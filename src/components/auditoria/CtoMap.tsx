@@ -6,6 +6,45 @@ import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl,
 import { haversineDistance, formatDistance } from "@/lib/ctos";
 import type { CtoWithRoute } from "@/lib/ctos";
 
+// =====================
+// Camadas de mapa
+// =====================
+type MapLayer = "map" | "satellite" | "hybrid";
+
+const LAYERS: Record<MapLayer, { label: string; emoji: string; url: string; attribution: string; overlay?: string }> = {
+  map: {
+    label: "Mapa",
+    emoji: "🗺️",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
+  },
+  satellite: {
+    label: "Satélite",
+    emoji: "🛰️",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "© Esri, Maxar, Earthstar Geographics",
+  },
+  hybrid: {
+    label: "Híbrido",
+    emoji: "🛣️",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "© Esri, Maxar, HERE",
+    overlay: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+  },
+};
+
+function LayerUpdater({ layer }: { layer: MapLayer }) {
+  const map = useMap();
+  useEffect(() => {
+    map.eachLayer((l) => { if ((l as L.TileLayer).options?.maxZoom) map.removeLayer(l); });
+    L.tileLayer(LAYERS[layer].url, { attribution: LAYERS[layer].attribution, maxZoom: 20 }).addTo(map);
+    if (LAYERS[layer].overlay) {
+      L.tileLayer(LAYERS[layer].overlay!, { maxZoom: 20, opacity: 0.85 }).addTo(map);
+    }
+  }, [layer, map]);
+  return null;
+}
+
 interface Props {
   clientLat: number;
   clientLon: number;
@@ -162,6 +201,9 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
 
+  // Camada de mapa
+  const [activeLayer, setActiveLayer] = useState<MapLayer>("map");
+
   // Estado da ferramenta de medição
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
@@ -189,7 +231,33 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
 
   return (
     <div style={{ position: "relative" }}>
-      {/* Botão de medição (fora do MapContainer para não capturar eventos) */}
+      {/* Seletor de camadas — canto superior esquerdo */}
+      <div style={{
+        position: "absolute", top: 10, left: 10, zIndex: 1000,
+        display: "flex", gap: 4, background: "white",
+        borderRadius: 8, padding: 3, boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+        border: "1px solid #e5e7eb",
+      }}>
+        {(Object.keys(LAYERS) as MapLayer[]).map((key) => (
+          <button
+            key={key}
+            onClick={() => setActiveLayer(key)}
+            title={LAYERS[key].label}
+            style={{
+              background: activeLayer === key ? "#4f46e5" : "transparent",
+              color: activeLayer === key ? "white" : "#374151",
+              border: "none", borderRadius: 6,
+              padding: "4px 8px", fontSize: 11, fontWeight: 600,
+              cursor: "pointer", fontFamily: "system-ui,sans-serif",
+              transition: "all 0.15s",
+            }}
+          >
+            {LAYERS[key].emoji} {LAYERS[key].label}
+          </button>
+        ))}
+      </div>
+
+      {/* Botão de medição — canto superior direito */}
       <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
         <button
           onClick={toggleMeasure}
@@ -265,6 +333,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
 
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
       <ScaleControl position="bottomleft" imperial={false} />
+      <LayerUpdater layer={activeLayer} />
       <MeasureHandler active={measuring} points={measurePoints} onAddPoint={addMeasurePoint} />
 
       {/* Rota da CTO selecionada (atrás dos marcadores) */}
