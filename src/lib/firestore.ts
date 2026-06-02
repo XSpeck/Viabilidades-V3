@@ -24,6 +24,13 @@ import type {
 // Helpers
 // =====================
 
+// Remove campos undefined/null antes de enviar ao Firestore
+function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
+  );
+}
+
 function fromFirestore<T>(doc: { id: string; data(): Record<string, unknown> }): T {
   const data = doc.data();
   // Converter Timestamps para ISO strings
@@ -45,8 +52,9 @@ function fromFirestore<T>(doc: { id: string; data(): Record<string, unknown> }):
 export async function createViabilizacao(
   data: Omit<Viabilizacao, "id" | "data_solicitacao">
 ): Promise<string> {
+  const clean = stripUndefined(data as Record<string, unknown>);
   const ref = await addDoc(collection(db, "viabilizacoes"), {
-    ...data,
+    ...clean,
     data_solicitacao: serverTimestamp(),
   });
   return ref.id;
@@ -130,7 +138,8 @@ export async function updateViabilizacao(
   data: Partial<Viabilizacao>
 ): Promise<void> {
   const ref = doc(db, "viabilizacoes", id);
-  await updateDoc(ref, { ...data });
+  const clean = stripUndefined(data as Record<string, unknown>);
+  await updateDoc(ref, { ...clean });
 }
 
 export async function pegarViabilizacao(id: string, auditor: string): Promise<void> {

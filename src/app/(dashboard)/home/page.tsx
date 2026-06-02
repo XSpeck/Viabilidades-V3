@@ -102,8 +102,9 @@ export default function HomePage() {
       setSuccessMsg(tipoSelecionado);
       setLocationInput("");
       setValidatedPlusCode(null);
-    } catch {
-      alert("Erro ao criar solicitação. Tente novamente.");
+    } catch (err) {
+      console.error("Erro ao criar viabilização:", err);
+      alert(`Erro: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
     }
