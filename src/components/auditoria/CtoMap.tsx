@@ -347,18 +347,14 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         </div>
       )}
 
+    <div style={{ height: mapHeight, transition: "height 0.3s ease", borderRadius: "12px", overflow: "hidden" }}>
     <MapContainer
       center={[clientLat, clientLon]}
       zoom={15}
-      style={{ height: mapHeight, width: "100%", borderRadius: "12px", zIndex: 0, transition: "height 0.3s ease" }}
+      style={{ height: "100%", width: "100%" }}
       zoomControl={false}
       scrollWheelZoom
     >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
-      />
-
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
       <ScaleControl position="bottomleft" imperial={false} />
       <LayerUpdater layer={activeLayer} />
@@ -474,6 +470,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         );
       })}
     </MapContainer>
+    </div>
     </div>
   );
 }
