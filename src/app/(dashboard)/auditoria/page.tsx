@@ -10,6 +10,7 @@ import {
 import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw } from "lucide-react";
+import CtoBusca from "@/components/auditoria/CtoBusca";
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
@@ -113,6 +114,9 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   // Rejeição
   const [showRejeitar, setShowRejeitar] = useState(false);
   const [motivo, setMotivo] = useState("");
+
+  // Busca de CTOs
+  const [showCtoBusca, setShowCtoBusca] = useState(false);
 
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
@@ -222,19 +226,41 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             {v.tipo_instalacao === "FTTH" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏠 Dados FTTH</h4>
-                {v.cto_numero && <p className="text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">✅ CTO escolhida: {v.cto_numero} | {v.distancia_cliente}</p>}
-                <div className="grid grid-cols-2 gap-2">
-                  <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                  <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <textarea placeholder="Observações" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Viabilizar</button>
-                  <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm font-medium">❌ Sem Viabilidade</button>
-                </div>
+
+                {cto && !showCtoBusca && (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
+                    <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
+                  </div>
+                )}
+
+                {showCtoBusca ? (
+                  <CtoBusca
+                    plusCode={v.plus_code_cliente}
+                    nomeCliente={v.nome_cliente}
+                    initialCto={cto || undefined}
+                    onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
+                    onClose={() => setShowCtoBusca(false)}
+                  />
+                ) : (
+                  <>
+                    <button onClick={() => setShowCtoBusca(true)} className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                      🔍 {cto ? "Buscar outra CTO" : "Buscar CTOs Próximas"}
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                      <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <textarea placeholder="Observações" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Viabilizar</button>
+                      <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm font-medium">❌ Sem Viabilidade</button>
+                    </div>
+                  </>
+                )}
               </>
             )}
 
@@ -262,18 +288,41 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             {v.tipo_instalacao === "Condomínio" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏘️ Dados Condomínio</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                  <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">✅ Viabilizar</button>
-                  <button onClick={handleSolicitarPredio} disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm">🏗️ Estrutura</button>
-                </div>
-                <button onClick={() => setShowRejeitar(!showRejeitar)} className="w-full border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
+
+                {cto && !showCtoBusca && (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
+                    <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
+                  </div>
+                )}
+
+                {showCtoBusca ? (
+                  <CtoBusca
+                    plusCode={v.plus_code_cliente}
+                    nomeCliente={v.nome_cliente}
+                    initialCto={cto || undefined}
+                    onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
+                    onClose={() => setShowCtoBusca(false)}
+                  />
+                ) : (
+                  <>
+                    <button onClick={() => setShowCtoBusca(true)} className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                      🔍 {cto ? "Buscar outra CTO" : "Buscar CTOs Próximas"}
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                      <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">✅ Viabilizar</button>
+                      <button onClick={handleSolicitarPredio} disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm">🏗️ Estrutura</button>
+                    </div>
+                    <button onClick={() => setShowRejeitar(!showRejeitar)} className="w-full border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
+                  </>
+                )}
               </>
             )}
 
