@@ -4,16 +4,15 @@ import {
   onAuthStateChanged,
   type User,
 } from "firebase/auth";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import type { AppUser } from "@/types";
 
-// Busca dados do usuário no Firestore pelo uid do Firebase Auth
+// Busca dados do usuário pelo document ID = uid (leitura direta, sem query)
 export async function getUserData(uid: string): Promise<AppUser | null> {
-  const q = query(collection(db, "users"), where("uid", "==", uid));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const data = snap.docs[0].data();
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return null;
+  const data = snap.data();
   return {
     uid,
     nome: data.nome,
