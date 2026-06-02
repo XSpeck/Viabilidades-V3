@@ -11,34 +11,30 @@ export function validatePlusCode(code: string): boolean {
   return PLUS_CODE_REGEX.test(code.toUpperCase().trim());
 }
 
-// Converte Plus Code para coordenadas usando a API do Google Maps
+// Converte Plus Code OU coordenadas "lat,lon" para { lat, lon }
 export async function plusCodeToCoords(
   plusCode: string
 ): Promise<{ lat: number; lon: number }> {
-  const code = plusCode.trim().toUpperCase();
-  const full = code.includes("+") && code.split("+")[0].length >= 8
-    ? code
-    : `${code.split("+")[0].padStart(8, "0")}+${code.split("+")[1]}`;
+  const input = plusCode.trim();
 
-  const url = `https://plus.codes/api?address=${encodeURIComponent(full)}&ekey=${process.env.NEXT_PUBLIC_PLUS_CODES_API_KEY || ""}`;
-
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data?.plus_code?.geometry?.location) {
-      return {
-        lat: data.plus_code.geometry.location.lat,
-        lon: data.plus_code.geometry.location.lng,
-      };
+  // Detectar formato de coordenadas: "-28.648873,-49.210531"
+  const coordMatch = input.match(/^(-?\d{1,3}\.?\d*),\s*(-?\d{1,3}\.?\d*)$/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lon = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      return { lat, lon };
     }
-  } catch {
-    // fallback: decodificação local básica
+    throw new Error(`Coordenadas inválidas: ${input}`);
   }
+
+  // Tratar como Plus Code
+  const code = input.toUpperCase();
 
   // Fallback: usar open-location-code (instância local)
   const { OpenLocationCode } = await import("open-location-code");
   const olc = new OpenLocationCode();
-  const resolved = olc.recoverNearest(code, REFERENCE_LAT, REFERENCE_LON);
+  const resolved = olc.isFull(code) ? code : olc.recoverNearest(code, REFERENCE_LAT, REFERENCE_LON);
   const decoded = olc.decode(resolved);
   return {
     lat: (decoded.latitudeLo + decoded.latitudeHi) / 2,
