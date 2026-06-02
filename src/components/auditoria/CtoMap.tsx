@@ -351,6 +351,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       center={[clientLat, clientLon]}
       zoom={15}
       style={{ height: mapHeight, width: "100%", borderRadius: "12px", zIndex: 0, transition: "height 0.3s ease" }}
+      zoomControl={false}
       scrollWheelZoom
     >
       <TileLayer
