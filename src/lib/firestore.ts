@@ -60,77 +60,88 @@ export async function createViabilizacao(
   return ref.id;
 }
 
+// Filtragem feita client-side para evitar índices compostos complexos
+
 export async function getViabilizacoesPendentes(): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
-    where("status", "==", "pendente"),
-    where("auditor_responsavel", "==", null),
-    orderBy("urgente", "desc"),
-    orderBy("data_solicitacao", "asc")
+    where("status", "==", "pendente")
   );
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => v.status_predio !== "agendado");
+    .filter((v) => !v.auditor_responsavel && v.status_predio !== "agendado")
+    .sort((a, b) => {
+      if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+      return (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1;
+    });
 }
 
 export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
     where("status", "==", "em_auditoria"),
-    where("auditor_responsavel", "==", auditorNome),
-    orderBy("urgente", "desc"),
-    orderBy("data_solicitacao", "asc")
+    where("auditor_responsavel", "==", auditorNome)
   );
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => v.status_predio !== "agendado");
+    .filter((v) => v.status_predio !== "agendado")
+    .sort((a, b) => {
+      if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+      return (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1;
+    });
 }
 
 export async function getViabilizacoesUsuario(username: string): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
-    where("usuario", "==", username),
-    where("data_finalizacao", "==", null),
-    orderBy("data_auditoria", "desc")
+    where("usuario", "==", username)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => !v.data_finalizacao)
+    .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
 }
 
 export async function getViabilizacoesHistorico(username: string): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
-    where("usuario", "==", username),
-    orderBy("data_solicitacao", "desc")
+    where("usuario", "==", username)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
 }
 
 export async function getAgendamentos(): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
-    where("status_predio", "==", "agendado"),
-    where("status_agendamento", "==", "pendente"),
-    orderBy("data_visita", "asc")
+    where("status_predio", "==", "agendado")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => v.status_agendamento === "pendente")
+    .sort((a, b) => (a.data_visita ?? "") < (b.data_visita ?? "") ? -1 : 1);
 }
 
 export async function getFtthPendenteBusca(): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
     where("tipo_instalacao", "==", "FTTH"),
-    where("status", "==", "pendente"),
-    where("status_busca", "==", null),
-    orderBy("urgente", "desc"),
-    orderBy("data_solicitacao", "asc")
+    where("status", "==", "pendente")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => !v.status_busca)
+    .sort((a, b) => {
+      if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+      return (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1;
+    });
 }
 
 export async function updateViabilizacao(
