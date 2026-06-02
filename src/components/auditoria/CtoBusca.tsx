@@ -83,18 +83,28 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
     if (clientLat && clientLon) await loadCtos(clientLat, clientLon, newRadius);
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!selectedName) return;
     const cto = ctos.find((c) => c.name === selectedName);
     if (!cto?.route) return;
 
-    const locPluscode = `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}`;
     setConfirming(true);
-    onConfirm({
-      cto_numero: cto.name,
-      distancia_cliente: formatDistance(cto.route.distanceWithBuffer),
-      localizacao_caixa: locPluscode,
-    });
+    try {
+      const { OpenLocationCode } = await import("open-location-code");
+      const olc = new OpenLocationCode();
+      const plusCode = olc.encode(cto.lat, cto.lon);
+      onConfirm({
+        cto_numero: cto.name,
+        distancia_cliente: formatDistance(cto.route.distanceWithBuffer),
+        localizacao_caixa: plusCode,
+      });
+    } catch {
+      onConfirm({
+        cto_numero: cto.name,
+        distancia_cliente: formatDistance(cto.route.distanceWithBuffer),
+        localizacao_caixa: `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}`,
+      });
+    }
   }
 
   const selectedCto = ctos.find((c) => c.name === selectedName);

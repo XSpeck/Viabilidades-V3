@@ -146,11 +146,14 @@ function ResultCard({ r, onFinalizar, showData }: {
     finalizado: "📦 Finalizado",
   };
 
+  const isAprovado = r.status === "aprovado";
+  const canExpand = ["aprovado", "rejeitado", "utp"].includes(r.status);
+
   return (
     <div className="p-4">
       <button onClick={() => setOpen(!open)} className="w-full text-left">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-0.5 min-w-0">
             <p className="font-medium text-gray-900">
               {r.tipo_instalacao === "FTTH" ? "🏠" : r.tipo_instalacao === "Prédio" ? "🏢" : "🏘️"}{" "}
               {r.nome_cliente ?? r.plus_code_cliente}
@@ -160,10 +163,21 @@ function ResultCard({ r, onFinalizar, showData }: {
               📍 {r.plus_code_cliente} · {formatDateTime(r.data_solicitacao)}
             </p>
           </div>
-          <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-            {statusLabel[r.status] ?? r.status}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              {statusLabel[r.status] ?? r.status}
+            </span>
+            {canExpand && (
+              <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
+            )}
+          </div>
         </div>
+        {/* Dica visual quando aprovado e fechado */}
+        {isAprovado && !open && (
+          <p className="text-xs text-indigo-500 mt-1.5 font-medium">
+            👆 Toque para ver os dados da viabilidade
+          </p>
+        )}
       </button>
 
       {open && (
@@ -196,8 +210,12 @@ function ResultCard({ r, onFinalizar, showData }: {
               <p>Atendemos esta área via UTP (cabo de rede).</p>
             </div>
           )}
-          {r.auditor_responsavel && <p className="text-xs text-gray-400">Auditor: {r.auditor_responsavel}</p>}
-          {r.auditado_por && <p className="text-xs text-gray-400">Auditado por: {r.auditado_por} · {formatDateTime(r.data_auditoria)}</p>}
+
+          {r.auditado_por && (
+            <p className="text-xs text-gray-400">
+              🔍 Auditado por: <strong>{r.auditado_por}</strong> · {formatDateTime(r.data_auditoria)}
+            </p>
+          )}
 
           {["aprovado", "rejeitado", "utp"].includes(r.status) && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
