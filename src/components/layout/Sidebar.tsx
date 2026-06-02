@@ -14,6 +14,7 @@ import {
   Network,
   LogOut,
   Shield,
+  Settings,
 } from "lucide-react";
 
 interface NavItem {
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { href: "/agenda", label: "Agenda FTTA/UTP", icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
   { href: "/relatorios", label: "Relatórios", icon: <FileText className="w-4 h-4" />, adminOnly: true },
   { href: "/analise-rede", label: "Análise da Rede", icon: <Network className="w-4 h-4" />, adminOnly: true },
+  { href: "/adm", label: "Administração", icon: <Settings className="w-4 h-4" />, adminOnly: true },
 ];
 
 export default function Sidebar() {

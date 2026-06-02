@@ -68,21 +68,92 @@ export function parseCtoKml(kmlText: string): Cto[] {
 }
 
 // =====================
-// Download + cache KML
+// Firestore — importar e buscar CTOs
 // =====================
-const SESSION_KEY = "viab_ctos_kml_v1";
+
+export async function importCtosToFirestore(
+  ctos: Cto[],
+  onProgress?: (done: number, total: number) => void
+): Promise<void> {
+  const { db } = await import("./firebase");
+  const { writeBatch, doc, collection, getDocs, deleteDoc } = await import("firebase/firestore");
+
+  const BATCH_SIZE = 400;
+  const total = ctos.length;
+  let done = 0;
+
+  // Deletar CTOs existentes em batches
+  const existingSnap = await getDocs(collection(db, "ctos"));
+  const deleteBatches: ReturnType<typeof writeBatch>[] = [];
+  let currentBatch = writeBatch(db);
+  let batchCount = 0;
+
+  for (const d of existingSnap.docs) {
+    currentBatch.delete(d.ref);
+    batchCount++;
+    if (batchCount >= BATCH_SIZE) {
+      deleteBatches.push(currentBatch);
+      currentBatch = writeBatch(db);
+      batchCount = 0;
+    }
+  }
+  if (batchCount > 0) deleteBatches.push(currentBatch);
+  await Promise.all(deleteBatches.map((b) => b.commit()));
+
+  // Inserir novas CTOs em batches
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const slice = ctos.slice(i, i + BATCH_SIZE);
+    slice.forEach((cto) => {
+      const safeName = cto.name.replace(/[\/\\.#\[\]]/g, "_");
+      const ref = doc(db, "ctos", safeName);
+      batch.set(ref, { name: cto.name, lat: cto.lat, lon: cto.lon });
+    });
+    await batch.commit();
+    done = Math.min(i + BATCH_SIZE, total);
+    onProgress?.(done, total);
+  }
+}
+
+export async function getCtosFromFirestore(): Promise<Cto[]> {
+  const { db } = await import("./firebase");
+  const { getDocs, collection } = await import("firebase/firestore");
+  const snap = await getDocs(collection(db, "ctos"));
+  return snap.docs.map((d) => d.data() as Cto);
+}
+
+export async function countCtosInFirestore(): Promise<number> {
+  const { db } = await import("./firebase");
+  const { getDocs, collection } = await import("firebase/firestore");
+  const snap = await getDocs(collection(db, "ctos"));
+  return snap.size;
+}
+
+// =====================
+// Buscar CTOs (Firestore first, fallback Drive)
+// =====================
+const SESSION_KEY = "viab_ctos_v2";
 
 export async function getCtos(): Promise<Cto[]> {
-  // Tentar cache primeiro
+  // Cache de sessão
   try {
     const cached = sessionStorage.getItem(SESSION_KEY);
     if (cached) {
-      const ctos = parseCtoKml(cached);
-      if (ctos.length > 0) return ctos;
+      const parsed: Cto[] = JSON.parse(cached);
+      if (parsed.length > 0) return parsed;
     }
   } catch {}
 
-  // Baixar via proxy (evita CORS)
+  // Tentar Firestore primeiro
+  try {
+    const ctos = await getCtosFromFirestore();
+    if (ctos.length > 0) {
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ctos)); } catch {}
+      return ctos;
+    }
+  } catch {}
+
+  // Fallback: baixar KML do Drive via proxy
   const res = await fetch("/api/kml/ctos");
   if (!res.ok) throw new Error(`Falha ao baixar KML de CTOs (${res.status})`);
 
@@ -91,9 +162,9 @@ export async function getCtos(): Promise<Cto[]> {
     throw new Error("Arquivo KML inválido ou inacessível.");
   }
 
-  try { sessionStorage.setItem(SESSION_KEY, kmlText); } catch {}
-
-  return parseCtoKml(kmlText);
+  const ctos = parseCtoKml(kmlText);
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ctos)); } catch {}
+  return ctos;
 }
 
 // =====================

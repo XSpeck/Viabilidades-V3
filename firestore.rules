@@ -39,5 +39,11 @@ service cloud.firestore {
       allow read: if isAuth();
       allow write: if isAdmin();
     }
+
+    // CTOs — leitura para todos autenticados, escrita apenas admin
+    match /ctos/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth(); // validação de nivel feita no app
+    }
   }
 }
