@@ -130,7 +130,7 @@ export async function countCtosInFirestore(): Promise<number> {
 }
 
 // =====================
-// Buscar CTOs (Firestore first, fallback Drive)
+// Buscar CTOs (Firestore + cache sessionStorage)
 // =====================
 const SESSION_KEY = "viab_ctos_v2";
 
@@ -144,25 +144,10 @@ export async function getCtos(): Promise<Cto[]> {
     }
   } catch {}
 
-  // Tentar Firestore primeiro
-  try {
-    const ctos = await getCtosFromFirestore();
-    if (ctos.length > 0) {
-      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ctos)); } catch {}
-      return ctos;
-    }
-  } catch {}
+  // Buscar do Firestore
+  const ctos = await getCtosFromFirestore();
+  if (ctos.length === 0) throw new Error("Nenhuma CTO encontrada. Importe o arquivo KML na página de Administração.");
 
-  // Fallback: baixar KML do Drive via proxy
-  const res = await fetch("/api/kml/ctos");
-  if (!res.ok) throw new Error(`Falha ao baixar KML de CTOs (${res.status})`);
-
-  const kmlText = await res.text();
-  if (!kmlText.includes("<kml") && !kmlText.includes("<Placemark")) {
-    throw new Error("Arquivo KML inválido ou inacessível.");
-  }
-
-  const ctos = parseCtoKml(kmlText);
   try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ctos)); } catch {}
   return ctos;
 }
