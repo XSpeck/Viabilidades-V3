@@ -120,13 +120,13 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
             Raio: <strong>{radius}m</strong>
           </label>
           <input
-            type="range" min={200} max={3000} step={100}
+            type="range" min={200} max={1000} step={50}
             value={radius}
             onChange={(e) => handleRadiusChange(Number(e.target.value))}
             className="flex-1 accent-indigo-600"
             disabled={loading}
           />
-          <span className="text-xs text-gray-400 whitespace-nowrap">3km</span>
+          <span className="text-xs text-gray-400 whitespace-nowrap">1km</span>
         </div>
 
         {/* Estado de carregamento */}
