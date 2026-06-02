@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl } from "react-leaflet";
 import type { CtoWithRoute } from "@/lib/ctos";
 
 interface Props {
@@ -128,6 +128,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       />
 
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
+      <ScaleControl position="bottomleft" imperial={false} />
 
       {/* Rota da CTO selecionada (atrás dos marcadores) */}
       {selected?.route && (
