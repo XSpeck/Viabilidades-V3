@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl, useMapEvents } from "react-leaflet";
+import { haversineDistance, formatDistance } from "@/lib/ctos";
 import type { CtoWithRoute } from "@/lib/ctos";
 
 interface Props {
@@ -86,6 +87,52 @@ function createClientIcon() {
 }
 
 // =====================
+// Ícone de ponto de medição
+// =====================
+function measurePointIcon(label: string) {
+  return L.divIcon({
+    html: `<div style="
+      width:22px;height:22px;border-radius:50%;
+      background:#f97316;border:3px solid white;
+      box-shadow:0 2px 4px rgba(0,0,0,0.4);
+      display:flex;align-items:center;justify-content:center;
+      font-size:10px;font-weight:700;color:white;
+      font-family:system-ui,sans-serif;
+    ">${label}</div>`,
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+// =====================
+// Handler de cliques para medição
+// =====================
+function MeasureHandler({
+  active,
+  points,
+  onAddPoint,
+}: {
+  active: boolean;
+  points: [number, number][];
+  onAddPoint: (p: [number, number]) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.getContainer().style.cursor = active ? "crosshair" : "";
+  }, [active, map]);
+
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      onAddPoint([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+  return null;
+}
+
+// =====================
 // FitBounds helper
 // =====================
 function FitBounds({ clientLat, clientLon, ctos }: {
@@ -115,7 +162,96 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
 
+  // Estado da ferramenta de medição
+  const [measuring, setMeasuring] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
+
+  const addMeasurePoint = useCallback((p: [number, number]) => {
+    setMeasurePoints((prev) => [...prev, p]);
+  }, []);
+
+  function toggleMeasure() {
+    if (measuring) {
+      setMeasuring(false);
+      setMeasurePoints([]);
+    } else {
+      setMeasuring(true);
+      setMeasurePoints([]);
+    }
+  }
+
+  // Distâncias acumuladas entre pontos
+  const measureSegments = measurePoints.slice(1).map((p, i) => {
+    const prev = measurePoints[i];
+    return haversineDistance(prev[0], prev[1], p[0], p[1]);
+  });
+  const totalMeasure = measureSegments.reduce((a, b) => a + b, 0);
+
   return (
+    <div style={{ position: "relative" }}>
+      {/* Botão de medição (fora do MapContainer para não capturar eventos) */}
+      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          onClick={toggleMeasure}
+          title={measuring ? "Sair da medição" : "Medir distância"}
+          style={{
+            background: measuring ? "#f97316" : "white",
+            color: measuring ? "white" : "#374151",
+            border: "2px solid " + (measuring ? "#f97316" : "#d1d5db"),
+            borderRadius: 8,
+            padding: "6px 10px",
+            fontSize: 18,
+            cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            lineHeight: 1,
+          }}
+        >
+          📏
+        </button>
+        {measuring && measurePoints.length > 0 && (
+          <button
+            onClick={() => setMeasurePoints([])}
+            title="Limpar medição"
+            style={{
+              background: "white", color: "#374151",
+              border: "2px solid #d1d5db", borderRadius: 8,
+              padding: "6px 10px", fontSize: 16, cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
+            }}
+          >
+            🗑️
+          </button>
+        )}
+      </div>
+
+      {/* Painel de resultado da medição */}
+      {measuring && (
+        <div style={{
+          position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)",
+          zIndex: 1000, background: "white", borderRadius: 10,
+          padding: "8px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          fontSize: 13, fontFamily: "system-ui,sans-serif", whiteSpace: "nowrap",
+          border: "2px solid #f97316",
+        }}>
+          {measurePoints.length === 0 && (
+            <span style={{ color: "#6b7280" }}>📏 Clique no mapa para iniciar a medição</span>
+          )}
+          {measurePoints.length === 1 && (
+            <span style={{ color: "#6b7280" }}>📍 Clique para adicionar mais pontos</span>
+          )}
+          {measurePoints.length >= 2 && (
+            <span>
+              📏 Total: <strong style={{ color: "#f97316" }}>{formatDistance(totalMeasure)}</strong>
+              {measureSegments.length > 1 && (
+                <span style={{ color: "#9ca3af", fontSize: 11, marginLeft: 8 }}>
+                  ({measureSegments.length} segmentos)
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+
     <MapContainer
       center={[clientLat, clientLon]}
       zoom={15}
@@ -129,6 +265,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
 
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
       <ScaleControl position="bottomleft" imperial={false} />
+      <MeasureHandler active={measuring} points={measurePoints} onAddPoint={addMeasurePoint} />
 
       {/* Rota da CTO selecionada (atrás dos marcadores) */}
       {selected?.route && (
@@ -204,6 +341,41 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
           </div>
         </Popup>
       </Marker>
+
+      {/* Linha de medição */}
+      {measurePoints.length >= 2 && (
+        <Polyline
+          positions={measurePoints}
+          pathOptions={{ color: "#f97316", weight: 3, dashArray: "6, 4" }}
+        />
+      )}
+
+      {/* Marcadores de medição com distância acumulada */}
+      {measurePoints.map((p, i) => {
+        const accumulated = measureSegments.slice(0, i).reduce((a, b) => a + b, 0);
+        const label = i === 0 ? "A" : String(i + 1);
+        return (
+          <Marker
+            key={`measure-${i}`}
+            position={p}
+            icon={measurePointIcon(label)}
+            zIndexOffset={3000}
+          >
+            <Popup>
+              <div style={{ fontFamily: "system-ui,sans-serif", fontSize: 12 }}>
+                <p style={{ fontWeight: 700, marginBottom: 2 }}>Ponto {label}</p>
+                {i > 0 && (
+                  <>
+                    <p>Segmento: <strong>{formatDistance(measureSegments[i - 1])}</strong></p>
+                    <p>Acumulado: <strong style={{ color: "#f97316" }}>{formatDistance(accumulated)}</strong></p>
+                  </>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
+    </div>
   );
 }
