@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function userNivel() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivel;
+    }
+
+    function isAdmin() {
+      return isAuth() && userNivel() == 1;
+    }
+
+    // Usuários — cada um lê o próprio, admin lê todos
+    match /users/{uid} {
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Viabilizações
+    match /viabilizacoes/{id} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAdmin();
+    }
+
+    // Prédios atendidos — leitura para todos, escrita para admin
+    match /predios_atendidos/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Prédios sem viabilidade — leitura para todos, escrita para admin
+    match /predios_sem_viabilidade/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}

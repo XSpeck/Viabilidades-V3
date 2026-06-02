@@ -62,6 +62,7 @@ export interface Viabilizacao {
   giga?: boolean;
   historico_reagendamento?: string;
   data_agendamento?: string;
+  status_agendamento?: string;
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;

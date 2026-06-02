@@ -35,18 +35,15 @@ export async function plusCodeToCoords(
     // fallback: decodificação local básica
   }
 
-  // Fallback: usar Open Location Code JS (importado dinamicamente)
-  const olc = await import("open-location-code-typescript").catch(() => null);
-  if (olc) {
-    const resolved = olc.recoverNearest(code, REFERENCE_LAT, REFERENCE_LON);
-    const decoded = olc.decode(resolved);
-    return {
-      lat: (decoded.latitudeLo + decoded.latitudeHi) / 2,
-      lon: (decoded.longitudeLo + decoded.longitudeHi) / 2,
-    };
-  }
-
-  throw new Error("Não foi possível converter o Plus Code.");
+  // Fallback: usar open-location-code (instância local)
+  const { OpenLocationCode } = await import("open-location-code");
+  const olc = new OpenLocationCode();
+  const resolved = olc.recoverNearest(code, REFERENCE_LAT, REFERENCE_LON);
+  const decoded = olc.decode(resolved);
+  return {
+    lat: (decoded.latitudeLo + decoded.latitudeHi) / 2,
+    lon: (decoded.longitudeLo + decoded.longitudeHi) / 2,
+  };
 }
 
 export function coordsToPlusCode(lat: number, lon: number): string {
