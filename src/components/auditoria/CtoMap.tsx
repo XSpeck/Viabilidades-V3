@@ -45,6 +45,16 @@ function LayerUpdater({ layer }: { layer: MapLayer }) {
   return null;
 }
 
+function ResizeHandler({ expanded }: { expanded: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    // Aguarda a transição CSS terminar antes de invalidar
+    const timer = setTimeout(() => map.invalidateSize(), 320);
+    return () => clearTimeout(timer);
+  }, [expanded, map]);
+  return null;
+}
+
 interface Props {
   clientLat: number;
   clientLon: number;
@@ -204,6 +214,10 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   // Camada de mapa
   const [activeLayer, setActiveLayer] = useState<MapLayer>("map");
 
+  // Expandir mapa
+  const [expanded, setExpanded] = useState(false);
+  const mapHeight = expanded ? "580px" : "400px";
+
   // Estado da ferramenta de medição
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
@@ -257,8 +271,21 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         ))}
       </div>
 
-      {/* Botão de medição — canto superior direito */}
+      {/* Botões — canto superior direito */}
       <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Expandir/recolher */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          title={expanded ? "Recolher mapa" : "Expandir mapa"}
+          style={{
+            background: "white", color: "#374151",
+            border: "2px solid #d1d5db", borderRadius: 8,
+            padding: "6px 10px", fontSize: 16, cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
+          }}
+        >
+          {expanded ? "⬇️" : "⬆️"}
+        </button>
         <button
           onClick={toggleMeasure}
           title={measuring ? "Sair da medição" : "Medir distância"}
@@ -323,7 +350,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
     <MapContainer
       center={[clientLat, clientLon]}
       zoom={15}
-      style={{ height: "380px", width: "100%", borderRadius: "12px", zIndex: 0 }}
+      style={{ height: mapHeight, width: "100%", borderRadius: "12px", zIndex: 0, transition: "height 0.3s ease" }}
       scrollWheelZoom
     >
       <TileLayer
@@ -334,6 +361,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
       <ScaleControl position="bottomleft" imperial={false} />
       <LayerUpdater layer={activeLayer} />
+      <ResizeHandler expanded={expanded} />
       <MeasureHandler active={measuring} points={measurePoints} onAddPoint={addMeasurePoint} />
 
       {/* Rota da CTO selecionada (atrás dos marcadores) */}
