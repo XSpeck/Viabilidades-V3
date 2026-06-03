@@ -76,7 +76,7 @@ export default function ResultadosPage() {
           {emAnalise.length > 0 && (
             <Section title="🔍 Em Análise Técnica" color="blue">
               {emAnalise.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} />
+                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
               ))}
             </Section>
           )}
@@ -85,7 +85,7 @@ export default function ResultadosPage() {
           {(aprovadas.length > 0 || estruturados.length > 0) && (
             <Section title="✅ Aprovadas" color="green">
               {[...aprovadas, ...estruturados].map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} showData />
+                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} showData />
               ))}
             </Section>
           )}
@@ -94,7 +94,7 @@ export default function ResultadosPage() {
           {rejeitadas.length > 0 && (
             <Section title="❌ Sem Viabilidade" color="red">
               {rejeitadas.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} />
+                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
               ))}
             </Section>
           )}
@@ -103,7 +103,7 @@ export default function ResultadosPage() {
           {utp.length > 0 && (
             <Section title="📡 Atendemos UTP" color="purple">
               {utp.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} />
+                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
               ))}
             </Section>
           )}
@@ -112,7 +112,7 @@ export default function ResultadosPage() {
           {predios.length > 0 && (
             <Section title="🏢 Prédio / Condomínio" color="orange">
               {predios.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} />
+                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
               ))}
             </Section>
           )}
@@ -133,8 +133,8 @@ function Section({ title, color, children }: { title: string; color: string; chi
   );
 }
 
-function ResultCard({ r, onFinalizar, showData }: {
-  r: Viabilizacao; onFinalizar: (id: string) => void; showData?: boolean;
+function ResultCard({ r, onFinalizar, onRefresh, showData }: {
+  r: Viabilizacao; onFinalizar: (id: string) => void; onRefresh: () => void; showData?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -178,7 +178,7 @@ function ResultCard({ r, onFinalizar, showData }: {
         apartamento,
         obs_agendamento: obsAgendamento,
       });
-      onFinalizar(r.id); // força reload
+      onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setSubmitting(false); }
   }
