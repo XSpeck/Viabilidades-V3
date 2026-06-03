@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl, useMapEvents } from "react-leaflet";
 import { haversineDistance, formatDistance } from "@/lib/ctos";
@@ -39,14 +39,25 @@ const MAP_MAX_ZOOM = 18;
 
 function LayerUpdater({ layer }: { layer: MapLayer }) {
   const map = useMap();
+  const baseTileRef = useRef<L.TileLayer | null>(null);
+  const overlayTileRef = useRef<L.TileLayer | null>(null);
+
   useEffect(() => {
-    map.eachLayer((l) => { if ((l as L.TileLayer).options?.maxZoom) map.removeLayer(l); });
-    L.tileLayer(LAYERS[layer].url, { attribution: LAYERS[layer].attribution, maxZoom: MAP_MAX_ZOOM }).addTo(map);
-    if (LAYERS[layer].overlay) {
-      L.tileLayer(LAYERS[layer].overlay!, { maxZoom: MAP_MAX_ZOOM, opacity: 0.85 }).addTo(map);
-    }
+    if (baseTileRef.current) map.removeLayer(baseTileRef.current);
+    if (overlayTileRef.current) map.removeLayer(overlayTileRef.current);
+
+    baseTileRef.current = L.tileLayer(LAYERS[layer].url, {
+      attribution: LAYERS[layer].attribution,
+      maxZoom: MAP_MAX_ZOOM,
+    }).addTo(map);
+
+    overlayTileRef.current = LAYERS[layer].overlay
+      ? L.tileLayer(LAYERS[layer].overlay!, { maxZoom: MAP_MAX_ZOOM, opacity: 0.85 }).addTo(map)
+      : null;
+
     map.setMaxZoom(MAP_MAX_ZOOM);
   }, [layer, map]);
+
   return null;
 }
 

@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getViabilizacoesAuditor, aprovarFTTH, aprovarFTTA, rejeitarViabilizacao,
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
-  solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio,
+  solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
 } from "@/lib/firestore";
 import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
@@ -270,7 +270,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
-                    onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
+                    onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch {} }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}
                   />
@@ -333,7 +333,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
-                    onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
+                    onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch {} }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}
                   />

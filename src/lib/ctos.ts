@@ -2,6 +2,7 @@ export interface Cto {
   name: string;
   lat: number;
   lon: number;
+  tipo?: "CTO" | "CDOI";
 }
 
 export interface RouteResult {
@@ -48,7 +49,7 @@ export function parseCtoKml(kmlText: string): Cto[] {
 
   placemarks.forEach((p) => {
     const name = p.querySelector("name")?.textContent?.trim() ?? "CTO";
-    if (name.toUpperCase().startsWith("CDOI")) return; // ignorar CDOIs
+    const isCdoi = name.toUpperCase().startsWith("CDOI");
 
     const coordsEl = p.querySelector("coordinates");
     if (!coordsEl?.textContent) return;
@@ -61,7 +62,7 @@ export function parseCtoKml(kmlText: string): Cto[] {
     if (!isFinite(lat) || !isFinite(lon)) return;
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
 
-    ctos.push({ name, lat, lon });
+    ctos.push({ name, lat, lon, tipo: isCdoi ? "CDOI" : "CTO" });
   });
 
   return ctos;

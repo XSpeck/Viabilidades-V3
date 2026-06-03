@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   getCtos, findNearestCtos, calculateRoutes, formatDistance,
@@ -42,6 +42,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
   const [radius, setRadius] = useState(600);
   const [selectedName, setSelectedName] = useState<string | null>(initialCto ?? null);
   const [confirming, setConfirming] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const loadCtos = useCallback(async (lat: number, lon: number, r: number) => {
     setLoading(true);
@@ -56,8 +58,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
         return;
       }
 
-      const withRoutes = await calculateRoutes(lat, lon, nearby, 8);
-      setCtos(withRoutes.slice(0, 6));
+      const withRoutes = await calculateRoutes(lat, lon, nearby, 6);
+      setCtos(withRoutes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar CTOs.");
     } finally {
@@ -79,15 +81,19 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
     })();
   }, [plusCode]);
 
-  async function handleRadiusChange(newRadius: number) {
+  function handleRadiusChange(newRadius: number) {
     setRadius(newRadius);
-    if (clientLat && clientLon) await loadCtos(clientLat, clientLon, newRadius);
+    if (!clientLat || !clientLon) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => loadCtos(clientLat, clientLon, newRadius), 500);
   }
 
   async function handleConfirm() {
     if (!selectedName) return;
     const cto = ctos.find((c) => c.name === selectedName);
-    if (!cto?.route) return;
+    if (!cto) return;
+
+    const distance = cto.route?.distanceWithBuffer ?? cto.straightDistance + 50;
 
     setConfirming(true);
     try {
@@ -96,13 +102,13 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
       const plusCode = olc.encode(cto.lat, cto.lon);
       onConfirm({
         cto_numero: cto.name,
-        distancia_cliente: formatDistance(cto.route.distanceWithBuffer),
+        distancia_cliente: formatDistance(distance),
         localizacao_caixa: plusCode,
       });
     } catch {
       onConfirm({
         cto_numero: cto.name,
-        distancia_cliente: formatDistance(cto.route.distanceWithBuffer),
+        distancia_cliente: formatDistance(distance),
         localizacao_caixa: `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}`,
       });
     }
