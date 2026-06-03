@@ -63,7 +63,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
   }
 
   const [obsEstruturacao, setObsEstruturacao] = useState("");
-  const [gigaEstrutura, setGigaEstrutura] = useState(v.giga ?? false);
+  const [gigaEstrutura, setGigaEstrutura] = useState(v.tecnologia_predio === "FTTA" ? true : (v.giga ?? false));
   const [novaData, setNovaData] = useState("");
   const [novoPeriodo, setNovoPeriodo] = useState("Manhã");
   const [novoTecnico, setNovoTecnico] = useState("");
@@ -205,8 +205,10 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
             <textarea placeholder="Observações da estruturação *" value={obsEstruturacao} onChange={(e) => setObsEstruturacao(e.target.value)}
               rows={3} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400" />
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={gigaEstrutura} onChange={(e) => setGigaEstrutura(e.target.checked)} />
+              <input type="checkbox" checked={gigaEstrutura} onChange={(e) => setGigaEstrutura(e.target.checked)}
+                disabled={v.tecnologia_predio === "FTTA"} />
               ⚡ {isCond ? "Condomínio" : "Prédio"} Giga?
+              {v.tecnologia_predio === "FTTA" && <span className="text-xs text-blue-600">(sempre ativo em FTTA)</span>}
             </label>
             <div className="flex gap-2">
               <button onClick={handleEstruturar} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">Confirmar</button>

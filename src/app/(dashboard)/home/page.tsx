@@ -294,7 +294,7 @@ export default function HomePage() {
       {/* Tabelas de consulta */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="flex border-b">
-          {["✅ Prédios Atendidos", "❌ Sem Viabilidade"].map((tab, i) => (
+          {["🏢 Prédios Atendidos", "❌ Sem Viabilidade"].map((tab, i) => (
             <button key={i} onClick={() => setActiveTab(i)}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === i ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50" : "text-gray-500 hover:bg-gray-50"}`}>
               {tab}
@@ -305,22 +305,24 @@ export default function HomePage() {
         <div className="p-4 space-y-3">
           {activeTab === 0 ? (
             <>
-              <input type="text" placeholder="🔍 Buscar prédio atendido..."
+              <p className="font-semibold text-gray-700 text-sm">🏢 Prédios/Condomínios com Estrutura Instalada</p>
+              <input type="text" placeholder="🔍 Buscar por nome do prédio/condomínio..."
                 value={searchAtendidos} onChange={(e) => setSearchAtendidos(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <div className="overflow-auto rounded-lg border max-h-64">
+              <div className="overflow-auto rounded-lg border max-h-72">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-gray-600 sticky top-0">
                     <tr>
                       <th className="text-left px-4 py-3 font-medium">Condomínio</th>
                       <th className="text-left px-4 py-3 font-medium">Tecnologia</th>
                       <th className="text-left px-4 py-3 font-medium">Giga</th>
+                      <th className="text-left px-4 py-3 font-medium">Observação</th>
                       <th className="text-left px-4 py-3 font-medium">Localização</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {filteredAtendidos.length === 0
-                      ? <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhum registro</td></tr>
+                      ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">Nenhum registro</td></tr>
                       : filteredAtendidos.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{p.condominio}</td>
@@ -332,7 +334,10 @@ export default function HomePage() {
                               {p.tecnologia}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{p.giga ? "⚡ Sim" : "Não"}</td>
+                          <td className="px-4 py-3 text-xs">
+                            {p.tecnologia === "FTTA" || p.giga ? "⚡ Giga" : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs max-w-[180px] truncate">{p.observacao ?? "—"}</td>
                           <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.localizacao}</td>
                         </tr>
                       ))}

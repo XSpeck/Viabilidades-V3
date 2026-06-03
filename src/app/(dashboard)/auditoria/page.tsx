@@ -118,7 +118,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [periodo, setPeriodo] = useState("Manhã");
   const [tecnico, setTecnico] = useState("");
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
-  const [giga, setGiga] = useState(false);
+  const [giga, setGiga] = useState(v.tipo_instalacao !== "Condomínio");
   const [checklist, setChecklist] = useState({
     sindico_avisado: false,
     portaria_informada: false,
@@ -427,13 +427,18 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     <option>Manhã</option><option>Tarde</option>
                   </select>
                   <input placeholder="Técnico *" value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <select value={tecnologia} onChange={(e) => { setTecnologia(e.target.value); if (e.target.value === "FTTA") setGiga(true); }} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     {v.tipo_instalacao === "Condomínio"
                       ? <option>FTTH</option>
                       : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>
                 </div>
-                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)} /> ⚡ Prédio Giga?</label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)}
+                    disabled={tecnologia === "FTTA"} />
+                  ⚡ Prédio Giga?
+                  {tecnologia === "FTTA" && <span className="text-xs text-blue-600">(sempre ativo em FTTA)</span>}
+                </label>
 
                 {/* Checklist pré-visita */}
                 <div className={`border rounded-xl p-3 space-y-2 ${checklistOk ? "border-green-300 bg-green-50" : "border-orange-200 bg-orange-50"}`}>
