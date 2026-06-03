@@ -150,6 +150,30 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
 
         {v.giga && <p className="mt-2 text-xs text-yellow-600 font-medium">⚡ Giga</p>}
 
+        {/* Checklist pré-visita */}
+        {v.checklist_previsita && (
+          <div className="mt-3 border rounded-xl p-3 bg-gray-50">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">📋 Checklist pré-visita</p>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              {[
+                { key: "sindico_avisado",      label: "Síndico avisado" },
+                { key: "portaria_informada",   label: "Portaria informada" },
+                { key: "acesso_confirmado",    label: "Acesso confirmado" },
+                { key: "data_confirmada",      label: "Data confirmada" },
+                { key: "equipamento_separado", label: "Equipamento separado" },
+              ].map((item) => {
+                const ok = v.checklist_previsita?.[item.key as keyof typeof v.checklist_previsita];
+                return (
+                  <div key={item.key} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${ok ? "bg-green-100 text-green-700" : "bg-red-50 text-red-600"}`}>
+                    <span>{ok ? "✅" : "❌"}</span>
+                    <span>{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Botões de ação */}
         <div className="flex gap-2 mt-4">
           <button onClick={() => { setShowEstruturar(!showEstruturar); setShowReagendar(false); setShowRejeitar(false); }}

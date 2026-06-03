@@ -63,6 +63,13 @@ export interface Viabilizacao {
   historico_reagendamento?: string;
   data_agendamento?: string;
   status_agendamento?: string;
+  checklist_previsita?: {
+    sindico_avisado?: boolean;
+    portaria_informada?: boolean;
+    acesso_confirmado?: boolean;
+    data_confirmada?: boolean;
+    equipamento_separado?: boolean;
+  };
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;
