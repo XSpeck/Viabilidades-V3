@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { createViabilizacao, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
 import { validatePlusCode } from "@/lib/pluscode";
 import type { TipoInstalacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft } from "lucide-react";
+
+const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
 
 type InputMethod = "pluscode" | "coords";
 type ModalStep = "tipo" | "form";
@@ -18,6 +21,7 @@ export default function HomePage() {
   const [inputValid, setInputValid] = useState<boolean | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState<ModalStep>("tipo");
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoInstalacao | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,13 +154,19 @@ export default function HomePage() {
         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
           <MapPin className="w-5 h-5 text-indigo-600" /> Localização do Cliente
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {(["pluscode", "coords"] as InputMethod[]).map((m) => (
             <button key={m} onClick={() => { setInputMethod(m); setLocationInput(""); setInputValid(null); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${inputMethod === m ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {m === "pluscode" ? "Plus Code" : "Coordenadas"}
             </button>
           ))}
+          <button
+            onClick={() => setShowLocationPicker(true)}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+          >
+            🛰️ Selecionar no Mapa
+          </button>
         </div>
         <div>
           <input type="text" value={locationInput}
@@ -177,6 +187,20 @@ export default function HomePage() {
           </button>
         )}
       </div>
+
+      {/* Location Picker */}
+      {showLocationPicker && (
+        <LocationPicker
+          onConfirm={(code) => {
+            setLocationInput(code);
+            setInputMethod("pluscode");
+            setInputValid(true);
+            setValidatedPlusCode(code);
+            setShowLocationPicker(false);
+          }}
+          onClose={() => setShowLocationPicker(false)}
+        />
+      )}
 
       {/* Modal 2 etapas */}
       {showModal && (
