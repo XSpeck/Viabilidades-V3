@@ -8,7 +8,7 @@ import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search } from "lucide-react";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
 
-type StatusFilter = "todos" | "analise" | "aprovados" | "predios" | "sem_viab" | "utp";
+type StatusFilter = "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp";
 type TipoFilter = "todos" | "FTTH" | "Prédio" | "Condomínio";
 
 export default function ResultadosPage() {
@@ -34,21 +34,25 @@ export default function ResultadosPage() {
   }
 
   const counts = {
-    analise:   results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio).length,
-    aprovados: results.filter((r) => r.status === "aprovado" || r.status_predio === "estruturado").length,
-    semViab:   results.filter((r) => r.status === "rejeitado").length,
-    predios:   results.filter((r) => !!r.status_predio && r.status_predio !== "estruturado" && r.status !== "rejeitado").length,
-    utp:       results.filter((r) => r.status === "utp").length,
+    analise:     results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio).length,
+    aprovado:    results.filter((r) => r.status === "aprovado" && !r.status_predio).length,
+    ag_dados:    results.filter((r) => r.status_predio === "aguardando_dados").length,
+    agendado:    results.filter((r) => ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "")).length,
+    estruturado: results.filter((r) => r.status_predio === "estruturado").length,
+    semViab:     results.filter((r) => r.status === "rejeitado").length,
+    utp:         results.filter((r) => r.status === "utp").length,
   };
 
   function matchesStatus(r: Viabilizacao): boolean {
     switch (statusFilter) {
-      case "analise":   return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio;
-      case "aprovados": return r.status === "aprovado" || r.status_predio === "estruturado";
-      case "sem_viab":  return r.status === "rejeitado";
-      case "utp":       return r.status === "utp";
-      case "predios":   return !!r.status_predio && r.status_predio !== "estruturado" && r.status !== "rejeitado";
-      default:          return true;
+      case "analise":     return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio;
+      case "aprovado":    return r.status === "aprovado" && !r.status_predio;
+      case "ag_dados":    return r.status_predio === "aguardando_dados";
+      case "agendado":    return ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "");
+      case "estruturado": return r.status_predio === "estruturado";
+      case "sem_viab":    return r.status === "rejeitado";
+      case "utp":         return r.status === "utp";
+      default:            return true;
     }
   }
 
@@ -68,12 +72,14 @@ export default function ResultadosPage() {
 
   const statusChips = (
     [
-      { key: "todos",     label: "Todos",         count: results.length },
-      { key: "analise",   label: "🔍 Em análise",  count: counts.analise },
-      { key: "aprovados", label: "✅ Aprovados",   count: counts.aprovados },
-      { key: "predios",   label: "🏢 Prédios",     count: counts.predios },
-      { key: "sem_viab",  label: "❌ Sem viab.",   count: counts.semViab },
-      { key: "utp",       label: "📡 UTP",         count: counts.utp },
+      { key: "todos",       label: "Todos",            count: results.length },
+      { key: "analise",     label: "🔍 Em análise",    count: counts.analise },
+      { key: "aprovado",    label: "✅ Aprovado",       count: counts.aprovado },
+      { key: "ag_dados",    label: "⚠️ Ag. dados",     count: counts.ag_dados },
+      { key: "agendado",    label: "📅 Agendado",       count: counts.agendado },
+      { key: "estruturado", label: "🎉 Estruturado",    count: counts.estruturado },
+      { key: "sem_viab",    label: "❌ Sem viab.",      count: counts.semViab },
+      { key: "utp",         label: "📡 UTP",            count: counts.utp },
     ] as { key: StatusFilter; label: string; count: number }[]
   ).filter((c) => c.key === "todos" || c.count > 0);
 
@@ -99,10 +105,10 @@ export default function ResultadosPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Em Análise",     count: counts.analise,   color: "blue",   icon: <Clock className="w-5 h-5" /> },
-          { label: "Aprovadas",      count: counts.aprovados, color: "green",  icon: <CheckCircle className="w-5 h-5" /> },
-          { label: "Sem Viabilidade",count: counts.semViab,   color: "red",    icon: <XCircle className="w-5 h-5" /> },
-          { label: "Prédio/Cond.",   count: counts.predios,   color: "purple", icon: <Building2 className="w-5 h-5" /> },
+          { label: "Em Análise",     count: counts.analise,                             color: "blue",   icon: <Clock className="w-5 h-5" /> },
+          { label: "Aprovadas",      count: counts.aprovado + counts.estruturado,        color: "green",  icon: <CheckCircle className="w-5 h-5" /> },
+          { label: "Sem Viabilidade",count: counts.semViab,                              color: "red",    icon: <XCircle className="w-5 h-5" /> },
+          { label: "Prédio/Cond.",   count: counts.ag_dados + counts.agendado,           color: "purple", icon: <Building2 className="w-5 h-5" /> },
         ].map((item) => (
           <div key={item.label} className="bg-white border rounded-xl p-4 flex items-center gap-3">
             <div className={`text-${item.color}-600`}>{item.icon}</div>
