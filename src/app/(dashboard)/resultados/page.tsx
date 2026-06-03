@@ -185,8 +185,7 @@ function ResultCard({ r, onFinalizar, showData }: {
 
   return (
     <div className="p-4">
-      {/* Stepper sempre visível para FTTA/Condomínio */}
-      {isFtta && <FluxoStepper v={r} />}
+      <FluxoStepper v={r} />
 
       <button onClick={() => setOpen(!open)} className="w-full text-left mt-2">
         <div className="flex items-center justify-between gap-3">
