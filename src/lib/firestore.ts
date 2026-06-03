@@ -385,6 +385,7 @@ export async function rejeitarPredio(
 // Agendamento Técnico (Instalação FTTH)
 // =====================
 
+// Retorna instalações ativas para o setor de agendamento
 export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
   const q = query(
     collection(db, "viabilizacoes"),
@@ -394,62 +395,95 @@ export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => v.status_instalacao && v.status_instalacao !== "instalado")
+    .filter((v) => ["proposta_enviada", "aguardando_confirmacao", "agendado", "instalado"].includes(v.status_instalacao ?? ""))
+    .filter((v) => !v.data_finalizacao)
     .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
 }
 
+// Dispara quando FTTH é aprovado — habilita o usuário a propor data
 export async function iniciarAgendamentoInstalacao(id: string): Promise<void> {
-  await updateViabilizacao(id, { status_instalacao: "aguardando_agendamento" });
+  await updateViabilizacao(id, { status_instalacao: "aguardando_proposta" });
 }
 
-export async function enviarObsAgendamentoTecnico(id: string, obs: string): Promise<void> {
-  await updateViabilizacao(id, {
-    obs_agendamento_tecnico: obs,
-    status_instalacao: "aguardando_resposta",
-  });
-}
-
-export async function responderAgendamentoTecnico(id: string, resposta: string): Promise<void> {
-  await updateViabilizacao(id, {
-    resposta_usuario_agendamento: resposta,
-    status_instalacao: "aguardando_agendamento",
-  });
-}
-
-export async function agendarInstalacao(
+// Usuário propõe data/período/obs ao setor de agendamento
+export async function enviarPropostaInstalacao(
   id: string,
-  dados: { data_instalacao: string; periodo_instalacao: string; tecnico_instalacao: string }
+  dados: { proposta_data: string; proposta_periodo: string; proposta_obs?: string },
+  historicoAnterior?: string
 ): Promise<void> {
+  const historico = historicoAnterior
+    ? `${historicoAnterior}\nUsuário propôs ${dados.proposta_data} ${dados.proposta_periodo}`
+    : `Usuário propôs ${dados.proposta_data} ${dados.proposta_periodo}`;
   await updateViabilizacao(id, {
-    status_instalacao: "agendado",
-    data_agendamento_tecnico: new Date().toISOString(),
-    ...dados,
+    status_instalacao: "proposta_enviada",
+    proposta_data: dados.proposta_data,
+    proposta_periodo: dados.proposta_periodo,
+    ...(dados.proposta_obs !== undefined ? { proposta_obs: dados.proposta_obs } : {}),
+    historico_agendamento: historico,
   });
 }
 
-export async function reagendarInstalacao(
+// Setor de agendamento confirma (com ou sem alteração)
+// Se confirmou sem alteração → agendado direto
+// Se alterou data/período → aguarda confirmação do usuário
+export async function confirmarAgendamentoTecnico(
   id: string,
-  dados: { data_instalacao: string; periodo_instalacao: string; tecnico_instalacao: string; motivo?: string },
-  dadosAtuais?: { data_instalacao?: string; periodo_instalacao?: string; tecnico_instalacao?: string }
+  dados: { agendamento_data: string; agendamento_periodo: string; agendamento_tecnico: string; agendamento_obs?: string },
+  proposta: { proposta_data?: string; proposta_periodo?: string },
+  historicoAnterior?: string
 ): Promise<void> {
-  let historico = "";
-  if (dadosAtuais) {
-    historico = `Reagendado de ${dadosAtuais.data_instalacao ?? "N/A"} ${dadosAtuais.periodo_instalacao ?? ""} (${dadosAtuais.tecnico_instalacao ?? "N/A"})`;
-    if (dados.motivo) historico += ` — Motivo: ${dados.motivo}`;
+  const alterou = dados.agendamento_data !== proposta.proposta_data
+    || dados.agendamento_periodo !== proposta.proposta_periodo;
+
+  const historico = historicoAnterior
+    ? `${historicoAnterior}\nAgendamento confirmou ${dados.agendamento_data} ${dados.agendamento_periodo}${alterou ? " (alterado)" : ""}`
+    : `Agendamento confirmou ${dados.agendamento_data} ${dados.agendamento_periodo}${alterou ? " (alterado)" : ""}`;
+
+  if (!alterou) {
+    await updateViabilizacao(id, {
+      status_instalacao: "agendado",
+      agendamento_data: dados.agendamento_data,
+      agendamento_periodo: dados.agendamento_periodo,
+      agendamento_tecnico: dados.agendamento_tecnico,
+      data_instalacao: dados.agendamento_data,
+      periodo_instalacao: dados.agendamento_periodo,
+      tecnico_instalacao: dados.agendamento_tecnico,
+      historico_agendamento: historico,
+    });
+  } else {
+    await updateViabilizacao(id, {
+      status_instalacao: "aguardando_confirmacao",
+      agendamento_data: dados.agendamento_data,
+      agendamento_periodo: dados.agendamento_periodo,
+      agendamento_tecnico: dados.agendamento_tecnico,
+      ...(dados.agendamento_obs !== undefined ? { agendamento_obs: dados.agendamento_obs } : {}),
+      historico_agendamento: historico,
+    });
   }
+}
+
+// Usuário confirma a proposta do agendamento (com alterações)
+export async function confirmarPropostaUsuario(
+  id: string,
+  dados: { agendamento_data: string; agendamento_periodo: string; agendamento_tecnico: string },
+  historicoAnterior?: string
+): Promise<void> {
+  const historico = `${historicoAnterior ?? ""}\nUsuário confirmou ${dados.agendamento_data} ${dados.agendamento_periodo}`;
   await updateViabilizacao(id, {
     status_instalacao: "agendado",
-    data_agendamento_tecnico: new Date().toISOString(),
-    data_instalacao: dados.data_instalacao,
-    periodo_instalacao: dados.periodo_instalacao,
-    tecnico_instalacao: dados.tecnico_instalacao,
-    ...(historico ? { historico_reagendamento_tecnico: historico } : {}),
+    data_instalacao: dados.agendamento_data,
+    periodo_instalacao: dados.agendamento_periodo,
+    tecnico_instalacao: dados.agendamento_tecnico,
+    historico_agendamento: historico,
   });
 }
 
+// Setor marca como instalado após a visita técnica
 export async function marcarInstalado(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "instalado" });
 }
+
+// Arquivar (ambos os lados usam finalizarViabilizacao existente)
 
 // =====================
 // Consultas (Home)

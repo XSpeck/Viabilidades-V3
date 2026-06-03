@@ -25,10 +25,11 @@ export type StatusPredio =
   | "rejeitado";
 
 export type StatusInstalacao =
-  | "aguardando_agendamento"
-  | "aguardando_resposta"
-  | "agendado"
-  | "instalado";
+  | "aguardando_proposta"       // usuário precisa propor data/período
+  | "proposta_enviada"          // usuário enviou, aguardando agendamento analisar
+  | "aguardando_confirmacao"    // agendamento alterou, usuário precisa confirmar
+  | "agendado"                  // ambos concordaram
+  | "instalado";                // instalação concluída, pronto para arquivar
 
 export interface Viabilizacao {
   id: string;
@@ -78,13 +79,21 @@ export interface Viabilizacao {
   };
   // Agendamento técnico (instalação FTTH)
   status_instalacao?: StatusInstalacao;
-  obs_agendamento_tecnico?: string;
-  resposta_usuario_agendamento?: string;
+  // Proposta do usuário
+  proposta_data?: string;
+  proposta_periodo?: string;
+  proposta_obs?: string;
+  // Resposta do setor de agendamento
+  agendamento_data?: string;
+  agendamento_periodo?: string;
+  agendamento_tecnico?: string;
+  agendamento_obs?: string;
+  // Valores confirmados (definidos quando ambos concordam)
   data_instalacao?: string;
   periodo_instalacao?: string;
   tecnico_instalacao?: string;
-  data_agendamento_tecnico?: string;
-  historico_reagendamento_tecnico?: string;
+  // Histórico de negociação
+  historico_agendamento?: string;
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;
