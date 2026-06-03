@@ -55,6 +55,12 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
   const [showEstruturar, setShowEstruturar] = useState(false);
   const [showReagendar, setShowReagendar] = useState(false);
   const [showRejeitar, setShowRejeitar] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  function finishWithSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(onRefresh, 2000);
+  }
 
   const [obsEstruturacao, setObsEstruturacao] = useState("");
   const [gigaEstrutura, setGigaEstrutura] = useState(v.giga ?? false);
@@ -85,7 +91,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
         tecnico: v.tecnico_responsavel ?? userName,
         giga: gigaEstrutura,
       });
-      onRefresh();
+      finishWithSuccess(`🎉 ${v.predio_ftta ?? "Prédio"} registrado como estruturado!`);
     } finally { setLoading(false); }
   }
 
@@ -96,7 +102,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
       await reagendarVisita(v.id, novaData, novoPeriodo, novoTecnico, motivoReagend, {
         data_visita: v.data_visita, periodo_visita: v.periodo_visita, tecnico_responsavel: v.tecnico_responsavel,
       });
-      onRefresh();
+      finishWithSuccess(`🔄 Visita reagendada para ${new Date(novaData + "T12:00:00").toLocaleDateString("pt-BR")} — ${novoPeriodo} — ${novoTecnico}.`);
     } finally { setLoading(false); }
   }
 
@@ -105,7 +111,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
     setLoading(true);
     try {
       await rejeitarPredio(v.id, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivoRejeicao, userName);
-      onRefresh();
+      finishWithSuccess("❌ Registrado como sem viabilidade.");
     } finally { setLoading(false); }
   }
 
@@ -137,7 +143,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
           </div>
           <div>
             <p className="text-xs text-gray-400 uppercase font-medium mb-1">👥 Contatos</p>
-            <p>{isCond ? "Resp" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
+            <p>{isCond ? "Responsável" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
             <p>Cliente: {v.nome_cliente_predio} | {v.contato_cliente_predio}</p>
           </div>
         </div>
@@ -174,8 +180,16 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
           </div>
         )}
 
+        {/* Banner de sucesso */}
+        {successMsg && (
+          <div className="mt-4 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-green-800 text-sm font-medium">
+            <span className="text-xl">🎉</span>
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         {/* Botões de ação */}
-        <div className="flex gap-2 mt-4">
+        <div className={`flex gap-2 mt-4 ${successMsg ? "hidden" : ""}`}>
           <button onClick={() => { setShowEstruturar(!showEstruturar); setShowReagendar(false); setShowRejeitar(false); }}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Estruturado</button>
           <button onClick={() => { setShowReagendar(!showReagendar); setShowEstruturar(false); setShowRejeitar(false); }}

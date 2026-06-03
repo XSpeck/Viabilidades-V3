@@ -254,6 +254,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p><strong>Prédio:</strong> {r.predio_ftta}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Média RX:</strong> {r.media_rx} dBm</p>
+              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
             </div>
           )}
 
@@ -364,6 +365,11 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {["aprovado", "rejeitado", "utp"].includes(r.status) && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
               ✅ {r.status === "aprovado" ? "Finalizar" : "OK, Entendi"}
+            </button>
+          )}
+          {r.status_predio === "estruturado" && (
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
+              ✅ Ciente
             </button>
           )}
         </div>

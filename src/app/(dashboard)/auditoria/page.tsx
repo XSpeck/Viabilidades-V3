@@ -44,7 +44,8 @@ export default function AuditoriaPage() {
   ].filter(Boolean) as { key: string; label: string; items: Viabilizacao[] }[];
 
   const [activeTab, setActiveTab] = useState(0);
-  const activeItems = tabs[activeTab]?.items ?? [];
+  const safeTab = Math.min(activeTab, Math.max(0, tabs.length - 1));
+  const activeItems = tabs[safeTab]?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -68,7 +69,7 @@ export default function AuditoriaPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {tabs.map((tab, i) => (
               <button key={tab.key} onClick={() => setActiveTab(i)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === i ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-50"}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${safeTab === i ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-50"}`}>
                 {tab.label}
               </button>
             ))}
