@@ -116,7 +116,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [dataVisita, setDataVisita] = useState("");
   const [periodo, setPeriodo] = useState("Manhã");
   const [tecnico, setTecnico] = useState("");
-  const [tecnologia, setTecnologia] = useState("FTTA");
+  const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(false);
   const [checklist, setChecklist] = useState({
     sindico_avisado: false,
@@ -390,9 +390,14 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </div>
                     <div className="flex gap-2">
                       <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">✅ Viabilizar</button>
-                      <button onClick={handleSolicitarPredio} disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm">🏗️ Estrutura</button>
+                      <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
                     </div>
-                    <button onClick={() => setShowRejeitar(!showRejeitar)} className="w-full border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                      🔧 Temos projeto na rua mas sem estrutura pronta no condomínio?
+                    </div>
+                    <button onClick={handleSolicitarPredio} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">
+                      🏘️ Solicitar Viabilização da Estrutura do Condomínio
+                    </button>
                   </>
                 )}
               </>
@@ -410,7 +415,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               <>
                 <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
                   <p className="font-medium text-blue-800">✅ Dados recebidos — agendar visita</p>
-                  <p>👤 Síndico: {v.nome_sindico} | {v.contato_sindico}</p>
+                  <p>👤 {v.tipo_instalacao === "Condomínio" ? "Responsável" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
                   <p>🏠 Cliente: {v.nome_cliente_predio} | {v.contato_cliente_predio}</p>
                   <p>🚪 Apto: {v.apartamento}</p>
                   {v.obs_agendamento && <p>📝 {v.obs_agendamento}</p>}
@@ -422,7 +427,9 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   </select>
                   <input placeholder="Técnico *" value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <option>FTTA</option><option>UTP</option><option>FTTH</option>
+                    {v.tipo_instalacao === "Condomínio"
+                      ? <option>FTTH</option>
+                      : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>
                 </div>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)} /> ⚡ Prédio Giga?</label>

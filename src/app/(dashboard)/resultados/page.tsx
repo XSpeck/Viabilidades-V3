@@ -235,6 +235,18 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
+          {/* ===== Condomínio aprovado direto (CTO) ===== */}
+          {r.status === "aprovado" && r.tipo_instalacao === "Condomínio" && !r.status_predio && (
+            <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <p><strong>CTO:</strong> {r.cto_numero}</p>
+              <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
+              <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
+              <p><strong>Distância:</strong> {r.distancia_cliente}</p>
+              <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
+              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+            </div>
+          )}
+
           {/* ===== FTTA aprovado direto ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "Prédio" && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
