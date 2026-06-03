@@ -228,7 +228,7 @@ export default function RelatoriosPage() {
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value"
-                label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}>
+                label={({ name, value, percent }) => `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`}>
                 {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Pie>
               <Tooltip />
