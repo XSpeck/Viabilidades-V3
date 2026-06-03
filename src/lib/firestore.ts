@@ -483,6 +483,20 @@ export async function marcarInstalado(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "instalado" });
 }
 
+// Retorna instalações arquivadas (finalizadas que passaram pelo fluxo técnico)
+export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
+  const q = query(
+    collection(db, "viabilizacoes"),
+    where("tipo_instalacao", "==", "FTTH"),
+    where("status", "==", "finalizado")
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => !!v.status_instalacao)
+    .sort((a, b) => ((b.data_finalizacao ?? b.data_solicitacao ?? "") > (a.data_finalizacao ?? a.data_solicitacao ?? "") ? 1 : -1));
+}
+
 // Arquivar (ambos os lados usam finalizarViabilizacao existente)
 
 // =====================
