@@ -158,14 +158,16 @@ export default function ResultadosPage() {
           {results.length === 0 ? "Nenhuma solicitação encontrada." : "Nenhum resultado para os filtros aplicados."}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border shadow-sm divide-y overflow-hidden">
+        <div className="space-y-3">
           {filtered.map((r) => (
-            <ResultCard
-              key={r.id} r={r}
-              onFinalizar={handleFinalizar}
-              onRefresh={load}
-              showData={r.status === "aprovado" || r.status_predio === "estruturado"}
-            />
+            <div key={r.id} className="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <ResultCard
+                r={r}
+                onFinalizar={handleFinalizar}
+                onRefresh={load}
+                showData={r.status === "aprovado" || r.status_predio === "estruturado"}
+              />
+            </div>
           ))}
         </div>
       )}
