@@ -66,14 +66,16 @@ export default function ResultadosPage() {
     })
     .sort((a, b) => ((b.data_solicitacao ?? "") > (a.data_solicitacao ?? "") ? 1 : -1));
 
-  const statusChips: { key: StatusFilter; label: string; count: number }[] = [
-    { key: "todos",     label: "Todos",         count: results.length },
-    { key: "analise",   label: "🔍 Em análise",  count: counts.analise },
-    { key: "aprovados", label: "✅ Aprovados",   count: counts.aprovados },
-    { key: "predios",   label: "🏢 Prédios",     count: counts.predios },
-    { key: "sem_viab",  label: "❌ Sem viab.",   count: counts.semViab },
-    { key: "utp",       label: "📡 UTP",         count: counts.utp },
-  ].filter((c) => c.key === "todos" || c.count > 0);
+  const statusChips = (
+    [
+      { key: "todos",     label: "Todos",         count: results.length },
+      { key: "analise",   label: "🔍 Em análise",  count: counts.analise },
+      { key: "aprovados", label: "✅ Aprovados",   count: counts.aprovados },
+      { key: "predios",   label: "🏢 Prédios",     count: counts.predios },
+      { key: "sem_viab",  label: "❌ Sem viab.",   count: counts.semViab },
+      { key: "utp",       label: "📡 UTP",         count: counts.utp },
+    ] as { key: StatusFilter; label: string; count: number }[]
+  ).filter((c) => c.key === "todos" || c.count > 0);
 
   const tipoChips: { key: TipoFilter; label: string }[] = [
     { key: "todos",       label: "Todos os tipos" },
