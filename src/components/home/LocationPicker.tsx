@@ -50,9 +50,22 @@ async function coordsToPlusCode(lat: number, lon: number): Promise<string> {
 // =====================
 // Busca Nominatim (OpenStreetMap)
 // =====================
+// Bounding box de Criciúma e região (bounded=0 = prioriza mas não filtra)
+const CRICIUMIA_VIEWBOX = "-49.50,-28.55,-49.15,-28.85";
+
 async function searchNominatim(query: string): Promise<NominatimResult[]> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=pt-BR,pt`;
-  const res = await fetch(url, { headers: { "User-Agent": "ViabilidadeV3/1.0" } });
+  const params = new URLSearchParams({
+    q: query,
+    format: "json",
+    limit: "6",
+    "accept-language": "pt-BR,pt",
+    viewbox: CRICIUMIA_VIEWBOX,
+    bounded: "0",
+    countrycodes: "br",
+  });
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+    headers: { "User-Agent": "ViabilidadeV3/1.0" },
+  });
   return res.json();
 }
 
