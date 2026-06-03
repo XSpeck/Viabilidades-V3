@@ -24,6 +24,12 @@ export type StatusPredio =
   | "estruturado"
   | "rejeitado";
 
+export type StatusInstalacao =
+  | "aguardando_agendamento"
+  | "aguardando_resposta"
+  | "agendado"
+  | "instalado";
+
 export interface Viabilizacao {
   id: string;
   usuario: string;
@@ -70,6 +76,15 @@ export interface Viabilizacao {
     data_confirmada?: boolean;
     equipamento_separado?: boolean;
   };
+  // Agendamento técnico (instalação FTTH)
+  status_instalacao?: StatusInstalacao;
+  obs_agendamento_tecnico?: string;
+  resposta_usuario_agendamento?: string;
+  data_instalacao?: string;
+  periodo_instalacao?: string;
+  tecnico_instalacao?: string;
+  data_agendamento_tecnico?: string;
+  historico_reagendamento_tecnico?: string;
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;

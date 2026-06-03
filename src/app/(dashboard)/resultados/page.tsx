@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, finalizarViabilizacao, enviarDadosPredio } from "@/lib/firestore";
+import { getViabilizacoesUsuario, finalizarViabilizacao, enviarDadosPredio, responderAgendamentoTecnico } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search } from "lucide-react";
@@ -180,6 +180,19 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [respostaInstalacao, setRespostaInstalacao] = useState("");
+  const [enviandoResposta, setEnviandoResposta] = useState(false);
+
+  async function handleResponderAgendamento() {
+    if (!respostaInstalacao.trim()) return;
+    setEnviandoResposta(true);
+    try {
+      await responderAgendamentoTecnico(r.id, respostaInstalacao);
+      setRespostaInstalacao("");
+      onRefresh();
+    } catch { alert("Erro ao enviar resposta."); }
+    finally { setEnviandoResposta(false); }
+  }
 
   // Formulário de dados do síndico
   const [nomeSindico, setNomeSindico] = useState("");
@@ -274,6 +287,68 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p><strong>Distância:</strong> {r.distancia_cliente}</p>
               <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
               {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+            </div>
+          )}
+
+          {/* ===== Fluxo de agendamento de instalação FTTH ===== */}
+          {r.tipo_instalacao === "FTTH" && r.status_instalacao && r.status_instalacao !== "instalado" && (
+            <div className="space-y-2">
+              {/* Status */}
+              {r.status_instalacao === "aguardando_agendamento" && !r.obs_agendamento_tecnico && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                  ⏳ Viabilidade aprovada! O setor de agendamento entrará em contato em breve.
+                </div>
+              )}
+
+              {/* Mensagem do setor */}
+              {r.obs_agendamento_tecnico && (
+                <div className="space-y-2">
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5">
+                    <p className="text-xs text-indigo-500 font-medium mb-0.5">🔧 Setor de agendamento</p>
+                    <p className="text-sm text-gray-800">{r.obs_agendamento_tecnico}</p>
+                  </div>
+                  {r.resposta_usuario_agendamento ? (
+                    <div className="bg-green-50 border border-green-100 rounded-xl px-3 py-2.5 ml-4">
+                      <p className="text-xs text-green-600 font-medium mb-0.5">👤 Sua resposta</p>
+                      <p className="text-sm text-gray-800">{r.resposta_usuario_agendamento}</p>
+                    </div>
+                  ) : (
+                    <div className="ml-4 space-y-2">
+                      <p className="text-xs text-gray-500">💬 Responda ao setor de agendamento:</p>
+                      <textarea
+                        placeholder="Ex: Terça de manhã funciona bem para mim!"
+                        value={respostaInstalacao}
+                        onChange={(e) => setRespostaInstalacao(e.target.value)}
+                        rows={2}
+                        className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      />
+                      <button onClick={handleResponderAgendamento} disabled={enviandoResposta || !respostaInstalacao.trim()}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                        {enviandoResposta ? <Loader2 className="w-4 h-4 animate-spin" /> : "📤 Enviar resposta"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Instalação agendada */}
+              {r.status_instalacao === "agendado" && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1 text-sm">
+                  <p className="font-medium text-green-800">📅 Instalação agendada!</p>
+                  <p>📆 Data: <strong>{r.data_instalacao ? new Date(r.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
+                  <p>🕐 Período: {r.periodo_instalacao}</p>
+                  <p>👷 Técnico: {r.tecnico_instalacao}</p>
+                  {r.historico_reagendamento_tecnico && <p className="text-xs text-orange-600">🔄 {r.historico_reagendamento_tecnico}</p>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== Instalação concluída ===== */}
+          {r.tipo_instalacao === "FTTH" && r.status_instalacao === "instalado" && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+              <p className="font-medium text-green-800">🎉 Instalação concluída!</p>
+              <p className="text-green-700 mt-1">Seu serviço foi instalado pelo técnico {r.tecnico_instalacao ?? ""}.</p>
             </div>
           )}
 
@@ -404,9 +479,14 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </p>
           )}
 
-          {["aprovado", "rejeitado", "utp"].includes(r.status) && (
+          {["aprovado", "rejeitado", "utp"].includes(r.status) && !r.status_instalacao && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
               ✅ {r.status === "aprovado" ? "Finalizar" : "OK, Entendi"}
+            </button>
+          )}
+          {r.status_instalacao === "instalado" && (
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-lg transition-colors">
+              ✅ Ciente — Finalizar
             </button>
           )}
           {r.status_predio === "estruturado" && (

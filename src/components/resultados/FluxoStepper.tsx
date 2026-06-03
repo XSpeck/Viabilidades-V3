@@ -7,6 +7,15 @@ interface Step {
   key: string;
 }
 
+// Fluxo de instalação FTTH (5 passos) — quando há status_instalacao
+const STEPS_FTTH_INSTALACAO: Step[] = [
+  { key: "solicitado",   label: "Solicitado"      },
+  { key: "em_analise",   label: "Em análise"      },
+  { key: "aprovado",     label: "Aprovado"        },
+  { key: "agendamento",  label: "Ag. instalação"  },
+  { key: "instalado",    label: "Instalado"       },
+];
+
 // Fluxo de prédio (5 passos) — quando há status_predio
 const STEPS_FTTA_FLOW: Step[] = [
   { key: "solicitado",       label: "Solicitado" },
@@ -25,6 +34,14 @@ const STEPS_SIMPLES: Step[] = [
 
 function getCurrentStep(v: Viabilizacao): number {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
+
+  // Fluxo de instalação FTTH
+  if (v.tipo_instalacao === "FTTH" && v.status_instalacao) {
+    if (v.status_instalacao === "instalado") return 4;
+    if (v.status_instalacao === "agendado") return 3;
+    if (["aguardando_agendamento", "aguardando_resposta"].includes(v.status_instalacao)) return 2;
+    return 1;
+  }
 
   if (isFtta && v.status_predio) {
     // Fluxo de estruturação de prédio
@@ -51,7 +68,10 @@ interface Props {
 
 export default function FluxoStepper({ v }: Props) {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
-  const steps = (isFtta && v.status_predio) ? STEPS_FTTA_FLOW : STEPS_SIMPLES;
+  const steps =
+    (v.tipo_instalacao === "FTTH" && v.status_instalacao) ? STEPS_FTTH_INSTALACAO :
+    (isFtta && v.status_predio) ? STEPS_FTTA_FLOW :
+    STEPS_SIMPLES;
   const current = getCurrentStep(v);
   const rejected = isRejected(v);
 

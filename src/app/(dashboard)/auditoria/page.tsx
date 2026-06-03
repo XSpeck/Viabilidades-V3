@@ -6,6 +6,7 @@ import {
   getViabilizacoesAuditor, aprovarFTTH, aprovarFTTA, rejeitarViabilizacao,
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
+  iniciarAgendamentoInstalacao,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
@@ -200,8 +201,11 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
-    try { await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName); finishWithSuccess("✅ Viabilidade FTTH aprovada!"); }
-    finally { setLoading(false); }
+    try {
+      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName);
+      if (v.tipo_instalacao === "FTTH") await iniciarAgendamentoInstalacao(v.id);
+      finishWithSuccess("✅ Viabilidade FTTH aprovada! Enviada para agendamento técnico.");
+    } finally { setLoading(false); }
   }
 
   async function handleAprovarFTTA() {

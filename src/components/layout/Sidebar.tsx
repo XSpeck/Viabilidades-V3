@@ -15,6 +15,7 @@ import {
   LogOut,
   Shield,
   Settings,
+  Wrench,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { href: "/viabilidades", label: "Viabilidades", icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
   { href: "/auditoria", label: "Auditoria", icon: <Search className="w-4 h-4" />, adminOnly: true },
   { href: "/agenda", label: "Agenda FTTA/UTP", icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
+  { href: "/agenda-tecnica", label: "Agenda Técnica", icon: <Wrench className="w-4 h-4" />, adminOnly: true },
   { href: "/relatorios", label: "Relatórios", icon: <FileText className="w-4 h-4" />, adminOnly: true },
   { href: "/analise-rede", label: "Análise da Rede", icon: <Network className="w-4 h-4" />, adminOnly: true },
   { href: "/adm", label: "Administração", icon: <Settings className="w-4 h-4" />, adminOnly: true },

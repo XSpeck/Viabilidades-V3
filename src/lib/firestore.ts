@@ -382,6 +382,76 @@ export async function rejeitarPredio(
 }
 
 // =====================
+// Agendamento Técnico (Instalação FTTH)
+// =====================
+
+export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
+  const q = query(
+    collection(db, "viabilizacoes"),
+    where("tipo_instalacao", "==", "FTTH"),
+    where("status", "==", "aprovado")
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => v.status_instalacao && v.status_instalacao !== "instalado")
+    .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
+}
+
+export async function iniciarAgendamentoInstalacao(id: string): Promise<void> {
+  await updateViabilizacao(id, { status_instalacao: "aguardando_agendamento" });
+}
+
+export async function enviarObsAgendamentoTecnico(id: string, obs: string): Promise<void> {
+  await updateViabilizacao(id, {
+    obs_agendamento_tecnico: obs,
+    status_instalacao: "aguardando_resposta",
+  });
+}
+
+export async function responderAgendamentoTecnico(id: string, resposta: string): Promise<void> {
+  await updateViabilizacao(id, {
+    resposta_usuario_agendamento: resposta,
+    status_instalacao: "aguardando_agendamento",
+  });
+}
+
+export async function agendarInstalacao(
+  id: string,
+  dados: { data_instalacao: string; periodo_instalacao: string; tecnico_instalacao: string }
+): Promise<void> {
+  await updateViabilizacao(id, {
+    status_instalacao: "agendado",
+    data_agendamento_tecnico: new Date().toISOString(),
+    ...dados,
+  });
+}
+
+export async function reagendarInstalacao(
+  id: string,
+  dados: { data_instalacao: string; periodo_instalacao: string; tecnico_instalacao: string; motivo?: string },
+  dadosAtuais?: { data_instalacao?: string; periodo_instalacao?: string; tecnico_instalacao?: string }
+): Promise<void> {
+  let historico = "";
+  if (dadosAtuais) {
+    historico = `Reagendado de ${dadosAtuais.data_instalacao ?? "N/A"} ${dadosAtuais.periodo_instalacao ?? ""} (${dadosAtuais.tecnico_instalacao ?? "N/A"})`;
+    if (dados.motivo) historico += ` — Motivo: ${dados.motivo}`;
+  }
+  await updateViabilizacao(id, {
+    status_instalacao: "agendado",
+    data_agendamento_tecnico: new Date().toISOString(),
+    data_instalacao: dados.data_instalacao,
+    periodo_instalacao: dados.periodo_instalacao,
+    tecnico_instalacao: dados.tecnico_instalacao,
+    ...(historico ? { historico_reagendamento_tecnico: historico } : {}),
+  });
+}
+
+export async function marcarInstalado(id: string): Promise<void> {
+  await updateViabilizacao(id, { status_instalacao: "instalado" });
+}
+
+// =====================
 // Consultas (Home)
 // =====================
 
