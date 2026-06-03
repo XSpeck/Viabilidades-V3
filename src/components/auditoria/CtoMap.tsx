@@ -5,6 +5,8 @@ import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, ScaleControl, useMapEvents } from "react-leaflet";
 import { haversineDistance, formatDistance } from "@/lib/ctos";
 import type { CtoWithRoute } from "@/lib/ctos";
+import { getRedes, EMPRESAS } from "@/lib/redes";
+import type { LinhaRede } from "@/lib/redes";
 
 // =====================
 // Camadas de mapa
@@ -217,6 +219,31 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   // Camada de mapa
   const [activeLayer, setActiveLayer] = useState<MapLayer>("map");
 
+  // Redes de distribuidoras
+  const [redes, setRedes] = useState<LinhaRede[]>([]);
+  const [redesVisiveis, setRedesVisiveis] = useState<Record<string, boolean>>({});
+  const [loadingRedes, setLoadingRedes] = useState(false);
+  const [redesCarregadas, setRedesCarregadas] = useState(false);
+
+  async function carregarRedes() {
+    if (redesCarregadas) return;
+    setLoadingRedes(true);
+    try {
+      const data = await getRedes();
+      setRedes(data);
+      const vis: Record<string, boolean> = {};
+      data.forEach((r) => { vis[r.empresa] = true; });
+      setRedesVisiveis(vis);
+      setRedesCarregadas(true);
+    } finally {
+      setLoadingRedes(false);
+    }
+  }
+
+  function toggleRede(empresa: string) {
+    setRedesVisiveis((prev) => ({ ...prev, [empresa]: !prev[empresa] }));
+  }
+
   // Expandir mapa
   const [expanded, setExpanded] = useState(false);
   const mapHeight = expanded ? "580px" : "400px";
@@ -251,27 +278,72 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       {/* Seletor de camadas — canto superior esquerdo */}
       <div style={{
         position: "absolute", top: 10, left: 10, zIndex: 1000,
-        display: "flex", gap: 4, background: "white",
-        borderRadius: 8, padding: 3, boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-        border: "1px solid #e5e7eb",
+        display: "flex", flexDirection: "column", gap: 6,
       }}>
-        {(Object.keys(LAYERS) as MapLayer[]).map((key) => (
+        {/* Camadas */}
+        <div style={{
+          display: "flex", gap: 4, background: "white",
+          borderRadius: 8, padding: 3, boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+          border: "1px solid #e5e7eb",
+        }}>
+          {(Object.keys(LAYERS) as MapLayer[]).map((key) => (
+            <button key={key} onClick={() => setActiveLayer(key)} title={LAYERS[key].label}
+              style={{
+                background: activeLayer === key ? "#4f46e5" : "transparent",
+                color: activeLayer === key ? "white" : "#374151",
+                border: "none", borderRadius: 6, padding: "4px 8px",
+                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                fontFamily: "system-ui,sans-serif", transition: "all 0.15s",
+              }}>
+              {LAYERS[key].emoji} {LAYERS[key].label}
+            </button>
+          ))}
+        </div>
+
+        {/* Painel de redes */}
+        <div style={{
+          background: "white", borderRadius: 8, padding: "6px 8px",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.2)", border: "1px solid #e5e7eb",
+          minWidth: 140,
+        }}>
           <button
-            key={key}
-            onClick={() => setActiveLayer(key)}
-            title={LAYERS[key].label}
+            onClick={carregarRedes}
+            disabled={loadingRedes}
             style={{
-              background: activeLayer === key ? "#4f46e5" : "transparent",
-              color: activeLayer === key ? "white" : "#374151",
-              border: "none", borderRadius: 6,
-              padding: "4px 8px", fontSize: 11, fontWeight: 600,
-              cursor: "pointer", fontFamily: "system-ui,sans-serif",
-              transition: "all 0.15s",
+              width: "100%", border: "none", background: "none", cursor: "pointer",
+              fontSize: 11, fontWeight: 700, color: "#374151", padding: "2px 0 4px",
+              fontFamily: "system-ui,sans-serif", display: "flex", alignItems: "center", gap: 4,
+              justifyContent: "space-between",
             }}
           >
-            {LAYERS[key].emoji} {LAYERS[key].label}
+            <span>⚡ Redes</span>
+            {loadingRedes
+              ? <span style={{ fontSize: 10, color: "#9ca3af" }}>...</span>
+              : !redesCarregadas
+              ? <span style={{ fontSize: 10, color: "#4f46e5" }}>carregar</span>
+              : null}
           </button>
-        ))}
+
+          {redesCarregadas && redes.length === 0 && (
+            <p style={{ fontSize: 10, color: "#9ca3af", margin: 0 }}>Nenhuma rede importada</p>
+          )}
+
+          {redes.map((r) => (
+            <label key={r.empresa} style={{
+              display: "flex", alignItems: "center", gap: 5,
+              cursor: "pointer", padding: "2px 0", fontSize: 11,
+              fontFamily: "system-ui,sans-serif", color: "#374151",
+            }}>
+              <input type="checkbox" checked={redesVisiveis[r.empresa] ?? true}
+                onChange={() => toggleRede(r.empresa)}
+                style={{ accentColor: r.cor, width: 12, height: 12 }} />
+              <div style={{ width: 12, height: 3, borderRadius: 2, background: r.cor, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 600 }}>
+                {EMPRESAS[r.empresa]?.label ?? r.empresa}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       {/* Botões — canto superior direito */}
@@ -364,6 +436,19 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       <LayerUpdater layer={activeLayer} />
       <ResizeHandler expanded={expanded} />
       <MeasureHandler active={measuring} points={measurePoints} onAddPoint={addMeasurePoint} />
+
+      {/* Linhas das redes de distribuidoras */}
+      {redes.map((r) =>
+        redesVisiveis[r.empresa] !== false
+          ? r.linhas.map((linha, i) => (
+              <Polyline
+                key={`${r.empresa}-${i}`}
+                positions={linha}
+                pathOptions={{ color: r.cor, weight: 2.5, opacity: 0.75 }}
+              />
+            ))
+          : null
+      )}
 
       {/* Rota da CTO selecionada (atrás dos marcadores) */}
       {selected?.route && (
