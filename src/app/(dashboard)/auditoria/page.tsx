@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw } from "lucide-react";
 import CtoBusca from "@/components/auditoria/CtoBusca";
+import FttaMap from "@/components/auditoria/FttaMap";
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
@@ -139,6 +140,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
   // Busca de CTOs
   const [showCtoBusca, setShowCtoBusca] = useState(false);
+  const [showFttaMap, setShowFttaMap] = useState(false);
 
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
@@ -300,6 +302,27 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             {v.tipo_instalacao === "Prédio" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏢 Dados FTTA</h4>
+
+                <button
+                  onClick={() => setShowFttaMap(!showFttaMap)}
+                  className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                    showFttaMap
+                      ? "border-blue-400 text-blue-700 bg-blue-50"
+                      : "border-blue-300 text-blue-600 hover:bg-blue-50"
+                  }`}
+                >
+                  🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
+                </button>
+
+                {showFttaMap && (
+                  <FttaMap
+                    plusCode={v.plus_code_cliente}
+                    nomeCliente={v.nome_cliente}
+                    onSelectCdoi={(name) => setCdoi(name)}
+                    onExpandChange={setMapExpanded}
+                  />
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="Nome do prédio" value={predioNome} onChange={(e) => setPredioNome(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
