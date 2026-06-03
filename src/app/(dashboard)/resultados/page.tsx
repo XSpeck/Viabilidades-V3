@@ -5,13 +5,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getViabilizacoesUsuario, finalizarViabilizacao, enviarDadosPredio } from "@/lib/firestore";
 import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2 } from "lucide-react";
+import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search } from "lucide-react";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
+
+type StatusFilter = "todos" | "analise" | "aprovados" | "predios" | "sem_viab" | "utp";
+type TipoFilter = "todos" | "FTTH" | "Prédio" | "Condomínio";
 
 export default function ResultadosPage() {
   const { user } = useAuth();
   const [results, setResults] = useState<Viabilizacao[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>("todos");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -22,17 +28,59 @@ export default function ResultadosPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const aprovadas = results.filter((r) => r.status === "aprovado");
-  const rejeitadas = results.filter((r) => r.status === "rejeitado");
-  const utp = results.filter((r) => r.status === "utp");
-  const emAnalise = results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio);
-  const predios = results.filter((r) => ["aguardando_dados", "pronto_auditoria", "agendado"].includes(r.status_predio ?? ""));
-  const estruturados = results.filter((r) => r.status_predio === "estruturado");
-
   async function handleFinalizar(id: string) {
     await finalizarViabilizacao(id);
     load();
   }
+
+  const counts = {
+    analise:   results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio).length,
+    aprovados: results.filter((r) => r.status === "aprovado" || r.status_predio === "estruturado").length,
+    semViab:   results.filter((r) => r.status === "rejeitado").length,
+    predios:   results.filter((r) => !!r.status_predio && r.status_predio !== "estruturado" && r.status !== "rejeitado").length,
+    utp:       results.filter((r) => r.status === "utp").length,
+  };
+
+  function matchesStatus(r: Viabilizacao): boolean {
+    switch (statusFilter) {
+      case "analise":   return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio;
+      case "aprovados": return r.status === "aprovado" || r.status_predio === "estruturado";
+      case "sem_viab":  return r.status === "rejeitado";
+      case "utp":       return r.status === "utp";
+      case "predios":   return !!r.status_predio && r.status_predio !== "estruturado" && r.status !== "rejeitado";
+      default:          return true;
+    }
+  }
+
+  const filtered = results
+    .filter(matchesStatus)
+    .filter((r) => tipoFilter === "todos" || r.tipo_instalacao === tipoFilter)
+    .filter((r) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        r.nome_cliente?.toLowerCase().includes(q) ||
+        r.plus_code_cliente.toLowerCase().includes(q) ||
+        r.predio_ftta?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => ((b.data_solicitacao ?? "") > (a.data_solicitacao ?? "") ? 1 : -1));
+
+  const statusChips: { key: StatusFilter; label: string; count: number }[] = [
+    { key: "todos",     label: "Todos",         count: results.length },
+    { key: "analise",   label: "🔍 Em análise",  count: counts.analise },
+    { key: "aprovados", label: "✅ Aprovados",   count: counts.aprovados },
+    { key: "predios",   label: "🏢 Prédios",     count: counts.predios },
+    { key: "sem_viab",  label: "❌ Sem viab.",   count: counts.semViab },
+    { key: "utp",       label: "📡 UTP",         count: counts.utp },
+  ].filter((c) => c.key === "todos" || c.count > 0);
+
+  const tipoChips: { key: TipoFilter; label: string }[] = [
+    { key: "todos",       label: "Todos os tipos" },
+    { key: "FTTH",        label: "🏠 FTTH" },
+    { key: "Prédio",      label: "🏢 Prédio" },
+    { key: "Condomínio",  label: "🏘️ Condomínio" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -46,15 +94,15 @@ export default function ResultadosPage() {
         </button>
       </div>
 
-      {/* Contadores */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Em Análise", count: emAnalise.length, color: "blue", icon: <Clock className="w-5 h-5" /> },
-          { label: "Aprovadas", count: aprovadas.length + estruturados.length, color: "green", icon: <CheckCircle className="w-5 h-5" /> },
-          { label: "Sem Viabilidade", count: rejeitadas.length, color: "red", icon: <XCircle className="w-5 h-5" /> },
-          { label: "Prédio/Cond.", count: predios.length, color: "purple", icon: <Building2 className="w-5 h-5" /> },
+          { label: "Em Análise",     count: counts.analise,   color: "blue",   icon: <Clock className="w-5 h-5" /> },
+          { label: "Aprovadas",      count: counts.aprovados, color: "green",  icon: <CheckCircle className="w-5 h-5" /> },
+          { label: "Sem Viabilidade",count: counts.semViab,   color: "red",    icon: <XCircle className="w-5 h-5" /> },
+          { label: "Prédio/Cond.",   count: counts.predios,   color: "purple", icon: <Building2 className="w-5 h-5" /> },
         ].map((item) => (
-          <div key={item.label} className={`bg-white border rounded-xl p-4 flex items-center gap-3`}>
+          <div key={item.label} className="bg-white border rounded-xl p-4 flex items-center gap-3">
             <div className={`text-${item.color}-600`}>{item.icon}</div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{item.count}</p>
@@ -64,71 +112,55 @@ export default function ResultadosPage() {
         ))}
       </div>
 
+      {/* Filtros */}
+      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por cliente, plus code ou prédio..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {statusChips.map((c) => (
+            <button key={c.key} onClick={() => setStatusFilter(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFilter === c.key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              {c.label}{c.key !== "todos" && ` (${c.count})`}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {tipoChips.map((c) => (
+            <button key={c.key} onClick={() => setTipoFilter(c.key as TipoFilter)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${tipoFilter === c.key ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista */}
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
-      ) : results.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border text-gray-400">
-          Nenhuma solicitação encontrada.
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border text-gray-400">
+          {results.length === 0 ? "Nenhuma solicitação encontrada." : "Nenhum resultado para os filtros aplicados."}
         </div>
       ) : (
-        <div className="space-y-4">
-          {/* Em análise */}
-          {emAnalise.length > 0 && (
-            <Section title="🔍 Em Análise Técnica" color="blue">
-              {emAnalise.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
-              ))}
-            </Section>
-          )}
-
-          {/* Aprovadas */}
-          {(aprovadas.length > 0 || estruturados.length > 0) && (
-            <Section title="✅ Aprovadas" color="green">
-              {[...aprovadas, ...estruturados].map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} showData />
-              ))}
-            </Section>
-          )}
-
-          {/* Sem viabilidade */}
-          {rejeitadas.length > 0 && (
-            <Section title="❌ Sem Viabilidade" color="red">
-              {rejeitadas.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
-              ))}
-            </Section>
-          )}
-
-          {/* UTP */}
-          {utp.length > 0 && (
-            <Section title="📡 Atendemos UTP" color="purple">
-              {utp.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
-              ))}
-            </Section>
-          )}
-
-          {/* Prédios pendentes */}
-          {predios.length > 0 && (
-            <Section title="🏢 Prédio / Condomínio" color="orange">
-              {predios.map((r) => (
-                <ResultCard key={r.id} r={r} onFinalizar={handleFinalizar} onRefresh={load} />
-              ))}
-            </Section>
-          )}
+        <div className="bg-white rounded-xl border shadow-sm divide-y overflow-hidden">
+          {filtered.map((r) => (
+            <ResultCard
+              key={r.id} r={r}
+              onFinalizar={handleFinalizar}
+              onRefresh={load}
+              showData={r.status === "aprovado" || r.status_predio === "estruturado"}
+            />
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-      <div className={`px-4 py-3 border-b bg-gray-50`}>
-        <h3 className="font-semibold text-gray-800">{title}</h3>
-      </div>
-      <div className="divide-y">{children}</div>
     </div>
   );
 }
