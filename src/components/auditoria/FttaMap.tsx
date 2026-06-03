@@ -39,7 +39,8 @@ export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onExpandC
         setClientLat(lat);
         setClientLon(lon);
         const allCtos = await getCtos();
-        const nearby = findNearestCtos(lat, lon, allCtos, RADIUS_M);
+        const cdois = allCtos.filter((c) => c.name.toUpperCase().startsWith("CDOI"));
+        const nearby = findNearestCtos(lat, lon, cdois, RADIUS_M);
         setCtos(nearby);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar mapa.");
