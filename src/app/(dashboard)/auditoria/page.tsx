@@ -232,6 +232,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               <p>📍 Plus Code: <span className="font-mono">{v.plus_code_cliente}</span></p>
               <p>🏷️ Tipo: {v.tipo_instalacao}</p>
               {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
+              {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}
               {v.andar_predio && <p>🚪 Apto: {v.andar_predio}</p>}
             </div>
 
