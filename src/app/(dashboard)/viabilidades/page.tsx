@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getViabilizacoesPendentes, pegarViabilizacao } from "@/lib/firestore";
-import { formatDateTime } from "@/lib/pluscode";
+import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -92,7 +92,7 @@ function CardViabilidade({ v, urgente, onPegar, pegando }: {
           </p>
           <div className="flex flex-wrap gap-4 text-sm text-gray-500">
             <span>👤 {v.usuario}</span>
-            <span className="font-mono">📍 {v.plus_code_cliente}</span>
+            <span className="font-mono">📍 {locationToPlusCode(v.plus_code_cliente)}</span>
             <span>🏷️ {v.tipo_instalacao}</span>
             <span>📅 {formatDateTime(v.data_solicitacao)}</span>
           </div>

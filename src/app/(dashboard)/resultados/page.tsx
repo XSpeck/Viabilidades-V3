@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getViabilizacoesUsuario, finalizarViabilizacao, enviarDadosPredio } from "@/lib/firestore";
-import { formatDateTime } from "@/lib/pluscode";
+import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search } from "lucide-react";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
@@ -238,7 +238,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               {r.urgente && " 🔥"}
             </p>
             <p className="text-xs text-gray-400">
-              📍 {r.plus_code_cliente} · {formatDateTime(r.data_solicitacao)}
+              📍 {locationToPlusCode(r.plus_code_cliente)} · {formatDateTime(r.data_solicitacao)}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

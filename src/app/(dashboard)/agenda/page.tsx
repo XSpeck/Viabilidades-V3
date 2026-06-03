@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio } from "@/lib/firestore";
-import { formatDateTime } from "@/lib/pluscode";
+import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CalendarDays } from "lucide-react";
 
@@ -131,7 +131,7 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>
             <p className="text-xs text-gray-400 uppercase font-medium mb-1">📍 Localização</p>
-            <p className="font-mono text-xs">{v.plus_code_cliente}</p>
+            <p className="font-mono text-xs">{locationToPlusCode(v.plus_code_cliente)}</p>
             <p>{isCond ? "Condomínio" : "Edifício"}: {v.predio_ftta}</p>
             <p>Apto/Casa: {v.apartamento ?? "N/A"}</p>
           </div>

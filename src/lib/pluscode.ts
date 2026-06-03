@@ -43,8 +43,24 @@ export async function plusCodeToCoords(
 }
 
 export function coordsToPlusCode(lat: number, lon: number): string {
-  // Formato simples para exibição — idealmente usar a lib OLC
   return `${lat.toFixed(4)},${lon.toFixed(4)}`;
+}
+
+// Converte "lat,lon" para Plus Code; retorna o valor original se já for Plus Code
+export function locationToPlusCode(location: string): string {
+  if (!location || location.includes("+")) return location;
+  const parts = location.split(",");
+  if (parts.length !== 2) return location;
+  const lat = parseFloat(parts[0].trim());
+  const lon = parseFloat(parts[1].trim());
+  if (isNaN(lat) || isNaN(lon)) return location;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { OpenLocationCode } = require("open-location-code");
+    return new OpenLocationCode().encode(lat, lon);
+  } catch {
+    return location;
+  }
 }
 
 export function formatDistance(meters: number): string {

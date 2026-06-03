@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { createViabilizacao, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
-import { validatePlusCode } from "@/lib/pluscode";
+import { validatePlusCode, locationToPlusCode } from "@/lib/pluscode";
 import type { TipoInstalacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft } from "lucide-react";
 
@@ -89,12 +89,24 @@ export default function HomePage() {
     if (tipoSelecionado !== "FTTH" && !nomePredio.trim()) { alert("Informe o nome do prédio/condomínio!"); return; }
     if (tipoSelecionado !== "FTTH" && !andar.trim()) { alert("Informe o apartamento/casa!"); return; }
 
+    // Garantir que a localização seja salva sempre como Plus Code
+    let plusCodeFinal = validatedPlusCode!;
+    if (!plusCodeFinal.includes("+")) {
+      try {
+        const parts = plusCodeFinal.split(",");
+        const lat = parseFloat(parts[0]);
+        const lon = parseFloat(parts[1]);
+        const { OpenLocationCode } = await import("open-location-code");
+        plusCodeFinal = new OpenLocationCode().encode(lat, lon);
+      } catch { /* mantém como coordenadas se falhar */ }
+    }
+
     setLoading(true);
     try {
       await createViabilizacao({
         usuario: user.nome,
         nome_cliente: nomeCliente.trim(),
-        plus_code_cliente: validatedPlusCode,
+        plus_code_cliente: plusCodeFinal,
         tipo_instalacao: tipoSelecionado,
         urgente,
         status: "pendente",
@@ -338,7 +350,7 @@ export default function HomePage() {
                             {p.tecnologia === "FTTA" || p.giga ? "⚡ Giga" : "—"}
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs max-w-[180px] truncate">{p.observacao ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.localizacao}</td>
+                          <td className="px-4 py-3 text-gray-500 font-mono text-xs">{locationToPlusCode(p.localizacao)}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -365,7 +377,7 @@ export default function HomePage() {
                       : filteredSemViab.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{p.condominio}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.localizacao}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-500">{locationToPlusCode(p.localizacao)}</td>
                           <td className="px-4 py-3 text-gray-600">{p.observacao}</td>
                         </tr>
                       ))}

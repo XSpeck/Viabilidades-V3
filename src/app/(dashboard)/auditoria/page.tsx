@@ -7,7 +7,7 @@ import {
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
 } from "@/lib/firestore";
-import { formatDateTime } from "@/lib/pluscode";
+import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw } from "lucide-react";
 import CtoBusca from "@/components/auditoria/CtoBusca";
@@ -218,7 +218,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   }
 
   const tipoIcon = v.tipo_instalacao === "FTTH" ? "🏠" : v.tipo_instalacao === "Prédio" ? "🏢" : "🏘️";
-  const titulo = `${tipoIcon} ${v.nome_cliente ?? "Cliente"} | ${v.plus_code_cliente}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
+  const titulo = `${tipoIcon} ${v.nome_cliente ?? "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
 
   return (
     <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : "border-indigo-400"}`}>
@@ -245,7 +245,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             <h4 className="font-medium text-gray-700">📋 Informações</h4>
             <div className="text-sm text-gray-600 space-y-1">
               {v.nome_cliente && <p>🙋 Cliente: {v.nome_cliente}</p>}
-              <p>📍 Plus Code: <span className="font-mono">{v.plus_code_cliente}</span></p>
+              <p>📍 Plus Code: <span className="font-mono">{locationToPlusCode(v.plus_code_cliente)}</span></p>
               <p>🏷️ Tipo: {v.tipo_instalacao}</p>
               {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
               {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}
