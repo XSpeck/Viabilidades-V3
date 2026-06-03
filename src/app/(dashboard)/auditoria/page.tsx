@@ -90,6 +90,12 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  function finishWithSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(onRefresh, 2000);
+  }
 
   // Campos FTTH
   const [cto, setCto] = useState(v.cto_numero ?? "");
@@ -145,27 +151,27 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
-    try { await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName); onRefresh(); }
+    try { await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName); finishWithSuccess("✅ Viabilidade FTTH aprovada!"); }
     finally { setLoading(false); }
   }
 
   async function handleAprovarFTTA() {
     if (!cdoi || !predioNome || !portasFtta || !mediaRx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
-    try { await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta }, userName); onRefresh(); }
+    try { await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta }, userName); finishWithSuccess("✅ Viabilidade FTTA aprovada!"); }
     finally { setLoading(false); }
   }
 
   async function handleRejeitar() {
     if (!motivo.trim()) { alert("Informe o motivo!"); return; }
     setLoading(true);
-    try { await rejeitarViabilizacao(v.id, motivo, userName); onRefresh(); }
+    try { await rejeitarViabilizacao(v.id, motivo, userName); finishWithSuccess("❌ Sem viabilidade registrada."); }
     finally { setLoading(false); }
   }
 
   async function handleUTP() {
     setLoading(true);
-    try { await marcarUTP(v.id, userName); onRefresh(); }
+    try { await marcarUTP(v.id, userName); finishWithSuccess("📡 Marcado como UTP."); }
     finally { setLoading(false); }
   }
 
@@ -183,7 +189,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
   async function handleSolicitarPredio() {
     setLoading(true);
-    try { await solicitarViabilizacaoPredio(v.id); onRefresh(); }
+    try { await solicitarViabilizacaoPredio(v.id); finishWithSuccess("🏗️ Solicitação de dados do prédio enviada ao usuário."); }
     finally { setLoading(false); }
   }
 
@@ -199,14 +205,14 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
         giga,
         checklist_previsita: checklist,
       });
-      onRefresh();
+      finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }
 
   async function handleRejeitarPredio() {
     if (!motivo.trim()) { alert("Informe o motivo!"); return; }
     setLoading(true);
-    try { await rejeitarPredio(v.id, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivo, userName); onRefresh(); }
+    try { await rejeitarPredio(v.id, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivo, userName); finishWithSuccess("❌ Prédio sem viabilidade registrado."); }
     finally { setLoading(false); }
   }
 
@@ -224,8 +230,17 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
       {open && (
         <div className={`px-5 pb-5 border-t pt-4 ${mapExpanded ? "block" : "grid grid-cols-1 md:grid-cols-2 gap-6"}`}>
-          {/* Info — oculto quando mapa expandido */}
-          <div className={`space-y-3 ${mapExpanded ? "hidden" : ""}`}>
+
+          {/* Banner de sucesso */}
+          {successMsg && (
+            <div className="col-span-2 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-green-800 text-sm font-medium">
+              <span className="text-xl">🎉</span>
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Info — oculto quando mapa expandido ou após ação concluída */}
+          <div className={`space-y-3 ${mapExpanded || successMsg ? "hidden" : ""}`}>
             <h4 className="font-medium text-gray-700">📋 Informações</h4>
             <div className="text-sm text-gray-600 space-y-1">
               {v.nome_cliente && <p>🙋 Cliente: {v.nome_cliente}</p>}
@@ -255,7 +270,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
           </div>
 
           {/* Formulário */}
-          <div className="space-y-3">
+          <div className={`space-y-3 ${successMsg ? "hidden" : ""}`}>
             {/* FTTH */}
             {v.tipo_instalacao === "FTTH" && !v.status_predio && (
               <>
