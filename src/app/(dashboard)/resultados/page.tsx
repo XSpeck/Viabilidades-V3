@@ -208,7 +208,7 @@ function ResultCard({ r, onFinalizar, showData }: {
             )}
           </div>
         </div>
-        {isAprovado && !open && !isFtta && (
+        {isAprovado && !open && (
           <p className="text-xs text-indigo-500 mt-1.5 font-medium">
             👆 Toque para ver os dados da viabilidade
           </p>
