@@ -251,6 +251,7 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
           <MapContainer
             center={[-28.6775, -49.3696]}
             zoom={14}
+            maxZoom={19}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
             scrollWheelZoom
