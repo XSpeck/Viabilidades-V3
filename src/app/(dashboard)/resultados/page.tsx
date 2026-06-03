@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search } from "lucide-react";
+import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
 
 type StatusFilter = "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp";
@@ -19,6 +19,14 @@ export default function ResultadosPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>("todos");
 
+  const [historico, setHistorico] = useState<Viabilizacao[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
+  const [historicoReady, setHistoricoReady] = useState(false);
+  const [histSearch, setHistSearch] = useState("");
+  const [histTipo, setHistTipo] = useState<TipoFilter>("todos");
+  const [histStatus, setHistStatus] = useState("todos");
+
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -27,6 +35,60 @@ export default function ResultadosPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function loadHistorico() {
+    if (!user || historicoReady) return;
+    setLoadingHistorico(true);
+    try {
+      setHistorico(await getViabilizacoesHistorico(user.nome));
+      setHistoricoReady(true);
+    } finally { setLoadingHistorico(false); }
+  }
+
+  function downloadHistoricoCSV() {
+    const rows = historicoFiltrado.map((v) => ({
+      Data:        formatDateTime(v.data_solicitacao),
+      Tipo:        v.tipo_instalacao,
+      Cliente:     v.nome_cliente ?? "-",
+      "Plus Code": locationToPlusCode(v.plus_code_cliente),
+      Prédio:      v.predio_ftta ?? "-",
+      Status:      v.status,
+      CTO:         v.cto_numero ?? "-",
+      Distância:   v.distancia_cliente ?? "-",
+      Auditor:     v.auditado_por ?? "-",
+      "Dt. Audit.":formatDateTime(v.data_auditoria),
+    }));
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const lines = rows.map((r) => headers.map((h) => `"${String(r[h as keyof typeof r] ?? "").replace(/"/g, '""')}"`).join(","));
+    const blob = new Blob(["﻿" + [headers.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `historico_${user?.nome?.replace(/\s/g, "_")}.csv`; a.click();
+  }
+
+  const statusOptions = [
+    { key: "todos",      label: "Todos os status" },
+    { key: "pendente",   label: "Pendente"         },
+    { key: "em_auditoria",label: "Em auditoria"    },
+    { key: "aprovado",   label: "Aprovado"         },
+    { key: "rejeitado",  label: "Sem viabilidade"  },
+    { key: "utp",        label: "UTP"              },
+    { key: "finalizado", label: "Finalizado"       },
+  ];
+
+  const historicoFiltrado = historico
+    .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
+    .filter((v) => histStatus === "todos" || v.status === histStatus)
+    .filter((v) => {
+      if (!histSearch.trim()) return true;
+      const q = histSearch.toLowerCase();
+      return (
+        v.nome_cliente?.toLowerCase().includes(q) ||
+        v.plus_code_cliente.toLowerCase().includes(q) ||
+        v.predio_ftta?.toLowerCase().includes(q) ||
+        v.cto_numero?.toLowerCase().includes(q)
+      );
+    });
 
   async function handleFinalizar(id: string) {
     await finalizarViabilizacao(id);
@@ -171,6 +233,117 @@ export default function ResultadosPage() {
           ))}
         </div>
       )}
+
+      {/* ─── Histórico completo ─────────────────────────────────── */}
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <button
+          onClick={() => { setShowHistorico((s) => { if (!s) loadHistorico(); return !s; }); }}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
+            <span className="font-semibold text-gray-800">📋 Histórico Completo</span>
+            <span className="text-xs text-gray-400 font-normal hidden sm:inline">— todas as viabilizações incluindo finalizadas</span>
+          </div>
+          {showHistorico ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+
+        {showHistorico && (
+          <div className="border-t">
+            {loadingHistorico ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                <p className="text-sm">Carregando histórico...</p>
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                {/* Filtros do histórico */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input type="text" placeholder="Buscar por cliente, plus code, prédio ou CTO..."
+                      value={histSearch} onChange={(e) => setHistSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  </div>
+                  <select value={histTipo} onChange={(e) => setHistTipo(e.target.value as TipoFilter)}
+                    className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="todos">Todos os tipos</option>
+                    <option value="FTTH">FTTH</option>
+                    <option value="Prédio">Prédio</option>
+                    <option value="Condomínio">Condomínio</option>
+                  </select>
+                  <select value={histStatus} onChange={(e) => setHistStatus(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    {statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                  <button onClick={downloadHistoricoCSV}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium">
+                    <Download className="w-3.5 h-3.5" /> CSV
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-400">{historicoFiltrado.length} de {historico.length} registro(s)</p>
+
+                {historicoFiltrado.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">Nenhum registro encontrado.</div>
+                ) : (
+                  <div className="overflow-auto rounded-lg border max-h-[420px]">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
+                        <tr>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Data</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Tipo</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Cliente</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Plus Code</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Prédio/Cond.</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">CTO</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Status</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Auditor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {historicoFiltrado.map((v) => {
+                          const statusColors: Record<string, string> = {
+                            aprovado:     "bg-green-100 text-green-700",
+                            rejeitado:    "bg-red-100 text-red-700",
+                            utp:          "bg-purple-100 text-purple-700",
+                            finalizado:   "bg-gray-100 text-gray-600",
+                            em_auditoria: "bg-yellow-100 text-yellow-700",
+                            pendente:     "bg-blue-100 text-blue-600",
+                          };
+                          const statusLabel: Record<string, string> = {
+                            aprovado: "✅ Aprovado", rejeitado: "❌ Sem viab.",
+                            utp: "📡 UTP", finalizado: "📁 Finalizado",
+                            em_auditoria: "🔍 Em análise", pendente: "⏳ Pendente",
+                          };
+                          return (
+                            <tr key={v.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(v.data_solicitacao)}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                <span className="text-xs">{v.tipo_instalacao === "FTTH" ? "🏠" : v.tipo_instalacao === "Prédio" ? "🏢" : "🏘️"} {v.tipo_instalacao}</span>
+                              </td>
+                              <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
+                              <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{locationToPlusCode(v.plus_code_cliente)}</td>
+                              <td className="px-3 py-2.5 max-w-[140px] truncate text-gray-600">{v.predio_ftta ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cto_numero ?? "-"}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] ?? "bg-gray-100 text-gray-600"}`}>
+                                  {statusLabel[v.status] ?? v.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{v.auditado_por ?? "-"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
