@@ -50,7 +50,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
     setError(null);
     try {
       const allCtos = await getCtos();
-      const nearby = findNearestCtos(lat, lon, allCtos, r);
+      const ctosOnly = allCtos.filter((c) => !c.name.toUpperCase().startsWith("CDOI"));
+      const nearby = findNearestCtos(lat, lon, ctosOnly, r);
 
       if (nearby.length === 0) {
         setCtos([]);
