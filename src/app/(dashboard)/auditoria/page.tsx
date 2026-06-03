@@ -9,14 +9,18 @@ import {
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, Trash2, RotateCcw } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, RotateCcw, Search } from "lucide-react";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
+
+type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar";
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<Viabilizacao[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<AuditoriaFilter>("todos");
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -29,26 +33,50 @@ export default function AuditoriaPage() {
 
   if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
-  const urgentes = items.filter((i) => i.urgente);
-  const ftth = items.filter((i) => i.tipo_instalacao === "FTTH" && !i.urgente);
-  const prediosNovos = items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio);
-  const aguardandoDados = items.filter((i) => i.status_predio === "aguardando_dados");
-  const prontosAgendar = items.filter((i) => i.status_predio === "pronto_auditoria");
+  const counts = {
+    todos:      items.length,
+    urgentes:   items.filter((i) => i.urgente).length,
+    ftth:       items.filter((i) => i.tipo_instalacao === "FTTH" && !i.urgente).length,
+    predios:    items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio).length,
+    aguardando: items.filter((i) => i.status_predio === "aguardando_dados").length,
+    agendar:    items.filter((i) => i.status_predio === "pronto_auditoria").length,
+  };
 
-  const tabs = [
-    urgentes.length > 0 && { key: "urgentes", label: `🔥 Urgentes (${urgentes.length})`, items: urgentes },
-    ftth.length > 0 && { key: "ftth", label: `🏠 FTTH (${ftth.length})`, items: ftth },
-    prediosNovos.length > 0 && { key: "predios", label: `🏢 Prédios (${prediosNovos.length})`, items: prediosNovos },
-    aguardandoDados.length > 0 && { key: "aguardando", label: `⏳ Ag. dados (${aguardandoDados.length})`, items: aguardandoDados },
-    prontosAgendar.length > 0 && { key: "agendar", label: `📅 Agendar (${prontosAgendar.length})`, items: prontosAgendar },
-  ].filter(Boolean) as { key: string; label: string; items: Viabilizacao[] }[];
+  const chips: { key: AuditoriaFilter; label: string }[] = [
+    { key: "todos",      label: `Todos (${counts.todos})` },
+    { key: "urgentes",   label: `🔥 Urgentes (${counts.urgentes})` },
+    { key: "ftth",       label: `🏠 FTTH (${counts.ftth})` },
+    { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
+    { key: "aguardando", label: `⏳ Ag. dados (${counts.aguardando})` },
+    { key: "agendar",    label: `📅 Agendar (${counts.agendar})` },
+  ].filter((c) => c.key === "todos" || counts[c.key] > 0) as { key: AuditoriaFilter; label: string }[];
 
-  const [activeTab, setActiveTab] = useState(0);
-  const safeTab = Math.min(activeTab, Math.max(0, tabs.length - 1));
-  const activeItems = tabs[safeTab]?.items ?? [];
+  function matchesFilter(v: Viabilizacao): boolean {
+    switch (filter) {
+      case "urgentes":   return !!v.urgente;
+      case "ftth":       return v.tipo_instalacao === "FTTH" && !v.urgente;
+      case "predios":    return ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !v.urgente && !v.status_predio;
+      case "aguardando": return v.status_predio === "aguardando_dados";
+      case "agendar":    return v.status_predio === "pronto_auditoria";
+      default:           return true;
+    }
+  }
+
+  const filtered = items
+    .filter(matchesFilter)
+    .filter((v) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        v.nome_cliente?.toLowerCase().includes(q) ||
+        v.plus_code_cliente.toLowerCase().includes(q) ||
+        v.predio_ftta?.toLowerCase().includes(q) ||
+        v.usuario.toLowerCase().includes(q)
+      );
+    });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">🔍 Auditoria</h1>
@@ -59,28 +87,46 @@ export default function AuditoriaPage() {
         </button>
       </div>
 
+      {/* Filtros */}
+      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por cliente, plus code, prédio ou solicitante..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {chips.map((c) => (
+            <button key={c.key} onClick={() => setFilter(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                filter === c.key
+                  ? c.key === "urgentes" ? "bg-red-600 text-white" : "bg-indigo-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
       ) : items.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border text-gray-400">✅ Nenhuma solicitação pendente.</div>
+        <div className="text-center py-20 bg-white rounded-xl border text-gray-400">✅ Nenhuma solicitação em análise.</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border text-gray-400">
+          Nenhum resultado para os filtros aplicados.
+        </div>
       ) : (
-        <>
-          {/* Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {tabs.map((tab, i) => (
-              <button key={tab.key} onClick={() => setActiveTab(i)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${safeTab === i ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-50"}`}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-4">
-            {activeItems.map((v) => (
-              <AuditoriaCard key={v.id} v={v} userName={user!.nome} onRefresh={load} />
-            ))}
-          </div>
-        </>
+        <div className="space-y-4">
+          {filtered.map((v) => (
+            <AuditoriaCard key={v.id} v={v} userName={user!.nome} onRefresh={load} />
+          ))}
+        </div>
       )}
     </div>
   );
