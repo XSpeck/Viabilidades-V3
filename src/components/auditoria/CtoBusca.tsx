@@ -30,9 +30,10 @@ interface Props {
   initialCto?: string;
   onConfirm: (data: SelectedCto) => void;
   onClose: () => void;
+  onExpandChange?: (expanded: boolean) => void;
 }
 
-export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm, onClose }: Props) {
+export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm, onClose, onExpandChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -169,6 +170,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               ctos={ctos}
               selectedName={selectedName}
               onSelect={setSelectedName}
+              onExpandChange={onExpandChange}
             />
 
             {/* Aviso de linha reta da CTO selecionada */}

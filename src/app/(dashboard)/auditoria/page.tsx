@@ -88,6 +88,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
 
   // Campos FTTH
   const [cto, setCto] = useState(v.cto_numero ?? "");
@@ -190,9 +191,9 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
       </button>
 
       {open && (
-        <div className="px-5 pb-5 border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Info */}
-          <div className="space-y-3">
+        <div className={`px-5 pb-5 border-t pt-4 ${mapExpanded ? "block" : "grid grid-cols-1 md:grid-cols-2 gap-6"}`}>
+          {/* Info — oculto quando mapa expandido */}
+          <div className={`space-y-3 ${mapExpanded ? "hidden" : ""}`}>
             <h4 className="font-medium text-gray-700">📋 Informações</h4>
             <div className="text-sm text-gray-600 space-y-1">
               {v.nome_cliente && <p>🙋 Cliente: {v.nome_cliente}</p>}
@@ -241,6 +242,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     initialCto={cto || undefined}
                     onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
                     onClose={() => setShowCtoBusca(false)}
+                    onExpandChange={setMapExpanded}
                   />
                 ) : (
                   <>
@@ -303,6 +305,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     initialCto={cto || undefined}
                     onConfirm={(data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); }}
                     onClose={() => setShowCtoBusca(false)}
+                    onExpandChange={setMapExpanded}
                   />
                 ) : (
                   <>

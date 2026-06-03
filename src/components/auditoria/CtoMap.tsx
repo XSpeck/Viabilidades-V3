@@ -66,6 +66,7 @@ interface Props {
   ctos: CtoWithRoute[];
   selectedName: string | null;
   onSelect: (name: string) => void;
+  onExpandChange?: (expanded: boolean) => void;
 }
 
 // =====================
@@ -212,7 +213,7 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 // Mapa principal
 // =====================
-export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSelect }: Props) {
+export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSelect, onExpandChange }: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
 
@@ -255,6 +256,12 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   const addMeasurePoint = useCallback((p: [number, number]) => {
     setMeasurePoints((prev) => [...prev, p]);
   }, []);
+
+  function toggleExpand() {
+    const next = !expanded;
+    setExpanded(next);
+    onExpandChange?.(next);
+  }
 
   function toggleMeasure() {
     if (measuring) {
@@ -350,7 +357,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
         {/* Expandir/recolher */}
         <button
-          onClick={() => setExpanded((v) => !v)}
+          onClick={toggleExpand}
           title={expanded ? "Recolher mapa" : "Expandir mapa"}
           style={{
             background: "white", color: "#374151",
