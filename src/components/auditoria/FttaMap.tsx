@@ -15,7 +15,7 @@ const CtoMap = dynamic(() => import("./CtoMap"), {
   ),
 });
 
-const RADIUS_M = 1500;
+const RADIUS_M = 600;
 
 interface Props {
   plusCode: string;
