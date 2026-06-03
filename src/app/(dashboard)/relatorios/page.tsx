@@ -6,7 +6,18 @@ import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade } fr
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { Loader2, Download, Search, RefreshCw } from "lucide-react";
+import { Loader2, Download, Search, RefreshCw, MapPin } from "lucide-react";
+import dynamic from "next/dynamic";
+import type { MapPoint } from "@/components/relatorios/RelatorioMapa";
+
+const RelatorioMapa = dynamic(() => import("@/components/relatorios/RelatorioMapa"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[520px] bg-gray-100 rounded-xl flex items-center justify-center">
+      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+    </div>
+  ),
+});
 
 // ─── CSV export ───────────────────────────────────────────────────
 function downloadCSV(rows: Record<string, string | number | undefined>[], filename: string) {
@@ -52,8 +63,72 @@ export default function RelatoriosPage() {
   const [dataFim, setDataFim] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
   const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", estruturados: "", sem_viab: "" });
+  const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
+  const [loadingMap, setLoadingMap] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   function setSearch(tab: TabKey, v: string) { setSearches((p) => ({ ...p, [tab]: v })); }
+
+  async function buildMapPoints(
+    viabs: Viabilizacao[],
+    atnd: PredioAtendido[],
+    svs: PredioSemViabilidade[]
+  ) {
+    if (mapReady) return;
+    setLoadingMap(true);
+    const REFERENCE_LAT = -28.6775;
+    const REFERENCE_LON = -49.3696;
+
+    function decode(plusCode: string): { lat: number; lon: number } | null {
+      try {
+        const { OpenLocationCode } = require("open-location-code");
+        const olc = new OpenLocationCode();
+        const m = plusCode.trim().match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+        if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
+        const upper = plusCode.trim().toUpperCase();
+        const resolved = olc.isFull(upper) ? upper : olc.recoverNearest(upper, REFERENCE_LAT, REFERENCE_LON);
+        const d = olc.decode(resolved);
+        return { lat: (d.latitudeLo + d.latitudeHi) / 2, lon: (d.longitudeLo + d.longitudeHi) / 2 };
+      } catch { return null; }
+    }
+
+    const points: MapPoint[] = [];
+
+    // FTTH aprovadas
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status)).forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
+    });
+
+    // FTTH rejeitadas
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado").forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `ftth_rej_${v.id}`, ...geo, category: "ftth_rej", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
+    });
+
+    // Prédio aprovado
+    viabs.filter((v) => v.tipo_instalacao === "Prédio" && v.status === "aprovado").forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `predio_ap_${v.id}`, ...geo, category: "predio_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+    });
+
+    // Condomínio aprovado
+    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && v.status === "aprovado").forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `cond_ap_${v.id}`, ...geo, category: "cond_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+    });
+
+    // Prédios sem viabilidade
+    svs.forEach((s) => {
+      const geo = decode(s.localizacao);
+      if (geo) points.push({ id: `sem_viab_${s.id}`, ...geo, category: "sem_viab", cliente: s.condominio, plusCode: locationToPlusCode(s.localizacao), extra: s.observacao });
+    });
+
+    setMapPoints(points);
+    setMapReady(true);
+    setLoadingMap(false);
+  }
 
   function load() {
     setLoading(true);
@@ -326,6 +401,44 @@ export default function RelatoriosPage() {
             </table>
           )}
         </div>
+      </div>
+
+      {/* Mapa de demanda */}
+      <div className="bg-white rounded-xl border overflow-hidden">
+        <button
+          onClick={() => {
+            setShowMap((s) => {
+              if (!s && !mapReady) buildMapPoints(viabilizacoes, atendidos, semViab);
+              return !s;
+            });
+          }}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <MapPin className="w-5 h-5 text-indigo-600" />
+            <span className="font-semibold text-gray-800">🗺️ Mapa de Demanda</span>
+            <span className="text-xs text-gray-400 font-normal hidden sm:inline">— visualize onde há procura para planejar novos projetos</span>
+          </div>
+          <span className="text-gray-400 text-sm">{showMap ? "▲" : "▼"}</span>
+        </button>
+
+        {showMap && (
+          <div className="border-t">
+            {loadingMap ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
+                <Loader2 className="w-7 h-7 animate-spin text-indigo-600" />
+                <p className="text-sm">Convertendo localizações e carregando mapa...</p>
+              </div>
+            ) : (
+              <div className="p-4">
+                <RelatorioMapa points={mapPoints} />
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  {mapPoints.length} pontos mapeados · clique nos pins para detalhes · use a legenda para filtrar
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
