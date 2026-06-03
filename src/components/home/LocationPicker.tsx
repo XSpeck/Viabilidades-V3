@@ -251,7 +251,7 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
           <MapContainer
             center={[-28.6775, -49.3696]}
             zoom={14}
-            maxZoom={19}
+            maxZoom={18}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
             scrollWheelZoom
@@ -259,11 +259,11 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               attribution="© Esri, Maxar"
-              maxZoom={20}
+              maxZoom={18}
             />
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={20}
+              maxZoom={18}
               opacity={0.7}
             />
             <ScaleControl position="bottomleft" imperial={false} />

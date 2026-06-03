@@ -33,14 +33,17 @@ const LAYERS: Record<MapLayer, { label: string; emoji: string; url: string; attr
   },
 };
 
+const MAP_MAX_ZOOM = 18;
+
 function LayerUpdater({ layer }: { layer: MapLayer }) {
   const map = useMap();
   useEffect(() => {
     map.eachLayer((l) => { if ((l as L.TileLayer).options?.maxZoom) map.removeLayer(l); });
-    L.tileLayer(LAYERS[layer].url, { attribution: LAYERS[layer].attribution, maxZoom: 20 }).addTo(map);
+    L.tileLayer(LAYERS[layer].url, { attribution: LAYERS[layer].attribution, maxZoom: MAP_MAX_ZOOM }).addTo(map);
     if (LAYERS[layer].overlay) {
-      L.tileLayer(LAYERS[layer].overlay!, { maxZoom: 20, opacity: 0.85 }).addTo(map);
+      L.tileLayer(LAYERS[layer].overlay!, { maxZoom: MAP_MAX_ZOOM, opacity: 0.85 }).addTo(map);
     }
+    map.setMaxZoom(MAP_MAX_ZOOM);
   }, [layer, map]);
   return null;
 }
@@ -353,7 +356,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       zoom={15}
       style={{ height: "100%", width: "100%" }}
       zoomControl={false}
-      maxZoom={19}
+      maxZoom={18}
       scrollWheelZoom
     >
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
