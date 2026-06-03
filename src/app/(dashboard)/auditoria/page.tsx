@@ -166,7 +166,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [periodo, setPeriodo] = useState("Manhã");
   const [tecnico, setTecnico] = useState("");
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
-  const [giga, setGiga] = useState(v.tipo_instalacao !== "Condomínio");
+  const [giga, setGiga] = useState(true);
   const [checklist, setChecklist] = useState({
     sindico_avisado: false,
     portaria_informada: false,
@@ -481,12 +481,21 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                       : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)}
-                    disabled={tecnologia === "FTTA"} />
-                  ⚡ Prédio Giga?
-                  {tecnologia === "FTTA" && <span className="text-xs text-blue-600">(sempre ativo em FTTA)</span>}
-                </label>
+                {(() => {
+                  const alwaysGiga = tecnologia === "FTTA" || v.tipo_instalacao === "Condomínio";
+                  return (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)}
+                        disabled={alwaysGiga} />
+                      ⚡ {v.tipo_instalacao === "Condomínio" ? "Condomínio" : "Prédio"} Giga?
+                      {alwaysGiga && (
+                        <span className="text-xs text-blue-600">
+                          {v.tipo_instalacao === "Condomínio" ? "(sempre ativo em Condomínio)" : "(sempre ativo em FTTA)"}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })()}
 
                 {/* Checklist pré-visita */}
                 <div className={`border rounded-xl p-3 space-y-2 ${checklistOk ? "border-green-300 bg-green-50" : "border-orange-200 bg-orange-50"}`}>

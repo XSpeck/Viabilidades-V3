@@ -63,7 +63,8 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
   }
 
   const [obsEstruturacao, setObsEstruturacao] = useState("");
-  const [gigaEstrutura, setGigaEstrutura] = useState(v.tecnologia_predio === "FTTA" ? true : (v.giga ?? false));
+  const isAlwaysGiga = v.tecnologia_predio === "FTTA" || v.tipo_instalacao === "Condomínio";
+  const [gigaEstrutura, setGigaEstrutura] = useState(isAlwaysGiga ? true : (v.giga ?? false));
   const [novaData, setNovaData] = useState("");
   const [novoPeriodo, setNovoPeriodo] = useState("Manhã");
   const [novoTecnico, setNovoTecnico] = useState("");
@@ -154,7 +155,9 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
           </div>
         )}
 
-        {v.giga && <p className="mt-2 text-xs text-yellow-600 font-medium">⚡ Giga</p>}
+        {(v.giga || v.tecnologia_predio === "FTTA" || v.tipo_instalacao === "Condomínio") && (
+          <p className="mt-2 text-xs text-yellow-600 font-medium">⚡ Giga</p>
+        )}
 
         {/* Checklist pré-visita */}
         {v.checklist_previsita && (
@@ -206,9 +209,13 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
               rows={3} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400" />
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={gigaEstrutura} onChange={(e) => setGigaEstrutura(e.target.checked)}
-                disabled={v.tecnologia_predio === "FTTA"} />
+                disabled={isAlwaysGiga} />
               ⚡ {isCond ? "Condomínio" : "Prédio"} Giga?
-              {v.tecnologia_predio === "FTTA" && <span className="text-xs text-blue-600">(sempre ativo em FTTA)</span>}
+              {isAlwaysGiga && (
+                <span className="text-xs text-blue-600">
+                  {isCond ? "(sempre ativo em Condomínio)" : "(sempre ativo em FTTA)"}
+                </span>
+              )}
             </label>
             <div className="flex gap-2">
               <button onClick={handleEstruturar} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">Confirmar</button>

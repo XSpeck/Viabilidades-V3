@@ -385,7 +385,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p>🕐 Período: {r.periodo_visita}</p>
               <p>👷 Técnico: {r.tecnico_responsavel}</p>
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
-              {r.giga && <p>⚡ Giga: Sim</p>}
+              {(r.giga || r.tecnologia_predio === "FTTA" || r.tipo_instalacao === "Condomínio") && <p>⚡ Giga: Sim</p>}
             </div>
           )}
 
