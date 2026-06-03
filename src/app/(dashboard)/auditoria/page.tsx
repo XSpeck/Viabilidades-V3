@@ -42,14 +42,16 @@ export default function AuditoriaPage() {
     agendar:    items.filter((i) => i.status_predio === "pronto_auditoria").length,
   };
 
-  const chips: { key: AuditoriaFilter; label: string }[] = [
-    { key: "todos",      label: `Todos (${counts.todos})` },
-    { key: "urgentes",   label: `🔥 Urgentes (${counts.urgentes})` },
-    { key: "ftth",       label: `🏠 FTTH (${counts.ftth})` },
-    { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
-    { key: "aguardando", label: `⏳ Ag. dados (${counts.aguardando})` },
-    { key: "agendar",    label: `📅 Agendar (${counts.agendar})` },
-  ].filter((c) => c.key === "todos" || counts[c.key] > 0) as { key: AuditoriaFilter; label: string }[];
+  const chips = (
+    [
+      { key: "todos",      label: `Todos (${counts.todos})` },
+      { key: "urgentes",   label: `🔥 Urgentes (${counts.urgentes})` },
+      { key: "ftth",       label: `🏠 FTTH (${counts.ftth})` },
+      { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
+      { key: "aguardando", label: `⏳ Ag. dados (${counts.aguardando})` },
+      { key: "agendar",    label: `📅 Agendar (${counts.agendar})` },
+    ] as { key: AuditoriaFilter; label: string }[]
+  ).filter((c) => c.key === "todos" || counts[c.key] > 0);
 
   function matchesFilter(v: Viabilizacao): boolean {
     switch (filter) {
