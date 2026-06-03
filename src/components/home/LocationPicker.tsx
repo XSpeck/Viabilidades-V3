@@ -146,7 +146,8 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
       <div style={{
         background: "white", borderRadius: 16, overflow: "hidden",
         width: "100%", maxWidth: 920, display: "flex", flexDirection: "column",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.4)", maxHeight: "92vh",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+        height: "92vh", maxHeight: 720,
       }}>
 
         {/* Header */}
@@ -232,12 +233,12 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
           )}
         </div>
 
-        {/* Mapa */}
-        <div style={{ flex: 1, minHeight: 380, position: "relative", cursor: "crosshair" }}>
+        {/* Mapa — flex: 1 com minHeight: 0 para encolher corretamente */}
+        <div style={{ flex: 1, minHeight: 0, position: "relative", cursor: "crosshair", overflow: "hidden" }}>
           <MapContainer
             center={[-28.6775, -49.3696]}
             zoom={14}
-            style={{ height: "100%", minHeight: 380, width: "100%" }}
+            style={{ height: "100%", width: "100%" }}
             zoomControl={false}
             scrollWheelZoom
           >
