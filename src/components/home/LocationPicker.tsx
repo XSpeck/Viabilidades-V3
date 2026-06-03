@@ -1,16 +1,25 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, useMapEvents, ScaleControl } from "react-leaflet";
-import { CheckCircle, X } from "lucide-react";
+import { MapContainer, TileLayer, Marker, useMapEvents, ScaleControl, useMap } from "react-leaflet";
+import { CheckCircle, X, Search, Loader2 } from "lucide-react";
 
 interface Props {
   onConfirm: (plusCode: string) => void;
   onClose: () => void;
 }
 
-// Ícone do marcador selecionado
+interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
+// =====================
+// Ícone do marcador
+// =====================
 function selectedIcon() {
   return L.divIcon({
     html: `
@@ -29,34 +38,81 @@ function selectedIcon() {
   });
 }
 
-// Converte coordenadas para Plus Code (síncrono via OLC)
+// =====================
+// Converte coords → Plus Code
+// =====================
 async function coordsToPlusCode(lat: number, lon: number): Promise<string> {
   const { OpenLocationCode } = await import("open-location-code");
   const olc = new OpenLocationCode();
-  return olc.encode(lat, lon, 10); // precisão 10 = ~14x14m
+  return olc.encode(lat, lon, 10);
 }
 
-// Captura cliques no mapa
-function ClickHandler({
-  onPick,
-}: {
-  onPick: (lat: number, lon: number) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      onPick(e.latlng.lat, e.latlng.lng);
-    },
-  });
+// =====================
+// Busca Nominatim (OpenStreetMap)
+// =====================
+async function searchNominatim(query: string): Promise<NominatimResult[]> {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=pt-BR,pt`;
+  const res = await fetch(url, { headers: { "User-Agent": "ViabilidadeV3/1.0" } });
+  return res.json();
+}
+
+// =====================
+// Voa para uma posição
+// =====================
+function FlyTo({ coords }: { coords: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) map.flyTo(coords, 17, { duration: 1.2 });
+  }, [coords, map]);
   return null;
 }
 
+// =====================
+// Captura cliques no mapa
+// =====================
+function ClickHandler({ onPick }: { onPick: (lat: number, lon: number) => void }) {
+  useMapEvents({ click(e) { onPick(e.latlng.lat, e.latlng.lng); } });
+  return null;
+}
+
+// =====================
+// Componente principal
+// =====================
 export default function LocationPicker({ onConfirm, onClose }: Props) {
   const [marker, setMarker] = useState<{ lat: number; lon: number } | null>(null);
   const [plusCode, setPlusCode] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
 
+  // Busca de endereço
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce da busca
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 3) { setResults([]); setShowResults(false); return; }
+
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await searchNominatim(query);
+        setResults(data);
+        setShowResults(data.length > 0);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  }, [query]);
+
   const handlePick = useCallback(async (lat: number, lon: number) => {
     setMarker({ lat, lon });
+    setShowResults(false);
     setConverting(true);
     try {
       const code = await coordsToPlusCode(lat, lon);
@@ -68,82 +124,142 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
     }
   }, []);
 
+  function handleSelectResult(r: NominatimResult) {
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    setQuery(r.display_name.split(",").slice(0, 3).join(","));
+    setShowResults(false);
+    setFlyTo([lat, lon]);
+    handlePick(lat, lon);
+  }
+
   function handleConfirm() {
     if (plusCode) onConfirm(plusCode);
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-        zIndex: 9999, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", padding: 16,
-      }}
-    >
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      zIndex: 9999, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", padding: 16,
+    }}>
       <div style={{
         background: "white", borderRadius: 16, overflow: "hidden",
-        width: "100%", maxWidth: 900, display: "flex", flexDirection: "column",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
-        maxHeight: "90vh",
+        width: "100%", maxWidth: 920, display: "flex", flexDirection: "column",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.4)", maxHeight: "92vh",
       }}>
+
         {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 16px", borderBottom: "1px solid #e5e7eb",
-          background: "#4f46e5",
+          padding: "12px 16px", background: "#4f46e5",
         }}>
           <div>
             <p style={{ color: "white", fontWeight: 700, fontSize: 15, margin: 0 }}>
               📍 Selecionar Localização no Mapa
             </p>
             <p style={{ color: "#c7d2fe", fontSize: 12, margin: 0 }}>
-              Clique no mapa para marcar o ponto
+              Busque um endereço ou clique diretamente no mapa
             </p>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
-              color: "white", cursor: "pointer", padding: "6px 10px", fontSize: 16,
-            }}
-          >
+          <button onClick={onClose} style={{
+            background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
+            color: "white", cursor: "pointer", padding: "6px 10px",
+          }}>
             <X size={18} />
           </button>
         </div>
 
+        {/* Barra de busca */}
+        <div style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb", position: "relative", background: "white" }}>
+          <div style={{ position: "relative" }}>
+            <Search size={16} style={{
+              position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+              color: "#9ca3af", pointerEvents: "none",
+            }} />
+            {searching && <Loader2 size={16} style={{
+              position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+              color: "#9ca3af", animation: "spin 1s linear infinite",
+            }} />}
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => results.length > 0 && setShowResults(true)}
+              placeholder="Buscar endereço, rua, bairro, cidade..."
+              style={{
+                width: "100%", padding: "9px 40px", border: "2px solid #e5e7eb",
+                borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box",
+                fontFamily: "system-ui,sans-serif",
+              }}
+              onKeyDown={(e) => e.key === "Escape" && setShowResults(false)}
+            />
+          </div>
+
+          {/* Dropdown de resultados */}
+          {showResults && results.length > 0 && (
+            <div style={{
+              position: "absolute", left: 12, right: 12, top: "calc(100% - 2px)",
+              background: "white", border: "1px solid #e5e7eb", borderRadius: "0 0 10px 10px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 10000,
+              maxHeight: 260, overflowY: "auto",
+            }}>
+              {results.map((r) => (
+                <button
+                  key={r.place_id}
+                  onClick={() => handleSelectResult(r)}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    width: "100%", padding: "10px 14px", border: "none",
+                    background: "none", cursor: "pointer", textAlign: "left",
+                    borderBottom: "1px solid #f3f4f6", fontFamily: "system-ui,sans-serif",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f3ff")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <span style={{ fontSize: 16, marginTop: 1, flexShrink: 0 }}>📍</span>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827" }}>
+                      {r.display_name.split(",")[0]}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.display_name.split(",").slice(1).join(",").trim()}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Mapa */}
-        <div style={{ flex: 1, minHeight: 400, position: "relative", cursor: "crosshair" }}>
+        <div style={{ flex: 1, minHeight: 380, position: "relative", cursor: "crosshair" }}>
           <MapContainer
             center={[-28.6775, -49.3696]}
             zoom={14}
-            style={{ height: "100%", minHeight: 400, width: "100%" }}
+            style={{ height: "100%", minHeight: 380, width: "100%" }}
             zoomControl={false}
             scrollWheelZoom
           >
-            {/* Satélite por padrão */}
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               attribution="© Esri, Maxar"
               maxZoom={20}
             />
-            {/* Overlay de ruas/nomes */}
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
               maxZoom={20}
               opacity={0.7}
             />
             <ScaleControl position="bottomleft" imperial={false} />
+            <FlyTo coords={flyTo} />
             <ClickHandler onPick={handlePick} />
 
             {marker && (
-              <Marker
-                position={[marker.lat, marker.lon]}
-                icon={selectedIcon()}
-              />
+              <Marker position={[marker.lat, marker.lon]} icon={selectedIcon()} />
             )}
           </MapContainer>
 
-          {/* Instrução flutuante */}
           {!marker && (
             <div style={{
               position: "absolute", top: "50%", left: "50%",
@@ -153,7 +269,7 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
               fontWeight: 600, pointerEvents: "none", zIndex: 1000,
               fontFamily: "system-ui,sans-serif", whiteSpace: "nowrap",
             }}>
-              👆 Clique no ponto desejado
+              👆 Busque um endereço ou clique no mapa
             </div>
           )}
         </div>
@@ -166,9 +282,7 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
         }}>
           <div style={{ flex: 1 }}>
             {converting && (
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-                Convertendo coordenadas...
-              </p>
+              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Convertendo coordenadas...</p>
             )}
             {plusCode && !converting && (
               <div>
@@ -182,29 +296,23 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
               </div>
             )}
             {!marker && !converting && (
-              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>
-                Nenhum ponto selecionado
-              </p>
+              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>Nenhum ponto selecionado</p>
             )}
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={onClose}
-              style={{
-                padding: "8px 16px", border: "1px solid #d1d5db",
-                borderRadius: 8, background: "white", cursor: "pointer",
-                fontSize: 13, fontWeight: 600, color: "#374151",
-              }}
-            >
+            <button onClick={onClose} style={{
+              padding: "8px 16px", border: "1px solid #d1d5db",
+              borderRadius: 8, background: "white", cursor: "pointer",
+              fontSize: 13, fontWeight: 600, color: "#374151",
+            }}>
               Cancelar
             </button>
             <button
               onClick={handleConfirm}
               disabled={!plusCode || converting}
               style={{
-                padding: "8px 16px", border: "none",
-                borderRadius: 8,
+                padding: "8px 16px", border: "none", borderRadius: 8,
                 background: plusCode && !converting ? "#4f46e5" : "#e5e7eb",
                 cursor: plusCode && !converting ? "pointer" : "not-allowed",
                 fontSize: 13, fontWeight: 700, color: "white",
@@ -216,6 +324,7 @@ export default function LocationPicker({ onConfirm, onClose }: Props) {
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
