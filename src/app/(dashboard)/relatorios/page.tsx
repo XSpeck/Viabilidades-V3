@@ -114,14 +114,14 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // Prédio aprovado (excluindo UTP)
-    viabs.filter((v) => v.tipo_instalacao === "Prédio" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v)).forEach((v) => {
+    // Prédio aprovado direto (excluindo UTP e fluxo estrutural)
+    viabs.filter((v) => v.tipo_instalacao === "Prédio" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v) && !v.status_predio).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `predio_ap_${v.id}`, ...geo, category: "predio_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // Condomínio aprovado
-    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && ["aprovado", "finalizado"].includes(v.status)).forEach((v) => {
+    // Condomínio aprovado direto (excluindo fluxo estrutural)
+    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && ["aprovado", "finalizado"].includes(v.status) && !v.status_predio).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `cond_ap_${v.id}`, ...geo, category: "cond_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
@@ -168,7 +168,7 @@ export default function RelatoriosPage() {
   // ── Derived data ─────────────────────────────────────────────
   const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status));
   const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado");
-  const prediosViab    = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao));
+  const prediosViab    = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio !== "estruturado");
 
   const taxaAprovacao = ftthAprovadas.length + ftthRejeitadas.length > 0
     ? ((ftthAprovadas.length / (ftthAprovadas.length + ftthRejeitadas.length)) * 100).toFixed(1)
