@@ -897,10 +897,26 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
           {/* ===== Pronto para agendar ===== */}
           {r.status_predio === "pronto_auditoria" && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm space-y-1">
-              <p className="font-medium text-blue-800">✅ Dados enviados!</p>
-              <p className="text-blue-700">Aguardando o agendamento da visita técnica pelo nosso time.</p>
-              {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
+            <div className="space-y-2 text-sm">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                <p className="font-medium text-blue-800">✅ Dados enviados!</p>
+                <p className="text-blue-700 text-xs">Aguardando o agendamento da visita técnica pelo nosso time.</p>
+              </div>
+              <div className="bg-gray-50 border rounded-lg p-3 space-y-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Dados que você enviou</p>
+                <p>👤 {isCond ? "Responsável" : "Síndico"}: <strong>{r.nome_sindico}</strong> · {r.contato_sindico}</p>
+                <p>🏠 Cliente: <strong>{r.nome_cliente_predio}</strong> · {r.contato_cliente_predio}</p>
+                <p>🚪 {isCond ? "Casa/Lote" : "Apto"}: <strong>{r.apartamento}</strong></p>
+                {r.data_preferencia_visita && (
+                  <p>📅 Preferência: <strong>{new Date(r.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")}</strong> — {r.periodo_preferencia_visita ?? "Manhã"}</p>
+                )}
+              </div>
+              {r.obs_agendamento && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                  <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Sua observação</p>
+                  <p className="text-gray-700 italic">"{r.obs_agendamento}"</p>
+                </div>
+              )}
             </div>
           )}
 
