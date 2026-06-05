@@ -420,23 +420,34 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
     status === "agendado"               ? "border-l-green-500"  :
     "border-l-blue-400";
 
+  const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "N/A";
+
   return (
     <div className={`bg-white rounded-xl shadow-sm border-l-4 overflow-hidden ${borderColor}`}>
+
+      {/* ── Cabeçalho (sempre visível) ── */}
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
         <span className="text-xl shrink-0">🏠</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-gray-900">{v.nome_cliente ?? "Cliente"}</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
+            {status === "agendado" && v.data_instalacao && (
+              <span className="text-xs font-medium text-green-700 shrink-0">
+                {fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}
+              </span>
+            )}
+            {status === "instalado" && v.data_instalacao && (
+              <span className="text-xs text-blue-600 shrink-0">{fmtData(v.data_instalacao)} · 👷 {v.tecnico_instalacao}</span>
+            )}
           </div>
-          <div className="flex flex-wrap gap-x-3 text-xs text-gray-500 mt-0.5">
+          <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
             <span className="font-mono">📍 {locationToPlusCode(v.plus_code_cliente)}</span>
             <span>👤 {v.usuario}</span>
             {status === "proposta_enviada" && v.proposta_data && (
-              <span className="font-medium text-orange-600">Proposta: {new Date(v.proposta_data + "T12:00:00").toLocaleDateString("pt-BR")} — {v.proposta_periodo}</span>
-            )}
-            {status === "agendado" && v.data_instalacao && (
-              <span className="font-medium text-green-700">📅 {new Date(v.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR")} — {v.periodo_instalacao} — {v.tecnico_instalacao}</span>
+              <span className="font-medium text-orange-600">
+                Proposta: {fmtData(v.proposta_data)} — {v.proposta_periodo}
+              </span>
             )}
           </div>
         </div>
@@ -444,153 +455,160 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
       </button>
 
       {open && (
-        <div className="px-4 pb-4 border-t pt-3 space-y-3">
-          {/* Dados técnicos */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold">{v.cto_numero ?? "-"}</p></div>
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold">{v.distancia_cliente ?? "-"}</p></div>
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold">{v.portas_disponiveis ?? "-"}</p></div>
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
+        <div className="px-4 pb-4 border-t pt-3 space-y-4">
+
+          {/* ── Dados técnicos ── */}
+          <div className="grid grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
           </div>
 
-          {/* Negociação */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">📋 Negociação</p>
-            {v.proposta_data && (
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-                <p className="text-xs text-blue-500 font-medium mb-0.5">👤 Proposta do usuário</p>
-                <p className="text-sm text-gray-800 font-medium">📆 {new Date(v.proposta_data + "T12:00:00").toLocaleDateString("pt-BR")} — {v.proposta_periodo}</p>
-                {v.proposta_obs && <p className="text-sm text-gray-600 mt-1">📝 {v.proposta_obs}</p>}
-              </div>
-            )}
-            {v.agendamento_obs && (
-              <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5 ml-4">
-                <p className="text-xs text-orange-500 font-medium mb-0.5">🔧 Agendamento alterou</p>
-                <p className="text-sm text-gray-800 font-medium">📆 {v.agendamento_data ? new Date(v.agendamento_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"} — {v.agendamento_periodo}</p>
-                <p className="text-sm text-gray-600 mt-1">📝 {v.agendamento_obs}</p>
-              </div>
-            )}
-            {status === "aguardando_confirmacao" && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm text-yellow-800">
-                ⏳ Aguardando o cliente confirmar a nova data.
-              </div>
-            )}
-            {v.historico_agendamento && (
-              <details className="text-xs text-gray-400 cursor-pointer">
-                <summary className="hover:text-gray-600">Ver histórico</summary>
-                <pre className="mt-1 whitespace-pre-wrap text-gray-500 bg-gray-50 p-2 rounded-lg">{v.historico_agendamento}</pre>
-              </details>
-            )}
-          </div>
+          {/* ── Conteúdo por status ── */}
 
+          {/* PROPOSTA ENVIADA — negociação em destaque */}
+          {status === "proposta_enviada" && (
+            <div className="space-y-3">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
+                <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1">👤 Proposta do usuário</p>
+                <p className="font-medium text-gray-800">📆 {fmtData(v.proposta_data)} — {v.proposta_periodo}</p>
+                {v.proposta_obs && <p className="text-gray-600 mt-1">📝 {v.proposta_obs}</p>}
+              </div>
+              {!showConfirmar ? (
+                <button onClick={() => setShowConfirmar(true)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium">
+                  🔧 Definir data e técnico
+                </button>
+              ) : (
+                <div className="border border-indigo-200 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-indigo-800">🔧 Confirmar agendamento</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={agData} onChange={(e) => setAgData(e.target.value)}
+                      className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <select value={agPeriodo} onChange={(e) => setAgPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
+                      <option>Manhã</option><option>Tarde</option>
+                    </select>
+                    <input placeholder="Técnico *" value={agTecnico} onChange={(e) => setAgTecnico(e.target.value)}
+                      className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <textarea placeholder="Observação para o cliente (se alterar data)" value={agObs} onChange={(e) => setAgObs(e.target.value)}
+                      rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                  </div>
+                  <p className={`text-xs font-medium ${agData === v.proposta_data && agPeriodo === v.proposta_periodo ? "text-green-600" : "text-orange-600"}`}>
+                    {agData === v.proposta_data && agPeriodo === v.proposta_periodo
+                      ? "✅ Mesma data proposta — confirmado direto"
+                      : "⚠️ Data diferente — cliente precisará confirmar"}
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={handleConfirmar} disabled={loading}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-medium">
+                      {loading ? "..." : "Confirmar"}
+                    </button>
+                    <button onClick={() => setShowConfirmar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AGUARDANDO CONFIRMAÇÃO — aguardando cliente */}
+          {status === "aguardando_confirmacao" && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5">
+                  <p className="text-xs text-blue-500 font-medium mb-0.5">👤 Usuário pediu</p>
+                  <p className="font-medium text-gray-800">{fmtData(v.proposta_data)} — {v.proposta_periodo}</p>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5">
+                  <p className="text-xs text-orange-500 font-medium mb-0.5">🔧 Agendamento propôs</p>
+                  <p className="font-medium text-gray-800">{fmtData(v.agendamento_data)} — {v.agendamento_periodo}</p>
+                  <p className="text-xs text-gray-600">👷 {v.agendamento_tecnico}</p>
+                  {v.agendamento_obs && <p className="text-xs text-gray-500 mt-0.5">📝 {v.agendamento_obs}</p>}
+                </div>
+              </div>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm text-yellow-800 text-center">
+                ⏳ Aguardando confirmação do cliente.
+              </div>
+            </div>
+          )}
+
+          {/* AGENDADO — data confirmada + ações */}
+          {status === "agendado" && (
+            <div className="space-y-2">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-2">📅 Instalação confirmada</p>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
+                  <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
+                  <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao}</p></div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleInstalado} disabled={loading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
+                  ✅ Marcar como Instalado
+                </button>
+                <button onClick={() => setShowReagendar(!showReagendar)} disabled={loading}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${showReagendar ? "bg-yellow-50 border-yellow-400 text-yellow-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                  🔄 Reagendar
+                </button>
+              </div>
+              {showReagendar && (
+                <div className="border border-yellow-200 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-yellow-800">🔄 Reagendar instalação</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={reagData} onChange={(e) => setReagData(e.target.value)}
+                      className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                    <select value={reagPeriodo} onChange={(e) => setReagPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
+                      <option>Manhã</option><option>Tarde</option>
+                    </select>
+                    <input placeholder="Técnico *" value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)}
+                      className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                    <textarea placeholder="Motivo do reagendamento (opcional)" value={reagMotivo} onChange={(e) => setReagMotivo(e.target.value)}
+                      rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleReagendar} disabled={loading || !reagData || !reagTecnico.trim()}
+                      className="flex-1 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-300 text-white py-2 rounded-lg text-sm font-medium">
+                      {loading ? "..." : "Confirmar reagendamento"}
+                    </button>
+                    <button onClick={() => setShowReagendar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* INSTALADO — conclusão + arquivar */}
+          {status === "instalado" && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="text-sm space-y-0.5">
+                <p className="font-medium text-blue-800">✅ Instalação concluída</p>
+                <p className="text-blue-700">{fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}</p>
+                <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
+              </div>
+              <button onClick={handleArquivar} disabled={loading}
+                className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                📁 Arquivar
+              </button>
+            </div>
+          )}
+
+          {/* ── Histórico de negociação (colapsado) ── */}
+          {v.historico_agendamento && (
+            <details className="text-xs">
+              <summary className="text-gray-400 hover:text-gray-600 cursor-pointer select-none">Ver histórico de negociação</summary>
+              <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5 leading-relaxed">{v.historico_agendamento}</pre>
+            </details>
+          )}
+
+          {/* ── Banner de sucesso ── */}
           {successMsg && (
             <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm font-medium">
               <span className="text-xl">🎉</span><span>{successMsg}</span>
             </div>
           )}
 
-          {!successMsg && (
-            <div className="space-y-2">
-
-              {/* ── Nova proposta do usuário ── */}
-              {status === "proposta_enviada" && (
-                !showConfirmar ? (
-                  <button onClick={() => setShowConfirmar(true)}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium">
-                    🔧 Analisar e confirmar data/técnico
-                  </button>
-                ) : (
-                  <div className="border border-indigo-200 rounded-lg p-3 space-y-2">
-                    <p className="text-sm font-medium text-indigo-800">
-                      🔧 Confirmar agendamento
-                      {v.proposta_data && <span className="text-xs text-gray-500 ml-2">(proposta: {new Date(v.proposta_data + "T12:00:00").toLocaleDateString("pt-BR")} {v.proposta_periodo})</span>}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="date" value={agData} onChange={(e) => setAgData(e.target.value)}
-                        className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <select value={agPeriodo} onChange={(e) => setAgPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                        <option>Manhã</option><option>Tarde</option>
-                      </select>
-                      <input placeholder="Técnico *" value={agTecnico} onChange={(e) => setAgTecnico(e.target.value)}
-                        className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <textarea placeholder="Observação para o cliente (se alterar data)" value={agObs} onChange={(e) => setAgObs(e.target.value)}
-                        rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
-                    </div>
-                    <p className={`text-xs ${agData === v.proposta_data && agPeriodo === v.proposta_periodo ? "text-green-600" : "text-orange-600"}`}>
-                      {agData === v.proposta_data && agPeriodo === v.proposta_periodo
-                        ? "✅ Confirmando a data proposta → agendado direto"
-                        : "⚠️ Data diferente da proposta → cliente precisará confirmar"}
-                    </p>
-                    <div className="flex gap-2">
-                      <button onClick={handleConfirmar} disabled={loading}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">Confirmar</button>
-                      <button onClick={() => setShowConfirmar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
-                    </div>
-                  </div>
-                )
-              )}
-
-              {/* ── Agendado — marcar instalado ou reagendar ── */}
-              {status === "agendado" && (
-                <div className="space-y-2">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm space-y-0.5">
-                    <p className="font-medium text-green-800">📅 Instalação confirmada</p>
-                    <p>Data: <strong>{v.data_instalacao ? new Date(v.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
-                    <p>Período: {v.periodo_instalacao} · Técnico: {v.tecnico_instalacao}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleInstalado} disabled={loading}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
-                      ✅ Marcar como Instalado
-                    </button>
-                    <button onClick={() => setShowReagendar(!showReagendar)} disabled={loading}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${showReagendar ? "bg-yellow-50 border-yellow-400 text-yellow-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
-                      🔄 Reagendar
-                    </button>
-                  </div>
-                  {showReagendar && (
-                    <div className="border border-yellow-200 rounded-lg p-3 space-y-2">
-                      <p className="text-sm font-medium text-yellow-800">🔄 Reagendar instalação</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="date" value={reagData} onChange={(e) => setReagData(e.target.value)}
-                          className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
-                        <select value={reagPeriodo} onChange={(e) => setReagPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                          <option>Manhã</option><option>Tarde</option>
-                        </select>
-                        <input placeholder="Técnico *" value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)}
-                          className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
-                        <textarea placeholder="Motivo do reagendamento (opcional)" value={reagMotivo} onChange={(e) => setReagMotivo(e.target.value)}
-                          rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={handleReagendar} disabled={loading || !reagData || !reagTecnico.trim()}
-                          className="flex-1 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-300 text-white py-2 rounded-lg text-sm">
-                          {loading ? "..." : "Confirmar reagendamento"}
-                        </button>
-                        <button onClick={() => setShowReagendar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Instalado — arquivar ── */}
-              {status === "instalado" && (
-                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div>
-                    <p className="text-sm font-medium text-blue-800">✅ Instalação concluída</p>
-                    <p className="text-xs text-blue-600">Técnico: {v.tecnico_instalacao ?? "-"} · {v.periodo_instalacao}</p>
-                    <p className="text-xs text-blue-500 mt-0.5">Aguardando arquivamento pelo usuário.</p>
-                  </div>
-                  <button onClick={handleArquivar} disabled={loading}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    📁 Arquivar
-                  </button>
-                </div>
-              )}
-
-            </div>
-          )}
         </div>
       )}
     </div>
