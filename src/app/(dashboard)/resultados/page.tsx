@@ -650,21 +650,14 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== Fluxo de agendamento de instalação FTTH / FTTA / Cond ===== */}
-          {r.status_instalacao && (
+          {/* ===== Fluxo de agendamento de instalação FTTH / FTTA ===== */}
+          {["FTTH", "Prédio"].includes(r.tipo_instalacao) && r.status_instalacao && (
             <div className="space-y-2">
               {r.status_instalacao === "aguardando_proposta" && (
                 <div className="space-y-2">
-                  {r.status_predio === "estruturado" && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 text-sm text-green-800">
-                      🎉 <strong>Estrutura instalada!</strong> Agora informe quando podemos fazer a instalação da sua internet.
-                    </div>
-                  )}
-                  {!r.status_predio && (
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
-                      ✅ {isFttaUtp ? "Viabilidade confirmada! Informe a data e período de preferência para a visita técnica." : "Viabilidade aprovada! Informe a data e período de preferência para a instalação."}
-                    </div>
-                  )}
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
+                    ✅ {isFttaUtp ? "Viabilidade confirmada! Informe a data e período de preferência para a visita técnica." : "Viabilidade aprovada! Informe a data e período de preferência para a instalação."}
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                     <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
@@ -944,9 +937,10 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {/* ===== Estruturado ===== */}
-          {r.status_predio === "estruturado" && !r.status_instalacao && (
+          {r.status_predio === "estruturado" && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm space-y-1">
               <p className="font-medium text-green-800">🎉 Estrutura instalada!</p>
+              <p className="text-green-700 text-xs">A estrutura do prédio foi concluída. Um novo pedido de viabilidade poderá ser feito para solicitar a instalação.</p>
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
               <p>👷 Técnico: {r.tecnico_responsavel}</p>
             </div>
@@ -956,7 +950,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             <p className="text-xs text-gray-400">🔍 Auditado por: <strong>{r.auditado_por}</strong> · {formatDateTime(r.data_auditoria)}</p>
           )}
 
-          {["aprovado", "rejeitado", "utp"].includes(r.status) && !r.status_instalacao && !r.status_predio && (
+          {["aprovado", "rejeitado", "utp"].includes(r.status) && !r.status_instalacao && !r.status_predio && !r.data_finalizacao && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
               ✅ {r.status === "aprovado" ? "Finalizar" : "OK, Entendi"}
             </button>
@@ -964,7 +958,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {r.status_instalacao === "instalado" && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg transition-colors">📁 Arquivar</button>
           )}
-          {r.status_predio === "estruturado" && !r.status_instalacao && (
+          {r.status_predio === "estruturado" && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">✅ Ciente</button>
           )}
         </div>

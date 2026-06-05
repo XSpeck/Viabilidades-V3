@@ -439,13 +439,11 @@ export async function finalizarEstruturado(
     giga: dados.giga,
     data_estruturacao: serverTimestamp(),
   });
-  // Marca como aprovado (sai da fila do auditor) e inicia agendamento de instalação
   await updateViabilizacao(id, {
     status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
     status_agendamento: "concluido",
   });
-  await iniciarAgendamentoInstalacao(id);
 }
 
 export async function rejeitarPredio(
