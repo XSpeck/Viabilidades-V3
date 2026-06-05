@@ -397,12 +397,15 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
 
       {/* ── Cabeçalho (sempre visível) ── */}
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
-        <span className="text-xl shrink-0">{v.tipo_instalacao === "FTTH" ? "🏠" : "🏢"}</span>
+        <span className="text-xl shrink-0">{v.status === "utp" ? "📡" : v.tipo_instalacao === "FTTH" ? "🏠" : "🏢"}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-gray-900">
               {v.tipo_instalacao !== "FTTH" && v.predio_ftta ? `${v.predio_ftta} — ` : ""}{v.nome_cliente ?? "Cliente"}
             </span>
+            {v.status === "utp" && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium shrink-0 bg-purple-100 text-purple-700">📡 UTP</span>
+            )}
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
             {status === "agendado" && v.data_instalacao && (
               <span className="text-xs font-medium text-green-700 shrink-0">
@@ -605,7 +608,7 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
   const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "-";
 
   const isFTTH = v.tipo_instalacao === "FTTH";
-  const isUTP = v.status === "utp";
+  const isUTP = v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
   const tipoBadge = isUTP
     ? { icon: "📡", label: "UTP",        color: "bg-purple-100 text-purple-700" }
