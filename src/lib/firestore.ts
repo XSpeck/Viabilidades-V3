@@ -310,13 +310,6 @@ export async function agendarVisita(
     tecnico_responsavel: string;
     tecnologia_predio: string;
     giga: boolean;
-    checklist_previsita?: {
-      sindico_avisado?: boolean;
-      portaria_informada?: boolean;
-      acesso_confirmado?: boolean;
-      data_confirmada?: boolean;
-      equipamento_separado?: boolean;
-    };
   }
 ): Promise<void> {
   await updateViabilizacao(id, {
@@ -336,7 +329,6 @@ export async function proporDataVisita(
     proposta_visita_tecnico: string;
     tecnologia_predio: string;
     giga: boolean;
-    checklist_previsita?: Record<string, boolean>;
   }
 ): Promise<void> {
   await updateViabilizacao(id, {

@@ -236,28 +236,6 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [tecnico, setTecnico] = useState("");
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(true);
-  const [checklist, setChecklist] = useState({
-    sindico_avisado: false,
-    portaria_informada: false,
-    acesso_confirmado: false,
-    data_confirmada: false,
-    equipamento_separado: false,
-  });
-
-  function toggleChecklist(key: keyof typeof checklist) {
-    setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  const checklistItems: { key: keyof typeof checklist; label: string }[] = [
-    { key: "sindico_avisado",      label: "Síndico/responsável avisado" },
-    { key: "portaria_informada",   label: "Portaria informada" },
-    { key: "acesso_confirmado",    label: "Acesso/chave confirmado" },
-    { key: "data_confirmada",      label: "Data confirmada com síndico" },
-    { key: "equipamento_separado", label: "Equipamento separado" },
-  ];
-
-  const checklistOk = Object.values(checklist).every(Boolean);
-
   // ── Rejeição ───────────────────────────────────────────
   const [showRejeitar, setShowRejeitar] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -320,17 +298,16 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, checklist_previsita: checklist });
+      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga });
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }
 
   async function handleProporData() {
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
-    if (!checklistOk) { alert("Confirme todos os itens do checklist!"); return; }
     setLoading(true);
     try {
-      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, checklist_previsita: checklist });
+      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga });
       finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
     } finally { setLoading(false); }
   }
@@ -679,18 +656,6 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </label>
                   );
                 })()}
-                <div className={`border rounded-xl p-3 space-y-2 ${checklistOk ? "border-green-300 bg-green-50" : "border-orange-200 bg-orange-50"}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                    {checklistOk ? "✅ Checklist pré-visita — completo" : "📋 Checklist pré-visita"}
-                  </p>
-                  {checklistItems.map((item) => (
-                    <label key={item.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" checked={checklist[item.key]} onChange={() => toggleChecklist(item.key)} className="w-4 h-4 accent-indigo-600" />
-                      <span className={checklist[item.key] ? "line-through text-gray-400" : ""}>{item.label}</span>
-                    </label>
-                  ))}
-                  {!checklistOk && <p className="text-xs text-orange-600">⚠️ Confirme todos os itens antes de agendar.</p>}
-                </div>
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
                   {dataDiferePref && (
