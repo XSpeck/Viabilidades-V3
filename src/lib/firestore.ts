@@ -18,6 +18,8 @@ import type {
   PredioAtendido,
   PredioSemViabilidade,
   StatusViabilizacao,
+  TipoInstalacao,
+  MensagemViabilizacao,
 } from "@/types";
 
 // =====================
@@ -78,14 +80,25 @@ export async function getViabilizacoesPendentes(): Promise<Viabilizacao[]> {
 }
 
 export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viabilizacao[]> {
-  const q = query(
-    collection(db, "viabilizacoes"),
-    where("status", "==", "em_auditoria"),
-    where("auditor_responsavel", "==", auditorNome)
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
+  const [snap1, snap2] = await Promise.all([
+    getDocs(query(
+      collection(db, "viabilizacoes"),
+      where("status", "==", "em_auditoria"),
+      where("auditor_responsavel", "==", auditorNome)
+    )),
+    getDocs(query(
+      collection(db, "viabilizacoes"),
+      where("status", "==", "em_revisao"),
+      where("auditor_responsavel", "==", auditorNome)
+    )),
+  ]);
+  const items = [
+    ...snap1.docs.map((d) => fromFirestore<Viabilizacao>(d)),
+    ...snap2.docs
+      .map((d) => fromFirestore<Viabilizacao>(d))
+      .filter((v) => v.revisao_tipo === "contestado"),
+  ];
+  return items
     .filter((v) => v.status_predio !== "agendado")
     .sort((a, b) => {
       if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
@@ -498,6 +511,78 @@ export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
 }
 
 // Arquivar (ambos os lados usam finalizarViabilizacao existente)
+
+// =====================
+// Revisão / Contestação
+// =====================
+
+export async function devolverComMensagem(
+  id: string,
+  mensagem: string,
+  auditorNome: string,
+  mensagensAnteriores?: MensagemViabilizacao[]
+): Promise<void> {
+  const nova: MensagemViabilizacao = { de: auditorNome, tipo: "auditoria", texto: mensagem, data: new Date().toISOString() };
+  await updateViabilizacao(id, {
+    status: "em_revisao" as StatusViabilizacao,
+    revisao_tipo: "devolvido",
+    mensagens: [...(mensagensAnteriores ?? []), nova],
+  });
+}
+
+export async function contestarViabilizacao(
+  id: string,
+  mensagem: string,
+  usuarioNome: string,
+  statusAtual: StatusViabilizacao,
+  mensagensAnteriores?: MensagemViabilizacao[]
+): Promise<void> {
+  const nova: MensagemViabilizacao = { de: usuarioNome, tipo: "contestacao", texto: mensagem, data: new Date().toISOString() };
+  await updateViabilizacao(id, {
+    status: "em_revisao" as StatusViabilizacao,
+    revisao_tipo: "contestado",
+    status_anterior: statusAtual,
+    mensagens: [...(mensagensAnteriores ?? []), nova],
+  });
+}
+
+export async function reenviarParaAuditoria(
+  id: string,
+  resposta: string,
+  usuarioNome: string,
+  mensagensAnteriores?: MensagemViabilizacao[]
+): Promise<void> {
+  const nova: MensagemViabilizacao = { de: usuarioNome, tipo: "resposta", texto: resposta, data: new Date().toISOString() };
+  await updateViabilizacao(id, {
+    status: "em_auditoria" as StatusViabilizacao,
+    mensagens: [...(mensagensAnteriores ?? []), nova],
+  });
+}
+
+export async function manterDecisaoContestacao(
+  id: string,
+  resposta: string,
+  auditorNome: string,
+  statusOriginal: StatusViabilizacao,
+  mensagensAnteriores?: MensagemViabilizacao[]
+): Promise<void> {
+  const nova: MensagemViabilizacao = { de: auditorNome, tipo: "resposta", texto: resposta, data: new Date().toISOString() };
+  await updateViabilizacao(id, {
+    status: statusOriginal,
+    mensagens: [...(mensagensAnteriores ?? []), nova],
+  });
+}
+
+export async function revisarContestacao(id: string): Promise<void> {
+  await updateViabilizacao(id, { status: "em_auditoria" as StatusViabilizacao });
+}
+
+export async function corrigirDadosViabilizacao(
+  id: string,
+  dados: { nome_cliente?: string; tipo_instalacao?: TipoInstalacao; plus_code_cliente?: string }
+): Promise<void> {
+  await updateViabilizacao(id, dados as Partial<Viabilizacao>);
+}
 
 // =====================
 // Consultas (Home)

@@ -6,15 +6,16 @@ import {
   getViabilizacoesAuditor, aprovarFTTH, aprovarFTTA, rejeitarViabilizacao,
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
-  iniciarAgendamentoInstalacao,
+  iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
+  manterDecisaoContestacao, revisarContestacao,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao } from "@/types";
+import type { Viabilizacao, TipoInstalacao } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw, Search } from "lucide-react";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
 
-type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar";
+type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "agendado" | "contestado";
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
@@ -39,8 +40,10 @@ export default function AuditoriaPage() {
     urgentes:   items.filter((i) => i.urgente).length,
     ftth:       items.filter((i) => i.tipo_instalacao === "FTTH" && !i.urgente).length,
     predios:    items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio).length,
-    aguardando: items.filter((i) => i.status_predio === "aguardando_dados").length,
-    agendar:    items.filter((i) => i.status_predio === "pronto_auditoria").length,
+    aguardando:  items.filter((i) => i.status_predio === "aguardando_dados").length,
+    agendar:     items.filter((i) => i.status_predio === "pronto_auditoria").length,
+    agendado:    items.filter((i) => i.status_predio === "agendado").length,
+    contestado:  items.filter((i) => i.status === "em_revisao" && i.revisao_tipo === "contestado").length,
   };
 
   const chips = (
@@ -49,8 +52,10 @@ export default function AuditoriaPage() {
       { key: "urgentes",   label: `🔥 Urgentes (${counts.urgentes})` },
       { key: "ftth",       label: `🏠 FTTH (${counts.ftth})` },
       { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
-      { key: "aguardando", label: `⏳ Ag. dados (${counts.aguardando})` },
-      { key: "agendar",    label: `📅 Agendar (${counts.agendar})` },
+      { key: "aguardando",  label: `⏳ Ag. dados (${counts.aguardando})` },
+      { key: "agendar",     label: `📅 Agendar (${counts.agendar})` },
+      { key: "agendado",    label: `✅ Agendado (${counts.agendado})` },
+      { key: "contestado",  label: `💬 Contestações (${counts.contestado})` },
     ] as { key: AuditoriaFilter; label: string }[]
   ).filter((c) => c.key === "todos" || counts[c.key] > 0);
 
@@ -59,8 +64,10 @@ export default function AuditoriaPage() {
       case "urgentes":   return !!v.urgente;
       case "ftth":       return v.tipo_instalacao === "FTTH" && !v.urgente;
       case "predios":    return ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !v.urgente && !v.status_predio;
-      case "aguardando": return v.status_predio === "aguardando_dados";
-      case "agendar":    return v.status_predio === "pronto_auditoria";
+      case "aguardando":  return v.status_predio === "aguardando_dados";
+      case "agendar":     return v.status_predio === "pronto_auditoria";
+      case "agendado":    return v.status_predio === "agendado";
+      case "contestado":  return v.status === "em_revisao" && v.revisao_tipo === "contestado";
       default:           return true;
     }
   }
@@ -147,7 +154,64 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     setTimeout(onRefresh, 2000);
   }
 
-  // Campos FTTH
+  // ── Edição inline ──────────────────────────────────────
+  const [tipoLocal, setTipoLocal] = useState<TipoInstalacao>(v.tipo_instalacao);
+  const [nomeClienteLocal, setNomeClienteLocal] = useState(v.nome_cliente ?? "");
+  const [editandoInfo, setEditandoInfo] = useState(false);
+
+  useEffect(() => {
+    setTipoLocal(v.tipo_instalacao);
+    setNomeClienteLocal(v.nome_cliente ?? "");
+  }, [v.tipo_instalacao, v.nome_cliente]);
+
+  async function handleSalvarInfo() {
+    setLoading(true);
+    try {
+      await corrigirDadosViabilizacao(v.id, { nome_cliente: nomeClienteLocal || undefined, tipo_instalacao: tipoLocal });
+      setEditandoInfo(false);
+      onRefresh();
+    } finally { setLoading(false); }
+  }
+
+  // ── Devolução com mensagem ─────────────────────────────
+  const [showDevolver, setShowDevolver] = useState(false);
+  const [msgDevolver, setMsgDevolver] = useState("");
+
+  async function handleDevolver() {
+    setLoading(true);
+    try { await devolverViabilizacao(v.id); onRefresh(); }
+    finally { setLoading(false); }
+  }
+
+  async function handleDevolverComMensagem() {
+    if (!msgDevolver.trim()) { alert("Escreva a mensagem!"); return; }
+    setLoading(true);
+    try {
+      await devolverComMensagem(v.id, msgDevolver, userName, v.mensagens);
+      finishWithSuccess("↩️ Devolvida com mensagem ao usuário.");
+    } finally { setLoading(false); }
+  }
+
+  // ── Resposta a contestação ─────────────────────────────
+  const [showResponderContest, setShowResponderContest] = useState(false);
+  const [msgRespContest, setMsgRespContest] = useState("");
+
+  async function handleManterDecisao() {
+    if (!msgRespContest.trim()) { alert("Escreva a resposta!"); return; }
+    setLoading(true);
+    try {
+      await manterDecisaoContestacao(v.id, msgRespContest, userName, v.status_anterior ?? "rejeitado", v.mensagens);
+      finishWithSuccess("✅ Decisão mantida. Resposta enviada ao usuário.");
+    } finally { setLoading(false); }
+  }
+
+  async function handleRevisarContestacao() {
+    setLoading(true);
+    try { await revisarContestacao(v.id); onRefresh(); }
+    finally { setLoading(false); }
+  }
+
+  // ── Campos FTTH ────────────────────────────────────────
   const [cto, setCto] = useState(v.cto_numero ?? "");
   const [distancia, setDistancia] = useState(v.distancia_cliente ?? "");
   const [localizacao, setLocalizacao] = useState(v.localizacao_caixa ?? "");
@@ -155,14 +219,14 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [rx, setRx] = useState(v.menor_rx ?? "");
   const [obs, setObs] = useState(v.observacoes ?? "");
 
-  // Campos FTTA
+  // ── Campos FTTA ────────────────────────────────────────
   const [cdoi, setCdoi] = useState(v.cdoi ?? "");
   const [predioNome, setPredioNome] = useState(v.predio_ftta ?? "");
   const [portasFtta, setPortasFtta] = useState(v.portas_disponiveis ?? 0);
   const [mediaRx, setMediaRx] = useState(v.media_rx ?? "");
   const [obsFtta, setObsFtta] = useState(v.observacoes ?? "");
 
-  // Agendamento
+  // ── Agendamento prédio ─────────────────────────────────
   const [dataVisita, setDataVisita] = useState("");
   const [periodo, setPeriodo] = useState("Manhã");
   const [tecnico, setTecnico] = useState("");
@@ -190,20 +254,24 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
   const checklistOk = Object.values(checklist).every(Boolean);
 
-  // Rejeição
+  // ── Rejeição ───────────────────────────────────────────
   const [showRejeitar, setShowRejeitar] = useState(false);
   const [motivo, setMotivo] = useState("");
 
-  // Busca de CTOs
+  // ── Busca de CTOs ──────────────────────────────────────
   const [showCtoBusca, setShowCtoBusca] = useState(false);
   const [showFttaMap, setShowFttaMap] = useState(false);
 
+  // ── Handlers aprovação ─────────────────────────────────
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
     try {
       await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName);
-      if (v.tipo_instalacao === "FTTH") await iniciarAgendamentoInstalacao(v.id);
+      if (tipoLocal === "FTTH") await iniciarAgendamentoInstalacao(v.id);
+      if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
+        await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
+      }
       finishWithSuccess("✅ Viabilidade FTTH aprovada! Enviada para agendamento técnico.");
     } finally { setLoading(false); }
   }
@@ -211,8 +279,13 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   async function handleAprovarFTTA() {
     if (!cdoi || !predioNome || !portasFtta || !mediaRx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
-    try { await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta }, userName); finishWithSuccess("✅ Viabilidade FTTA aprovada!"); }
-    finally { setLoading(false); }
+    try {
+      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta }, userName);
+      if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
+        await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
+      }
+      finishWithSuccess("✅ Viabilidade FTTA aprovada!");
+    } finally { setLoading(false); }
   }
 
   async function handleRejeitar() {
@@ -234,12 +307,6 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     finally { setLoading(false); }
   }
 
-  async function handleDevolver() {
-    setLoading(true);
-    try { await devolverViabilizacao(v.id); onRefresh(); }
-    finally { setLoading(false); }
-  }
-
   async function handleSolicitarPredio() {
     setLoading(true);
     try { await solicitarViabilizacaoPredio(v.id); finishWithSuccess("🏗️ Solicitação de dados do prédio enviada ao usuário."); }
@@ -250,14 +317,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await agendarVisita(v.id, {
-        data_visita: dataVisita,
-        periodo_visita: periodo,
-        tecnico_responsavel: tecnico,
-        tecnologia_predio: tecnologia,
-        giga,
-        checklist_previsita: checklist,
-      });
+      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, checklist_previsita: checklist });
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }
@@ -269,15 +329,19 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     finally { setLoading(false); }
   }
 
-  const tipoIcon = v.tipo_instalacao === "FTTH" ? "🏠" : v.tipo_instalacao === "Prédio" ? "🏢" : "🏘️";
-  const titulo = `${tipoIcon} ${v.nome_cliente ?? "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
+  const isContestacao = v.status === "em_revisao" && v.revisao_tipo === "contestado";
+  const tipoIcon = tipoLocal === "FTTH" ? "🏠" : tipoLocal === "Prédio" ? "🏢" : "🏘️";
+  const titulo = `${tipoIcon} ${nomeClienteLocal || "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : "border-indigo-400"}`}>
+    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : isContestacao ? "border-orange-400" : "border-indigo-400"}`}>
       <button onClick={() => setOpen(!open)} className="w-full text-left px-5 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <p className="font-semibold text-gray-900">{titulo}</p>
-          <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {isContestacao && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
+            <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
+          </div>
         </div>
       </button>
 
@@ -287,27 +351,114 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
           {/* Banner de sucesso */}
           {successMsg && (
             <div className="col-span-2 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-green-800 text-sm font-medium">
-              <span className="text-xl">🎉</span>
-              <span>{successMsg}</span>
+              <span className="text-xl">🎉</span><span>{successMsg}</span>
             </div>
           )}
 
-          {/* Info — oculto quando mapa expandido ou após ação concluída */}
-          <div className={`space-y-3 ${mapExpanded || successMsg ? "hidden" : ""}`}>
-            <h4 className="font-medium text-gray-700">📋 Informações</h4>
-            <div className="text-sm text-gray-600 space-y-1">
-              {v.nome_cliente && <p>🙋 Cliente: {v.nome_cliente}</p>}
-              <p>📍 Plus Code: <span className="font-mono">{locationToPlusCode(v.plus_code_cliente)}</span></p>
-              <p>🏷️ Tipo: {v.tipo_instalacao}</p>
-              {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
-              {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}
-              {v.andar_predio && <p>🚪 Apto: {v.andar_predio}</p>}
+          {/* ── Thread de mensagens ── */}
+          {!successMsg && v.mensagens && v.mensagens.length > 0 && (
+            <div className={`col-span-2 space-y-2 pb-2 ${mapExpanded ? "hidden" : ""}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">💬 Histórico de mensagens</p>
+              {v.mensagens.map((m, i) => (
+                <div key={i} className={`rounded-lg px-3 py-2.5 text-sm ${
+                  m.tipo === "auditoria"   ? "bg-blue-50 border border-blue-200" :
+                  m.tipo === "contestacao" ? "bg-orange-50 border border-orange-200" :
+                  "bg-gray-50 border border-gray-200"
+                }`}>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">{m.de} · {formatDateTime(m.data)}</p>
+                  <p className="text-gray-800">{m.texto}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Painel de contestação ── */}
+          {isContestacao && !successMsg && (
+            <div className={`col-span-2 space-y-3 ${mapExpanded ? "hidden" : ""}`}>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
+                <p className="font-medium text-orange-800">⚠️ O usuário contestou a decisão anterior
+                  {v.status_anterior ? ` (${v.status_anterior})` : ""}.
+                </p>
+                <p className="text-orange-700 text-xs mt-1">Leia as mensagens acima e escolha como proceder.</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleRevisarContestacao} disabled={loading}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-medium">
+                  🔍 Revisar viabilidade
+                </button>
+                <button onClick={() => setShowResponderContest(!showResponderContest)}
+                  className="flex-1 border border-orange-300 text-orange-700 hover:bg-orange-50 py-2 rounded-lg text-sm font-medium">
+                  ✉️ Manter e responder
+                </button>
+              </div>
+              {showResponderContest && (
+                <div className="space-y-2">
+                  <textarea
+                    placeholder="Explique ao usuário por que a decisão se mantém..."
+                    value={msgRespContest}
+                    onChange={(e) => setMsgRespContest(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  <button onClick={handleManterDecisao} disabled={loading || !msgRespContest.trim()}
+                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white py-2 rounded-lg text-sm font-medium">
+                    {loading ? "Enviando..." : "✅ Confirmar e enviar resposta"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Painel de informações ── */}
+          <div className={`space-y-3 ${mapExpanded || successMsg || isContestacao ? "hidden" : ""}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-700">📋 Informações</h4>
+              {!editandoInfo && (
+                <button onClick={() => setEditandoInfo(true)} className="text-xs text-indigo-600 hover:underline">✏️ Editar</button>
+              )}
             </div>
 
+            {editandoInfo ? (
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Tipo de instalação</p>
+                  <select value={tipoLocal} onChange={(e) => setTipoLocal(e.target.value as TipoInstalacao)}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="FTTH">🏠 FTTH</option>
+                    <option value="Prédio">🏢 Prédio (FTTA)</option>
+                    <option value="Condomínio">🏘️ Condomínio</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Nome do cliente</p>
+                  <input type="text" value={nomeClienteLocal} onChange={(e) => setNomeClienteLocal(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSalvarInfo} disabled={loading}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded-lg text-sm">
+                    {loading ? "..." : "✅ Salvar"}
+                  </button>
+                  <button onClick={() => { setEditandoInfo(false); setTipoLocal(v.tipo_instalacao); setNomeClienteLocal(v.nome_cliente ?? ""); }}
+                    className="flex-1 border py-1.5 rounded-lg text-sm">Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 space-y-1">
+                {nomeClienteLocal && <p>🙋 Cliente: {nomeClienteLocal}</p>}
+                <p>📍 Plus Code: <span className="font-mono">{locationToPlusCode(v.plus_code_cliente)}</span></p>
+                <p>🏷️ Tipo: {tipoLocal}{tipoLocal !== v.tipo_instalacao && <span className="ml-1 text-xs text-amber-600 font-medium">(alterado — não salvo)</span>}</p>
+                {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
+                {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}
+                {v.andar_predio && <p>🚪 Apto: {v.andar_predio}</p>}
+              </div>
+            )}
+
             {/* Ações gerais */}
-            <div className="flex gap-2 pt-2">
-              <button onClick={handleDevolver} disabled={loading} className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" /> Devolver
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
+                className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                ↩️ Devolver
               </button>
               {confirmDelete ? (
                 <div className="flex gap-2">
@@ -320,22 +471,46 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 </button>
               )}
             </div>
+
+            {/* Formulário de devolução */}
+            {showDevolver && (
+              <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+                <p className="text-xs font-medium text-gray-700">↩️ Devolver viabilização</p>
+                <textarea
+                  placeholder="Mensagem para o usuário (ex: endereço incorreto, tipo errado...)"
+                  value={msgDevolver}
+                  onChange={(e) => setMsgDevolver(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <div className="flex gap-2">
+                  <button onClick={handleDevolverComMensagem} disabled={loading || !msgDevolver.trim()}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm">
+                    {loading ? "..." : "↩️ Devolver com mensagem"}
+                  </button>
+                  <button onClick={handleDevolver} disabled={loading}
+                    className="flex-1 border py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                    Sem mensagem
+                  </button>
+                  <button onClick={() => setShowDevolver(false)} className="px-3 border rounded-lg text-sm">✕</button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Formulário */}
-          <div className={`space-y-3 ${successMsg ? "hidden" : ""}`}>
+          {/* ── Formulário técnico ── */}
+          <div className={`space-y-3 ${successMsg || isContestacao ? "hidden" : ""}`}>
+
             {/* FTTH */}
-            {v.tipo_instalacao === "FTTH" && !v.status_predio && (
+            {tipoLocal === "FTTH" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏠 Dados FTTH</h4>
-
                 {cto && !showCtoBusca && (
                   <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                     <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
                     <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
                   </div>
                 )}
-
                 {showCtoBusca ? (
                   <CtoBusca
                     plusCode={v.plus_code_cliente}
@@ -367,31 +542,15 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               </>
             )}
 
-            {/* FTTA (Prédio) — estado inicial */}
-            {v.tipo_instalacao === "Prédio" && !v.status_predio && (
+            {/* FTTA (Prédio) */}
+            {tipoLocal === "Prédio" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏢 Dados FTTA</h4>
-
-                <button
-                  onClick={() => setShowFttaMap(!showFttaMap)}
-                  className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                    showFttaMap
-                      ? "border-blue-400 text-blue-700 bg-blue-50"
-                      : "border-blue-300 text-blue-600 hover:bg-blue-50"
-                  }`}
-                >
+                <button onClick={() => setShowFttaMap(!showFttaMap)}
+                  className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${showFttaMap ? "border-blue-400 text-blue-700 bg-blue-50" : "border-blue-300 text-blue-600 hover:bg-blue-50"}`}>
                   🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
                 </button>
-
-                {showFttaMap && (
-                  <FttaMap
-                    plusCode={v.plus_code_cliente}
-                    nomeCliente={v.nome_cliente}
-                    onSelectCdoi={(name) => setCdoi(name)}
-                    onExpandChange={setMapExpanded}
-                  />
-                )}
-
+                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onExpandChange={setMapExpanded} />}
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="Nome do prédio" value={predioNome} onChange={(e) => setPredioNome(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
@@ -408,18 +567,16 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               </>
             )}
 
-            {/* Condomínio — igual FTTH */}
-            {v.tipo_instalacao === "Condomínio" && !v.status_predio && (
+            {/* Condomínio */}
+            {tipoLocal === "Condomínio" && !v.status_predio && (
               <>
                 <h4 className="font-medium text-gray-700">🏘️ Dados Condomínio</h4>
-
                 {cto && !showCtoBusca && (
                   <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                     <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
                     <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
                   </div>
                 )}
-
                 {showCtoBusca ? (
                   <CtoBusca
                     plusCode={v.plus_code_cliente}
@@ -468,7 +625,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               <>
                 <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
                   <p className="font-medium text-blue-800">✅ Dados recebidos — agendar visita</p>
-                  <p>👤 {v.tipo_instalacao === "Condomínio" ? "Responsável" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
+                  <p>👤 {tipoLocal === "Condomínio" ? "Responsável" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
                   <p>🏠 Cliente: {v.nome_cliente_predio} | {v.contato_cliente_predio}</p>
                   <p>🚪 Apto: {v.apartamento}</p>
                   {v.obs_agendamento && <p>📝 {v.obs_agendamento}</p>}
@@ -480,48 +637,31 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   </select>
                   <input placeholder="Técnico *" value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={tecnologia} onChange={(e) => { setTecnologia(e.target.value); if (e.target.value === "FTTA") setGiga(true); }} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    {v.tipo_instalacao === "Condomínio"
-                      ? <option>FTTH</option>
-                      : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
+                    {tipoLocal === "Condomínio" ? <option>FTTH</option> : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>
                 </div>
                 {(() => {
-                  const alwaysGiga = tecnologia === "FTTA" || v.tipo_instalacao === "Condomínio";
+                  const alwaysGiga = tecnologia === "FTTA" || tipoLocal === "Condomínio";
                   return (
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)}
-                        disabled={alwaysGiga} />
-                      ⚡ {v.tipo_instalacao === "Condomínio" ? "Condomínio" : "Prédio"} Giga?
-                      {alwaysGiga && (
-                        <span className="text-xs text-blue-600">
-                          {v.tipo_instalacao === "Condomínio" ? "(sempre ativo em Condomínio)" : "(sempre ativo em FTTA)"}
-                        </span>
-                      )}
+                      <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)} disabled={alwaysGiga} />
+                      ⚡ {tipoLocal === "Condomínio" ? "Condomínio" : "Prédio"} Giga?
+                      {alwaysGiga && <span className="text-xs text-blue-600">{tipoLocal === "Condomínio" ? "(sempre ativo em Condomínio)" : "(sempre ativo em FTTA)"}</span>}
                     </label>
                   );
                 })()}
-
-                {/* Checklist pré-visita */}
                 <div className={`border rounded-xl p-3 space-y-2 ${checklistOk ? "border-green-300 bg-green-50" : "border-orange-200 bg-orange-50"}`}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
                     {checklistOk ? "✅ Checklist pré-visita — completo" : "📋 Checklist pré-visita"}
                   </p>
                   {checklistItems.map((item) => (
                     <label key={item.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={checklist[item.key]}
-                        onChange={() => toggleChecklist(item.key)}
-                        className="w-4 h-4 accent-indigo-600"
-                      />
+                      <input type="checkbox" checked={checklist[item.key]} onChange={() => toggleChecklist(item.key)} className="w-4 h-4 accent-indigo-600" />
                       <span className={checklist[item.key] ? "line-through text-gray-400" : ""}>{item.label}</span>
                     </label>
                   ))}
-                  {!checklistOk && (
-                    <p className="text-xs text-orange-600">⚠️ Confirme todos os itens antes de agendar.</p>
-                  )}
+                  {!checklistOk && <p className="text-xs text-orange-600">⚠️ Confirme todos os itens antes de agendar.</p>}
                 </div>
-
                 <div className="flex gap-2">
                   <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
                   <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>

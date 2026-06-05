@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
 
-type StatusFilter = "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp";
+type StatusFilter =
+  | "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp"
+  | "ag_inst" | "neg_inst" | "inst_agendado" | "instalado" | "em_revisao";
 type TipoFilter = "todos" | "FTTH" | "Prédio" | "Condomínio";
 
 export default function ResultadosPage() {
@@ -67,18 +69,29 @@ export default function ResultadosPage() {
   }
 
   const statusOptions = [
-    { key: "todos",      label: "Todos os status" },
-    { key: "pendente",   label: "Pendente"         },
-    { key: "em_auditoria",label: "Em auditoria"    },
-    { key: "aprovado",   label: "Aprovado"         },
-    { key: "rejeitado",  label: "Sem viabilidade"  },
-    { key: "utp",        label: "UTP"              },
-    { key: "finalizado", label: "Finalizado"       },
+    { key: "todos",         label: "Todos os status"   },
+    { key: "pendente",      label: "Pendente"           },
+    { key: "em_auditoria",  label: "Em auditoria"       },
+    { key: "em_revisao",    label: "Devolvida / Em revisão" },
+    { key: "aprovado",      label: "Aprovado"           },
+    { key: "em_agendamento",label: "Em agendamento"     },
+    { key: "rejeitado",     label: "Sem viabilidade"    },
+    { key: "utp",           label: "UTP"                },
+    { key: "finalizado",    label: "Finalizado"         },
   ];
 
   const historicoFiltrado = historico
     .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
-    .filter((v) => histStatus === "todos" || v.status === histStatus)
+    .filter((v) => {
+      if (histStatus === "todos") return true;
+      if (histStatus === "em_agendamento")
+        return (
+          v.status_predio === "agendado" ||
+          v.status_predio === "pronto_auditoria" ||
+          (v.status_instalacao != null && v.status_instalacao !== "instalado")
+        );
+      return v.status === histStatus;
+    })
     .filter((v) => {
       if (!histSearch.trim()) return true;
       const q = histSearch.toLowerCase();
@@ -96,25 +109,35 @@ export default function ResultadosPage() {
   }
 
   const counts = {
-    analise:     results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio).length,
-    aprovado:    results.filter((r) => r.status === "aprovado" && !r.status_predio).length,
-    ag_dados:    results.filter((r) => r.status_predio === "aguardando_dados").length,
-    agendado:    results.filter((r) => ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "")).length,
-    estruturado: results.filter((r) => r.status_predio === "estruturado").length,
-    semViab:     results.filter((r) => r.status === "rejeitado").length,
-    utp:         results.filter((r) => r.status === "utp").length,
+    analise:      results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio && !r.status_instalacao).length,
+    aprovado:     results.filter((r) => r.status === "aprovado" && !r.status_predio && !r.status_instalacao).length,
+    ag_dados:     results.filter((r) => r.status_predio === "aguardando_dados").length,
+    agendado:     results.filter((r) => ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "")).length,
+    estruturado:  results.filter((r) => r.status_predio === "estruturado").length,
+    semViab:      results.filter((r) => r.status === "rejeitado").length,
+    utp:          results.filter((r) => r.status === "utp").length,
+    em_revisao:   results.filter((r) => r.status === "em_revisao" && r.revisao_tipo === "devolvido").length,
+    ag_inst:      results.filter((r) => r.status_instalacao === "aguardando_proposta").length,
+    neg_inst:     results.filter((r) => ["proposta_enviada", "aguardando_confirmacao"].includes(r.status_instalacao ?? "")).length,
+    inst_agendado:results.filter((r) => r.status_instalacao === "agendado").length,
+    instalado:    results.filter((r) => r.status_instalacao === "instalado").length,
   };
 
   function matchesStatus(r: Viabilizacao): boolean {
     switch (statusFilter) {
-      case "analise":     return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio;
-      case "aprovado":    return r.status === "aprovado" && !r.status_predio;
-      case "ag_dados":    return r.status_predio === "aguardando_dados";
-      case "agendado":    return ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "");
-      case "estruturado": return r.status_predio === "estruturado";
-      case "sem_viab":    return r.status === "rejeitado";
-      case "utp":         return r.status === "utp";
-      default:            return true;
+      case "analise":      return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio && !r.status_instalacao;
+      case "aprovado":     return r.status === "aprovado" && !r.status_predio && !r.status_instalacao;
+      case "ag_dados":     return r.status_predio === "aguardando_dados";
+      case "agendado":     return ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "");
+      case "estruturado":  return r.status_predio === "estruturado";
+      case "sem_viab":     return r.status === "rejeitado";
+      case "utp":          return r.status === "utp";
+      case "em_revisao":   return r.status === "em_revisao" && r.revisao_tipo === "devolvido";
+      case "ag_inst":      return r.status_instalacao === "aguardando_proposta";
+      case "neg_inst":     return ["proposta_enviada", "aguardando_confirmacao"].includes(r.status_instalacao ?? "");
+      case "inst_agendado":return r.status_instalacao === "agendado";
+      case "instalado":    return r.status_instalacao === "instalado";
+      default:             return true;
     }
   }
 
@@ -134,14 +157,19 @@ export default function ResultadosPage() {
 
   const statusChips = (
     [
-      { key: "todos",       label: "Todos",            count: results.length },
-      { key: "analise",     label: "🔍 Em análise",    count: counts.analise },
-      { key: "aprovado",    label: "✅ Aprovado",       count: counts.aprovado },
-      { key: "ag_dados",    label: "⚠️ Ag. dados",     count: counts.ag_dados },
-      { key: "agendado",    label: "📅 Agendado",       count: counts.agendado },
-      { key: "estruturado", label: "🎉 Estruturado",    count: counts.estruturado },
-      { key: "sem_viab",    label: "❌ Sem viab.",      count: counts.semViab },
-      { key: "utp",         label: "📡 UTP",            count: counts.utp },
+      { key: "todos",        label: "Todos",               count: results.length     },
+      { key: "analise",      label: "🔍 Em análise",       count: counts.analise     },
+      { key: "aprovado",     label: "✅ Aprovado",          count: counts.aprovado    },
+      { key: "ag_dados",     label: "⚠️ Ag. dados",        count: counts.ag_dados    },
+      { key: "agendado",     label: "📅 Agendado",          count: counts.agendado    },
+      { key: "estruturado",  label: "🎉 Estruturado",       count: counts.estruturado },
+      { key: "em_revisao",   label: "↩️ Devolvida",          count: counts.em_revisao  },
+      { key: "sem_viab",     label: "❌ Sem viab.",         count: counts.semViab     },
+      { key: "utp",          label: "📡 UTP",               count: counts.utp         },
+      { key: "ag_inst",      label: "⚠️ Propor data",       count: counts.ag_inst     },
+      { key: "neg_inst",     label: "🔧 Negociando",        count: counts.neg_inst    },
+      { key: "inst_agendado",label: "🏠 Inst. agendada",    count: counts.inst_agendado },
+      { key: "instalado",    label: "🏠 Instalado",         count: counts.instalado   },
     ] as { key: StatusFilter; label: string; count: number }[]
   ).filter((c) => c.key === "todos" || c.count > 0);
 
@@ -351,9 +379,13 @@ export default function ResultadosPage() {
 function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   r: Viabilizacao; onFinalizar: (id: string) => void; onRefresh: () => void; showData?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+  const isDevolvida = r.status === "em_revisao" && r.revisao_tipo === "devolvido";
+  const isContestacaoPendente = r.status === "em_revisao" && r.revisao_tipo === "contestado";
+  const [open, setOpen] = useState(isDevolvida);
   const [submitting, setSubmitting] = useState(false);
-  // Proposta de instalação FTTH
+
+  // ── Proposta de instalação FTTH ────────────────────────
   const [propostaData, setPropostaData] = useState("");
   const [propostaPeriodo, setPropostaPeriodo] = useState("Manhã");
   const [propostaObs, setPropostaObs] = useState("");
@@ -363,11 +395,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!propostaData) { alert("Informe a data desejada!"); return; }
     setEnviandoProposta(true);
     try {
-      await enviarPropostaInstalacao(
-        r.id,
-        { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined },
-        r.historico_agendamento
-      );
+      await enviarPropostaInstalacao(r.id, { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined }, r.historico_agendamento);
       onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setEnviandoProposta(false); }
@@ -377,11 +405,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!r.agendamento_data || !r.agendamento_tecnico) return;
     setEnviandoProposta(true);
     try {
-      await confirmarPropostaUsuario(r.id, {
-        agendamento_data: r.agendamento_data,
-        agendamento_periodo: r.agendamento_periodo ?? "Manhã",
-        agendamento_tecnico: r.agendamento_tecnico,
-      }, r.historico_agendamento);
+      await confirmarPropostaUsuario(r.id, { agendamento_data: r.agendamento_data, agendamento_periodo: r.agendamento_periodo ?? "Manhã", agendamento_tecnico: r.agendamento_tecnico }, r.historico_agendamento);
       onRefresh();
     } catch { alert("Erro ao confirmar."); }
     finally { setEnviandoProposta(false); }
@@ -391,17 +415,42 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!propostaData) { alert("Informe a nova data!"); return; }
     setEnviandoProposta(true);
     try {
-      await enviarPropostaInstalacao(
-        r.id,
-        { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined },
-        r.historico_agendamento
-      );
+      await enviarPropostaInstalacao(r.id, { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined }, r.historico_agendamento);
       onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setEnviandoProposta(false); }
   }
 
-  // Formulário de dados do síndico
+  // ── Contestação ────────────────────────────────────────
+  const [showContestar, setShowContestar] = useState(false);
+  const [msgContestacao, setMsgContestacao] = useState("");
+  const [enviandoContestacao, setEnviandoContestacao] = useState(false);
+
+  async function handleContestar() {
+    if (!msgContestacao.trim()) { alert("Escreva a contestação!"); return; }
+    setEnviandoContestacao(true);
+    try {
+      await contestarViabilizacao(r.id, msgContestacao, user?.nome ?? "Usuário", r.status, r.mensagens);
+      onRefresh();
+    } catch { alert("Erro ao enviar contestação."); }
+    finally { setEnviandoContestacao(false); }
+  }
+
+  // ── Resposta a devolução ───────────────────────────────
+  const [msgResposta, setMsgResposta] = useState("");
+  const [enviandoResposta, setEnviandoResposta] = useState(false);
+
+  async function handleReenviar() {
+    if (!msgResposta.trim()) { alert("Escreva uma resposta!"); return; }
+    setEnviandoResposta(true);
+    try {
+      await reenviarParaAuditoria(r.id, msgResposta, user?.nome ?? "Usuário", r.mensagens);
+      onRefresh();
+    } catch { alert("Erro ao enviar."); }
+    finally { setEnviandoResposta(false); }
+  }
+
+  // ── Dados do síndico ───────────────────────────────────
   const [nomeSindico, setNomeSindico] = useState("");
   const [contatoSindico, setContatoSindico] = useState("");
   const [nomeClientePredio, setNomeClientePredio] = useState("");
@@ -414,15 +463,16 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const isCond = r.tipo_instalacao === "Condomínio";
   const aguardandoDados = r.status_predio === "aguardando_dados";
   const isAprovado = r.status === "aprovado";
-  const canExpand = ["aprovado", "rejeitado", "utp"].includes(r.status) || isFtta;
+  const canExpand = ["aprovado", "rejeitado", "utp", "em_revisao"].includes(r.status) || isFtta;
 
   const statusLabel: Record<string, string> = {
-    pendente: "⏳ Na fila",
+    pendente:     "⏳ Na fila",
     em_auditoria: "🔍 Em análise",
-    aprovado: "✅ Aprovado",
-    rejeitado: "❌ Sem viabilidade",
-    utp: "📡 UTP",
-    finalizado: "📦 Finalizado",
+    em_revisao:   isDevolvida ? "↩️ Devolvida" : "💬 Contestação enviada",
+    aprovado:     "✅ Aprovado",
+    rejeitado:    "❌ Sem viabilidade",
+    utp:          "📡 UTP",
+    finalizado:   "📦 Finalizado",
   };
 
   async function handleEnviarDados() {
@@ -431,15 +481,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     }
     setSubmitting(true);
     try {
-      await enviarDadosPredio(r.id, {
-        predio_ftta: nomePredioInput,
-        nome_sindico: nomeSindico,
-        contato_sindico: contatoSindico,
-        nome_cliente_predio: nomeClientePredio,
-        contato_cliente_predio: contatoClientePredio,
-        apartamento,
-        obs_agendamento: obsAgendamento,
-      });
+      await enviarDadosPredio(r.id, { predio_ftta: nomePredioInput, nome_sindico: nomeSindico, contato_sindico: contatoSindico, nome_cliente_predio: nomeClientePredio, contato_cliente_predio: contatoClientePredio, apartamento, obs_agendamento: obsAgendamento });
       onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setSubmitting(false); }
@@ -462,28 +504,73 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+              isDevolvida ? "bg-orange-100 text-orange-700" :
+              isContestacaoPendente ? "bg-blue-100 text-blue-700" :
+              "bg-gray-100 text-gray-500"
+            }`}>
               {statusLabel[r.status] ?? r.status}
             </span>
-            {canExpand && (
-              <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
-            )}
+            {canExpand && <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>}
           </div>
         </div>
         {isAprovado && !open && (
-          <p className="text-xs text-indigo-500 mt-1.5 font-medium">
-            👆 Toque para ver os dados da viabilidade
-          </p>
+          <p className="text-xs text-indigo-500 mt-1.5 font-medium">👆 Toque para ver os dados da viabilidade</p>
         )}
         {aguardandoDados && !open && (
-          <p className="text-xs text-orange-500 mt-1.5 font-medium">
-            ⚠️ Ação necessária — preencha os dados do {isCond ? "responsável" : "síndico"}
-          </p>
+          <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Ação necessária — preencha os dados do {isCond ? "responsável" : "síndico"}</p>
+        )}
+        {isDevolvida && !open && (
+          <p className="text-xs text-orange-500 mt-1.5 font-medium">↩️ Ação necessária — o auditor solicitou uma correção</p>
         )}
       </button>
 
       {open && (
         <div className="mt-3 pt-3 border-t space-y-3 text-sm text-gray-600">
+
+          {/* ── Thread de mensagens ── */}
+          {r.mensagens && r.mensagens.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">💬 Mensagens</p>
+              {r.mensagens.map((m, i) => (
+                <div key={i} className={`rounded-lg px-3 py-2.5 text-sm ${
+                  m.tipo === "auditoria"   ? "bg-blue-50 border border-blue-200" :
+                  m.tipo === "contestacao" ? "bg-orange-50 border border-orange-200" :
+                  "bg-gray-50 border border-gray-200"
+                }`}>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">{m.de} · {formatDateTime(m.data)}</p>
+                  <p className="text-gray-800">{m.texto}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Devolvida — responder e reenviar ── */}
+          {isDevolvida && (
+            <div className="space-y-2 bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <p className="font-medium text-orange-800 text-sm">↩️ Viabilização devolvida pelo auditor</p>
+              <p className="text-xs text-orange-700">Responda abaixo e reenvie para a fila de análise.</p>
+              <textarea
+                placeholder="Sua resposta ou esclarecimento..."
+                value={msgResposta}
+                onChange={(e) => setMsgResposta(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              />
+              <button onClick={handleReenviar} disabled={enviandoResposta || !msgResposta.trim()}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                {enviandoResposta ? <Loader2 className="w-4 h-4 animate-spin" /> : "📤 Reenviar para análise"}
+              </button>
+            </div>
+          )}
+
+          {/* ── Contestação pendente — aguardando auditor ── */}
+          {isContestacaoPendente && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+              <p className="font-medium text-blue-800">💬 Contestação enviada</p>
+              <p className="text-blue-700 text-xs mt-1">Aguardando análise do auditor. Você será notificado quando houver uma resposta.</p>
+            </div>
+          )}
 
           {/* ===== FTTH aprovado ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "FTTH" && (
@@ -500,22 +587,17 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {/* ===== Fluxo de agendamento de instalação FTTH ===== */}
           {r.tipo_instalacao === "FTTH" && r.status_instalacao && (
             <div className="space-y-2">
-
-              {/* Usuário precisa propor data */}
               {r.status_instalacao === "aguardando_proposta" && (
                 <div className="space-y-2">
                   <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
                     ✅ Viabilidade aprovada! Informe a data e período de preferência para a instalação.
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)}
-                      className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)}
-                      className="px-3 py-2 text-sm border rounded-lg">
+                    <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
                       <option>Manhã</option><option>Tarde</option>
                     </select>
-                    <textarea placeholder="Observações (opcional)" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)}
-                      rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                    <textarea placeholder="Observações (opcional)" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                   </div>
                   <button onClick={handleEnviarProposta} disabled={enviandoProposta || !propostaData}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
@@ -524,7 +606,6 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </div>
               )}
 
-              {/* Proposta enviada, aguardando agendamento */}
               {r.status_instalacao === "proposta_enviada" && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-1 text-sm">
                   <p className="font-medium text-yellow-800">⏳ Proposta enviada ao setor de agendamento</p>
@@ -534,7 +615,6 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </div>
               )}
 
-              {/* Agendamento alterou a data — usuário confirma ou contra-propõe */}
               {r.status_instalacao === "aguardando_confirmacao" && (
                 <div className="space-y-2">
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1 text-sm">
@@ -544,8 +624,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                     {r.agendamento_obs && <p className="text-gray-600">📝 {r.agendamento_obs}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={handleConfirmarProposta} disabled={enviandoProposta}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
+                    <button onClick={handleConfirmarProposta} disabled={enviandoProposta} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
                       ✅ Confirmar esta data
                     </button>
                   </div>
@@ -553,17 +632,13 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                     <summary className="cursor-pointer text-gray-500 hover:text-gray-700">Propor outra data</summary>
                     <div className="mt-2 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)}
-                          className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                        <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)}
-                          className="px-3 py-2 text-sm border rounded-lg">
+                        <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                        <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
                           <option>Manhã</option><option>Tarde</option>
                         </select>
-                        <textarea placeholder="Motivo / observação" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)}
-                          rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                        <textarea placeholder="Motivo / observação" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                       </div>
-                      <button onClick={handleContraproposta} disabled={enviandoProposta || !propostaData}
-                        className="w-full border border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2 rounded-lg text-sm">
+                      <button onClick={handleContraproposta} disabled={enviandoProposta || !propostaData} className="w-full border border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2 rounded-lg text-sm">
                         📤 Enviar nova proposta
                       </button>
                     </div>
@@ -571,7 +646,6 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </div>
               )}
 
-              {/* Agendado */}
               {r.status_instalacao === "agendado" && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1 text-sm">
                   <p className="font-medium text-green-800">📅 Instalação agendada!</p>
@@ -580,7 +654,6 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </div>
               )}
 
-              {/* Instalado */}
               {r.status_instalacao === "instalado" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                   <p className="font-medium text-blue-800">🎉 Instalação concluída pelo técnico {r.tecnico_instalacao ?? ""}!</p>
@@ -590,7 +663,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== Condomínio aprovado direto (CTO) ===== */}
+          {/* ===== Condomínio aprovado direto ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "Condomínio" && !r.status_predio && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
               <p><strong>CTO:</strong> {r.cto_numero}</p>
@@ -627,62 +700,62 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== AGUARDANDO DADOS DO SÍNDICO ===== */}
+          {/* ===== Contestar ===== */}
+          {["rejeitado", "utp"].includes(r.status) && !showContestar && (
+            <button onClick={() => setShowContestar(true)} className="text-xs border border-orange-300 text-orange-700 hover:bg-orange-50 px-3 py-1.5 rounded-lg">
+              💬 Contestar decisão
+            </button>
+          )}
+          {showContestar && (
+            <div className="space-y-2 border border-orange-200 rounded-lg p-3 bg-orange-50">
+              <p className="text-xs font-medium text-orange-800">💬 Contestar decisão do auditor</p>
+              <textarea
+                placeholder="Descreva o motivo da contestação (ex: vizinho tem nossa internet, endereço correto é outro...)"
+                value={msgContestacao}
+                onChange={(e) => setMsgContestacao(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleContestar} disabled={enviandoContestacao || !msgContestacao.trim()}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                  {enviandoContestacao ? <Loader2 className="w-4 h-4 animate-spin" /> : "📤 Enviar contestação"}
+                </button>
+                <button onClick={() => setShowContestar(false)} className="px-3 border rounded-lg text-sm">✕</button>
+              </div>
+            </div>
+          )}
+
+          {/* ===== Aguardando dados síndico ===== */}
           {aguardandoDados && (
             <div className="space-y-3">
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="font-medium text-orange-800 text-sm">
-                  🏗️ Precisamos viabilizar a estrutura no {isCond ? "condomínio" : "prédio"}
-                </p>
-                <p className="text-xs text-orange-700 mt-1">
-                  Preencha os dados abaixo para que possamos agendar a visita técnica.
-                </p>
+                <p className="font-medium text-orange-800 text-sm">🏗️ Precisamos viabilizar a estrutura no {isCond ? "condomínio" : "prédio"}</p>
+                <p className="text-xs text-orange-700 mt-1">Preencha os dados abaixo para que possamos agendar a visita técnica.</p>
               </div>
-
               <div className="space-y-2">
-                <input type="text" placeholder={`Nome do ${isCond ? "condomínio" : "prédio"} *`}
-                  value={nomePredioInput} onChange={(e) => setNomePredioInput(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">
-                  {isCond ? "👤 Responsável do condomínio" : "👤 Síndico"}
-                </p>
+                <input type="text" placeholder={`Nome do ${isCond ? "condomínio" : "prédio"} *`} value={nomePredioInput} onChange={(e) => setNomePredioInput(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">{isCond ? "👤 Responsável do condomínio" : "👤 Síndico"}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder={`Nome do ${isCond ? "responsável" : "síndico"} *`}
-                    value={nomeSindico} onChange={(e) => setNomeSindico(e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input type="text" placeholder="Telefone *"
-                    value={contatoSindico} onChange={(e) => setContatoSindico(e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input type="text" placeholder={`Nome do ${isCond ? "responsável" : "síndico"} *`} value={nomeSindico} onChange={(e) => setNomeSindico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input type="text" placeholder="Telefone *" value={contatoSindico} onChange={(e) => setContatoSindico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
-
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">🏠 Cliente</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Nome do cliente *"
-                    value={nomeClientePredio} onChange={(e) => setNomeClientePredio(e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input type="text" placeholder="Telefone *"
-                    value={contatoClientePredio} onChange={(e) => setContatoClientePredio(e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input type="text" placeholder="Nome do cliente *" value={nomeClientePredio} onChange={(e) => setNomeClientePredio(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input type="text" placeholder="Telefone *" value={contatoClientePredio} onChange={(e) => setContatoClientePredio(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
-                <input type="text" placeholder={`${isCond ? "Casa/Lote" : "Apartamento"} *`}
-                  value={apartamento} onChange={(e) => setApartamento(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                <textarea placeholder="📅 Melhores dias e horários para a visita técnica"
-                  value={obsAgendamento} onChange={(e) => setObsAgendamento(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <input type="text" placeholder={`${isCond ? "Casa/Lote" : "Apartamento"} *`} value={apartamento} onChange={(e) => setApartamento(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <textarea placeholder="📅 Melhores dias e horários para a visita técnica" value={obsAgendamento} onChange={(e) => setObsAgendamento(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
-
               <button onClick={handleEnviarDados} disabled={submitting}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-                {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
-                  : "📤 Enviar para verificação técnica"}
+                {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</> : "📤 Enviar para verificação técnica"}
               </button>
             </div>
           )}
 
-          {/* ===== PRONTO PARA AGENDAR ===== */}
+          {/* ===== Pronto para agendar ===== */}
           {r.status_predio === "pronto_auditoria" && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
               <p className="font-medium text-blue-800">✅ Dados enviados!</p>
@@ -690,7 +763,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== AGENDADO ===== */}
+          {/* ===== Visita agendada ===== */}
           {r.status_predio === "agendado" && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1 text-sm">
               <p className="font-medium text-green-800">📅 Visita técnica agendada!</p>
@@ -702,7 +775,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== ESTRUTURADO ===== */}
+          {/* ===== Estruturado ===== */}
           {r.status_predio === "estruturado" && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm space-y-1">
               <p className="font-medium text-green-800">🎉 Estrutura instalada!</p>
@@ -712,9 +785,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {r.auditado_por && (
-            <p className="text-xs text-gray-400">
-              🔍 Auditado por: <strong>{r.auditado_por}</strong> · {formatDateTime(r.data_auditoria)}
-            </p>
+            <p className="text-xs text-gray-400">🔍 Auditado por: <strong>{r.auditado_por}</strong> · {formatDateTime(r.data_auditoria)}</p>
           )}
 
           {["aprovado", "rejeitado", "utp"].includes(r.status) && !r.status_instalacao && (
@@ -723,14 +794,10 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </button>
           )}
           {r.status_instalacao === "instalado" && (
-            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg transition-colors">
-              📁 Arquivar
-            </button>
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg transition-colors">📁 Arquivar</button>
           )}
           {r.status_predio === "estruturado" && (
-            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
-              ✅ Ciente
-            </button>
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">✅ Ciente</button>
           )}
         </div>
       )}

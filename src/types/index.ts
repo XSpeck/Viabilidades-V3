@@ -12,10 +12,18 @@ export type TipoInstalacao = "FTTH" | "Prédio" | "Condomínio";
 export type StatusViabilizacao =
   | "pendente"
   | "em_auditoria"
+  | "em_revisao"
   | "aprovado"
   | "rejeitado"
   | "utp"
   | "finalizado";
+
+export interface MensagemViabilizacao {
+  de: string;
+  tipo: "auditoria" | "contestacao" | "resposta";
+  texto: string;
+  data: string;
+}
 
 export type StatusPredio =
   | "aguardando_dados"
@@ -97,6 +105,10 @@ export interface Viabilizacao {
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;
+  // Revisão / Contestação
+  mensagens?: MensagemViabilizacao[];
+  revisao_tipo?: "devolvido" | "contestado";
+  status_anterior?: StatusViabilizacao;
   // Timestamps
   data_solicitacao?: string;
   data_auditoria?: string;
