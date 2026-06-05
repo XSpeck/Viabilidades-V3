@@ -166,7 +166,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               clientLon={clientLon}
               ctos={ctos}
               selectedName={selectedName}
-              onSelect={confirmCto}
+              onSelect={setSelectedName}
+              onConfirm={confirmCto}
               onExpandChange={onExpandChange}
             />
 

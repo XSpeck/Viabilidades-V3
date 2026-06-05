@@ -77,6 +77,7 @@ interface Props {
   ctos: CtoWithRoute[];
   selectedName: string | null;
   onSelect: (name: string) => void;
+  onConfirm?: (name: string) => void;
   onExpandChange?: (expanded: boolean) => void;
 }
 
@@ -224,7 +225,7 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 // Mapa principal
 // =====================
-export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSelect, onExpandChange }: Props) {
+export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange }: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
 
@@ -272,6 +273,17 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
     const next = !expanded;
     setExpanded(next);
     onExpandChange?.(next);
+  }
+
+  function handleConfirmFromPopup(name: string) {
+    onSelect(name);
+    if (expanded) {
+      setExpanded(false);
+      onExpandChange?.(false);
+      setTimeout(() => onConfirm?.(name), 350);
+    } else {
+      onConfirm?.(name);
+    }
   }
 
   function toggleMeasure() {
@@ -515,14 +527,14 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
                   </>
                 )}
                 <button
-                  onClick={() => onSelect(cto.name)}
+                  onClick={() => handleConfirmFromPopup(cto.name)}
                   style={{
-                    width: "100%", background: "#4f46e5", color: "white",
+                    width: "100%", background: "#16a34a", color: "white",
                     border: "none", borderRadius: 6, padding: "6px 0",
                     cursor: "pointer", fontWeight: 600, fontSize: 12,
                   }}
                 >
-                  ✅ Selecionar esta CTO
+                  ✅ Confirmar esta CTO
                 </button>
               </div>
             </Popup>
