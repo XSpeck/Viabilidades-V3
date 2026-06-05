@@ -456,9 +456,13 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
             {/* Ações gerais */}
             <div className="flex flex-wrap gap-2 pt-2">
-              <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
+              <button onClick={handleDevolver} disabled={loading}
                 className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
-                ↩️ Devolver
+                <RotateCcw className="w-3 h-3" /> Fila
+              </button>
+              <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
+                className="text-xs px-3 py-1.5 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+                ↩️ Devolver c/ msg
               </button>
               {confirmDelete ? (
                 <div className="flex gap-2">
@@ -487,10 +491,6 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   <button onClick={handleDevolverComMensagem} disabled={loading || !msgDevolver.trim()}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm">
                     {loading ? "..." : "↩️ Devolver com mensagem"}
-                  </button>
-                  <button onClick={handleDevolver} disabled={loading}
-                    className="flex-1 border py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                    Sem mensagem
                   </button>
                   <button onClick={() => setShowDevolver(false)} className="px-3 border rounded-lg text-sm">✕</button>
                 </div>
