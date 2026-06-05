@@ -550,7 +550,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${showFttaMap ? "border-blue-400 text-blue-700 bg-blue-50" : "border-blue-300 text-blue-600 hover:bg-blue-50"}`}>
                   🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
                 </button>
-                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onExpandChange={setMapExpanded} />}
+                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="OLT *" value={oltFtta} onChange={(e) => setOltFtta(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />

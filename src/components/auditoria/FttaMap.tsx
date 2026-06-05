@@ -21,10 +21,11 @@ interface Props {
   plusCode: string;
   nomeCliente?: string;
   onSelectCdoi?: (name: string) => void;
+  onConfirm?: () => void;
   onExpandChange?: (expanded: boolean) => void;
 }
 
-export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onExpandChange }: Props) {
+export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onConfirm, onExpandChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -53,6 +54,12 @@ export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onExpandC
   function handleSelect(name: string) {
     setSelectedName(name);
     onSelectCdoi?.(name);
+  }
+
+  function handleConfirm(name: string) {
+    setSelectedName(name);
+    onSelectCdoi?.(name);
+    onConfirm?.();
   }
 
   return (
@@ -99,6 +106,7 @@ export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onExpandC
               ctos={ctos}
               selectedName={selectedName}
               onSelect={handleSelect}
+              onConfirm={handleConfirm}
               onExpandChange={onExpandChange}
             />
             {selectedName && onSelectCdoi && (
