@@ -314,7 +314,10 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
           </div>
 
           {v.obs_agendamento && (
-            <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">📝 {v.obs_agendamento}</div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm">
+              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Obs. do agendamento</p>
+              <p className="text-gray-700 italic">"{v.obs_agendamento}"</p>
+            </div>
           )}
 
           {v.historico_reagendamento && (
