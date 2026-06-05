@@ -28,6 +28,7 @@ export interface MensagemViabilizacao {
 export type StatusPredio =
   | "aguardando_dados"
   | "pronto_auditoria"
+  | "proposta_visita"
   | "agendado"
   | "estruturado"
   | "rejeitado";
@@ -72,6 +73,11 @@ export interface Viabilizacao {
   contato_cliente_predio?: string;
   apartamento?: string;
   obs_agendamento?: string;
+  data_preferencia_visita?: string;
+  periodo_preferencia_visita?: string;
+  proposta_visita_data?: string;
+  proposta_visita_periodo?: string;
+  proposta_visita_tecnico?: string;
   data_visita?: string;
   periodo_visita?: string;
   tecnico_responsavel?: string;

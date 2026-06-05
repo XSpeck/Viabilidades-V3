@@ -7,7 +7,7 @@ import {
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
   iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
-  manterDecisaoContestacao, revisarContestacao,
+  manterDecisaoContestacao, revisarContestacao, proporDataVisita,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
@@ -41,7 +41,7 @@ export default function AuditoriaPage() {
     ftth:       items.filter((i) => i.tipo_instalacao === "FTTH" && !i.urgente).length,
     predios:    items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio).length,
     aguardando:  items.filter((i) => i.status_predio === "aguardando_dados").length,
-    agendar:     items.filter((i) => i.status_predio === "pronto_auditoria").length,
+    agendar:     items.filter((i) => ["pronto_auditoria", "proposta_visita"].includes(i.status_predio ?? "")).length,
     agendado:    items.filter((i) => i.status_predio === "agendado").length,
     contestado:  items.filter((i) => i.status === "em_revisao" && i.revisao_tipo === "contestado").length,
   };
@@ -65,7 +65,7 @@ export default function AuditoriaPage() {
       case "ftth":       return v.tipo_instalacao === "FTTH" && !v.urgente;
       case "predios":    return ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !v.urgente && !v.status_predio;
       case "aguardando":  return v.status_predio === "aguardando_dados";
-      case "agendar":     return v.status_predio === "pronto_auditoria";
+      case "agendar":     return ["pronto_auditoria", "proposta_visita"].includes(v.status_predio ?? "");
       case "agendado":    return v.status_predio === "agendado";
       case "contestado":  return v.status === "em_revisao" && v.revisao_tipo === "contestado";
       default:           return true;
@@ -231,8 +231,8 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [oltFtta, setOltFtta] = useState(v.olt ?? "");
 
   // ── Agendamento prédio ─────────────────────────────────
-  const [dataVisita, setDataVisita] = useState("");
-  const [periodo, setPeriodo] = useState("Manhã");
+  const [dataVisita, setDataVisita] = useState(v.data_preferencia_visita ?? "");
+  const [periodo, setPeriodo] = useState(v.periodo_preferencia_visita ?? "Manhã");
   const [tecnico, setTecnico] = useState("");
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(true);
@@ -312,12 +312,26 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     finally { setLoading(false); }
   }
 
+  const dataDiferePref = !!v.data_preferencia_visita && (
+    dataVisita !== v.data_preferencia_visita || periodo !== (v.periodo_preferencia_visita ?? "Manhã")
+  );
+
   async function handleAgendar() {
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
       await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, checklist_previsita: checklist });
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
+    } finally { setLoading(false); }
+  }
+
+  async function handleProporData() {
+    if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
+    if (!checklistOk) { alert("Confirme todos os itens do checklist!"); return; }
+    setLoading(true);
+    try {
+      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, checklist_previsita: checklist });
+      finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
     } finally { setLoading(false); }
   }
 
@@ -636,6 +650,15 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   <p>🚪 Apto: {v.apartamento}</p>
                   {v.obs_agendamento && <p>📝 {v.obs_agendamento}</p>}
                 </div>
+                {v.data_preferencia_visita && (
+                  <div className={`rounded-lg p-2.5 text-sm flex items-center gap-2 ${dataDiferePref ? "bg-orange-50 border border-orange-200 text-orange-800" : "bg-green-50 border border-green-200 text-green-800"}`}>
+                    <span>{dataDiferePref ? "⚠️" : "✅"}</span>
+                    <span>
+                      Preferência do usuário: <strong>{new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")}</strong> — {v.periodo_preferencia_visita ?? "Manhã"}
+                      {dataDiferePref && <span className="ml-1 font-medium"> (data alterada)</span>}
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -668,11 +691,28 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   ))}
                   {!checklistOk && <p className="text-xs text-orange-600">⚠️ Confirme todos os itens antes de agendar.</p>}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
+                  {dataDiferePref && (
+                    <button onClick={handleProporData} disabled={loading} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm">📤 Propor ao usuário</button>
+                  )}
                   <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
                 </div>
               </>
+            )}
+
+            {/* Proposta enviada — aguardando confirmação do usuário */}
+            {v.status_predio === "proposta_visita" && (
+              <div className="space-y-2">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm space-y-1">
+                  <p className="font-medium text-orange-800">⏳ Aguardando confirmação do usuário</p>
+                  <p>📆 Data proposta: <strong>{v.proposta_visita_data ? new Date(v.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {v.proposta_visita_periodo}</p>
+                  <p>👷 Técnico: {v.proposta_visita_tecnico}</p>
+                  {v.data_preferencia_visita && (
+                    <p className="text-xs text-orange-600">Preferência original: {new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")} — {v.periodo_preferencia_visita ?? "Manhã"}</p>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Formulário de rejeição */}

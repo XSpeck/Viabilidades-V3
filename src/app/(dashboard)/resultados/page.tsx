@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
@@ -113,7 +113,7 @@ export default function ResultadosPage() {
     analise:      results.filter((r) => ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio && !r.status_instalacao).length,
     aprovado:     results.filter((r) => r.status === "aprovado" && !r.status_predio && !r.status_instalacao).length,
     ag_dados:     results.filter((r) => r.status_predio === "aguardando_dados").length,
-    agendado:     results.filter((r) => ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "")).length,
+    agendado:     results.filter((r) => ["pronto_auditoria", "proposta_visita", "agendado"].includes(r.status_predio ?? "")).length,
     estruturado:  results.filter((r) => r.status_predio === "estruturado").length,
     semViab:      results.filter((r) => r.status === "rejeitado").length,
     utp:          results.filter((r) => r.status === "utp").length,
@@ -129,7 +129,7 @@ export default function ResultadosPage() {
       case "analise":      return ["pendente", "em_auditoria"].includes(r.status) && !r.status_predio && !r.status_instalacao;
       case "aprovado":     return r.status === "aprovado" && !r.status_predio && !r.status_instalacao;
       case "ag_dados":     return r.status_predio === "aguardando_dados";
-      case "agendado":     return ["pronto_auditoria", "agendado"].includes(r.status_predio ?? "");
+      case "agendado":     return ["pronto_auditoria", "proposta_visita", "agendado"].includes(r.status_predio ?? "");
       case "estruturado":  return r.status_predio === "estruturado";
       case "sem_viab":     return r.status === "rejeitado";
       case "utp":          return r.status === "utp";
@@ -391,7 +391,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const { user } = useAuth();
   const isDevolvida = r.status === "em_revisao" && r.revisao_tipo === "devolvido";
   const isContestacaoPendente = r.status === "em_revisao" && r.revisao_tipo === "contestado";
-  const needsDateAction = r.status_instalacao === "aguardando_proposta" || r.status_instalacao === "aguardando_confirmacao";
+  const needsDateAction = r.status_instalacao === "aguardando_proposta" || r.status_instalacao === "aguardando_confirmacao" || r.status_predio === "proposta_visita";
   const [open, setOpen] = useState(isDevolvida || needsDateAction);
   const [submitting, setSubmitting] = useState(false);
 
@@ -449,6 +449,30 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
       onRefresh();
     } catch { alert("Erro ao enviar."); }
     finally { setEnviandoResposta(false); }
+  }
+
+  // ── Proposta de visita (FTTA/UTP) ─────────────────────
+  const [enviandoConfirmacaoVisita, setEnviandoConfirmacaoVisita] = useState(false);
+  const [contraData, setContraData] = useState("");
+  const [contraPeriodo, setContraPeriodo] = useState("Manhã");
+  const [contraObs, setContraObs] = useState("");
+
+  async function handleConfirmarPropostaVisita() {
+    if (!r.proposta_visita_data || !r.proposta_visita_tecnico) return;
+    setEnviandoConfirmacaoVisita(true);
+    try {
+      await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico });
+      onRefresh();
+    } finally { setEnviandoConfirmacaoVisita(false); }
+  }
+
+  async function handleContraproporVisita() {
+    if (!contraData) { alert("Informe a data!"); return; }
+    setEnviandoConfirmacaoVisita(true);
+    try {
+      await contraproporVisita(r.id, contraData, contraPeriodo, contraObs || undefined);
+      onRefresh();
+    } finally { setEnviandoConfirmacaoVisita(false); }
   }
 
   // ── Dados do síndico ───────────────────────────────────
@@ -538,6 +562,9 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
         )}
         {aguardandoDados && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Ação necessária — preencha os dados do {isCond ? "responsável" : "síndico"}</p>
+        )}
+        {r.status_predio === "proposta_visita" && !open && (
+          <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Nova data proposta — confirme ou contra-proponha a visita</p>
         )}
         {isDevolvida && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">↩️ Ação necessária — o auditor solicitou uma correção</p>
@@ -848,6 +875,37 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
               <p className="font-medium text-blue-800">✅ Dados enviados!</p>
               <p className="text-blue-700 mt-1">Aguardando o agendamento da visita técnica pelo nosso time.</p>
+            </div>
+          )}
+
+          {/* ===== Proposta de data de visita ===== */}
+          {r.status_predio === "proposta_visita" && (
+            <div className="space-y-2">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1 text-sm">
+                <p className="font-medium text-orange-800">⚠️ O auditor propôs uma data para a visita técnica</p>
+                <p>📆 Data proposta: <strong>{r.proposta_visita_data ? new Date(r.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.proposta_visita_periodo}</p>
+                <p>👷 Técnico: {r.proposta_visita_tecnico}</p>
+              </div>
+              <button onClick={handleConfirmarPropostaVisita} disabled={enviandoConfirmacaoVisita}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                {enviandoConfirmacaoVisita ? <Loader2 className="w-4 h-4 animate-spin" /> : "✅ Confirmar esta data"}
+              </button>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700">Propor outra data</summary>
+                <div className="mt-2 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={contraData} onChange={(e) => setContraData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <select value={contraPeriodo} onChange={(e) => setContraPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
+                      <option>Manhã</option><option>Tarde</option>
+                    </select>
+                    <textarea placeholder="Motivo / observação (opcional)" value={contraObs} onChange={(e) => setContraObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                  </div>
+                  <button onClick={handleContraproporVisita} disabled={enviandoConfirmacaoVisita || !contraData}
+                    className="w-full border border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2 rounded-lg text-sm disabled:opacity-50">
+                    📤 Enviar nova proposta
+                  </button>
+                </div>
+              </details>
             </div>
           )}
 

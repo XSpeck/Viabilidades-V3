@@ -11,6 +11,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type {
@@ -323,6 +324,62 @@ export async function agendarVisita(
     status_agendamento: "pendente",
     data_agendamento: new Date().toISOString(),
     ...dados,
+  });
+}
+
+// Auditor propõe nova data diferente da preferência do usuário → aguarda confirmação
+export async function proporDataVisita(
+  id: string,
+  dados: {
+    proposta_visita_data: string;
+    proposta_visita_periodo: string;
+    proposta_visita_tecnico: string;
+    tecnologia_predio: string;
+    giga: boolean;
+    checklist_previsita?: Record<string, boolean>;
+  }
+): Promise<void> {
+  await updateViabilizacao(id, {
+    status_predio: "proposta_visita",
+    data_agendamento: new Date().toISOString(),
+    ...dados,
+  });
+}
+
+// Usuário confirma a proposta do auditor → agendado
+export async function confirmarPropostaVisita(id: string, dados: {
+  proposta_visita_data: string;
+  proposta_visita_periodo: string;
+  proposta_visita_tecnico: string;
+  tecnologia_predio?: string;
+  giga?: boolean;
+}): Promise<void> {
+  await updateViabilizacao(id, {
+    status_predio: "agendado",
+    status_agendamento: "pendente",
+    data_visita: dados.proposta_visita_data,
+    periodo_visita: dados.proposta_visita_periodo,
+    tecnico_responsavel: dados.proposta_visita_tecnico,
+    data_agendamento: new Date().toISOString(),
+  });
+}
+
+// Usuário recusa e contra-propõe nova data → volta para pronto_auditoria
+export async function contraproporVisita(
+  id: string,
+  novaData: string,
+  novoPeriodo: string,
+  obs?: string
+): Promise<void> {
+  const ref = doc(db, "viabilizacoes", id);
+  await updateDoc(ref, {
+    status_predio: "pronto_auditoria",
+    data_preferencia_visita: novaData,
+    periodo_preferencia_visita: novoPeriodo,
+    ...(obs !== undefined ? { obs_agendamento: obs } : {}),
+    proposta_visita_data: deleteField(),
+    proposta_visita_periodo: deleteField(),
+    proposta_visita_tecnico: deleteField(),
   });
 }
 
