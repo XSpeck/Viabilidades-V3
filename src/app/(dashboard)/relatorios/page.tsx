@@ -201,7 +201,7 @@ export default function RelatoriosPage() {
 
   const rowsPredios = prediosViab.map((v) => ({
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
-    Tipo:        v.tipo_instalacao,
+    Tipo:        (v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP") ? "UTP" : v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
     "Casa/Apto": v.andar_predio ?? "-",
     Bloco:       v.bloco_predio ?? "-",
