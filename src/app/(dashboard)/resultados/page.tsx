@@ -885,6 +885,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 <p className="font-medium text-orange-800">⚠️ O auditor propôs uma data para a visita técnica</p>
                 <p>📆 Data proposta: <strong>{r.proposta_visita_data ? new Date(r.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.proposta_visita_periodo}</p>
                 <p>👷 Técnico: {r.proposta_visita_tecnico}</p>
+                {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
               </div>
               <button onClick={handleConfirmarPropostaVisita} disabled={enviandoConfirmacaoVisita}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
@@ -918,6 +919,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p>👷 Técnico: {r.tecnico_responsavel}</p>
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
               {(r.giga || r.tecnologia_predio === "FTTA" || r.tipo_instalacao === "Condomínio") && <p>⚡ Giga: Sim</p>}
+              {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
             </div>
           )}
 

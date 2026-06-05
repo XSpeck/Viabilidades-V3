@@ -310,6 +310,7 @@ export async function agendarVisita(
     tecnico_responsavel: string;
     tecnologia_predio: string;
     giga: boolean;
+    obs_agendamento?: string;
   }
 ): Promise<void> {
   await updateViabilizacao(id, {
@@ -329,6 +330,7 @@ export async function proporDataVisita(
     proposta_visita_tecnico: string;
     tecnologia_predio: string;
     giga: boolean;
+    obs_agendamento?: string;
   }
 ): Promise<void> {
   await updateViabilizacao(id, {

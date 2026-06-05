@@ -236,6 +236,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [tecnico, setTecnico] = useState("");
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(true);
+  const [obsVisita, setObsVisita] = useState("");
   // ── Rejeição ───────────────────────────────────────────
   const [showRejeitar, setShowRejeitar] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -298,7 +299,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga });
+      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined });
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }
@@ -307,7 +308,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga });
+      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined });
       finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
     } finally { setLoading(false); }
   }
@@ -656,6 +657,13 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </label>
                   );
                 })()}
+                <textarea
+                  placeholder="Observações (opcional)"
+                  value={obsVisita}
+                  onChange={(e) => setObsVisita(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
                   {dataDiferePref && (
