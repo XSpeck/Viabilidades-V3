@@ -299,7 +299,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined });
+      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }
@@ -308,7 +308,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined });
+      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
       finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
     } finally { setLoading(false); }
   }
@@ -637,6 +637,12 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </span>
                   </div>
                 )}
+                {v.historico_visita && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-gray-400 hover:text-gray-600">📋 Histórico de negociação</summary>
+                    <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5 leading-relaxed">{v.historico_visita}</pre>
+                  </details>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -683,6 +689,12 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   <p>👷 Técnico: {v.proposta_visita_tecnico}</p>
                   {v.data_preferencia_visita && (
                     <p className="text-xs text-orange-600">Preferência original: {new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")} — {v.periodo_preferencia_visita ?? "Manhã"}</p>
+                  )}
+                  {v.historico_visita && (
+                    <details className="text-xs mt-1">
+                      <summary className="cursor-pointer text-orange-500 hover:text-orange-700">📋 Histórico de negociação</summary>
+                      <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-white border rounded-lg p-2 leading-relaxed">{v.historico_visita}</pre>
+                    </details>
                   )}
                 </div>
               </div>

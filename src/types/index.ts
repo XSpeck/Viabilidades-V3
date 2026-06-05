@@ -110,6 +110,7 @@ export interface Viabilizacao {
   tecnico_instalacao?: string;
   // Histórico de negociação
   historico_agendamento?: string;
+  historico_visita?: string;
   // Motivo
   motivo_rejeicao?: string;
   observacoes?: string;

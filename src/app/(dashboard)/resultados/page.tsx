@@ -461,7 +461,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!r.proposta_visita_data || !r.proposta_visita_tecnico) return;
     setEnviandoConfirmacaoVisita(true);
     try {
-      await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico });
+      await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico }, r.historico_visita);
       onRefresh();
     } finally { setEnviandoConfirmacaoVisita(false); }
   }
@@ -470,7 +470,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!contraData) { alert("Informe a data!"); return; }
     setEnviandoConfirmacaoVisita(true);
     try {
-      await contraproporVisita(r.id, contraData, contraPeriodo, contraObs || undefined);
+      await contraproporVisita(r.id, contraData, contraPeriodo, contraObs || undefined, r.historico_visita);
       onRefresh();
     } finally { setEnviandoConfirmacaoVisita(false); }
   }
@@ -887,6 +887,12 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 <p>👷 Técnico: {r.proposta_visita_tecnico}</p>
                 {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
               </div>
+              {r.historico_visita && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-gray-400 hover:text-gray-600">📋 Histórico de negociação</summary>
+                  <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5 leading-relaxed">{r.historico_visita}</pre>
+                </details>
+              )}
               <button onClick={handleConfirmarPropostaVisita} disabled={enviandoConfirmacaoVisita}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                 {enviandoConfirmacaoVisita ? <Loader2 className="w-4 h-4 animate-spin" /> : "✅ Confirmar esta data"}
@@ -920,6 +926,12 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
               {(r.giga || r.tecnologia_predio === "FTTA" || r.tipo_instalacao === "Condomínio") && <p>⚡ Giga: Sim</p>}
               {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
+              {r.historico_visita && (
+                <details className="text-xs mt-1">
+                  <summary className="cursor-pointer text-gray-400 hover:text-gray-600">📋 Histórico de negociação</summary>
+                  <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-white border rounded-lg p-2 leading-relaxed">{r.historico_visita}</pre>
+                </details>
+              )}
             </div>
           )}
 

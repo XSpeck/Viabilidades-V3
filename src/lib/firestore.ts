@@ -296,8 +296,12 @@ export async function enviarDadosPredio(
     obs_agendamento?: string;
   }
 ): Promise<void> {
+  const entrada = dados.data_preferencia_visita
+    ? `Usuário preferiu ${dados.data_preferencia_visita} ${dados.periodo_preferencia_visita ?? "Manhã"}`
+    : "Usuário enviou dados do prédio";
   await updateViabilizacao(id, {
     status_predio: "pronto_auditoria",
+    historico_visita: entrada,
     ...dados,
   });
 }
@@ -311,12 +315,16 @@ export async function agendarVisita(
     tecnologia_predio: string;
     giga: boolean;
     obs_agendamento?: string;
-  }
+  },
+  historicoAnterior?: string
 ): Promise<void> {
+  const entrada = `Auditor agendou ${dados.data_visita} ${dados.periodo_visita} — ${dados.tecnico_responsavel}`;
+  const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
     status_predio: "agendado",
     status_agendamento: "pendente",
     data_agendamento: new Date().toISOString(),
+    historico_visita,
     ...dados,
   });
 }
@@ -331,11 +339,15 @@ export async function proporDataVisita(
     tecnologia_predio: string;
     giga: boolean;
     obs_agendamento?: string;
-  }
+  },
+  historicoAnterior?: string
 ): Promise<void> {
+  const entrada = `Auditor propôs ${dados.proposta_visita_data} ${dados.proposta_visita_periodo} — ${dados.proposta_visita_tecnico}`;
+  const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
     status_predio: "proposta_visita",
     data_agendamento: new Date().toISOString(),
+    historico_visita,
     ...dados,
   });
 }
@@ -347,7 +359,9 @@ export async function confirmarPropostaVisita(id: string, dados: {
   proposta_visita_tecnico: string;
   tecnologia_predio?: string;
   giga?: boolean;
-}): Promise<void> {
+}, historicoAnterior?: string): Promise<void> {
+  const entrada = `Usuário confirmou ${dados.proposta_visita_data} ${dados.proposta_visita_periodo}`;
+  const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
     status_predio: "agendado",
     status_agendamento: "pendente",
@@ -355,6 +369,7 @@ export async function confirmarPropostaVisita(id: string, dados: {
     periodo_visita: dados.proposta_visita_periodo,
     tecnico_responsavel: dados.proposta_visita_tecnico,
     data_agendamento: new Date().toISOString(),
+    historico_visita,
   });
 }
 
@@ -363,13 +378,17 @@ export async function contraproporVisita(
   id: string,
   novaData: string,
   novoPeriodo: string,
-  obs?: string
+  obs?: string,
+  historicoAnterior?: string
 ): Promise<void> {
+  const entrada = `Usuário contra-propôs ${novaData} ${novoPeriodo}`;
+  const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   const ref = doc(db, "viabilizacoes", id);
   await updateDoc(ref, {
     status_predio: "pronto_auditoria",
     data_preferencia_visita: novaData,
     periodo_preferencia_visita: novoPeriodo,
+    historico_visita,
     ...(obs !== undefined ? { obs_agendamento: obs } : {}),
     proposta_visita_data: deleteField(),
     proposta_visita_periodo: deleteField(),
