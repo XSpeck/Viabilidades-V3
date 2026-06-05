@@ -40,6 +40,7 @@ export default function AgendaTecnicaPage() {
   // Ativos
   const [items, setItems] = useState<Viabilizacao[]>([]);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<"ftth" | "ftta_utp">("ftth");
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -74,12 +75,17 @@ export default function AgendaTecnicaPage() {
 
   if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
+  const isUTPItem = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
+  const itemsFtth    = items.filter((v) => v.tipo_instalacao === "FTTH" && !isUTPItem(v));
+  const itemsFttaUtp = items.filter((v) => v.tipo_instalacao !== "FTTH" || isUTPItem(v));
+  const activeItems  = view === "ftth" ? itemsFtth : itemsFttaUtp;
+
   const counts = {
-    todos:                  items.length,
-    proposta_enviada:       items.filter((v) => v.status_instalacao === "proposta_enviada").length,
-    aguardando_confirmacao: items.filter((v) => v.status_instalacao === "aguardando_confirmacao").length,
-    agendado:               items.filter((v) => v.status_instalacao === "agendado").length,
-    instalado:              items.filter((v) => v.status_instalacao === "instalado").length,
+    todos:                  activeItems.length,
+    proposta_enviada:       activeItems.filter((v) => v.status_instalacao === "proposta_enviada").length,
+    aguardando_confirmacao: activeItems.filter((v) => v.status_instalacao === "aguardando_confirmacao").length,
+    agendado:               activeItems.filter((v) => v.status_instalacao === "agendado").length,
+    instalado:              activeItems.filter((v) => v.status_instalacao === "instalado").length,
   };
 
   const chips = (
@@ -92,7 +98,7 @@ export default function AgendaTecnicaPage() {
     ] as { key: FilterKey; label: string }[]
   ).filter((c) => c.key === "todos" || counts[c.key] > 0);
 
-  const filtered = items
+  const filtered = activeItems
     .filter((v) => filter === "todos" || v.status_instalacao === filter)
     .filter((v) => {
       const d = itemDate(v);
@@ -112,9 +118,13 @@ export default function AgendaTecnicaPage() {
     });
 
   // Arquivados filtrados
-  const tecnicosArq = ["todos", ...Array.from(new Set(arquivados.map((v) => v.tecnico_instalacao).filter(Boolean))) as string[]];
+  const activeArquivados = view === "ftth"
+    ? arquivados.filter((v) => v.tipo_instalacao === "FTTH" && !isUTPItem(v))
+    : arquivados.filter((v) => v.tipo_instalacao !== "FTTH" || isUTPItem(v));
 
-  const arquivadosFiltrados = arquivados
+  const tecnicosArq = ["todos", ...Array.from(new Set(activeArquivados.map((v) => v.tecnico_instalacao).filter(Boolean))) as string[]];
+
+  const arquivadosFiltrados = activeArquivados
     .filter((v) => arquTecnico === "todos" || v.tecnico_instalacao === arquTecnico)
     .filter((v) => {
       const d = v.data_instalacao ?? v.data_finalizacao ?? "";
@@ -161,12 +171,28 @@ export default function AgendaTecnicaPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">🔧 Agenda Técnica</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Instalações FTTH
+            {view === "ftth" ? "Instalações FTTH" : "Agendamentos FTTA / UTP"}
             {counts.proposta_enviada > 0 && <span className="text-orange-600 font-medium"> · {counts.proposta_enviada} aguardando análise</span>}
           </p>
         </div>
         <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+        </button>
+      </div>
+
+      {/* Tabs FTTH / FTTA+UTP */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        <button
+          onClick={() => { setView("ftth"); setFilter("todos"); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "ftth" ? "bg-white shadow text-indigo-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          🏠 FTTH <span className="ml-1 text-xs text-gray-400">({itemsFtth.length})</span>
+        </button>
+        <button
+          onClick={() => { setView("ftta_utp"); setFilter("todos"); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "ftta_utp" ? "bg-white shadow text-indigo-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          🏢 FTTA / 📡 UTP <span className="ml-1 text-xs text-gray-400">({itemsFttaUtp.length})</span>
         </button>
       </div>
 
@@ -213,17 +239,17 @@ export default function AgendaTecnicaPage() {
       {/* Lista ativa */}
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
-      ) : items.length === 0 ? (
+      ) : activeItems.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border">
           <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhuma instalação ativa.</p>
+          <p className="text-gray-500">{view === "ftth" ? "Nenhuma instalação FTTH ativa." : "Nenhum agendamento FTTA/UTP ativo."}</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-10 bg-white rounded-xl border text-gray-400">Nenhum resultado para os filtros aplicados.</div>
       ) : (
         <div className="space-y-3">
           {filtered.map((v) => (
-            <AgendaTecnicaCard key={v.id} v={v} onRefresh={load} />
+            <AgendaTecnicaCard key={v.id} v={v} isFttaUtp={view === "ftta_utp"} onRefresh={load} />
           ))}
         </div>
       )}
@@ -306,7 +332,7 @@ export default function AgendaTecnicaPage() {
 }
 
 // ─── Card de instalação ────────────────────────────────────────────
-function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () => void }) {
+function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizacao; isFttaUtp?: boolean; onRefresh: () => void }) {
   const [open, setOpen] = useState(v.status_instalacao === "proposta_enviada");
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -343,7 +369,7 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
       const alterou = agData !== v.proposta_data || agPeriodo !== v.proposta_periodo;
       finishWithSuccess(alterou
         ? "🔄 Proposta alterada e enviada ao cliente para confirmação."
-        : `📅 Agendado! ${new Date(agData + "T12:00:00").toLocaleDateString("pt-BR")} — ${agPeriodo} — ${agTecnico}.`
+        : `📅 ${isFttaUtp ? "Visita agendada" : "Agendado"}! ${new Date(agData + "T12:00:00").toLocaleDateString("pt-BR")} — ${agPeriodo} — ${agTecnico}.`
       );
     } finally { setLoading(false); }
   }
@@ -365,7 +391,7 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
     setLoading(true);
     try {
       await marcarInstalado(v.id);
-      finishWithSuccess("✅ Marcado como instalado! Aguardando arquivamento pelo usuário.");
+      finishWithSuccess(isFttaUtp ? "✅ Visita concluída! Aguardando arquivamento pelo usuário." : "✅ Marcado como instalado! Aguardando arquivamento pelo usuário.");
     } finally { setLoading(false); }
   }
 
@@ -465,11 +491,11 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
               {!showConfirmar ? (
                 <button onClick={() => setShowConfirmar(true)}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium">
-                  🔧 Definir data e técnico
+                  {isFttaUtp ? "🗓️ Definir data da visita" : "🔧 Definir data e técnico"}
                 </button>
               ) : (
                 <div className="border border-indigo-200 rounded-lg p-3 space-y-2">
-                  <p className="text-sm font-medium text-indigo-800">🔧 Confirmar agendamento</p>
+                  <p className="text-sm font-medium text-indigo-800">{isFttaUtp ? "🗓️ Confirmar visita" : "🔧 Confirmar agendamento"}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={agData} onChange={(e) => setAgData(e.target.value)}
                       className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -523,7 +549,7 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
           {status === "agendado" && (
             <div className="space-y-2">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-2">📅 Instalação confirmada</p>
+                <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-2">{isFttaUtp ? "📅 Visita confirmada" : "📅 Instalação confirmada"}</p>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
                   <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
@@ -533,16 +559,17 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
               <div className="flex gap-2">
                 <button onClick={handleInstalado} disabled={loading}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
-                  ✅ Marcar como Instalado
+                  {isFttaUtp ? "✅ Marcar como Concluído" : "✅ Marcar como Instalado"}
                 </button>
                 <button onClick={() => setShowReagendar(!showReagendar)} disabled={loading}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${showReagendar ? "bg-yellow-50 border-yellow-400 text-yellow-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
                   🔄 Reagendar
                 </button>
+
               </div>
               {showReagendar && (
                 <div className="border border-yellow-200 rounded-lg p-3 space-y-2">
-                  <p className="text-sm font-medium text-yellow-800">🔄 Reagendar instalação</p>
+                  <p className="text-sm font-medium text-yellow-800">{isFttaUtp ? "🔄 Reagendar visita" : "🔄 Reagendar instalação"}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={reagData} onChange={(e) => setReagData(e.target.value)}
                       className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
@@ -570,7 +597,7 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
           {status === "instalado" && (
             <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="text-sm space-y-0.5">
-                <p className="font-medium text-blue-800">✅ Instalação concluída</p>
+                <p className="font-medium text-blue-800">{isFttaUtp ? "✅ Visita concluída" : "✅ Instalação concluída"}</p>
                 <p className="text-blue-700">{fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}</p>
                 <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
               </div>
