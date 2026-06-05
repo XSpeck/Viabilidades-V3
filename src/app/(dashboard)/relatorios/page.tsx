@@ -165,6 +165,9 @@ export default function RelatoriosPage() {
   const utpCount      = atendidos.filter((a) => a.tecnologia === "UTP").length;
   const ftthCondCount = atendidos.filter((a) => a.tecnologia === "FTTH").length;
   const gigaCount     = atendidos.filter((a) => a.tecnologia === "FTTA" || a.giga).length;
+  // UTP direto (via marcarUTP) — não passa por predios_atendidos
+  const utpDiretoCount = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
+  const utpTotal = utpCount + utpDiretoCount;
 
   const statusLabelRel: Record<string, string> = {
     pendente:     "Pendente",
@@ -250,7 +253,7 @@ export default function RelatoriosPage() {
 
   const barPredios = [
     { name: "FTTA",  value: fttaCount,     fill: "#3b82f6" },
-    { name: "UTP",   value: utpCount,      fill: "#22c55e" },
+    { name: "UTP",   value: utpTotal,      fill: "#22c55e" },
     { name: "FTTH",  value: ftthCondCount, fill: "#f97316" },
   ];
 
@@ -345,7 +348,7 @@ export default function RelatoriosPage() {
             { label: "Total Estruturados", value: atendidos.length  },
             { label: "⚡ Giga",            value: gigaCount          },
             { label: "FTTA",               value: fttaCount          },
-            { label: "UTP",                value: utpCount           },
+            { label: "UTP",                value: utpTotal           },
             { label: "FTTH (Cond.)",       value: ftthCondCount      },
             { label: "Sem Viabilidade",    value: semViab.length     },
           ].map((k) => (
