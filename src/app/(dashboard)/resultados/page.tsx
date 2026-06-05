@@ -55,7 +55,7 @@ export default function ResultadosPage() {
       "Plus Code": locationToPlusCode(v.plus_code_cliente),
       Prédio:      v.predio_ftta ?? "-",
       Status:      v.status,
-      CTO:         v.cto_numero ?? "-",
+      "CTO/CDOI":  v.cdoi ?? v.cto_numero ?? "-",
       Distância:   v.distancia_cliente ?? "-",
       Auditor:     v.auditado_por ?? "-",
       "Dt. Audit.":formatDateTime(v.data_auditoria),
@@ -324,7 +324,7 @@ export default function ResultadosPage() {
                           <th className="px-3 py-3 text-left whitespace-nowrap">Cliente</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Plus Code</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Prédio/Cond.</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">CTO</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">CTO / CDOI</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Status</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Auditor</th>
                         </tr>
@@ -358,7 +358,7 @@ export default function ResultadosPage() {
                               <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
                               <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{locationToPlusCode(v.plus_code_cliente)}</td>
                               <td className="px-3 py-2.5 max-w-[140px] truncate text-gray-600">{v.predio_ftta ?? "-"}</td>
-                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cto_numero ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cdoi ?? v.cto_numero ?? "-"}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] ?? "bg-gray-100 text-gray-600"}`}>
                                   {statusLabel[v.status] ?? v.status}
