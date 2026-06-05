@@ -305,10 +305,10 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   }
 
   async function handleProporData() {
-    if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
+    if (!dataVisita) { alert("Preencha a data!"); return; }
     setLoading(true);
     try {
-      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, proposta_visita_tecnico: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
+      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
       finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
     } finally { setLoading(false); }
   }
@@ -686,7 +686,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm space-y-1">
                   <p className="font-medium text-orange-800">⏳ Aguardando confirmação do usuário</p>
                   <p>📆 Data proposta: <strong>{v.proposta_visita_data ? new Date(v.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {v.proposta_visita_periodo}</p>
-                  <p>👷 Técnico: {v.proposta_visita_tecnico}</p>
+                  {v.proposta_visita_tecnico && <p>👷 Técnico: {v.proposta_visita_tecnico}</p>}
                   {v.data_preferencia_visita && (
                     <p className="text-xs text-orange-600">Preferência original: {new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")} — {v.periodo_preferencia_visita ?? "Manhã"}</p>
                   )}

@@ -335,14 +335,14 @@ export async function proporDataVisita(
   dados: {
     proposta_visita_data: string;
     proposta_visita_periodo: string;
-    proposta_visita_tecnico: string;
+    proposta_visita_tecnico?: string;
     tecnologia_predio: string;
     giga: boolean;
     obs_agendamento?: string;
   },
   historicoAnterior?: string
 ): Promise<void> {
-  const entrada = `Auditor propôs ${dados.proposta_visita_data} ${dados.proposta_visita_periodo} — ${dados.proposta_visita_tecnico}`;
+  const entrada = `Auditor propôs ${dados.proposta_visita_data} ${dados.proposta_visita_periodo}`;
   const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
     status_predio: "proposta_visita",
@@ -356,7 +356,7 @@ export async function proporDataVisita(
 export async function confirmarPropostaVisita(id: string, dados: {
   proposta_visita_data: string;
   proposta_visita_periodo: string;
-  proposta_visita_tecnico: string;
+  proposta_visita_tecnico?: string;
   tecnologia_predio?: string;
   giga?: boolean;
 }, historicoAnterior?: string): Promise<void> {
@@ -367,7 +367,7 @@ export async function confirmarPropostaVisita(id: string, dados: {
     status_agendamento: "pendente",
     data_visita: dados.proposta_visita_data,
     periodo_visita: dados.proposta_visita_periodo,
-    tecnico_responsavel: dados.proposta_visita_tecnico,
+    ...(dados.proposta_visita_tecnico ? { tecnico_responsavel: dados.proposta_visita_tecnico } : {}),
     data_agendamento: new Date().toISOString(),
     historico_visita,
   });

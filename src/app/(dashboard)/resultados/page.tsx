@@ -458,7 +458,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const [contraObs, setContraObs] = useState("");
 
   async function handleConfirmarPropostaVisita() {
-    if (!r.proposta_visita_data || !r.proposta_visita_tecnico) return;
+    if (!r.proposta_visita_data) return;
     setEnviandoConfirmacaoVisita(true);
     try {
       await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico }, r.historico_visita);
@@ -910,7 +910,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1 text-sm">
                 <p className="font-medium text-orange-800">⚠️ O auditor propôs uma data para a visita técnica</p>
                 <p>📆 Data proposta: <strong>{r.proposta_visita_data ? new Date(r.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.proposta_visita_periodo}</p>
-                <p>👷 Técnico: {r.proposta_visita_tecnico}</p>
+                {r.proposta_visita_tecnico && <p>👷 Técnico: {r.proposta_visita_tecnico}</p>}
                 {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
               </div>
               {r.historico_visita && (
