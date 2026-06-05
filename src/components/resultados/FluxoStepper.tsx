@@ -89,11 +89,12 @@ interface Props {
 
 export default function FluxoStepper({ v }: Props) {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
-  const steps =
+  const steps = (
     (["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) ? STEPS_FTTH_INSTALACAO :
     (isFtta && v.status_predio === "estruturado" && v.status_instalacao) ? STEPS_FTTA_INSTALACAO :
     (isFtta && v.status_predio) ? STEPS_FTTA_FLOW :
-    STEPS_SIMPLES;
+    STEPS_SIMPLES
+  ).map((s) => s.key === "aprovado" && v.status === "utp" ? { ...s, label: "UTP" } : s);
   const current = getCurrentStep(v);
   const rejected = isRejected(v);
 

@@ -759,14 +759,14 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {/* ===== UTP ===== */}
-          {r.status === "utp" && (
+          {r.status === "utp" && !r.status_instalacao && (
             <div className="bg-purple-50 rounded-lg p-3">
               <p>Atendemos esta área via UTP (cabo de rede).</p>
             </div>
           )}
 
           {/* ===== Contestar ===== */}
-          {["rejeitado", "utp"].includes(r.status) && !showContestar && (
+          {["rejeitado", "utp"].includes(r.status) && !r.status_instalacao && !showContestar && (
             <button onClick={() => setShowContestar(true)} className="text-xs border border-orange-300 text-orange-700 hover:bg-orange-50 px-3 py-1.5 rounded-lg">
               💬 Contestar decisão
             </button>

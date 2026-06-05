@@ -250,6 +250,7 @@ export async function marcarUTP(id: string, auditadoPor: string): Promise<void> 
     auditado_por: auditadoPor,
     data_auditoria: new Date().toISOString(),
   });
+  await iniciarAgendamentoInstalacao(id);
 }
 
 export async function finalizarViabilizacao(id: string): Promise<void> {
@@ -404,16 +405,20 @@ export async function rejeitarPredio(
 // Agendamento Técnico (Instalação FTTH)
 // =====================
 
-// Retorna instalações ativas — FTTH + FTTA aprovação direta (sem visita estrutural)
+// Retorna instalações ativas — FTTH + FTTA aprovação direta (sem visita estrutural) + UTP
 export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
-  const [snap1, snap2] = await Promise.all([
+  const [snap1, snap2, snap3, snap4] = await Promise.all([
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "aprovado"))),
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "aprovado"))),
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "utp"))),
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "utp"))),
   ]);
   const items = [
     ...snap1.docs.map((d) => fromFirestore<Viabilizacao>(d)),
     // FTTA direto = sem visita estrutural (sem status_predio)
     ...snap2.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !v.status_predio),
+    ...snap3.docs.map((d) => fromFirestore<Viabilizacao>(d)),
+    ...snap4.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !v.status_predio),
   ];
   return items
     .filter((v) => ["proposta_enviada", "aguardando_confirmacao", "agendado", "instalado"].includes(v.status_instalacao ?? ""))
