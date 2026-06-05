@@ -282,7 +282,8 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     setLoading(true);
     try {
       await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta, olt: oltFtta || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
-      finishWithSuccess("✅ Viabilidade FTTA aprovada!");
+      await iniciarAgendamentoInstalacao(v.id);
+      finishWithSuccess("✅ Viabilidade FTTA aprovada! Enviada para Agenda Técnica.");
     } finally { setLoading(false); }
   }
 

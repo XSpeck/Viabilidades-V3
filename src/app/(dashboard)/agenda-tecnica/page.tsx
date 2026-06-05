@@ -397,10 +397,12 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
 
       {/* ── Cabeçalho (sempre visível) ── */}
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
-        <span className="text-xl shrink-0">🏠</span>
+        <span className="text-xl shrink-0">{v.tipo_instalacao === "FTTH" ? "🏠" : "🏢"}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-gray-900">{v.nome_cliente ?? "Cliente"}</span>
+            <span className="font-semibold text-gray-900">
+              {v.tipo_instalacao !== "FTTH" && v.predio_ftta ? `${v.predio_ftta} — ` : ""}{v.nome_cliente ?? "Cliente"}
+            </span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
             {status === "agendado" && v.data_instalacao && (
               <span className="text-xs font-medium text-green-700 shrink-0">
@@ -429,11 +431,22 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
 
           {/* ── Dados técnicos ── */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs bg-gray-50 rounded-lg p-3">
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+            {v.tipo_instalacao === "FTTH" ? (
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+            ) : (
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">CDOI</p><p className="font-semibold text-gray-800">{v.cdoi ?? "-"}</p></div>
+            )}
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">OLT</p><p className="font-semibold text-gray-800">{v.olt ?? "-"}</p></div>
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+            {v.tipo_instalacao === "FTTH" ? (
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+            ) : (
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Prédio</p><p className="font-semibold text-gray-800">{v.predio_ftta ?? "-"}</p></div>
+            )}
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
-            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
+            <div>
+              <p className="text-gray-400 uppercase font-medium mb-0.5">{v.tipo_instalacao === "FTTH" ? "Menor RX" : "Média RX"}</p>
+              <p className="font-semibold text-gray-800">{(v.tipo_instalacao === "FTTH" ? v.menor_rx : v.media_rx) ? `${v.tipo_instalacao === "FTTH" ? v.menor_rx : v.media_rx} dBm` : "-"}</p>
+            </div>
           </div>
 
           {/* ── Conteúdo por status ── */}

@@ -16,13 +16,24 @@ const STEPS_FTTH_INSTALACAO: Step[] = [
   { key: "instalado",    label: "Instalado"       },
 ];
 
-// Fluxo de prédio (5 passos) — quando há status_predio
+// Fluxo de prédio sem instalação (5 passos)
 const STEPS_FTTA_FLOW: Step[] = [
   { key: "solicitado",       label: "Solicitado" },
   { key: "em_analise",       label: "Em análise" },
   { key: "aguardando_dados", label: "Dados do prédio" },
-  { key: "agendado",         label: "Visita agendada" },
+  { key: "agendado",         label: "Visita técnica" },
   { key: "estruturado",      label: "Estruturado" },
+];
+
+// Fluxo de prédio com instalação via estrutura (7 passos)
+const STEPS_FTTA_INSTALACAO: Step[] = [
+  { key: "solicitado",    label: "Solicitado"     },
+  { key: "em_analise",    label: "Em análise"     },
+  { key: "dados_predio",  label: "Dados prédio"   },
+  { key: "visita",        label: "Visita técnica" },
+  { key: "estruturado",   label: "Estruturado"    },
+  { key: "agendamento",   label: "Ag. instalação" },
+  { key: "instalado",     label: "Instalado"      },
 ];
 
 // Fluxo simples (3 passos) — FTTH e FTTA com aprovação/rejeição direta
@@ -35,8 +46,8 @@ const STEPS_SIMPLES: Step[] = [
 function getCurrentStep(v: Viabilizacao): number {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
 
-  // Fluxo de instalação FTTH
-  if (v.tipo_instalacao === "FTTH" && v.status_instalacao) {
+  // FTTH ou FTTA direto (sem visita estrutural) com instalação
+  if (["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) {
     if (v.status_instalacao === "instalado") return 4;
     if (v.status_instalacao === "agendado") return 3;
     if (["proposta_enviada", "aguardando_confirmacao"].includes(v.status_instalacao)) return 3;
@@ -44,8 +55,17 @@ function getCurrentStep(v: Viabilizacao): number {
     return 1;
   }
 
+  // FTTA via estrutura com instalação (7 passos)
+  if (isFtta && v.status_predio === "estruturado" && v.status_instalacao) {
+    if (v.status_instalacao === "instalado") return 6;
+    if (v.status_instalacao === "agendado") return 5;
+    if (["proposta_enviada", "aguardando_confirmacao"].includes(v.status_instalacao)) return 5;
+    if (v.status_instalacao === "aguardando_proposta") return 5;
+    return 4;
+  }
+
   if (isFtta && v.status_predio) {
-    // Fluxo de estruturação de prédio
+    // Fluxo de estruturação de prédio (sem instalação ainda)
     if (v.status_predio === "estruturado" || v.status === "finalizado") return 4;
     if (v.status_predio === "agendado") return 3;
     if (v.status_predio === "pronto_auditoria") return 3;
@@ -53,7 +73,7 @@ function getCurrentStep(v: Viabilizacao): number {
     return 1;
   }
 
-  // FTTH ou FTTA com resolução direta (sem fluxo de prédio)
+  // Resolução direta sem instalação (FTTA Condomínio, rejeitado, utp)
   if (["aprovado", "rejeitado", "utp", "finalizado"].includes(v.status)) return 2;
   if (v.status === "em_auditoria") return 1;
   return 0;
@@ -70,7 +90,8 @@ interface Props {
 export default function FluxoStepper({ v }: Props) {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
   const steps =
-    (v.tipo_instalacao === "FTTH" && v.status_instalacao) ? STEPS_FTTH_INSTALACAO :
+    (["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) ? STEPS_FTTH_INSTALACAO :
+    (isFtta && v.status_predio === "estruturado" && v.status_instalacao) ? STEPS_FTTA_INSTALACAO :
     (isFtta && v.status_predio) ? STEPS_FTTA_FLOW :
     STEPS_SIMPLES;
   const current = getCurrentStep(v);
@@ -140,7 +161,7 @@ export default function FluxoStepper({ v }: Props) {
           ⚠️ Agendamento alterou a data — confirme ou proponha nova data
         </p>
       )}
-      {v.tipo_instalacao === "FTTH" && v.status_instalacao === "agendado" && (
+      {["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao === "agendado" && (
         <p className="text-xs text-green-600 text-center mt-1 font-medium">
           📅 Instalação agendada — aguardando execução pelo técnico
         </p>

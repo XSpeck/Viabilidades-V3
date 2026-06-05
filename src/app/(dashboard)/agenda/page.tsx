@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio } from "@/lib/firestore";
-import { locationToPlusCode } from "@/lib/pluscode";
+import {
+  getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio,
+  getInstalacoesAgendaFTTA, confirmarAgendamentoTecnico, marcarInstalado,
+  finalizarViabilizacao, reagendarInstalacao,
+} from "@/lib/firestore";
+import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, CalendarDays, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Loader2, CalendarDays, Search, ChevronDown, ChevronUp, Wrench } from "lucide-react";
 
 // ─── Helpers de data ──────────────────────────────────────────────
 function toDay(iso: string) {
@@ -47,14 +51,20 @@ function sortByDatePeriod(a: Viabilizacao, b: Viabilizacao) {
 export default function AgendaPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<Viabilizacao[]>([]);
+  const [instalacoes, setInstalacoes] = useState<Viabilizacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tecnicoFilter, setTecnicoFilter] = useState("todos");
   const [techFilter, setTechFilter] = useState("todos");
+  const [instFilter, setInstFilter] = useState<"todos" | "proposta_enviada" | "aguardando_confirmacao" | "agendado" | "instalado">("todos");
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setItems(await getAgendamentos()); }
+    try {
+      const [visitas, insts] = await Promise.all([getAgendamentos(), getInstalacoesAgendaFTTA()]);
+      setItems(visitas);
+      setInstalacoes(insts);
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -166,6 +176,58 @@ export default function AgendaPage() {
           ))}
         </div>
       )}
+
+      {/* ─── Agendamento de Instalação FTTA ────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-bold text-gray-800">🔧 Agendamento de Instalação</h2>
+            {instalacoes.length > 0 && (
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">{instalacoes.length}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Chips de filtro */}
+        {instalacoes.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {([
+              { key: "todos",                  label: `Todos (${instalacoes.length})` },
+              { key: "proposta_enviada",       label: `📋 Nova proposta (${instalacoes.filter(v => v.status_instalacao === "proposta_enviada").length})` },
+              { key: "aguardando_confirmacao", label: `⏳ Ag. confirmação (${instalacoes.filter(v => v.status_instalacao === "aguardando_confirmacao").length})` },
+              { key: "agendado",               label: `📅 Agendados (${instalacoes.filter(v => v.status_instalacao === "agendado").length})` },
+              { key: "instalado",              label: `✅ Instalados (${instalacoes.filter(v => v.status_instalacao === "instalado").length})` },
+            ] as { key: typeof instFilter; label: string }[])
+              .filter((c) => c.key === "todos" || instalacoes.some(v => v.status_instalacao === c.key))
+              .map((c) => (
+                <button key={c.key} onClick={() => setInstFilter(c.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    instFilter === c.key
+                      ? c.key === "proposta_enviada" ? "bg-orange-600 text-white" : "bg-indigo-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}>
+                  {c.label}
+                </button>
+              ))
+            }
+          </div>
+        )}
+
+        {loading ? null : instalacoes.length === 0 ? (
+          <div className="text-center py-10 bg-white rounded-xl border text-gray-400">
+            Nenhuma instalação pendente.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {instalacoes
+              .filter((v) => instFilter === "todos" || v.status_instalacao === instFilter)
+              .map((v) => (
+                <AgendaInstalacaoCard key={v.id} v={v} onRefresh={load} />
+              ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -417,6 +479,238 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
                 <button onClick={handleRejeitar} disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm">Confirmar</button>
                 <button onClick={() => setShowRejeitar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Card de instalação FTTA (via estrutura) ───────────────────────
+function AgendaInstalacaoCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () => void }) {
+  const [open, setOpen] = useState(v.status_instalacao === "proposta_enviada");
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showConfirmar, setShowConfirmar] = useState(false);
+  const [showReagendar, setShowReagendar] = useState(false);
+
+  const [agData, setAgData] = useState(v.proposta_data ?? "");
+  const [agPeriodo, setAgPeriodo] = useState(v.proposta_periodo ?? "Manhã");
+  const [agTecnico, setAgTecnico] = useState(v.agendamento_tecnico ?? "");
+  const [agObs, setAgObs] = useState("");
+  const [reagData, setReagData] = useState(v.data_instalacao ?? "");
+  const [reagPeriodo, setReagPeriodo] = useState(v.periodo_instalacao ?? "Manhã");
+  const [reagTecnico, setReagTecnico] = useState(v.tecnico_instalacao ?? "");
+  const [reagMotivo, setReagMotivo] = useState("");
+
+  const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "N/A";
+
+  function finishWithSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(onRefresh, 2000);
+  }
+
+  async function handleConfirmar() {
+    if (!agData || !agTecnico.trim()) { alert("Preencha data e técnico!"); return; }
+    setLoading(true);
+    try {
+      await confirmarAgendamentoTecnico(
+        v.id,
+        { agendamento_data: agData, agendamento_periodo: agPeriodo, agendamento_tecnico: agTecnico, agendamento_obs: agObs || undefined },
+        { proposta_data: v.proposta_data, proposta_periodo: v.proposta_periodo },
+        v.historico_agendamento
+      );
+      const alterou = agData !== v.proposta_data || agPeriodo !== v.proposta_periodo;
+      finishWithSuccess(alterou
+        ? "🔄 Proposta alterada e enviada ao cliente para confirmação."
+        : `📅 Agendado! ${fmtData(agData)} — ${agPeriodo} — ${agTecnico}.`
+      );
+    } finally { setLoading(false); }
+  }
+
+  async function handleReagendar() {
+    if (!reagData || !reagTecnico.trim()) { alert("Preencha data e técnico!"); return; }
+    setLoading(true);
+    try {
+      await reagendarInstalacao(v.id, { data_instalacao: reagData, periodo_instalacao: reagPeriodo, tecnico_instalacao: reagTecnico, motivo: reagMotivo || undefined }, v.historico_agendamento);
+      finishWithSuccess(`🔄 Reagendado para ${fmtData(reagData)} — ${reagPeriodo} — ${reagTecnico}.`);
+    } finally { setLoading(false); }
+  }
+
+  async function handleInstalado() {
+    setLoading(true);
+    try { await marcarInstalado(v.id); finishWithSuccess("✅ Marcado como instalado! Aguardando arquivamento."); }
+    finally { setLoading(false); }
+  }
+
+  async function handleArquivar() {
+    setLoading(true);
+    try { await finalizarViabilizacao(v.id); onRefresh(); }
+    finally { setLoading(false); }
+  }
+
+  const status = v.status_instalacao;
+  const statusCfg: Record<string, { label: string; color: string }> = {
+    aguardando_proposta:    { label: "⏳ Ag. proposta",          color: "bg-gray-100 text-gray-600"   },
+    proposta_enviada:       { label: "📋 Nova proposta",          color: "bg-orange-100 text-orange-700" },
+    aguardando_confirmacao: { label: "⏳ Ag. confirmação cliente", color: "bg-yellow-100 text-yellow-700" },
+    agendado:               { label: "📅 Agendado",              color: "bg-green-100 text-green-700"  },
+    instalado:              { label: "✅ Instalado",             color: "bg-blue-100 text-blue-700"    },
+  };
+  const cfg = statusCfg[status ?? ""] ?? { label: status ?? "-", color: "bg-gray-100 text-gray-600" };
+  const borderColor = status === "proposta_enviada" ? "border-l-orange-500" : status === "aguardando_confirmacao" ? "border-l-yellow-400" : status === "agendado" ? "border-l-green-500" : status === "instalado" ? "border-l-blue-400" : "border-l-gray-300";
+  const tipoIcon = v.tipo_instalacao === "Condomínio" ? "🏘️" : "🏢";
+
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border-l-4 overflow-hidden ${borderColor}`}>
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+        <span className="text-xl shrink-0">{tipoIcon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-900">{v.predio_ftta ?? "Prédio"} — {v.nome_cliente ?? "Cliente"}</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
+          </div>
+          <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
+            <span className="font-mono">📍 {locationToPlusCode(v.plus_code_cliente)}</span>
+            <span>👤 {v.usuario}</span>
+            {status === "proposta_enviada" && v.proposta_data && (
+              <span className="font-medium text-orange-600">Proposta: {fmtData(v.proposta_data)} — {v.proposta_periodo}</span>
+            )}
+            {status === "agendado" && v.data_instalacao && (
+              <span className="font-medium text-green-700">📅 {fmtData(v.data_instalacao)} — {v.periodo_instalacao} — 👷 {v.tecnico_instalacao}</span>
+            )}
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t pt-3 space-y-4">
+          {/* Dados técnicos */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">CDOI</p><p className="font-semibold text-gray-800">{v.cdoi ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">OLT</p><p className="font-semibold text-gray-800">{v.olt ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">Tecnologia</p><p className="font-semibold text-gray-800">{v.tecnologia_predio ?? "-"}</p></div>
+          </div>
+
+          {/* Negociação */}
+          {(v.proposta_data || v.agendamento_obs) && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">📋 Negociação</p>
+              {v.proposta_data && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-blue-500 font-medium mb-0.5">👤 Proposta do usuário</p>
+                  <p className="text-sm text-gray-800 font-medium">📆 {fmtData(v.proposta_data)} — {v.proposta_periodo}</p>
+                  {v.proposta_obs && <p className="text-sm text-gray-600 mt-1">📝 {v.proposta_obs}</p>}
+                </div>
+              )}
+              {v.agendamento_obs && (
+                <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5 ml-4">
+                  <p className="text-xs text-orange-500 font-medium mb-0.5">🔧 Agendamento alterou</p>
+                  <p className="text-sm text-gray-800 font-medium">📆 {fmtData(v.agendamento_data)} — {v.agendamento_periodo}</p>
+                  <p className="text-sm text-gray-600 mt-1">📝 {v.agendamento_obs}</p>
+                </div>
+              )}
+              {status === "aguardando_confirmacao" && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm text-yellow-800 text-center">
+                  ⏳ Aguardando confirmação do cliente.
+                </div>
+              )}
+              {v.historico_agendamento && (
+                <details className="text-xs">
+                  <summary className="text-gray-400 hover:text-gray-600 cursor-pointer select-none">Ver histórico</summary>
+                  <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5">{v.historico_agendamento}</pre>
+                </details>
+              )}
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm font-medium">
+              <span className="text-xl">🎉</span><span>{successMsg}</span>
+            </div>
+          )}
+
+          {!successMsg && (
+            <div className="space-y-2">
+              {/* Nova proposta */}
+              {status === "proposta_enviada" && (
+                !showConfirmar ? (
+                  <button onClick={() => setShowConfirmar(true)}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium">
+                    🔧 Definir data e técnico
+                  </button>
+                ) : (
+                  <div className="border border-indigo-200 rounded-lg p-3 space-y-2">
+                    <p className="text-sm font-medium text-indigo-800">🔧 Confirmar agendamento</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={agData} onChange={(e) => setAgData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <select value={agPeriodo} onChange={(e) => setAgPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
+                        <option>Manhã</option><option>Tarde</option>
+                      </select>
+                      <input placeholder="Técnico *" value={agTecnico} onChange={(e) => setAgTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <textarea placeholder="Observação (se alterar data)" value={agObs} onChange={(e) => setAgObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                    </div>
+                    <p className={`text-xs font-medium ${agData === v.proposta_data && agPeriodo === v.proposta_periodo ? "text-green-600" : "text-orange-600"}`}>
+                      {agData === v.proposta_data && agPeriodo === v.proposta_periodo ? "✅ Mesma data proposta — confirmado direto" : "⚠️ Data diferente — cliente precisará confirmar"}
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={handleConfirmar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-medium">{loading ? "..." : "Confirmar"}</button>
+                      <button onClick={() => setShowConfirmar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* Agendado */}
+              {status === "agendado" && (
+                <div className="space-y-2">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                    <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-2">📅 Instalação confirmada</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
+                      <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
+                      <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao}</p></div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleInstalado} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Marcar como Instalado</button>
+                    <button onClick={() => setShowReagendar(!showReagendar)} disabled={loading}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${showReagendar ? "bg-yellow-50 border-yellow-400 text-yellow-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                      🔄 Reagendar
+                    </button>
+                  </div>
+                  {showReagendar && (
+                    <div className="border border-yellow-200 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-yellow-800">🔄 Reagendar instalação</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="date" value={reagData} onChange={(e) => setReagData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                        <select value={reagPeriodo} onChange={(e) => setReagPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg"><option>Manhã</option><option>Tarde</option></select>
+                        <input placeholder="Técnico *" value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                        <textarea placeholder="Motivo (opcional)" value={reagMotivo} onChange={(e) => setReagMotivo(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleReagendar} disabled={loading || !reagData || !reagTecnico.trim()} className="flex-1 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-300 text-white py-2 rounded-lg text-sm font-medium">{loading ? "..." : "Confirmar"}</button>
+                        <button onClick={() => setShowReagendar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Instalado */}
+              {status === "instalado" && (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-sm space-y-0.5">
+                    <p className="font-medium text-blue-800">✅ Instalação concluída</p>
+                    <p className="text-blue-700">{fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}</p>
+                    <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
+                  </div>
+                  <button onClick={handleArquivar} disabled={loading} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">📁 Arquivar</button>
+                </div>
+              )}
             </div>
           )}
         </div>

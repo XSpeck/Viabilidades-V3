@@ -356,7 +356,6 @@ export async function finalizarEstruturado(
     giga: boolean;
   }
 ): Promise<void> {
-  // 1. Registrar em predios_atendidos
   await addDoc(collection(db, "predios_atendidos"), {
     condominio: dados.condominio,
     tecnologia: dados.tecnologia,
@@ -367,12 +366,13 @@ export async function finalizarEstruturado(
     giga: dados.giga,
     data_estruturacao: serverTimestamp(),
   });
-  // 2. Atualizar viabilização
+  // Marca como aprovado (sai da fila do auditor) e inicia agendamento de instalação
   await updateViabilizacao(id, {
-    status: "finalizado" as StatusViabilizacao,
+    status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
     status_agendamento: "concluido",
   });
+  await iniciarAgendamentoInstalacao(id);
 }
 
 export async function rejeitarPredio(
@@ -404,17 +404,30 @@ export async function rejeitarPredio(
 // Agendamento Técnico (Instalação FTTH)
 // =====================
 
-// Retorna instalações ativas para o setor de agendamento
+// Retorna instalações ativas — FTTH + FTTA aprovação direta (sem visita estrutural)
 export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
-  const q = query(
-    collection(db, "viabilizacoes"),
-    where("tipo_instalacao", "==", "FTTH"),
-    where("status", "==", "aprovado")
-  );
+  const [snap1, snap2] = await Promise.all([
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "aprovado"))),
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "aprovado"))),
+  ]);
+  const items = [
+    ...snap1.docs.map((d) => fromFirestore<Viabilizacao>(d)),
+    // FTTA direto = sem visita estrutural (sem status_predio)
+    ...snap2.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !v.status_predio),
+  ];
+  return items
+    .filter((v) => ["proposta_enviada", "aguardando_confirmacao", "agendado", "instalado"].includes(v.status_instalacao ?? ""))
+    .filter((v) => !v.data_finalizacao)
+    .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
+}
+
+// Retorna instalações FTTA/Cond via estrutura — gerenciadas na Agenda FTTA/UTP
+export async function getInstalacoesAgendaFTTA(): Promise<Viabilizacao[]> {
+  const q = query(collection(db, "viabilizacoes"), where("status_predio", "==", "estruturado"));
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => ["proposta_enviada", "aguardando_confirmacao", "agendado", "instalado"].includes(v.status_instalacao ?? ""))
+    .filter((v) => !!v.status_instalacao)
     .filter((v) => !v.data_finalizacao)
     .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
 }
@@ -518,18 +531,17 @@ export async function marcarInstalado(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "instalado" });
 }
 
-// Retorna instalações arquivadas (finalizadas que passaram pelo fluxo técnico)
+// Arquivadas da Agenda Técnica: FTTH + FTTA direto
 export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
-  const q = query(
-    collection(db, "viabilizacoes"),
-    where("tipo_instalacao", "==", "FTTH"),
-    where("status", "==", "finalizado")
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => !!v.status_instalacao)
-    .sort((a, b) => ((b.data_finalizacao ?? b.data_solicitacao ?? "") > (a.data_finalizacao ?? a.data_solicitacao ?? "") ? 1 : -1));
+  const [snap1, snap2] = await Promise.all([
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "finalizado"))),
+    getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "finalizado"))),
+  ]);
+  const items = [
+    ...snap1.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !!v.status_instalacao),
+    ...snap2.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !!v.status_instalacao && !v.status_predio),
+  ];
+  return items.sort((a, b) => ((b.data_finalizacao ?? b.data_solicitacao ?? "") > (a.data_finalizacao ?? a.data_solicitacao ?? "") ? 1 : -1));
 }
 
 // Arquivar (ambos os lados usam finalizarViabilizacao existente)

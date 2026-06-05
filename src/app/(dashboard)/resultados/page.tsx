@@ -610,8 +610,8 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== Fluxo de agendamento de instalação FTTH ===== */}
-          {r.tipo_instalacao === "FTTH" && r.status_instalacao && (
+          {/* ===== Fluxo de agendamento de instalação FTTH / FTTA ===== */}
+          {["FTTH", "Prédio"].includes(r.tipo_instalacao) && r.status_instalacao && (
             <div className="space-y-2">
               {r.status_instalacao === "aguardando_proposta" && (
                 <div className="space-y-2">
