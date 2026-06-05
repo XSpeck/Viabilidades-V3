@@ -491,6 +491,22 @@ export async function confirmarPropostaUsuario(
   });
 }
 
+// Setor reagenda instalação confirmada (sem necessidade de reconfirmação do usuário)
+export async function reagendarInstalacao(
+  id: string,
+  dados: { data_instalacao: string; periodo_instalacao: string; tecnico_instalacao: string; motivo?: string },
+  historicoAnterior?: string
+): Promise<void> {
+  const entrada = `Reagendado para ${dados.data_instalacao} ${dados.periodo_instalacao} — ${dados.tecnico_instalacao}${dados.motivo ? ` (${dados.motivo})` : ""}`;
+  const historico = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
+  await updateViabilizacao(id, {
+    data_instalacao: dados.data_instalacao,
+    periodo_instalacao: dados.periodo_instalacao,
+    tecnico_instalacao: dados.tecnico_instalacao,
+    historico_agendamento: historico,
+  });
+}
+
 // Setor marca como instalado após a visita técnica
 export async function marcarInstalado(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "instalado" });
