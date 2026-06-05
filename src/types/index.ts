@@ -63,6 +63,8 @@ export interface Viabilizacao {
   // FTTA
   cdoi?: string;
   media_rx?: string;
+  // Comum FTTH/FTTA
+  olt?: string;
   // Agendamento
   nome_sindico?: string;
   contato_sindico?: string;

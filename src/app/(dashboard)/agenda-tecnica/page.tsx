@@ -143,6 +143,7 @@ export default function AgendaTecnicaPage() {
         Solicitante: v.usuario,
         "Plus Code": locationToPlusCode(v.plus_code_cliente),
         CTO:         v.cto_numero ?? "-",
+        OLT:         v.olt ?? "-",
         Distância:   v.distancia_cliente ?? "-",
         "Menor RX":  v.menor_rx ? `${v.menor_rx} dBm` : "-",
         Técnico:     v.tecnico_instalacao ?? "-",
@@ -427,8 +428,9 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
         <div className="px-4 pb-4 border-t pt-3 space-y-4">
 
           {/* ── Dados técnicos ── */}
-          <div className="grid grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs bg-gray-50 rounded-lg p-3">
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+            <div><p className="text-gray-400 uppercase font-medium mb-0.5">OLT</p><p className="font-semibold text-gray-800">{v.olt ?? "-"}</p></div>
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
             <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
@@ -635,8 +637,9 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
           {/* Dados técnicos */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🔧 Dados técnicos</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs bg-gray-50 rounded-lg p-3">
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">OLT</p><p className="font-semibold text-gray-800">{v.olt ?? "-"}</p></div>
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>

@@ -56,6 +56,7 @@ export default function ResultadosPage() {
       Prédio:      v.predio_ftta ?? "-",
       Status:      v.status,
       "CTO/CDOI":  v.cdoi ?? v.cto_numero ?? "-",
+      OLT:         v.olt ?? "-",
       Distância:   v.distancia_cliente ?? "-",
       Auditor:     v.auditado_por ?? "-",
       "Dt. Audit.":formatDateTime(v.data_auditoria),
@@ -595,6 +596,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   onClick={() => copyToClipboard(
                     [
                       `CTO: ${r.cto_numero ?? "-"}`,
+                      r.olt ? `OLT: ${r.olt}` : "",
                       `Portas: ${r.portas_disponiveis ?? "-"}`,
                       `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
                       `Distância: ${r.distancia_cliente ?? "-"}`,
@@ -608,6 +610,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </button>
               </div>
               <p><strong>CTO:</strong> {r.cto_numero}</p>
+              {r.olt && <p><strong>OLT:</strong> {r.olt}</p>}
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
               <p><strong>Distância:</strong> {r.distancia_cliente}</p>
@@ -704,6 +707,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   onClick={() => copyToClipboard(
                     [
                       `CTO: ${r.cto_numero ?? "-"}`,
+                      r.olt ? `OLT: ${r.olt}` : "",
                       `Portas: ${r.portas_disponiveis ?? "-"}`,
                       `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
                       `Distância: ${r.distancia_cliente ?? "-"}`,
@@ -717,6 +721,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </button>
               </div>
               <p><strong>CTO:</strong> {r.cto_numero}</p>
+              {r.olt && <p><strong>OLT:</strong> {r.olt}</p>}
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
               <p><strong>Distância:</strong> {r.distancia_cliente}</p>
@@ -734,6 +739,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   onClick={() => copyToClipboard(
                     [
                       `CDOI: ${r.cdoi ?? "-"}`,
+                      r.olt ? `OLT: ${r.olt}` : "",
                       `Prédio: ${r.predio_ftta ?? "-"}`,
                       `Portas: ${r.portas_disponiveis ?? "-"}`,
                       `Média RX: ${r.media_rx ? r.media_rx + " dBm" : "-"}`,
@@ -746,6 +752,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 </button>
               </div>
               <p><strong>CDOI:</strong> {r.cdoi}</p>
+              {r.olt && <p><strong>OLT:</strong> {r.olt}</p>}
               <p><strong>Prédio:</strong> {r.predio_ftta}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Média RX:</strong> {r.media_rx} dBm</p>

@@ -218,6 +218,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [portas, setPortas] = useState(v.portas_disponiveis ?? 0);
   const [rx, setRx] = useState(v.menor_rx ?? "");
   const [obs, setObs] = useState(v.observacoes ?? "");
+  const [olt, setOlt] = useState(v.olt ?? "");
 
   // ── Campos FTTA ────────────────────────────────────────
   const [cdoi, setCdoi] = useState(v.cdoi ?? "");
@@ -225,6 +226,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [portasFtta, setPortasFtta] = useState(v.portas_disponiveis ?? 0);
   const [mediaRx, setMediaRx] = useState(v.media_rx ?? "");
   const [obsFtta, setObsFtta] = useState(v.observacoes ?? "");
+  const [oltFtta, setOltFtta] = useState(v.olt ?? "");
 
   // ── Agendamento prédio ─────────────────────────────────
   const [dataVisita, setDataVisita] = useState("");
@@ -267,7 +269,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
     try {
-      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs }, userName);
+      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined }, userName);
       if (tipoLocal === "FTTH") await iniciarAgendamentoInstalacao(v.id);
       if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
         await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
@@ -280,7 +282,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!cdoi || !predioNome || !portasFtta || !mediaRx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
     try {
-      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta }, userName);
+      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta, olt: oltFtta || undefined }, userName);
       if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
         await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
       }
@@ -527,6 +529,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </button>
                     <div className="grid grid-cols-2 gap-2">
                       <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                      <input placeholder="OLT *" value={olt} onChange={(e) => setOlt(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                       <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -553,6 +556,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onExpandChange={setMapExpanded} />}
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                  <input placeholder="OLT *" value={oltFtta} onChange={(e) => setOltFtta(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="Nome do prédio" value={predioNome} onChange={(e) => setPredioNome(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input type="number" placeholder="Portas" value={portasFtta || ""} onChange={(e) => setPortasFtta(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <input placeholder="Média RX" value={mediaRx} onChange={(e) => setMediaRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -593,6 +597,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     </button>
                     <div className="grid grid-cols-2 gap-2">
                       <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
+                      <input placeholder="OLT *" value={olt} onChange={(e) => setOlt(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                       <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />

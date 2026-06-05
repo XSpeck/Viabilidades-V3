@@ -194,6 +194,7 @@ export async function aprovarFTTH(
     distancia_cliente: string;
     localizacao_caixa: string;
     observacoes?: string;
+    olt?: string;
   },
   auditadoPor: string
 ): Promise<void> {
@@ -213,6 +214,7 @@ export async function aprovarFTTA(
     portas_disponiveis: number;
     media_rx: string;
     observacoes?: string;
+    olt?: string;
   },
   auditadoPor: string
 ): Promise<void> {
