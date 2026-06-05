@@ -89,29 +89,19 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
     debounceRef.current = setTimeout(() => loadCtos(clientLat, clientLon, newRadius), 500);
   }
 
-  async function handleConfirm() {
-    if (!selectedName) return;
-    const cto = ctos.find((c) => c.name === selectedName);
+  async function confirmCto(name: string) {
+    const cto = ctos.find((c) => c.name === name);
     if (!cto) return;
-
     const distance = cto.route?.distanceWithBuffer ?? cto.straightDistance + 50;
-
+    setSelectedName(name);
     setConfirming(true);
     try {
       const { OpenLocationCode } = await import("open-location-code");
       const olc = new OpenLocationCode();
       const plusCode = olc.encode(cto.lat, cto.lon);
-      onConfirm({
-        cto_numero: cto.name,
-        distancia_cliente: formatDistance(distance),
-        localizacao_caixa: plusCode,
-      });
+      onConfirm({ cto_numero: cto.name, distancia_cliente: formatDistance(distance), localizacao_caixa: plusCode });
     } catch {
-      onConfirm({
-        cto_numero: cto.name,
-        distancia_cliente: formatDistance(distance),
-        localizacao_caixa: `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}`,
-      });
+      onConfirm({ cto_numero: cto.name, distancia_cliente: formatDistance(distance), localizacao_caixa: `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}` });
     }
   }
 
@@ -176,7 +166,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               clientLon={clientLon}
               ctos={ctos}
               selectedName={selectedName}
-              onSelect={setSelectedName}
+              onSelect={confirmCto}
               onExpandChange={onExpandChange}
             />
 
@@ -201,12 +191,13 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
                 return (
                   <button
                     key={cto.name}
-                    onClick={() => setSelectedName(cto.name)}
+                    onClick={() => confirmCto(cto.name)}
+                    disabled={confirming}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
                       isSelected
                         ? "border-green-500 bg-green-50"
                         : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50"
-                    }`}
+                    } disabled:opacity-60`}
                   >
                     <span className="text-xl">{icons[i] ?? "📍"}</span>
                     <div className="flex-1 min-w-0">
@@ -216,24 +207,16 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
                         <p className="text-xs text-orange-500 mt-0.5">Rota real indisponível</p>
                       )}
                     </div>
-                    {isSelected && <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />}
+                    {isSelected && confirming
+                      ? <Loader2 className="w-5 h-5 text-green-600 shrink-0 animate-spin" />
+                      : isSelected
+                        ? <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                        : null}
                   </button>
                 );
               })}
             </div>
 
-            {/* Botão confirmar */}
-            {selectedName && (
-              <button
-                onClick={handleConfirm}
-                disabled={confirming}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-              >
-                {confirming
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : `✅ Confirmar CTO ${selectedName}`}
-              </button>
-            )}
           </>
         )}
       </div>
