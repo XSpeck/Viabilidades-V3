@@ -94,9 +94,10 @@ export default function RelatoriosPage() {
     }
 
     const points: MapPoint[] = [];
+    const isUTP = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
-    // FTTH aprovadas
-    viabs.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status)).forEach((v) => {
+    // FTTH aprovadas (excluindo UTP)
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v)).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
     });
@@ -107,19 +108,31 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `ftth_rej_${v.id}`, ...geo, category: "ftth_rej", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
     });
 
-    // Prédio aprovado
-    viabs.filter((v) => v.tipo_instalacao === "Prédio" && v.status === "aprovado").forEach((v) => {
+    // UTP (todos os tipos)
+    viabs.filter(isUTP).forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+    });
+
+    // Prédio aprovado (excluindo UTP)
+    viabs.filter((v) => v.tipo_instalacao === "Prédio" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v)).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `predio_ap_${v.id}`, ...geo, category: "predio_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
     // Condomínio aprovado
-    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && v.status === "aprovado").forEach((v) => {
+    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && ["aprovado", "finalizado"].includes(v.status)).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `cond_ap_${v.id}`, ...geo, category: "cond_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // Prédios sem viabilidade
+    // Prédio/Condomínio rejeitados
+    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status === "rejeitado").forEach((v) => {
+      const geo = decode(v.plus_code_cliente);
+      if (geo) points.push({ id: `ftta_rej_${v.id}`, ...geo, category: "ftta_rej", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
+    });
+
+    // Prédios sem viabilidade (cadastro)
     svs.forEach((s) => {
       const geo = decode(s.localizacao);
       if (geo) points.push({ id: `sem_viab_${s.id}`, ...geo, category: "sem_viab", cliente: s.condominio, plusCode: locationToPlusCode(s.localizacao), extra: s.observacao });
