@@ -338,11 +338,16 @@ export default function ResultadosPage() {
                             finalizado:   "bg-gray-100 text-gray-600",
                             em_auditoria: "bg-yellow-100 text-yellow-700",
                             pendente:     "bg-blue-100 text-blue-600",
+                            em_revisao:   "bg-orange-100 text-orange-700",
                           };
                           const statusLabel: Record<string, string> = {
-                            aprovado: "✅ Aprovado", rejeitado: "❌ Sem viab.",
-                            utp: "📡 UTP", finalizado: "📁 Finalizado",
-                            em_auditoria: "🔍 Em análise", pendente: "⏳ Pendente",
+                            aprovado:     "✅ Aprovado",
+                            rejeitado:    "❌ Sem viab.",
+                            utp:          "📡 UTP",
+                            finalizado:   "📁 Finalizado",
+                            em_auditoria: "🔍 Em análise",
+                            pendente:     "⏳ Pendente",
+                            em_revisao:   v.revisao_tipo === "contestado" ? "💬 Contestado" : "↩️ Devolvida",
                           };
                           return (
                             <tr key={v.id} className="hover:bg-gray-50">

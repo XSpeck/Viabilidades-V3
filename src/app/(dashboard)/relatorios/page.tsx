@@ -166,6 +166,16 @@ export default function RelatoriosPage() {
   const ftthCondCount = atendidos.filter((a) => a.tecnologia === "FTTH").length;
   const gigaCount     = atendidos.filter((a) => a.tecnologia === "FTTA" || a.giga).length;
 
+  const statusLabelRel: Record<string, string> = {
+    pendente:     "Pendente",
+    em_auditoria: "Em auditoria",
+    em_revisao:   "Em revisão",
+    aprovado:     "Aprovado",
+    rejeitado:    "Sem viabilidade",
+    utp:          "UTP",
+    finalizado:   "Finalizado",
+  };
+
   // ── Rows for CSV / table ──────────────────────────────────────
   const rowsFtthAp = ftthAprovadas.map((v) => ({
     Data:         formatDateTime(v.data_auditoria),
@@ -194,7 +204,7 @@ export default function RelatoriosPage() {
     "Prédio/Cond.": v.predio_ftta ?? "-",
     "Casa/Apto": v.andar_predio ?? "-",
     Bloco:       v.bloco_predio ?? "-",
-    Status:      v.status,
+    Status:      statusLabelRel[v.status] ?? v.status,
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
     Solicitante: v.usuario,
     Cliente:     v.nome_cliente ?? "-",
