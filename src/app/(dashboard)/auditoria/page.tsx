@@ -673,7 +673,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
                   {dataDiferePref && (
-                    <button onClick={handleProporData} disabled={loading} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm">📤 Propor ao usuário</button>
+                    <button onClick={handleProporData} disabled={loading} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm">📤 Propor</button>
                   )}
                   <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
                 </div>
