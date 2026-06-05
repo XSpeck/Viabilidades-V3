@@ -464,6 +464,15 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const [obsAgendamento, setObsAgendamento] = useState("");
   const [nomePredioInput, setNomePredioInput] = useState(r.predio_ftta ?? "");
 
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copyToClipboard(text: string, key: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
   const isFtta = ["Prédio", "Condomínio"].includes(r.tipo_instalacao);
   const isCond = r.tipo_instalacao === "Condomínio";
   const aguardandoDados = r.status_predio === "aguardando_dados";
@@ -580,6 +589,24 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {/* ===== FTTH aprovado ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "FTTH" && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button
+                  onClick={() => copyToClipboard(
+                    [
+                      `CTO: ${r.cto_numero ?? "-"}`,
+                      `Portas: ${r.portas_disponiveis ?? "-"}`,
+                      `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
+                      `Distância: ${r.distancia_cliente ?? "-"}`,
+                      `Localização CTO: ${r.localizacao_caixa ?? "-"}`,
+                      r.observacoes ? `Obs: ${r.observacoes}` : "",
+                    ].filter(Boolean).join("\n"),
+                    "ftth"
+                  )}
+                  className={`text-xs px-2 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 ${copied === "ftth" ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied === "ftth" ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
               <p><strong>CTO:</strong> {r.cto_numero}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
@@ -671,6 +698,24 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {/* ===== Condomínio aprovado direto ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "Condomínio" && !r.status_predio && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button
+                  onClick={() => copyToClipboard(
+                    [
+                      `CTO: ${r.cto_numero ?? "-"}`,
+                      `Portas: ${r.portas_disponiveis ?? "-"}`,
+                      `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
+                      `Distância: ${r.distancia_cliente ?? "-"}`,
+                      `Localização CTO: ${r.localizacao_caixa ?? "-"}`,
+                      r.observacoes ? `Obs: ${r.observacoes}` : "",
+                    ].filter(Boolean).join("\n"),
+                    "cond"
+                  )}
+                  className={`text-xs px-2 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 ${copied === "cond" ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied === "cond" ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
               <p><strong>CTO:</strong> {r.cto_numero}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
@@ -683,6 +728,23 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           {/* ===== FTTA aprovado direto ===== */}
           {r.status === "aprovado" && r.tipo_instalacao === "Prédio" && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button
+                  onClick={() => copyToClipboard(
+                    [
+                      `CDOI: ${r.cdoi ?? "-"}`,
+                      `Prédio: ${r.predio_ftta ?? "-"}`,
+                      `Portas: ${r.portas_disponiveis ?? "-"}`,
+                      `Média RX: ${r.media_rx ? r.media_rx + " dBm" : "-"}`,
+                      r.observacoes ? `Obs: ${r.observacoes}` : "",
+                    ].filter(Boolean).join("\n"),
+                    "ftta"
+                  )}
+                  className={`text-xs px-2 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 ${copied === "ftta" ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied === "ftta" ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
               <p><strong>CDOI:</strong> {r.cdoi}</p>
               <p><strong>Prédio:</strong> {r.predio_ftta}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
