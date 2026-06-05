@@ -622,12 +622,17 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             {v.status_predio === "pronto_auditoria" && (
               <>
                 <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
-                  <p className="font-medium text-blue-800">✅ Dados recebidos — agendar visita</p>
-                  <p>👤 {tipoLocal === "Condomínio" ? "Responsável" : "Síndico"}: {v.nome_sindico} | {v.contato_sindico}</p>
-                  <p>🏠 Cliente: {v.nome_cliente_predio} | {v.contato_cliente_predio}</p>
-                  <p>🚪 Apto: {v.apartamento}</p>
-                  {v.obs_agendamento && <p>📝 {v.obs_agendamento}</p>}
+                  <p className="font-medium text-blue-800 mb-1">✅ Dados recebidos — agendar visita</p>
+                  <p>👤 {tipoLocal === "Condomínio" ? "Responsável" : "Síndico"}: <strong>{v.nome_sindico}</strong> · {v.contato_sindico}</p>
+                  <p>🏠 Cliente: <strong>{v.nome_cliente_predio}</strong> · {v.contato_cliente_predio}</p>
+                  <p>🚪 {tipoLocal === "Condomínio" ? "Casa/Lote" : "Apto"}: <strong>{v.apartamento}</strong></p>
                 </div>
+                {v.obs_agendamento && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm">
+                    <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Observação do usuário</p>
+                    <p className="text-gray-700 italic">"{v.obs_agendamento}"</p>
+                  </div>
+                )}
                 {v.data_preferencia_visita && (
                   <div className={`rounded-lg p-2.5 text-sm flex items-center gap-2 ${dataDiferePref ? "bg-orange-50 border border-orange-200 text-orange-800" : "bg-green-50 border border-green-200 text-green-800"}`}>
                     <span>{dataDiferePref ? "⚠️" : "✅"}</span>
