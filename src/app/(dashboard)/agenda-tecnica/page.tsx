@@ -75,9 +75,10 @@ export default function AgendaTecnicaPage() {
 
   if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
-  const isUTPItem = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
-  const itemsFtth    = items.filter((v) => v.tipo_instalacao === "FTTH" && !isUTPItem(v));
-  const itemsFttaUtp = items.filter((v) => v.tipo_instalacao !== "FTTH" || isUTPItem(v));
+  const isUTPItem    = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
+  const isFtthLike   = (v: Viabilizacao) => (v.tipo_instalacao === "FTTH" || v.tipo_instalacao === "Condomínio") && !isUTPItem(v);
+  const itemsFtth    = items.filter(isFtthLike);
+  const itemsFttaUtp = items.filter((v) => !isFtthLike(v));
   const activeItems  = view === "ftth" ? itemsFtth : itemsFttaUtp;
 
   const counts = {
@@ -119,8 +120,8 @@ export default function AgendaTecnicaPage() {
 
   // Arquivados filtrados
   const activeArquivados = view === "ftth"
-    ? arquivados.filter((v) => v.tipo_instalacao === "FTTH" && !isUTPItem(v))
-    : arquivados.filter((v) => v.tipo_instalacao !== "FTTH" || isUTPItem(v));
+    ? arquivados.filter(isFtthLike)
+    : arquivados.filter((v) => !isFtthLike(v));
 
   const tecnicosArq = ["todos", ...Array.from(new Set(activeArquivados.map((v) => v.tecnico_instalacao).filter(Boolean))) as string[]];
 

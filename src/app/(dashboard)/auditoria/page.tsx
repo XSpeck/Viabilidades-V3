@@ -251,7 +251,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     setLoading(true);
     try {
       await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
-      if (tipoLocal === "FTTH") await iniciarAgendamentoInstalacao(v.id);
+      await iniciarAgendamentoInstalacao(v.id);
       finishWithSuccess("✅ Viabilidade FTTH aprovada! Enviada para agendamento técnico.");
     } finally { setLoading(false); }
   }
