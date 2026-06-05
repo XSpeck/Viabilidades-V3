@@ -289,41 +289,10 @@ export default function AgendaTecnicaPage() {
                 {arquivadosFiltrados.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">Nenhum registro arquivado encontrado.</div>
                 ) : (
-                  <div className="overflow-auto rounded-lg border max-h-[420px]">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
-                        <tr>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Dt. Instalação</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Dt. Arquivamento</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Cliente</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Solicitante</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Plus Code</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">CTO</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Distância</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Menor RX</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Técnico</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Período</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {arquivadosFiltrados.map((v) => (
-                          <tr key={v.id} className="hover:bg-gray-50">
-                            <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap text-xs font-medium">
-                              {v.data_instalacao ? new Date(v.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap text-xs">{formatDateTime(v.data_finalizacao)}</td>
-                            <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
-                            <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{v.usuario}</td>
-                            <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{locationToPlusCode(v.plus_code_cliente)}</td>
-                            <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{v.cto_numero ?? "-"}</td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.distancia_cliente ?? "-"}</td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</td>
-                            <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{v.tecnico_instalacao ?? "-"}</td>
-                            <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.periodo_instalacao ?? "-"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-2">
+                    {arquivadosFiltrados.map((v) => (
+                      <ArquivadoCard key={v.id} v={v} />
+                    ))}
                   </div>
                 )}
               </div>
@@ -607,6 +576,90 @@ function AgendaTecnicaCard({ v, onRefresh }: { v: Viabilizacao; onRefresh: () =>
             <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm font-medium">
               <span className="text-xl">🎉</span><span>{successMsg}</span>
             </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Card de instalação arquivada ──────────────────────────────────
+function ArquivadoCard({ v }: { v: Viabilizacao }) {
+  const [open, setOpen] = useState(false);
+  const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "-";
+
+  return (
+    <div className="bg-white rounded-xl border border-l-4 border-l-gray-300 overflow-hidden">
+
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+        <span className="text-lg shrink-0">📁</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-800">{v.nome_cliente ?? "Cliente"}</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">Arquivado</span>
+          </div>
+          <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
+            <span>📅 {fmtData(v.data_instalacao)} · {v.periodo_instalacao ?? "-"}</span>
+            <span>👷 {v.tecnico_instalacao ?? "-"}</span>
+            <span>👤 {v.usuario}</span>
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t pt-3 space-y-4">
+
+          {/* Resumo da instalação */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">✅ Instalação concluída</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
+              <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao ?? "-"}</p></div>
+              <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? "-"}</p></div>
+              <div><p className="text-gray-400 text-xs mb-0.5">Arquivado em</p><p className="font-semibold text-gray-800">{formatDateTime(v.data_finalizacao)}</p></div>
+            </div>
+          </div>
+
+          {/* Cliente */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">👤 Cliente</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-1 text-sm text-gray-700">
+              <p><span className="text-gray-400">Nome:</span> {v.nome_cliente ?? "-"}</p>
+              <p><span className="text-gray-400">Solicitante:</span> {v.usuario}</p>
+              <p><span className="text-gray-400">Plus Code:</span> <span className="font-mono text-xs">{locationToPlusCode(v.plus_code_cliente)}</span></p>
+            </div>
+          </div>
+
+          {/* Dados técnicos */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🔧 Dados técnicos</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-gray-50 rounded-lg p-3">
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
+              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
+            </div>
+          </div>
+
+          {/* Proposta original */}
+          {v.proposta_data && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">📋 Proposta original do cliente</p>
+              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
+                <p>📆 {fmtData(v.proposta_data)} — {v.proposta_periodo}</p>
+                {v.proposta_obs && <p className="text-gray-500 mt-0.5">📝 {v.proposta_obs}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Histórico */}
+          {v.historico_agendamento && (
+            <details className="text-xs">
+              <summary className="text-gray-400 hover:text-gray-600 cursor-pointer select-none">Ver histórico de negociação</summary>
+              <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5 leading-relaxed">{v.historico_agendamento}</pre>
+            </details>
           )}
 
         </div>
