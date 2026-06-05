@@ -146,17 +146,17 @@ export default function FluxoStepper({ v }: Props) {
           ⏳ Aguardando agendamento da visita técnica
         </p>
       )}
-      {v.tipo_instalacao === "FTTH" && v.status_instalacao === "aguardando_proposta" && (
+      {["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao === "aguardando_proposta" && (
         <p className="text-xs text-indigo-600 text-center mt-1 font-medium">
           📋 Informe sua preferência de data para a instalação
         </p>
       )}
-      {v.tipo_instalacao === "FTTH" && v.status_instalacao === "proposta_enviada" && (
+      {["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao === "proposta_enviada" && (
         <p className="text-xs text-yellow-600 text-center mt-1 font-medium">
           ⏳ Proposta enviada — aguardando análise do agendamento
         </p>
       )}
-      {v.tipo_instalacao === "FTTH" && v.status_instalacao === "aguardando_confirmacao" && (
+      {["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao === "aguardando_confirmacao" && (
         <p className="text-xs text-orange-600 text-center mt-1 font-medium">
           ⚠️ Agendamento alterou a data — confirme ou proponha nova data
         </p>
