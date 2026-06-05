@@ -417,15 +417,6 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     finally { setEnviandoProposta(false); }
   }
 
-  async function handleContraproposta() {
-    if (!propostaData) { alert("Informe a nova data!"); return; }
-    setEnviandoProposta(true);
-    try {
-      await enviarPropostaInstalacao(r.id, { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined }, r.historico_agendamento);
-      onRefresh();
-    } catch { alert("Erro ao enviar. Tente novamente."); }
-    finally { setEnviandoProposta(false); }
-  }
 
   // ── Contestação ────────────────────────────────────────
   const [showContestar, setShowContestar] = useState(false);
@@ -673,7 +664,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                         </select>
                         <textarea placeholder="Motivo / observação" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                       </div>
-                      <button onClick={handleContraproposta} disabled={enviandoProposta || !propostaData} className="w-full border border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2 rounded-lg text-sm">
+                      <button onClick={handleEnviarProposta} disabled={enviandoProposta || !propostaData} className="w-full border border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2 rounded-lg text-sm">
                         📤 Enviar nova proposta
                       </button>
                     </div>

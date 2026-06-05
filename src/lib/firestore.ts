@@ -26,10 +26,10 @@ import type {
 // Helpers
 // =====================
 
-// Remove campos undefined/null antes de enviar ao Firestore
+// Remove campos undefined antes de enviar ao Firestore (null é válido — significa limpar o campo)
 function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
+    Object.entries(obj).filter(([, v]) => v !== undefined)
   );
 }
 
@@ -195,6 +195,8 @@ export async function aprovarFTTH(
     localizacao_caixa: string;
     observacoes?: string;
     olt?: string;
+    tipo_instalacao?: TipoInstalacao;
+    nome_cliente?: string;
   },
   auditadoPor: string
 ): Promise<void> {
@@ -215,6 +217,8 @@ export async function aprovarFTTA(
     media_rx: string;
     observacoes?: string;
     olt?: string;
+    tipo_instalacao?: TipoInstalacao;
+    nome_cliente?: string;
   },
   auditadoPor: string
 ): Promise<void> {

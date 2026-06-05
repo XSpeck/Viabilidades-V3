@@ -162,7 +162,9 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   useEffect(() => {
     setTipoLocal(v.tipo_instalacao);
     setNomeClienteLocal(v.nome_cliente ?? "");
-  }, [v.tipo_instalacao, v.nome_cliente]);
+    setOlt(v.olt ?? "");
+    setOltFtta(v.olt ?? "");
+  }, [v.tipo_instalacao, v.nome_cliente, v.olt]);
 
   async function handleSalvarInfo() {
     setLoading(true);
@@ -269,11 +271,8 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
     try {
-      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined }, userName);
+      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
       if (tipoLocal === "FTTH") await iniciarAgendamentoInstalacao(v.id);
-      if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
-        await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
-      }
       finishWithSuccess("✅ Viabilidade FTTH aprovada! Enviada para agendamento técnico.");
     } finally { setLoading(false); }
   }
@@ -282,10 +281,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!cdoi || !predioNome || !portasFtta || !mediaRx) { alert("Preencha todos os campos!"); return; }
     setLoading(true);
     try {
-      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta, olt: oltFtta || undefined }, userName);
-      if (tipoLocal !== v.tipo_instalacao || nomeClienteLocal !== (v.nome_cliente ?? "")) {
-        await corrigirDadosViabilizacao(v.id, { tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined });
-      }
+      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta, olt: oltFtta || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
       finishWithSuccess("✅ Viabilidade FTTA aprovada!");
     } finally { setLoading(false); }
   }
