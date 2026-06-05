@@ -354,7 +354,10 @@ export default function ResultadosPage() {
                             <tr key={v.id} className="hover:bg-gray-50">
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(v.data_solicitacao)}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
-                                <span className="text-xs">{v.tipo_instalacao === "FTTH" ? "🏠" : v.tipo_instalacao === "Prédio" ? "🏢" : "🏘️"} {v.tipo_instalacao}</span>
+                                {(() => {
+                                  const isUTP = v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
+                                  return <span className="text-xs">{isUTP ? "📡 UTP" : v.tipo_instalacao === "FTTH" ? "🏠 FTTH" : v.tipo_instalacao === "Prédio" ? "🏢 Prédio" : "🏘️ Condomínio"}</span>;
+                                })()}
                               </td>
                               <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
                               <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{locationToPlusCode(v.plus_code_cliente)}</td>
