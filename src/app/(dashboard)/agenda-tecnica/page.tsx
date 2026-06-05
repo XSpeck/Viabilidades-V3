@@ -604,14 +604,26 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
   const [open, setOpen] = useState(false);
   const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "-";
 
+  const isFTTH = v.tipo_instalacao === "FTTH";
+  const isUTP = v.status === "utp";
+
+  const tipoBadge = isUTP
+    ? { icon: "📡", label: "UTP",        color: "bg-purple-100 text-purple-700" }
+    : isFTTH
+    ? { icon: "🏠", label: "FTTH",       color: "bg-blue-100 text-blue-700"    }
+    : v.tipo_instalacao === "Condomínio"
+    ? { icon: "🏘️", label: "Condomínio", color: "bg-teal-100 text-teal-700"    }
+    : { icon: "🏢", label: "FTTA",       color: "bg-indigo-100 text-indigo-700" };
+
   return (
     <div className="bg-white rounded-xl border border-l-4 border-l-gray-300 overflow-hidden">
 
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
-        <span className="text-lg shrink-0">📁</span>
+        <span className="text-lg shrink-0">{tipoBadge.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-gray-800">{v.nome_cliente ?? "Cliente"}</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${tipoBadge.color}`}>{tipoBadge.label}</span>
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">Arquivado</span>
           </div>
           <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
@@ -651,11 +663,22 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🔧 Dados técnicos</p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs bg-gray-50 rounded-lg p-3">
-              <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+              {isFTTH ? (
+                <div><p className="text-gray-400 uppercase font-medium mb-0.5">CTO</p><p className="font-semibold text-gray-800">{v.cto_numero ?? "-"}</p></div>
+              ) : (
+                <div><p className="text-gray-400 uppercase font-medium mb-0.5">CDOI</p><p className="font-semibold text-gray-800">{v.cdoi ?? "-"}</p></div>
+              )}
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">OLT</p><p className="font-semibold text-gray-800">{v.olt ?? "-"}</p></div>
-              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+              {isFTTH ? (
+                <div><p className="text-gray-400 uppercase font-medium mb-0.5">Distância</p><p className="font-semibold text-gray-800">{v.distancia_cliente ?? "-"}</p></div>
+              ) : (
+                <div><p className="text-gray-400 uppercase font-medium mb-0.5">Prédio</p><p className="font-semibold text-gray-800">{v.predio_ftta ?? "-"}</p></div>
+              )}
               <div><p className="text-gray-400 uppercase font-medium mb-0.5">Portas</p><p className="font-semibold text-gray-800">{v.portas_disponiveis ?? "-"}</p></div>
-              <div><p className="text-gray-400 uppercase font-medium mb-0.5">Menor RX</p><p className="font-semibold text-gray-800">{v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p></div>
+              <div>
+                <p className="text-gray-400 uppercase font-medium mb-0.5">{isFTTH ? "Menor RX" : "Média RX"}</p>
+                <p className="font-semibold text-gray-800">{(isFTTH ? v.menor_rx : v.media_rx) ? `${isFTTH ? v.menor_rx : v.media_rx} dBm` : "-"}</p>
+              </div>
             </div>
           </div>
 
