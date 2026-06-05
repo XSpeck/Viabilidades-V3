@@ -169,8 +169,8 @@ export default function ResultadosPage() {
       { key: "utp",          label: "📡 UTP",               count: counts.utp         },
       { key: "ag_inst",      label: "⚠️ Propor data",       count: counts.ag_inst     },
       { key: "neg_inst",     label: "🔧 Negociando",        count: counts.neg_inst    },
-      { key: "inst_agendado",label: "🏠 Inst. agendada",    count: counts.inst_agendado },
-      { key: "instalado",    label: "🏠 Instalado",         count: counts.instalado   },
+      { key: "inst_agendado",label: "📅 Agendado",           count: counts.inst_agendado },
+      { key: "instalado",    label: "✅ Concluído",          count: counts.instalado   },
     ] as { key: StatusFilter; label: string; count: number }[]
   ).filter((c) => c.key === "todos" || c.count > 0);
 
@@ -391,7 +391,8 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const { user } = useAuth();
   const isDevolvida = r.status === "em_revisao" && r.revisao_tipo === "devolvido";
   const isContestacaoPendente = r.status === "em_revisao" && r.revisao_tipo === "contestado";
-  const [open, setOpen] = useState(isDevolvida);
+  const needsDateAction = r.status_instalacao === "aguardando_proposta" || r.status_instalacao === "aguardando_confirmacao";
+  const [open, setOpen] = useState(isDevolvida || needsDateAction);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Proposta de instalação FTTH ────────────────────────
@@ -470,6 +471,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
   const isFtta = ["Prédio", "Condomínio"].includes(r.tipo_instalacao);
   const isCond = r.tipo_instalacao === "Condomínio";
+  const isFttaUtp = isFtta || r.status === "utp" || r.motivo_rejeicao === "Atendemos UTP";
   const aguardandoDados = r.status_predio === "aguardando_dados";
   const isAprovado = r.status === "aprovado";
   const canExpand = ["aprovado", "rejeitado", "utp", "em_revisao"].includes(r.status) || isFtta;
@@ -523,8 +525,14 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             {canExpand && <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>}
           </div>
         </div>
-        {isAprovado && !open && (
+        {isAprovado && !r.status_instalacao && !open && (
           <p className="text-xs text-indigo-500 mt-1.5 font-medium">👆 Toque para ver os dados da viabilidade</p>
+        )}
+        {r.status_instalacao === "aguardando_proposta" && !open && (
+          <p className="text-xs text-indigo-500 mt-1.5 font-medium">📅 Ação necessária — informe sua disponibilidade de data</p>
+        )}
+        {r.status_instalacao === "aguardando_confirmacao" && !open && (
+          <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Nova data proposta — confirme ou contra-proponha</p>
         )}
         {aguardandoDados && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Ação necessária — preencha os dados do {isCond ? "responsável" : "síndico"}</p>
@@ -619,7 +627,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               {r.status_instalacao === "aguardando_proposta" && (
                 <div className="space-y-2">
                   <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
-                    ✅ Viabilidade aprovada! Informe a data e período de preferência para a instalação.
+                    ✅ {isFttaUtp ? "Viabilidade confirmada! Informe a data e período de preferência para a visita técnica." : "Viabilidade aprovada! Informe a data e período de preferência para a instalação."}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -677,7 +685,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
               {r.status_instalacao === "agendado" && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1 text-sm">
-                  <p className="font-medium text-green-800">📅 Instalação agendada!</p>
+                  <p className="font-medium text-green-800">{isFttaUtp ? "📅 Visita agendada!" : "📅 Instalação agendada!"}</p>
                   <p>📆 Data: <strong>{r.data_instalacao ? new Date(r.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
                   <p>🕐 Período: {r.periodo_instalacao} · 👷 Técnico: {r.tecnico_instalacao}</p>
                 </div>
@@ -685,7 +693,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
               {r.status_instalacao === "instalado" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-800">🎉 Instalação concluída pelo técnico {r.tecnico_instalacao ?? ""}!</p>
+                  <p className="font-medium text-blue-800">{isFttaUtp ? `🎉 Visita concluída pelo técnico ${r.tecnico_instalacao ?? ""}!` : `🎉 Instalação concluída pelo técnico ${r.tecnico_instalacao ?? ""}!`}</p>
                   <p className="text-blue-700 mt-1 text-xs">Clique em "Arquivar" para arquivar este agendamento.</p>
                 </div>
               )}
