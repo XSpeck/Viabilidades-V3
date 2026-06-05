@@ -412,7 +412,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
           <div className={`space-y-3 ${mapExpanded || successMsg || isContestacao ? "hidden" : ""}`}>
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-gray-700">📋 Informações</h4>
-              {!editandoInfo && (
+              {!editandoInfo && !v.status_predio && (
                 <button onClick={() => setEditandoInfo(true)} className="text-xs text-indigo-600 hover:underline">✏️ Editar</button>
               )}
             </div>
@@ -455,14 +455,18 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
             {/* Ações gerais */}
             <div className="flex flex-wrap gap-2 pt-2">
-              <button onClick={handleDevolver} disabled={loading}
-                className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" /> Fila
-              </button>
-              <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
-                className="text-xs px-3 py-1.5 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
-                ↩️ Devolver c/ msg
-              </button>
+              {!v.status_predio && (
+                <>
+                  <button onClick={handleDevolver} disabled={loading}
+                    className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> Fila
+                  </button>
+                  <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
+                    className="text-xs px-3 py-1.5 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+                    ↩️ Devolver c/ msg
+                  </button>
+                </>
+              )}
               {confirmDelete ? (
                 <div className="flex gap-2">
                   <button onClick={handleDelete} disabled={loading} className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg">Confirmar</button>
@@ -476,7 +480,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             </div>
 
             {/* Formulário de devolução */}
-            {showDevolver && (
+            {showDevolver && !v.status_predio && (
               <div className="border border-gray-200 rounded-lg p-3 space-y-2">
                 <p className="text-xs font-medium text-gray-700">↩️ Devolver viabilização</p>
                 <textarea
