@@ -458,6 +458,8 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   const [contatoClientePredio, setContatoClientePredio] = useState("");
   const [apartamento, setApartamento] = useState(r.andar_predio ?? "");
   const [obsAgendamento, setObsAgendamento] = useState("");
+  const [dataPreferenciaVisita, setDataPreferenciaVisita] = useState("");
+  const [periodoPreferenciaVisita, setPeriodoPreferenciaVisita] = useState("Manhã");
   const [nomePredioInput, setNomePredioInput] = useState(r.predio_ftta ?? "");
 
   const [copied, setCopied] = useState<string | null>(null);
@@ -492,7 +494,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     }
     setSubmitting(true);
     try {
-      await enviarDadosPredio(r.id, { predio_ftta: nomePredioInput, nome_sindico: nomeSindico, contato_sindico: contatoSindico, nome_cliente_predio: nomeClientePredio, contato_cliente_predio: contatoClientePredio, apartamento, obs_agendamento: obsAgendamento });
+      await enviarDadosPredio(r.id, { predio_ftta: nomePredioInput, nome_sindico: nomeSindico, contato_sindico: contatoSindico, nome_cliente_predio: nomeClientePredio, contato_cliente_predio: contatoClientePredio, apartamento, data_preferencia_visita: dataPreferenciaVisita || undefined, periodo_preferencia_visita: dataPreferenciaVisita ? periodoPreferenciaVisita : undefined, obs_agendamento: obsAgendamento || undefined });
       onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setSubmitting(false); }
@@ -822,7 +824,17 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   <input type="text" placeholder="Telefone *" value={contatoClientePredio} onChange={(e) => setContatoClientePredio(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
                 <input type="text" placeholder={`${isCond ? "Casa/Lote" : "Apartamento"} *`} value={apartamento} onChange={(e) => setApartamento(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                <textarea placeholder="📅 Melhores dias e horários para a visita técnica" value={obsAgendamento} onChange={(e) => setObsAgendamento(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">📅 Preferência de data para a visita</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" value={dataPreferenciaVisita} onChange={(e) => setDataPreferenciaVisita(e.target.value)}
+                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <select value={periodoPreferenciaVisita} onChange={(e) => setPeriodoPreferenciaVisita(e.target.value)}
+                    className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option>Manhã</option>
+                    <option>Tarde</option>
+                  </select>
+                </div>
+                <textarea placeholder="Observações (opcional)" value={obsAgendamento} onChange={(e) => setObsAgendamento(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
               <button onClick={handleEnviarDados} disabled={submitting}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">

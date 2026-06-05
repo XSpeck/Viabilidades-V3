@@ -290,6 +290,8 @@ export async function enviarDadosPredio(
     nome_cliente_predio: string;
     contato_cliente_predio: string;
     apartamento: string;
+    data_preferencia_visita?: string;
+    periodo_preferencia_visita?: string;
     obs_agendamento?: string;
   }
 ): Promise<void> {
