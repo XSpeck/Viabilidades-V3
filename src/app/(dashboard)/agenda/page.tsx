@@ -177,20 +177,15 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* ─── Agendamento de Instalação FTTA ────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      {/* ─── Agendamento de Instalação FTTA ─── só mostra se houver itens ── */}
+      {!loading && instalacoes.length > 0 && (
+        <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Wrench className="w-5 h-5 text-indigo-600" />
             <h2 className="text-lg font-bold text-gray-800">🔧 Agendamento de Instalação</h2>
-            {instalacoes.length > 0 && (
-              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">{instalacoes.length}</span>
-            )}
+            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">{instalacoes.length}</span>
           </div>
-        </div>
 
-        {/* Chips de filtro */}
-        {instalacoes.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {([
               { key: "todos",                  label: `Todos (${instalacoes.length})` },
@@ -212,13 +207,7 @@ export default function AgendaPage() {
               ))
             }
           </div>
-        )}
 
-        {loading ? null : instalacoes.length === 0 ? (
-          <div className="text-center py-10 bg-white rounded-xl border text-gray-400">
-            Nenhuma instalação pendente.
-          </div>
-        ) : (
           <div className="space-y-3">
             {instalacoes
               .filter((v) => instFilter === "todos" || v.status_instalacao === instFilter)
@@ -226,8 +215,8 @@ export default function AgendaPage() {
                 <AgendaInstalacaoCard key={v.id} v={v} onRefresh={load} />
               ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

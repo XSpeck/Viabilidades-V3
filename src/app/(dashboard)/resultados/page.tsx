@@ -512,6 +512,21 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     finalizado:   "📦 Finalizado",
   };
 
+  const predioStatusLabel: Record<string, string> = {
+    aguardando_dados: "📋 Dados pendentes",
+    pronto_auditoria: "⏳ Aguardando visita",
+    proposta_visita:  "⚠️ Confirmar data",
+    agendado:         "📅 Visita agendada",
+    estruturado:      "🏗️ Estruturado",
+  };
+  const predioStatusColor: Record<string, string> = {
+    aguardando_dados: "bg-orange-100 text-orange-700",
+    pronto_auditoria: "bg-blue-100 text-blue-700",
+    proposta_visita:  "bg-orange-100 text-orange-700",
+    agendado:         "bg-green-100 text-green-700",
+    estruturado:      "bg-green-100 text-green-700",
+  };
+
   async function handleEnviarDados() {
     if (!nomeSindico || !contatoSindico || !nomeClientePredio || !contatoClientePredio || !apartamento) {
       alert("Preencha todos os campos obrigatórios (*)"); return;
@@ -544,14 +559,15 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${
               isDevolvida ? "bg-orange-100 text-orange-700" :
               isContestacaoPendente ? "bg-blue-100 text-blue-700" :
+              r.status_predio ? (predioStatusColor[r.status_predio] ?? "bg-gray-100 text-gray-500") :
               "bg-gray-100 text-gray-500"
             }`}>
-              {statusLabel[r.status] ?? r.status}
+              {r.status_predio ? (predioStatusLabel[r.status_predio] ?? r.status_predio) : (statusLabel[r.status] ?? r.status)}
             </span>
             {canExpand && <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>}
           </div>
         </div>
-        {isAprovado && !r.status_instalacao && !open && (
+        {isAprovado && !r.status_instalacao && !r.status_predio && !open && (
           <p className="text-xs text-indigo-500 mt-1.5 font-medium">👆 Toque para ver os dados da viabilidade</p>
         )}
         {r.status_instalacao === "aguardando_proposta" && !open && (
@@ -563,8 +579,17 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
         {aguardandoDados && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Ação necessária — preencha os dados do {isCond ? "responsável" : "síndico"}</p>
         )}
+        {r.status_predio === "pronto_auditoria" && !open && (
+          <p className="text-xs text-blue-500 mt-1.5 font-medium">⏳ Dados enviados — aguardando agendamento da visita</p>
+        )}
         {r.status_predio === "proposta_visita" && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">⚠️ Nova data proposta — confirme ou contra-proponha a visita</p>
+        )}
+        {r.status_predio === "agendado" && !open && (
+          <p className="text-xs text-green-600 mt-1.5 font-medium">📅 Visita técnica agendada — toque para ver os detalhes</p>
+        )}
+        {r.status_predio === "estruturado" && !open && (
+          <p className="text-xs text-green-600 mt-1.5 font-medium">🏗️ Estrutura instalada — toque para ver os detalhes</p>
         )}
         {isDevolvida && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">↩️ Ação necessária — o auditor solicitou uma correção</p>
@@ -762,7 +787,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {/* ===== FTTA aprovado direto ===== */}
-          {r.status === "aprovado" && r.tipo_instalacao === "Prédio" && (
+          {r.status === "aprovado" && r.tipo_instalacao === "Prédio" && !r.status_predio && (
             <div className="bg-green-50 rounded-lg p-3 space-y-1">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
