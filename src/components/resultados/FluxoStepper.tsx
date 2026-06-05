@@ -38,7 +38,7 @@ function getCurrentStep(v: Viabilizacao): number {
   // Fluxo de instalação FTTH
   if (v.tipo_instalacao === "FTTH" && v.status_instalacao) {
     if (v.status_instalacao === "instalado") return 4;
-    if (v.status_instalacao === "agendado") return 4;
+    if (v.status_instalacao === "agendado") return 3;
     if (["proposta_enviada", "aguardando_confirmacao"].includes(v.status_instalacao)) return 3;
     if (v.status_instalacao === "aguardando_proposta") return 2;
     return 1;
@@ -138,6 +138,11 @@ export default function FluxoStepper({ v }: Props) {
       {v.tipo_instalacao === "FTTH" && v.status_instalacao === "aguardando_confirmacao" && (
         <p className="text-xs text-orange-600 text-center mt-1 font-medium">
           ⚠️ Agendamento alterou a data — confirme ou proponha nova data
+        </p>
+      )}
+      {v.tipo_instalacao === "FTTH" && v.status_instalacao === "agendado" && (
+        <p className="text-xs text-green-600 text-center mt-1 font-medium">
+          📅 Instalação agendada — aguardando execução pelo técnico
         </p>
       )}
     </div>
