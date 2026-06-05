@@ -504,7 +504,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-0.5 min-w-0">
             <p className="font-medium text-gray-900">
-              {r.tipo_instalacao === "FTTH" ? "🏠" : isCond ? "🏘️" : "🏢"}{" "}
+              {(r.status === "utp" || r.motivo_rejeicao === "Atendemos UTP") ? "📡" : r.tipo_instalacao === "FTTH" ? "🏠" : isCond ? "🏘️" : "🏢"}{" "}
               {r.nome_cliente ?? r.plus_code_cliente}
               {r.urgente && " 🔥"}
             </p>
