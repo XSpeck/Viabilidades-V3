@@ -555,6 +555,9 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                   <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
                   <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao}</p></div>
                 </div>
+                {(v.agendamento_obs || v.proposta_obs) && (
+                  <p className="text-xs text-gray-500 mt-1.5">📝 {v.agendamento_obs ?? v.proposta_obs}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={handleInstalado} disabled={loading}

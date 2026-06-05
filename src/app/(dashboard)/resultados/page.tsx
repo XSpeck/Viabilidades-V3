@@ -872,9 +872,10 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
           {/* ===== Pronto para agendar ===== */}
           {r.status_predio === "pronto_auditoria" && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm space-y-1">
               <p className="font-medium text-blue-800">✅ Dados enviados!</p>
-              <p className="text-blue-700 mt-1">Aguardando o agendamento da visita técnica pelo nosso time.</p>
+              <p className="text-blue-700">Aguardando o agendamento da visita técnica pelo nosso time.</p>
+              {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
             </div>
           )}
 
