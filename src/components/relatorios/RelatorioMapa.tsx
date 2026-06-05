@@ -40,7 +40,7 @@ const CATEGORIES: Record<PointCategory, { label: string; color: string; emoji: s
   predio_ap: { label: "Prédio Aprovado",         color: "#3b82f6", emoji: "🏢" },
   cond_ap:   { label: "Condomínio Aprovado",    color: "#f97316", emoji: "🏘️" },
   ftta_rej:  { label: "Prédio/Cond. Sem Viab.", color: "#b91c1c", emoji: "❌" },
-  sem_viab:  { label: "Sem Viab. (Cadastro)",   color: "#7c3aed", emoji: "🚫" },
+  sem_viab:  { label: "Sem Viab. (Cadastro)",   color: "#eab308", emoji: "🚫" },
 };
 
 // ─── Ícone SVG por categoria ──────────────────────────────────────
