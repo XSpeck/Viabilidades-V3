@@ -199,7 +199,10 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     setSaving(true);
     try {
       await agendarDemanda(d.id, dataAgendar, periodoAgendar);
+      setShowAgendar(false);
       onRefresh();
+    } catch (e) {
+      alert("Erro ao agendar: " + (e instanceof Error ? e.message : "verifique as permissões e tente novamente."));
     } finally { setSaving(false); }
   }
 

@@ -173,29 +173,31 @@ export default function AgendaPage() {
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && demandas.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-xl border">
           <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhuma visita agendada.</p>
+          <p className="text-gray-500">Nenhuma visita ou demanda agendada.</p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && demandasFiltradas.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border text-gray-400">
           Nenhum resultado para os filtros aplicados.
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Atrasadas */}
-          {atrasadas.length > 0 && (
-            <DateGroup label="🔴 Atrasadas" color="red" items={atrasadas} userName={user!.nome} onRefresh={load} />
+          {/* Visitas FTTA/UTP */}
+          {filtered.length > 0 && (
+            <>
+              {atrasadas.length > 0 && (
+                <DateGroup label="🔴 Atrasadas" color="red" items={atrasadas} userName={user!.nome} onRefresh={load} />
+              )}
+              {hoje.length > 0 && (
+                <DateGroup label="🟡 Hoje" color="yellow" items={hoje} userName={user!.nome} onRefresh={load} />
+              )}
+              {futureGroups.map((g) => (
+                <DateGroup key={g.iso} label={`🔵 ${g.label}`} color="blue" items={g.items} userName={user!.nome} onRefresh={load} />
+              ))}
+            </>
           )}
-          {/* Hoje */}
-          {hoje.length > 0 && (
-            <DateGroup label="🟡 Hoje" color="yellow" items={hoje} userName={user!.nome} onRefresh={load} />
-          )}
-          {/* Futuras agrupadas por dia */}
-          {futureGroups.map((g) => (
-            <DateGroup key={g.iso} label={`🔵 ${g.label}`} color="blue" items={g.items} userName={user!.nome} onRefresh={load} />
-          ))}
 
           {/* ── Demandas de Rede ── */}
           {demandasFiltradas.length > 0 && (
