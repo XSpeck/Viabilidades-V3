@@ -745,13 +745,33 @@ export async function updateDemanda(id: string, data: Partial<DemandaRede>): Pro
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
 }
 
+export async function agendarDemanda(id: string, data: string, periodo: string): Promise<void> {
+  await updateDemanda(id, { status: "em_andamento", data_agendamento: data, periodo_agendamento: periodo });
+}
+
+export async function concluirDemanda(id: string, obs?: string): Promise<void> {
+  await updateDemanda(id, {
+    status: "concluida",
+    data_conclusao: new Date().toISOString(),
+    obs_conclusao: obs ?? undefined,
+  });
+}
+
+export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
+  const q = query(collection(db, "demandas_rede"), where("status", "==", "em_andamento"));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => fromFirestore<DemandaRede>(d))
+    .sort((a, b) => {
+      if ((a.data_agendamento ?? "") !== (b.data_agendamento ?? ""))
+        return (a.data_agendamento ?? "") < (b.data_agendamento ?? "") ? -1 : 1;
+      return (a.periodo_agendamento === "Manhã" ? 0 : 1) - (b.periodo_agendamento === "Manhã" ? 0 : 1);
+    });
+}
+
 export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): Promise<void> {
-  const next: StatusDemanda =
-    demanda.status === "aberta" ? "em_andamento" : "concluida";
-  const extra = next === "concluida"
-    ? { data_conclusao: new Date().toISOString(), obs_conclusao: obs ?? undefined }
-    : {};
-  await updateDemanda(demanda.id, { status: next, ...extra });
+  if (demanda.status !== "em_andamento") return;
+  await concluirDemanda(demanda.id, obs);
 }
 
 export async function deleteDemanda(id: string): Promise<void> {

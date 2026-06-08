@@ -4,10 +4,19 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
+  getDemandasAgendadas, agendarDemanda, concluirDemanda,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao } from "@/types";
+import type { Viabilizacao, DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
+import { TECNICOS_REDE } from "@/types";
 import { RefreshCw, Loader2, CalendarDays, Search, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
+
+const PRIORIDADE_COLOR: Record<PrioridadeDemanda, string> = {
+  baixa:   "bg-gray-100 text-gray-600",
+  media:   "bg-blue-100 text-blue-700",
+  alta:    "bg-orange-100 text-orange-700",
+  urgente: "bg-red-100 text-red-700",
+};
 import { canAccess } from "@/lib/access";
 
 // ─── Helpers de data ──────────────────────────────────────────────
@@ -49,16 +58,19 @@ function sortByDatePeriod(a: Viabilizacao, b: Viabilizacao) {
 // ─── Page ─────────────────────────────────────────────────────────
 export default function AgendaPage() {
   const { user } = useAuth();
-  const [items, setItems] = useState<Viabilizacao[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [items, setItems]       = useState<Viabilizacao[]>([]);
+  const [demandas, setDemandas] = useState<DemandaRede[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState("");
   const [tecnicoFilter, setTecnicoFilter] = useState("todos");
-  const [techFilter, setTechFilter] = useState("todos");
+  const [techFilter, setTechFilter]       = useState("todos");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await getAgendamentos());
+      const [viabs, dems] = await Promise.all([getAgendamentos(), getDemandasAgendadas()]);
+      setItems(viabs);
+      setDemandas(dems);
     }
     finally { setLoading(false); }
   }, []);
@@ -67,8 +79,9 @@ export default function AgendaPage() {
 
   if (!canAccess(user ?? null, "agenda")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
-  // Unique technicians for filter
-  const tecnicos = ["todos", ...Array.from(new Set(items.map((v) => v.tecnico_responsavel).filter(Boolean))) as string[]];
+  // Unique technicians for filter (visitas + técnicos de rede fixos)
+  const tecnicosVisitas = Array.from(new Set(items.map((v) => v.tecnico_responsavel).filter(Boolean))) as string[];
+  const tecnicos = ["todos", ...Array.from(new Set([...tecnicosVisitas, ...TECNICOS_REDE]))];
 
   const filtered = items
     .filter((v) => tecnicoFilter === "todos" || v.tecnico_responsavel === tecnicoFilter)
@@ -100,14 +113,28 @@ export default function AgendaPage() {
   const totalHoje = items.filter((v) => classifyDate(v.data_visita) === "hoje").length;
   const totalAtrasadas = items.filter((v) => classifyDate(v.data_visita) === "atrasada").length;
 
+  // Demandas de rede agrupadas por data
+  const demandasFiltradas = demandas
+    .filter((d) => tecnicoFilter === "todos" || d.tecnico === tecnicoFilter);
+  const demandasAtrasadas = demandasFiltradas.filter((d) => classifyDate(d.data_agendamento) === "atrasada");
+  const demandasHoje      = demandasFiltradas.filter((d) => classifyDate(d.data_agendamento) === "hoje");
+  const demandasFuturas   = demandasFiltradas.filter((d) => classifyDate(d.data_agendamento) === "futura");
+  const demandasFutGroups: { label: string; iso: string; items: DemandaRede[] }[] = [];
+  for (const d of demandasFuturas) {
+    const iso = d.data_agendamento!;
+    const existing = demandasFutGroups.find((g) => g.iso === iso);
+    if (existing) existing.items.push(d);
+    else demandasFutGroups.push({ label: formatDayLabel(iso), iso, items: [d] });
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">📅 Agenda FTTA/UTP</h1>
+          <h1 className="text-2xl font-bold text-gray-900">📅 Agenda Técnica</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {total} visita(s) agendada(s)
+            {total} visita(s) · {demandas.length} demanda(s) de rede
             {totalHoje > 0 && <span className="text-yellow-600 font-medium"> · {totalHoje} hoje</span>}
             {totalAtrasadas > 0 && <span className="text-red-600 font-medium"> · {totalAtrasadas} atrasada(s)</span>}
           </p>
@@ -169,6 +196,26 @@ export default function AgendaPage() {
           {futureGroups.map((g) => (
             <DateGroup key={g.iso} label={`🔵 ${g.label}`} color="blue" items={g.items} userName={user!.nome} onRefresh={load} />
           ))}
+
+          {/* ── Demandas de Rede ── */}
+          {demandasFiltradas.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-sm font-bold uppercase tracking-wide text-purple-700">🔧 Demandas de Rede</span>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-purple-300 text-purple-700">{demandasFiltradas.length}</span>
+                <div className="flex-1 h-px border-t border-purple-200" />
+              </div>
+              {demandasAtrasadas.length > 0 && (
+                <DemandaRedeGroup label="🔴 Atrasadas" color="red" items={demandasAtrasadas} onRefresh={load} />
+              )}
+              {demandasHoje.length > 0 && (
+                <DemandaRedeGroup label="🟡 Hoje" color="yellow" items={demandasHoje} onRefresh={load} />
+              )}
+              {demandasFutGroups.map((g) => (
+                <DemandaRedeGroup key={g.iso} label={`🔵 ${g.label}`} color="blue" items={g.items} onRefresh={load} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -470,6 +517,145 @@ function AgendaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
               <div className="flex gap-2">
                 <button onClick={handleRejeitar} disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm">Confirmar</button>
                 <button onClick={() => setShowRejeitar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Demandas de Rede — grupo ───────────────────────────────────────
+function DemandaRedeGroup({ label, color, items, onRefresh }: {
+  label: string; color: "red" | "yellow" | "blue";
+  items: DemandaRede[]; onRefresh: () => void;
+}) {
+  const borderColor = { red: "border-red-300", yellow: "border-yellow-300", blue: "border-blue-200" }[color];
+  const textColor   = { red: "text-red-700",   yellow: "text-yellow-700",   blue: "text-blue-700"  }[color];
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <span className={`text-sm font-bold uppercase tracking-wide ${textColor}`}>{label}</span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${borderColor} ${textColor}`}>{items.length}</span>
+        <div className={`flex-1 h-px ${borderColor} border-t`} />
+      </div>
+      <div className="space-y-2">
+        {items.map((d) => <DemandaRedeAgendaCard key={d.id} d={d} onRefresh={onRefresh} />)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Demandas de Rede — card ────────────────────────────────────────
+function DemandaRedeAgendaCard({ d, onRefresh }: { d: DemandaRede; onRefresh: () => void }) {
+  const [open, setOpen]               = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [showObsConc, setShowObsConc] = useState(false);
+  const [obsConc, setObsConc]         = useState("");
+  const [showReagendar, setShowReagendar] = useState(false);
+  const [novaData, setNovaData]       = useState(d.data_agendamento ?? "");
+  const [novoPeriodo, setNovoPeriodo] = useState(d.periodo_agendamento ?? "Manhã");
+  const isAtrasada = classifyDate(d.data_agendamento) === "atrasada";
+
+  async function handleConcluir() {
+    setSaving(true);
+    try {
+      await concluirDemanda(d.id, obsConc || undefined);
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
+  async function handleReagendar() {
+    if (!novaData) { alert("Informe a data!"); return; }
+    setSaving(true);
+    try {
+      await agendarDemanda(d.id, novaData, novoPeriodo);
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border-l-4 overflow-hidden ${isAtrasada ? "border-l-red-500" : "border-l-purple-400"}`}>
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+        <span className="text-lg shrink-0">🔧</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-900 truncate">{d.tipo}</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${PRIORIDADE_COLOR[d.prioridade]}`}>
+              {d.prioridade.charAt(0).toUpperCase() + d.prioridade.slice(1)}
+            </span>
+            {isAtrasada && <span className="text-xs text-red-600 font-medium shrink-0">⚠️ Atrasada</span>}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500 mt-0.5">
+            <span>🕐 {d.periodo_agendamento}</span>
+            <span>👷 {d.tecnico}</span>
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t pt-3 space-y-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-0.5">
+              <p className="text-xs text-gray-400 uppercase font-medium">📋 Serviço</p>
+              <p className="font-medium">{d.tipo}</p>
+              <p className="text-gray-600">{d.descricao}</p>
+              {d.local && <p className="font-mono text-xs text-gray-500">📍 {locationToPlusCode(d.local)}</p>}
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs text-gray-400 uppercase font-medium">📅 Agendamento</p>
+              <p>Data: <strong>{d.data_agendamento ? new Date(d.data_agendamento + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
+              <p>Período: {d.periodo_agendamento}</p>
+              <p>Técnico: {d.tecnico}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => { setShowObsConc(!showObsConc); setShowReagendar(false); }}
+              className="flex-1 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-700 text-white transition-colors">
+              ✅ Concluído
+            </button>
+            <button onClick={() => { setShowReagendar(!showReagendar); setShowObsConc(false); }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${showReagendar ? "bg-yellow-50 border-yellow-400 text-yellow-700" : "border-gray-300 hover:bg-gray-50 text-gray-700"}`}>
+              🔄 Reagendar
+            </button>
+          </div>
+
+          {showObsConc && (
+            <div className="border border-green-200 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold text-green-800">✅ Confirmar conclusão</p>
+              <textarea placeholder="Observação (opcional)..." value={obsConc} onChange={(e) => setObsConc(e.target.value)}
+                rows={2} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400" />
+              <div className="flex gap-2">
+                <button onClick={handleConcluir} disabled={saving}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-1.5 rounded-lg text-sm flex items-center justify-center gap-1.5">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
+                </button>
+                <button onClick={() => setShowObsConc(false)} className="flex-1 border py-1.5 rounded-lg text-sm">Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {showReagendar && (
+            <div className="border border-yellow-200 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold text-yellow-800">🔄 Reagendar demanda</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)}
+                  className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                <select value={novoPeriodo} onChange={(e) => setNovoPeriodo(e.target.value)}
+                  className="px-3 py-2 text-sm border rounded-lg">
+                  <option>Manhã</option><option>Tarde</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleReagendar} disabled={saving || !novaData}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-1.5 rounded-lg text-sm flex items-center justify-center">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
+                </button>
+                <button onClick={() => setShowReagendar(false)} className="flex-1 border py-1.5 rounded-lg text-sm">Cancelar</button>
               </div>
             </div>
           )}

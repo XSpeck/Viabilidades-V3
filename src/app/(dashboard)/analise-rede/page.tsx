@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, avancarStatusDemanda, deleteDemanda } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, avancarStatusDemanda, deleteDemanda } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -182,17 +182,28 @@ export default function AnaliseRedePage() {
 
 // ── Card de demanda ───────────────────────────────────────
 function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefresh: () => void }) {
-  const [concluindo, setConcluindo]     = useState(false);
-  const [obsConc, setObsConc]           = useState("");
-  const [showObsConc, setShowObsConc]   = useState(false);
-  const [saving, setSaving]             = useState(false);
+  const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  async function handleAvancar() {
-    if (d.status === "em_andamento" && !showObsConc) {
-      setShowObsConc(true);
-      return;
-    }
+  // Agendar (aberta → em_andamento)
+  const [showAgendar, setShowAgendar]     = useState(false);
+  const [dataAgendar, setDataAgendar]     = useState("");
+  const [periodoAgendar, setPeriodoAgendar] = useState("Manhã");
+
+  // Concluir (em_andamento → concluida)
+  const [showObsConc, setShowObsConc]     = useState(false);
+  const [obsConc, setObsConc]             = useState("");
+
+  async function handleAgendar() {
+    if (!dataAgendar) { alert("Informe a data!"); return; }
+    setSaving(true);
+    try {
+      await agendarDemanda(d.id, dataAgendar, periodoAgendar);
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
+  async function handleConcluir() {
     setSaving(true);
     try {
       await avancarStatusDemanda(d, obsConc || undefined);
@@ -203,7 +214,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   async function handleReabrir() {
     setSaving(true);
     try {
-      await updateDemanda(d.id, { status: "aberta", data_conclusao: undefined, obs_conclusao: undefined });
+      await updateDemanda(d.id, { status: "aberta", data_agendamento: undefined, periodo_agendamento: undefined, data_conclusao: undefined, obs_conclusao: undefined });
       onRefresh();
     } finally { setSaving(false); }
   }
@@ -215,11 +226,6 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
       onRefresh();
     } finally { setSaving(false); }
   }
-
-  const acaoLabel = d.status === "aberta" ? "▶ Iniciar" : "✅ Concluir";
-  const acaoColor = d.status === "aberta"
-    ? "bg-blue-600 hover:bg-blue-700 text-white"
-    : "bg-green-600 hover:bg-green-700 text-white";
 
   return (
     <div className={`p-4 ${d.status === "concluida" ? "opacity-70" : ""}`}>
@@ -247,6 +253,13 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             <p className="text-xs text-gray-500 font-mono">📍 {locationToPlusCode(d.local)}</p>
           )}
 
+          {/* Data agendada */}
+          {d.data_agendamento && (
+            <p className="text-xs text-indigo-600 font-medium">
+              📅 {new Date(d.data_agendamento + "T12:00:00").toLocaleDateString("pt-BR")} — {d.periodo_agendamento}
+            </p>
+          )}
+
           {/* Meta */}
           <p className="text-xs text-gray-400 mt-1">
             Criado em {formatDateTime(d.data_criacao)} por {d.criado_por}
@@ -263,11 +276,16 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
         {/* Ações */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {d.status !== "concluida" && (
-            <button onClick={handleAvancar} disabled={saving}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${acaoColor} disabled:opacity-50`}>
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3" />}
-              {acaoLabel}
+          {d.status === "aberta" && (
+            <button onClick={() => { setShowAgendar(!showAgendar); setShowObsConc(false); }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50">
+              <ChevronRight className="w-3 h-3" /> 📅 Agendar
+            </button>
+          )}
+          {d.status === "em_andamento" && (
+            <button onClick={() => { setShowObsConc(!showObsConc); setShowAgendar(false); }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50">
+              <ChevronRight className="w-3 h-3" /> ✅ Concluir
             </button>
           )}
           {d.status === "concluida" && (
@@ -296,18 +314,42 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
         </div>
       </div>
 
-      {/* Textarea de obs ao concluir */}
+      {/* Form agendar */}
+      {showAgendar && (
+        <div className="mt-3 space-y-2 border border-indigo-200 rounded-lg p-3 bg-indigo-50">
+          <p className="text-xs font-semibold text-indigo-800">📅 Agendar para a agenda técnica</p>
+          <div className="flex gap-2">
+            <input type="date" value={dataAgendar} onChange={(e) => setDataAgendar(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <select value={periodoAgendar} onChange={(e) => setPeriodoAgendar(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option>Manhã</option><option>Tarde</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAgendar} disabled={saving || !dataAgendar}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
+            </button>
+            <button onClick={() => setShowAgendar(false)}
+              className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Form concluir */}
       {showObsConc && (
         <div className="mt-3 space-y-2">
           <textarea
             placeholder="Observação de conclusão (opcional)..."
-            value={obsConc}
-            onChange={(e) => setObsConc(e.target.value)}
+            value={obsConc} onChange={(e) => setObsConc(e.target.value)}
             rows={2}
             className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
           />
           <div className="flex gap-2">
-            <button onClick={handleAvancar} disabled={saving}
+            <button onClick={handleConcluir} disabled={saving}
               className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "✅ Confirmar conclusão"}
             </button>

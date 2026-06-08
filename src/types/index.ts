@@ -164,6 +164,8 @@ export interface DemandaRede {
   status: StatusDemanda;
   criado_por: string;
   data_criacao: string;
+  data_agendamento?: string;
+  periodo_agendamento?: string;
   data_conclusao?: string;
   obs_conclusao?: string;
 }
