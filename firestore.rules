@@ -6,15 +6,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userNivel() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivel;
-    }
-
     function isAdmin() {
-      return isAuth() && userNivel() == 1;
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.nivel == 1;
     }
 
-    // Usuários — cada um lê o próprio doc, admin lista todos
+    // Usuários — cada um lê o próprio doc, admin lista e gerencia todos
     match /users/{uid} {
       allow get: if isAuth() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
@@ -23,28 +19,32 @@ service cloud.firestore {
 
     // Viabilizações
     match /viabilizacoes/{id} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAdmin();
+      allow read, create, update: if isAuth();
+      allow delete: if isAuth();
     }
 
-    // Prédios atendidos — leitura para todos, escrita para admin
+    // Prédios atendidos
     match /predios_atendidos/{id} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if isAuth();
     }
 
-    // Prédios sem viabilidade — leitura para todos, escrita para admin
+    // Prédios sem viabilidade
     match /predios_sem_viabilidade/{id} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if isAuth();
     }
 
-    // CTOs — leitura para todos autenticados, escrita apenas admin
+    // CTOs
     match /ctos/{id} {
       allow read: if isAuth();
-      allow write: if isAuth(); // validação de nivel feita no app
+      allow write: if isAuth();
+    }
+
+    // Redes distribuidoras
+    match /redes_distribuidoras/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth();
     }
   }
 }
