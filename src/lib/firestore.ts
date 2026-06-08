@@ -707,6 +707,26 @@ export async function getPrediosAtendidos(): Promise<PredioAtendido[]> {
   return snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
 }
 
+export async function createPredioAtendido(
+  data: Omit<PredioAtendido, "id" | "data_estruturacao">
+): Promise<void> {
+  await addDoc(collection(db, "predios_atendidos"), {
+    ...stripUndefined(data as Record<string, unknown>),
+    data_estruturacao: serverTimestamp(),
+  });
+}
+
+export async function updatePredioAtendido(
+  id: string,
+  data: Partial<Omit<PredioAtendido, "id">>
+): Promise<void> {
+  await updateDoc(doc(db, "predios_atendidos", id), stripUndefined(data as Record<string, unknown>));
+}
+
+export async function deletePredioAtendido(id: string): Promise<void> {
+  await deleteDoc(doc(db, "predios_atendidos", id));
+}
+
 export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]> {
   const q = query(
     collection(db, "predios_sem_viabilidade"),
@@ -714,6 +734,26 @@ export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
+}
+
+export async function createPredioSemViabilidade(
+  data: Omit<PredioSemViabilidade, "id" | "data_registro">
+): Promise<void> {
+  await addDoc(collection(db, "predios_sem_viabilidade"), {
+    ...stripUndefined(data as Record<string, unknown>),
+    data_registro: serverTimestamp(),
+  });
+}
+
+export async function updatePredioSemViabilidade(
+  id: string,
+  data: Partial<Omit<PredioSemViabilidade, "id">>
+): Promise<void> {
+  await updateDoc(doc(db, "predios_sem_viabilidade", id), stripUndefined(data as Record<string, unknown>));
+}
+
+export async function deletePredioSemViabilidade(id: string): Promise<void> {
+  await deleteDoc(doc(db, "predios_sem_viabilidade", id));
 }
 
 // =====================
