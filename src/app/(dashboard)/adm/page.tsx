@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { parseCtoKml, importCtosToFirestore, countCtosInFirestore } from "@/lib/ctos";
 import { importRedeToFirestore, listRedesImportadas, EMPRESAS } from "@/lib/redes";
-import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network } from "lucide-react";
+import { listUsers, createUser, updateUser, deleteUser } from "@/lib/users";
+import type { AppUser, UserCargo } from "@/types";
+import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon } from "lucide-react";
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -33,15 +35,11 @@ export default function AdminPage() {
         {/* Importação de CTOs */}
         <ImportCtos />
 
-        {/* Placeholder para futuras seções */}
-        <PlaceholderCard
-          icon="👥"
-          title="Gestão de Usuários"
-          desc="Criar, editar e remover usuários do sistema"
-        />
-
         {/* Importação de redes das distribuidoras */}
         <ImportRedes />
+
+        {/* Gestão de Usuários — full width */}
+        <GestaoUsuarios />
 
         <PlaceholderCard
           icon="🔔"
@@ -363,6 +361,271 @@ function ImportRedes() {
         </button>
       </div>
     </div>
+  );
+}
+
+// =====================
+// Card: Gestão de Usuários
+// =====================
+const CARGO_LABEL: Record<UserCargo, string> = {
+  adm: "ADM",
+  auditor: "Auditor",
+  agendamento: "Agendamento",
+  usuario: "Usuário",
+};
+const CARGO_COLOR: Record<UserCargo, string> = {
+  adm: "bg-purple-100 text-purple-700",
+  auditor: "bg-blue-100 text-blue-700",
+  agendamento: "bg-green-100 text-green-700",
+  usuario: "bg-gray-100 text-gray-700",
+};
+
+type ModalState = { mode: "create" } | { mode: "edit"; user: AppUser };
+
+function GestaoUsuarios() {
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<ModalState | null>(null);
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try { setUsers(await listUsers()); }
+    catch { alert("Erro ao carregar usuários."); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario" });
+    setFormError(null);
+    setModal({ mode: "create" });
+  }
+
+  function openEdit(u: AppUser) {
+    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario") });
+    setFormError(null);
+    setModal({ mode: "edit", user: u });
+  }
+
+  async function handleSave() {
+    if (!form.nome.trim()) { setFormError("Informe o nome."); return; }
+    if (modal?.mode === "create") {
+      if (!form.email.trim()) { setFormError("Informe o email."); return; }
+      if (form.senha.length < 6) { setFormError("Senha deve ter no mínimo 6 caracteres."); return; }
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (modal?.mode === "create") {
+        await createUser(form.email, form.senha, form.nome, form.cargo);
+      } else if (modal?.mode === "edit") {
+        await updateUser(modal.user.uid, { nome: form.nome, cargo: form.cargo });
+      }
+      setModal(null);
+      await load();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(u: AppUser) {
+    setSaving(true);
+    try {
+      await deleteUser(u.uid);
+      setConfirmDelete(null);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao excluir.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden lg:col-span-2">
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-indigo-600" />
+            <div>
+              <h3 className="font-semibold text-gray-800">Gestão de Usuários</h3>
+              <p className="text-xs text-gray-500">Criar, editar e remover usuários do sistema</p>
+            </div>
+          </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg"
+          >
+            <Plus className="w-4 h-4" /> Novo usuário
+          </button>
+        </div>
+
+        <div className="p-5">
+          {loading ? (
+            <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+              <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">Nenhum usuário cadastrado.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                    <th className="text-left py-2 pr-4 font-medium">Nome</th>
+                    <th className="text-left py-2 pr-4 font-medium">Email</th>
+                    <th className="text-left py-2 pr-4 font-medium">Cargo</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const cargo: UserCargo = u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario");
+                    return (
+                      <tr key={u.uid} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="py-2.5 pr-4 font-medium text-gray-800">{u.nome}</td>
+                        <td className="py-2.5 pr-4 text-gray-500">{u.login}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CARGO_COLOR[cargo]}`}>
+                            {CARGO_LABEL[cargo]}
+                          </span>
+                        </td>
+                        <td className="py-2.5">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setConfirmDelete(u)} className="p-1.5 text-gray-400 hover:text-red-600 rounded">
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal criar / editar */}
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">
+              {modal.mode === "create" ? "Novo Usuário" : "Editar Usuário"}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Nome</label>
+                <input
+                  value={form.nome}
+                  onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="Nome completo"
+                />
+              </div>
+              {modal.mode === "create" && (
+                <>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      placeholder="email@empresa.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Senha</label>
+                    <input
+                      type="password"
+                      value={form.senha}
+                      onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Cargo</label>
+                <select
+                  value={form.cargo}
+                  onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value as UserCargo }))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="usuario">Usuário</option>
+                  <option value="auditor">Auditor</option>
+                  <option value="agendamento">Agendamento</option>
+                  <option value="adm">ADM</option>
+                </select>
+              </div>
+            </div>
+            {formError && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                {formError}
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setModal(null)}
+                className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {modal.mode === "create" ? "Criar" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de exclusão */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">Excluir usuário?</h3>
+            <p className="text-sm text-gray-600">
+              <strong>{confirmDelete.nome}</strong> ({confirmDelete.login}) será removido do sistema e não poderá mais fazer login.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDelete)}
+                disabled={saving}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

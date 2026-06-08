@@ -1,10 +1,12 @@
 export type UserNivel = 1 | 2;
+export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario";
 
 export interface AppUser {
   uid: string;
   nome: string;
   login: string;
   nivel: UserNivel;
+  cargo?: UserCargo;
 }
 
 export type TipoInstalacao = "FTTH" | "Prédio" | "Condomínio";

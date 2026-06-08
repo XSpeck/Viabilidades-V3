@@ -18,6 +18,7 @@ export async function getUserData(uid: string): Promise<AppUser | null> {
     nome: data.nome,
     login: data.login,
     nivel: data.nivel,
+    cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
   };
 }
 

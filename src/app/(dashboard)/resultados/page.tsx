@@ -675,13 +675,45 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== Fluxo de agendamento de instalação FTTH / FTTA ===== */}
-          {["FTTH", "Prédio"].includes(r.tipo_instalacao) && r.status_instalacao && (
+          {/* ===== Condomínio aprovado direto — dados da CTO ===== */}
+          {r.status === "aprovado" && r.tipo_instalacao === "Condomínio" && !r.status_predio && (
+            <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button
+                  onClick={() => copyToClipboard(
+                    [
+                      `CTO: ${r.cto_numero ?? "-"}`,
+                      r.olt ? `OLT: ${r.olt}` : "",
+                      `Portas: ${r.portas_disponiveis ?? "-"}`,
+                      `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
+                      `Distância: ${r.distancia_cliente ?? "-"}`,
+                      `Localização CTO: ${r.localizacao_caixa ?? "-"}`,
+                      r.observacoes ? `Obs: ${r.observacoes}` : "",
+                    ].filter(Boolean).join("\n"),
+                    "cond"
+                  )}
+                  className={`text-xs px-2 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 ${copied === "cond" ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied === "cond" ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
+              <p><strong>CTO:</strong> {r.cto_numero}</p>
+              {r.olt && <p><strong>OLT:</strong> {r.olt}</p>}
+              <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
+              <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
+              <p><strong>Distância:</strong> {r.distancia_cliente}</p>
+              <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
+              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+            </div>
+          )}
+
+          {/* ===== Fluxo de agendamento de instalação FTTH / Condomínio / FTTA ===== */}
+          {["FTTH", "Prédio", "Condomínio"].includes(r.tipo_instalacao) && r.status_instalacao && (
             <div className="space-y-2">
               {r.status_instalacao === "aguardando_proposta" && (
                 <div className="space-y-2">
                   <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
-                    ✅ {isFttaUtp ? "Viabilidade confirmada! Informe a data e período de preferência para a visita técnica." : "Viabilidade aprovada! Informe a data e período de preferência para a instalação."}
+                    ✅ Viabilidade aprovada! Informe a data e período de preferência para a instalação.
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -739,7 +771,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
               {r.status_instalacao === "agendado" && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1 text-sm">
-                  <p className="font-medium text-green-800">{isFttaUtp ? "📅 Visita agendada!" : "📅 Instalação agendada!"}</p>
+                  <p className="font-medium text-green-800">📅 Instalação agendada!</p>
                   <p>📆 Data: <strong>{r.data_instalacao ? new Date(r.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
                   <p>🕐 Período: {r.periodo_instalacao} · 👷 Técnico: {r.tecnico_instalacao}</p>
                 </div>
@@ -747,42 +779,10 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
 
               {r.status_instalacao === "instalado" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-800">{isFttaUtp ? `🎉 Visita concluída pelo técnico ${r.tecnico_instalacao ?? ""}!` : `🎉 Instalação concluída pelo técnico ${r.tecnico_instalacao ?? ""}!`}</p>
+                  <p className="font-medium text-blue-800">🎉 Instalação concluída pelo técnico {r.tecnico_instalacao ?? ""}!</p>
                   <p className="text-blue-700 mt-1 text-xs">Clique em "Arquivar" para arquivar este agendamento.</p>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ===== Condomínio aprovado direto ===== */}
-          {r.status === "aprovado" && r.tipo_instalacao === "Condomínio" && !r.status_predio && (
-            <div className="bg-green-50 rounded-lg p-3 space-y-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
-                <button
-                  onClick={() => copyToClipboard(
-                    [
-                      `CTO: ${r.cto_numero ?? "-"}`,
-                      r.olt ? `OLT: ${r.olt}` : "",
-                      `Portas: ${r.portas_disponiveis ?? "-"}`,
-                      `Menor RX: ${r.menor_rx ? r.menor_rx + " dBm" : "-"}`,
-                      `Distância: ${r.distancia_cliente ?? "-"}`,
-                      `Localização CTO: ${r.localizacao_caixa ?? "-"}`,
-                      r.observacoes ? `Obs: ${r.observacoes}` : "",
-                    ].filter(Boolean).join("\n"),
-                    "cond"
-                  )}
-                  className={`text-xs px-2 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 ${copied === "cond" ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
-                  {copied === "cond" ? "✓ Copiado!" : "📋 Copiar"}
-                </button>
-              </div>
-              <p><strong>CTO:</strong> {r.cto_numero}</p>
-              {r.olt && <p><strong>OLT:</strong> {r.olt}</p>}
-              <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
-              <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
-              <p><strong>Distância:</strong> {r.distancia_cliente}</p>
-              <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
-              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
             </div>
           )}
 
