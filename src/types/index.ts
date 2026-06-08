@@ -125,6 +125,7 @@ export interface Viabilizacao {
   data_auditoria?: string;
   data_finalizacao?: string;
   data_solicitacao_predio?: string;
+  notas_visita?: NotaAtividade[];
 }
 
 export interface PredioAtendido {
@@ -148,6 +149,17 @@ export interface PredioSemViabilidade {
   data_registro?: string;
 }
 
+export interface NotaAtividade {
+  texto: string;
+  data: string;
+  por: string;
+}
+
+export const TIPOS_SERVICO_REDE = [
+  "Troca de Splitter", "Melhoria de Sinal", "Lançamento de Fibra",
+  "Manutenção CTO", "Readequação", "Mutirão", "Migração", "Outro",
+] as const;
+
 export const TECNICOS_REDE = ["Eduardo", "Ulisses", "Zilli", "Andre"] as const;
 export type TecnicoRede = typeof TECNICOS_REDE[number];
 
@@ -168,4 +180,5 @@ export interface DemandaRede {
   periodo_agendamento?: string;
   data_conclusao?: string;
   obs_conclusao?: string;
+  notas_atividade?: NotaAtividade[];
 }

@@ -5,12 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
   getDemandasAgendadas, agendarDemanda, concluirDemanda,
+  addNotaDemanda, addNotaVisita, editarInfoDemanda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao, DemandaRede, PrioridadeDemanda } from "@/types";
-import { TECNICOS_REDE } from "@/types";
+import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade } from "@/types";
+import { TECNICOS_REDE, TIPOS_SERVICO_REDE } from "@/types";
 import {
-  RefreshCw, Loader2, ChevronLeft, ChevronRight, X, Pencil, Check,
+  RefreshCw, Loader2, ChevronLeft, ChevronRight, X, Pencil, Check, Plus,
 } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
@@ -595,6 +596,12 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
             </button>
           </ActionForm>
         )}
+
+        {/* Andamento */}
+        <NotasAndamento
+          notas={v.notas_visita ?? []}
+          onAdd={(texto) => addNotaVisita(v.id, texto, userName).then(onRefresh)}
+        />
       </div>
 
       {/* Footer de ações */}
@@ -624,12 +631,34 @@ type DemandaAction = "concluir" | "reagendar" | null;
 function DemandaModal({ d, onRefresh, onClose }: {
   d: DemandaRede; onRefresh: () => void; onClose: () => void;
 }) {
+  const { user } = useAuth();
   const [action, setAction]         = useState<DemandaAction>(null);
   const [saving, setSaving]         = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [obsConc, setObsConc]       = useState("");
   const [novaData, setNovaData]     = useState(d.data_agendamento ?? "");
   const [novoPeriodo, setNovoPeriodo] = useState(d.periodo_agendamento ?? "Manhã");
+
+  // Edit mode
+  const [editMode, setEditMode]     = useState(false);
+  const [editTipo, setEditTipo]     = useState(d.tipo);
+  const [editPrior, setEditPrior]   = useState(d.prioridade);
+  const [editDesc, setEditDesc]     = useState(d.descricao);
+  const [editLocal, setEditLocal]   = useState(d.local ?? "");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  async function handleSaveEdit() {
+    setSavingEdit(true);
+    try {
+      await editarInfoDemanda(d.id, {
+        tipo: editTipo, prioridade: editPrior, descricao: editDesc,
+        local: editLocal || undefined,
+      });
+      setEditMode(false);
+      onRefresh();
+    } catch { alert("Erro ao salvar."); }
+    finally { setSavingEdit(false); }
+  }
 
   function done(msg: string) {
     setSuccessMsg(msg);
@@ -670,13 +699,67 @@ function DemandaModal({ d, onRefresh, onClose }: {
           </div>
           <p className="text-white/70 text-sm">👷 {d.tecnico}</p>
         </div>
-        <button onClick={onClose} className="text-white/60 hover:text-white ml-4 mt-0.5 shrink-0 transition-colors">
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          <button onClick={() => { setEditMode((e) => !e); setAction(null); }}
+            title="Editar informações"
+            className="text-white/60 hover:text-white transition-colors">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+        {/* Modo edição */}
+        {editMode && (
+          <div className="border-2 border-indigo-200 bg-indigo-50 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-indigo-800">✏️ Editar informações</p>
+              <button onClick={() => setEditMode(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Tipo de serviço</label>
+                <select value={editTipo} onChange={(e) => setEditTipo(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                  {TIPOS_SERVICO_REDE.map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Prioridade</label>
+                <select value={editPrior} onChange={(e) => setEditPrior(e.target.value as DemandaRede["prioridade"])}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                  <option value="baixa">Baixa</option>
+                  <option value="media">Média</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Local</label>
+                <input value={editLocal} onChange={(e) => setEditLocal(e.target.value)}
+                  placeholder="Plus code ou coordenadas"
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Descrição</label>
+                <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+            </div>
+            <button onClick={handleSaveEdit} disabled={savingEdit}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+              {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Salvar alterações</>}
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <InfoBox title="📋 Serviço">
             <p className="font-semibold text-gray-800">{d.tipo}</p>
@@ -734,6 +817,12 @@ function DemandaModal({ d, onRefresh, onClose }: {
             </button>
           </ActionForm>
         )}
+
+        {/* Andamento */}
+        <NotasAndamento
+          notas={d.notas_atividade ?? []}
+          onAdd={(texto) => addNotaDemanda(d.id, texto, user?.nome ?? "—").then(onRefresh)}
+        />
       </div>
 
       {/* Footer */}
@@ -750,6 +839,72 @@ function DemandaModal({ d, onRefresh, onClose }: {
         </div>
       )}
     </ModalShell>
+  );
+}
+
+// ─── Andamento / log de notas ─────────────────────────────────────
+function NotasAndamento({ notas, onAdd }: {
+  notas: NotaAtividade[];
+  onAdd: (texto: string) => Promise<void>;
+}) {
+  const [texto, setTexto]   = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleAdd() {
+    if (!texto.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(texto.trim());
+      setTexto("");
+    } catch { alert("Erro ao salvar nota."); }
+    finally { setSaving(false); }
+  }
+
+  const sorted = [...notas].sort((a, b) => b.data.localeCompare(a.data));
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-2">
+        <span className="text-sm font-bold text-gray-700">📋 Andamento</span>
+        <span className="text-xs text-gray-400 font-medium">{notas.length} nota(s)</span>
+      </div>
+
+      {/* Timeline */}
+      {sorted.length > 0 && (
+        <div className="divide-y">
+          {sorted.map((n, i) => (
+            <div key={i} className="flex gap-3 px-4 py-3">
+              <div className="flex flex-col items-center shrink-0 pt-1">
+                <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                {i < sorted.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+              </div>
+              <div className="flex-1 min-w-0 pb-1">
+                <p className="text-sm text-gray-800 leading-snug">{n.texto}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {n.por} · {new Date(n.data).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add note */}
+      <div className="px-4 py-3 bg-white border-t flex gap-2 items-end">
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
+          placeholder="Adicionar nota de andamento… (Enter para enviar)"
+          rows={2}
+          className="flex-1 px-3 py-2 text-sm border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        />
+        <button onClick={handleAdd} disabled={saving || !texto.trim()}
+          className="shrink-0 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg transition-colors">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
   );
 }
 

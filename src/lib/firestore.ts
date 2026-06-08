@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   Timestamp,
   deleteField,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type {
@@ -23,6 +24,7 @@ import type {
   MensagemViabilizacao,
   DemandaRede,
   StatusDemanda,
+  NotaAtividade,
 } from "@/types";
 
 // =====================
@@ -776,4 +778,21 @@ export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): 
 
 export async function deleteDemanda(id: string): Promise<void> {
   await deleteDoc(doc(db, "demandas_rede", id));
+}
+
+export async function editarInfoDemanda(
+  id: string,
+  data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local">,
+): Promise<void> {
+  await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
+}
+
+export async function addNotaDemanda(id: string, texto: string, por: string): Promise<void> {
+  const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
+  await updateDoc(doc(db, "demandas_rede", id), { notas_atividade: arrayUnion(nota) });
+}
+
+export async function addNotaVisita(id: string, texto: string, por: string): Promise<void> {
+  const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
+  await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
 }
