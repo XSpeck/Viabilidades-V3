@@ -302,23 +302,15 @@ export default function AgendaPage() {
                       </div>
                     </td>
                     {allTecnicos.map((tec) => {
-                      const vs      = vCell(tec, periodo);
-                      const ds      = dCell(tec, periodo);
-                      const total   = vs.length + ds.length;
-                      const conflict = total > 1;
+                      const vs    = vCell(tec, periodo);
+                      const ds    = dCell(tec, periodo);
+                      const total = vs.length + ds.length;
                       return (
-                        <td key={tec}
-                          className={`py-3 px-3 border-r last:border-r-0 align-top min-h-[80px] ${conflict ? "bg-red-50" : ""}`}>
+                        <td key={tec} className="py-3 px-3 border-r last:border-r-0 align-top min-h-[80px]">
                           {total === 0 ? (
                             <div className="h-12 flex items-center justify-center text-gray-200 text-lg select-none">—</div>
                           ) : (
-                            <div className="space-y-1.5">
-                              {conflict && (
-                                <p className="text-xs text-red-500 font-semibold text-center mb-1">⚠️ Conflito</p>
-                              )}
-                              {vs.map((v) => <VisitaChip key={v.id} v={v} userName={user!.nome} onRefresh={load} />)}
-                              {ds.map((d) => <DemandaChip key={d.id} d={d} onRefresh={load} />)}
-                            </div>
+                            <CellStack vs={vs} ds={ds} userName={user!.nome} onRefresh={load} />
                           )}
                         </td>
                       );
@@ -329,6 +321,42 @@ export default function AgendaPage() {
             </table>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Célula com múltiplos itens ───────────────────────────────────
+const CELL_LIMIT = 2;
+
+function CellStack({ vs, ds, userName, onRefresh }: {
+  vs: Viabilizacao[]; ds: DemandaRede[];
+  userName: string; onRefresh: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const chips = [
+    ...vs.map((v) => <VisitaChip key={`v-${v.id}`} v={v} userName={userName} onRefresh={onRefresh} />),
+    ...ds.map((d) => <DemandaChip key={`d-${d.id}`} d={d} onRefresh={onRefresh} />),
+  ];
+
+  const visible = expanded ? chips : chips.slice(0, CELL_LIMIT);
+  const hidden  = chips.length - CELL_LIMIT;
+
+  return (
+    <div className="space-y-1.5">
+      {visible}
+      {!expanded && hidden > 0 && (
+        <button onClick={() => setExpanded(true)}
+          className="w-full py-1 text-xs font-semibold text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">
+          +{hidden} mais
+        </button>
+      )}
+      {expanded && hidden > 0 && (
+        <button onClick={() => setExpanded(false)}
+          className="w-full py-1 text-xs text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+          Mostrar menos ▲
+        </button>
       )}
     </div>
   );
