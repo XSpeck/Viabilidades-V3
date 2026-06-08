@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
 import { getDemandas, createDemanda, updateDemanda, avancarStatusDemanda, deleteDemanda } from "@/lib/firestore";
-import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
+import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
-import { Loader2, Plus, RefreshCw, Trash2, ChevronRight } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle } from "lucide-react";
+
+const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
 
 // ── Constantes ────────────────────────────────────────────
 const TIPOS_SERVICO = [
@@ -320,6 +323,8 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 }
 
 // ── Modal nova demanda ────────────────────────────────────
+type InputMethod = "pluscode" | "coords";
+
 function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   auditorNome: string; onClose: () => void; onSaved: () => void;
 }) {
@@ -327,9 +332,34 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   const [tipo, setTipo]             = useState(TIPOS_SERVICO[0]);
   const [tipoCustom, setTipoCustom] = useState("");
   const [prioridade, setPrioridade] = useState<PrioridadeDemanda>("media");
-  const [local, setLocal]           = useState("");
   const [descricao, setDescricao]   = useState("");
   const [saving, setSaving]         = useState(false);
+
+  // ── Localização ──────────────────────────────────────────
+  const [inputMethod, setInputMethod]         = useState<InputMethod>("pluscode");
+  const [locationInput, setLocationInput]     = useState("");
+  const [validatedPlusCode, setValidatedPlusCode] = useState<string | null>(null);
+  const [inputValid, setInputValid]           = useState<boolean | null>(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  useEffect(() => {
+    if (!locationInput) { setInputValid(null); setValidatedPlusCode(null); return; }
+    if (inputMethod === "pluscode") {
+      const valid = validatePlusCode(locationInput);
+      setInputValid(valid);
+      setValidatedPlusCode(valid ? locationInput.trim().toUpperCase() : null);
+    } else {
+      const parts = locationInput.split(",");
+      if (parts.length === 2) {
+        const lat = parseFloat(parts[0].trim());
+        const lon = parseFloat(parts[1].trim());
+        if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          setInputValid(true);
+          setValidatedPlusCode(`${lat.toFixed(6)},${lon.toFixed(6)}`);
+        } else { setInputValid(false); setValidatedPlusCode(null); }
+      } else { setInputValid(false); setValidatedPlusCode(null); }
+    }
+  }, [locationInput, inputMethod]);
 
   async function handleSave() {
     const tipoFinal = tipo === "Outro" ? tipoCustom.trim() : tipo;
@@ -341,7 +371,7 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
         tecnico,
         tipo: tipoFinal,
         prioridade,
-        local: local.trim().toUpperCase() || undefined,
+        local: validatedPlusCode ?? undefined,
         descricao: descricao.trim(),
         status: "aberta",
         criado_por: auditorNome,
@@ -353,74 +383,121 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-5 rounded-t-2xl flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white">🔧 Nova Demanda de Rede</h3>
-          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
-        </div>
+    <>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-5 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+            <h3 className="text-lg font-bold text-white">🔧 Nova Demanda de Rede</h3>
+            <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+          </div>
 
-        <div className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Técnico *</label>
-              <select value={tecnico} onChange={(e) => setTecnico(e.target.value as TecnicoRede)}
-                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
-              </select>
+          <div className="p-5 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Técnico *</label>
+                <select value={tecnico} onChange={(e) => setTecnico(e.target.value as TecnicoRede)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Prioridade *</label>
+                <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as PrioridadeDemanda)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="baixa">Baixa</option>
+                  <option value="media">Média</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
             </div>
+
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Prioridade *</label>
-              <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as PrioridadeDemanda)}
+              <label className="block text-xs text-gray-500 mb-1">Tipo de serviço *</label>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)}
                 className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="baixa">Baixa</option>
-                <option value="media">Média</option>
-                <option value="alta">Alta</option>
-                <option value="urgente">Urgente</option>
+                {TIPOS_SERVICO.map((t) => <option key={t}>{t}</option>)}
               </select>
+              {tipo === "Outro" && (
+                <input type="text" placeholder="Descreva o tipo..." value={tipoCustom}
+                  onChange={(e) => setTipoCustom(e.target.value)}
+                  className="mt-2 w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              )}
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Tipo de serviço *</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)}
-              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {TIPOS_SERVICO.map((t) => <option key={t}>{t}</option>)}
-            </select>
-            {tipo === "Outro" && (
-              <input type="text" placeholder="Descreva o tipo..." value={tipoCustom}
-                onChange={(e) => setTipoCustom(e.target.value)}
-                className="mt-2 w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-            )}
-          </div>
+            {/* ── Localização ── */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Localização (opcional)</label>
+              <div className="flex gap-2 flex-wrap mb-2">
+                {(["pluscode", "coords"] as InputMethod[]).map((m) => (
+                  <button key={m} type="button"
+                    onClick={() => { setInputMethod(m); setLocationInput(""); setInputValid(null); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${inputMethod === m ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                    {m === "pluscode" ? "Plus Code" : "Coordenadas"}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setShowLocationPicker(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                  🛰️ Selecionar no Mapa
+                </button>
+              </div>
+              <input
+                type="text"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value.toUpperCase())}
+                placeholder={inputMethod === "pluscode" ? "Ex: 8J3G+WGV" : "Ex: -28.695133, -49.373710"}
+                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 font-mono transition-colors ${
+                  inputValid === null ? "border-gray-300 focus:ring-indigo-400"
+                  : inputValid ? "border-green-400 focus:ring-green-400 bg-green-50"
+                  : "border-red-400 focus:ring-red-400 bg-red-50"
+                }`}
+              />
+              {inputValid === true && (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> Localização válida — {validatedPlusCode}
+                </p>
+              )}
+              {inputValid === false && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <XCircle className="w-3.5 h-3.5" /> Formato inválido
+                </p>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Localização (Plus Code, opcional)</label>
-            <input type="text" placeholder="Ex: 8J3G+WGV" value={local}
-              onChange={(e) => setLocal(e.target.value.toUpperCase())}
-              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono" />
-          </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Descrição *</label>
+              <textarea placeholder="Detalhe o serviço a ser executado..."
+                value={descricao} onChange={(e) => setDescricao(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Descrição *</label>
-            <textarea placeholder="Detalhe o serviço a ser executado..."
-              value={descricao} onChange={(e) => setDescricao(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar demanda"}
-            </button>
-            <button onClick={onClose}
-              className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-              Cancelar
-            </button>
+            <div className="flex gap-2 pt-1">
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar demanda"}
+              </button>
+              <button onClick={onClose}
+                className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {showLocationPicker && (
+        <LocationPicker
+          onConfirm={(code) => {
+            setLocationInput(code);
+            setInputMethod("pluscode");
+            setInputValid(true);
+            setValidatedPlusCode(code);
+            setShowLocationPicker(false);
+          }}
+          onClose={() => setShowLocationPicker(false)}
+        />
+      )}
+    </>
   );
 }
