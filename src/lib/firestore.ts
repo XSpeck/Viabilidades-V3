@@ -29,6 +29,29 @@ import type {
 } from "@/types";
 
 // =====================
+// Session cache (5 min TTL) — evita releituras a cada navegação
+// =====================
+const CACHE_TTL = 5 * 60 * 1000;
+
+function getCached<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw) as { data: T; ts: number };
+    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function setCache<T>(key: string, data: T): void {
+  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
+function bustCache(...keys: string[]): void {
+  try { keys.forEach((k) => sessionStorage.removeItem(k)); } catch {}
+}
+
+// =====================
 // Helpers
 // =====================
 
@@ -703,9 +726,13 @@ export async function corrigirDadosViabilizacao(
 // =====================
 
 export async function getPrediosAtendidos(): Promise<PredioAtendido[]> {
+  const cached = getCached<PredioAtendido[]>("viab_predios_atendidos_v1");
+  if (cached) return cached;
   const q = query(collection(db, "predios_atendidos"), orderBy("data_estruturacao", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
+  const data = snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
+  setCache("viab_predios_atendidos_v1", data);
+  return data;
 }
 
 export async function createPredioAtendido(
@@ -715,6 +742,7 @@ export async function createPredioAtendido(
     ...stripUndefined(data as Record<string, unknown>),
     data_estruturacao: serverTimestamp(),
   });
+  bustCache("viab_predios_atendidos_v1");
 }
 
 export async function updatePredioAtendido(
@@ -722,10 +750,12 @@ export async function updatePredioAtendido(
   data: Partial<Omit<PredioAtendido, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_atendidos", id), stripUndefined(data as Record<string, unknown>));
+  bustCache("viab_predios_atendidos_v1");
 }
 
 export async function deletePredioAtendido(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_atendidos", id));
+  bustCache("viab_predios_atendidos_v1");
 }
 
 export async function deleteAllPrediosAtendidos(): Promise<void> {
@@ -736,6 +766,7 @@ export async function deleteAllPrediosAtendidos(): Promise<void> {
     snap.docs.slice(i, i + CHUNK).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
+  bustCache("viab_predios_atendidos_v1");
 }
 
 export async function batchCreatePrediosAtendidos(
@@ -752,15 +783,20 @@ export async function batchCreatePrediosAtendidos(
     await batch.commit();
     onProgress?.(Math.min(i + CHUNK, items.length), items.length);
   }
+  bustCache("viab_predios_atendidos_v1");
 }
 
 export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]> {
+  const cached = getCached<PredioSemViabilidade[]>("viab_predios_sem_viab_v1");
+  if (cached) return cached;
   const q = query(
     collection(db, "predios_sem_viabilidade"),
     orderBy("data_registro", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
+  const data = snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
+  setCache("viab_predios_sem_viab_v1", data);
+  return data;
 }
 
 export async function createPredioSemViabilidade(
@@ -770,6 +806,7 @@ export async function createPredioSemViabilidade(
     ...stripUndefined(data as Record<string, unknown>),
     data_registro: serverTimestamp(),
   });
+  bustCache("viab_predios_sem_viab_v1");
 }
 
 export async function updatePredioSemViabilidade(
@@ -777,10 +814,12 @@ export async function updatePredioSemViabilidade(
   data: Partial<Omit<PredioSemViabilidade, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_sem_viabilidade", id), stripUndefined(data as Record<string, unknown>));
+  bustCache("viab_predios_sem_viab_v1");
 }
 
 export async function deletePredioSemViabilidade(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_sem_viabilidade", id));
+  bustCache("viab_predios_sem_viab_v1");
 }
 
 // =====================
@@ -801,17 +840,23 @@ export async function atualizarObsAgendamento(id: string, obs: string): Promise<
 // =====================
 
 export async function getDemandas(): Promise<DemandaRede[]> {
+  const cached = getCached<DemandaRede[]>("viab_demandas_rede_v1");
+  if (cached) return cached;
   const q = query(collection(db, "demandas_rede"), orderBy("data_criacao", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fromFirestore<DemandaRede>(d));
+  const data = snap.docs.map((d) => fromFirestore<DemandaRede>(d));
+  setCache("viab_demandas_rede_v1", data);
+  return data;
 }
 
 export async function createDemanda(data: Omit<DemandaRede, "id">): Promise<void> {
   await addDoc(collection(db, "demandas_rede"), stripUndefined(data as Record<string, unknown>));
+  bustCache("viab_demandas_rede_v1");
 }
 
 export async function updateDemanda(id: string, data: Partial<DemandaRede>): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
+  bustCache("viab_demandas_rede_v1");
 }
 
 export async function agendarDemanda(id: string, data: string, periodo: string): Promise<void> {
@@ -845,6 +890,7 @@ export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): 
 
 export async function deleteDemanda(id: string): Promise<void> {
   await deleteDoc(doc(db, "demandas_rede", id));
+  bustCache("viab_demandas_rede_v1");
 }
 
 export async function getDemandasArquivadas(): Promise<DemandaRede[]> {
