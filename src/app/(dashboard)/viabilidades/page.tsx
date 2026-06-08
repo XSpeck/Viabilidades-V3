@@ -7,6 +7,7 @@ import { locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { Loader2, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { canAccess } from "@/lib/access";
 
 const REFRESH_SECONDS = 30;
 
@@ -61,7 +62,7 @@ export default function ViabilidadesPage() {
     } finally { setPegando(null); }
   }
 
-  if (user?.nivel !== 1) {
+  if (!canAccess(user ?? null, "viabilidades")) {
     return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a auditores.</div>;
   }
 

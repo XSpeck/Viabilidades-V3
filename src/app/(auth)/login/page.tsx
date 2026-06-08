@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth";
+import { getCargo, CARGO_DEFAULT_ROUTE } from "@/lib/access";
 import { Lock, User, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -21,8 +22,8 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      await signIn(email, password);
-      router.push("/home");
+      const userData = await signIn(email, password);
+      router.push(CARGO_DEFAULT_ROUTE[getCargo(userData)]);
     } catch {
       setError("Login ou senha incorretos!");
     } finally {

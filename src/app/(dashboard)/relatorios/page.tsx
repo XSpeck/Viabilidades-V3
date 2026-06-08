@@ -7,6 +7,7 @@ import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Loader2, Download, Search, RefreshCw, MapPin } from "lucide-react";
+import { canAccess } from "@/lib/access";
 import dynamic from "next/dynamic";
 import type { MapPoint } from "@/components/relatorios/RelatorioMapa";
 
@@ -152,7 +153,7 @@ export default function RelatoriosPage() {
 
   useEffect(() => { if (user?.nivel === 1) load(); }, [user]);
 
-  if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   // ── Date filter ──────────────────────────────────────────────

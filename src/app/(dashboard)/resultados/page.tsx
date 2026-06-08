@@ -6,6 +6,7 @@ import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizac
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { canAccess } from "@/lib/access";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
 
 type StatusFilter =
@@ -37,6 +38,8 @@ export default function ResultadosPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (!canAccess(user ?? null, "resultados")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   async function loadHistorico() {
     if (!user || historicoReady) return;

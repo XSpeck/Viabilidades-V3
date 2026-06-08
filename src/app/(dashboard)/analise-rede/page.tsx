@@ -1,11 +1,12 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { canAccess } from "@/lib/access";
 
 export default function AnaliseRedePage() {
   const { user } = useAuth();
 
-  if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  if (!canAccess(user ?? null, "analise-rede")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   return (
     <div className="space-y-6">

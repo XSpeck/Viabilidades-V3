@@ -13,29 +13,37 @@ import {
   FileText,
   Network,
   LogOut,
-  Shield,
   Settings,
   Wrench,
 } from "lucide-react";
+import { canAccess, getCargo, CARGO_LABEL } from "@/lib/access";
+import type { UserCargo } from "@/types";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
-  adminOnly?: boolean;
+  page: string;
 }
 
 const navItems: NavItem[] = [
-  { href: "/home", label: "Solicitar Viabilização", icon: <Home className="w-4 h-4" /> },
-  { href: "/resultados", label: "Meus Resultados", icon: <BarChart2 className="w-4 h-4" /> },
-  { href: "/viabilidades", label: "Viabilidades", icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
-  { href: "/auditoria", label: "Auditoria", icon: <Search className="w-4 h-4" />, adminOnly: true },
-  { href: "/agenda", label: "Agenda FTTA/UTP", icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
-  { href: "/agenda-tecnica", label: "Agenda Técnica", icon: <Wrench className="w-4 h-4" />, adminOnly: true },
-  { href: "/relatorios", label: "Relatórios", icon: <FileText className="w-4 h-4" />, adminOnly: true },
-  { href: "/analise-rede", label: "Análise da Rede", icon: <Network className="w-4 h-4" />, adminOnly: true },
-  { href: "/adm", label: "Administração", icon: <Settings className="w-4 h-4" />, adminOnly: true },
+  { href: "/home",           label: "Solicitar Viabilização", icon: <Home className="w-4 h-4" />,         page: "home" },
+  { href: "/resultados",     label: "Meus Resultados",        icon: <BarChart2 className="w-4 h-4" />,    page: "resultados" },
+  { href: "/viabilidades",   label: "Viabilidades",           icon: <ClipboardList className="w-4 h-4" />, page: "viabilidades" },
+  { href: "/auditoria",      label: "Auditoria",              icon: <Search className="w-4 h-4" />,        page: "auditoria" },
+  { href: "/agenda",         label: "Agenda FTTA/UTP",        icon: <CalendarDays className="w-4 h-4" />, page: "agenda" },
+  { href: "/agenda-tecnica", label: "Agenda Técnica",         icon: <Wrench className="w-4 h-4" />,       page: "agenda-tecnica" },
+  { href: "/relatorios",     label: "Relatórios",             icon: <FileText className="w-4 h-4" />,     page: "relatorios" },
+  { href: "/analise-rede",   label: "Análise da Rede",        icon: <Network className="w-4 h-4" />,      page: "analise-rede" },
+  { href: "/adm",            label: "Administração",          icon: <Settings className="w-4 h-4" />,     page: "adm" },
 ];
+
+const CARGO_BADGE_COLOR: Record<UserCargo, string> = {
+  adm:         "text-purple-400",
+  auditor:     "text-yellow-400",
+  agendamento: "text-green-400",
+  usuario:     "text-gray-400",
+};
 
 export default function Sidebar() {
   const { user } = useAuth();
@@ -47,9 +55,7 @@ export default function Sidebar() {
     router.push("/login");
   }
 
-  const visibleItems = navItems.filter(
-    (item) => !item.adminOnly || user?.nivel === 1
-  );
+  const visibleItems = navItems.filter((item) => canAccess(user ?? null, item.page));
 
   return (
     <aside className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
@@ -67,12 +73,10 @@ export default function Sidebar() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-white truncate">{user?.nome}</p>
-            {user?.nivel === 1 ? (
-              <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
-                <Shield className="w-3 h-3" /> Admin
+            {user && (
+              <span className={`text-xs font-medium ${CARGO_BADGE_COLOR[getCargo(user)]}`}>
+                {CARGO_LABEL[getCargo(user)]}
               </span>
-            ) : (
-              <span className="text-xs text-gray-400">Usuário</span>
             )}
           </div>
         </div>

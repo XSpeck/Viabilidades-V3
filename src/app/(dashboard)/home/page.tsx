@@ -7,6 +7,7 @@ import { createViabilizacao, getPrediosAtendidos, getPrediosSemViabilidade } fro
 import { validatePlusCode, locationToPlusCode } from "@/lib/pluscode";
 import type { TipoInstalacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft } from "lucide-react";
+import { canAccess } from "@/lib/access";
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
 
@@ -64,6 +65,8 @@ export default function HomePage() {
       } else { setInputValid(false); setValidatedPlusCode(null); }
     }
   }, [locationInput, inputMethod]);
+
+  if (!canAccess(user ?? null, "home")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   function abrirModal() {
     setModalStep("tipo");

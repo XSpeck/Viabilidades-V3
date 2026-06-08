@@ -8,6 +8,7 @@ import {
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CalendarDays, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { canAccess } from "@/lib/access";
 
 // ─── Helpers de data ──────────────────────────────────────────────
 function toDay(iso: string) {
@@ -64,7 +65,7 @@ export default function AgendaPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  if (!canAccess(user ?? null, "agenda")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   // Unique technicians for filter
   const tecnicos = ["todos", ...Array.from(new Set(items.map((v) => v.tecnico_responsavel).filter(Boolean))) as string[]];

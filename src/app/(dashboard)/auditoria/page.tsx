@@ -12,6 +12,7 @@ import {
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw, Search } from "lucide-react";
+import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
 
@@ -33,7 +34,7 @@ export default function AuditoriaPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  if (!canAccess(user ?? null, "auditoria")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   const counts = {
     todos:      items.length,

@@ -7,11 +7,12 @@ import { importRedeToFirestore, listRedesImportadas, EMPRESAS } from "@/lib/rede
 import { listUsers, createUser, updateUser, deleteUser } from "@/lib/users";
 import type { AppUser, UserCargo } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon } from "lucide-react";
+import { canAccess } from "@/lib/access";
 
 export default function AdminPage() {
   const { user } = useAuth();
 
-  if (user?.nivel !== 1) {
+  if (!canAccess(user ?? null, "adm")) {
     return (
       <div className="text-center py-20 text-red-500">
         🚫 Acesso restrito a administradores.

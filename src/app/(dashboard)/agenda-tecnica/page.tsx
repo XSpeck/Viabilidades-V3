@@ -13,6 +13,7 @@ import {
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download } from "lucide-react";
+import { canAccess } from "@/lib/access";
 
 type FilterKey = "todos" | "proposta_enviada" | "aguardando_confirmacao" | "agendado" | "instalado";
 
@@ -73,7 +74,7 @@ export default function AgendaTecnicaPage() {
     } finally { setLoadingArq(false); }
   }
 
-  if (user?.nivel !== 1) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  if (!canAccess(user ?? null, "agenda-tecnica")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   const isUTPItem    = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
   const isFtthLike   = (v: Viabilizacao) => (v.tipo_instalacao === "FTTH" || v.tipo_instalacao === "Condomínio") && !isUTPItem(v);
