@@ -825,9 +825,12 @@ function GerenciarPrediosAtendidos() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Tecnologia *</label>
-                  <input value={form.tecnologia} onChange={(e) => setForm((f) => ({ ...f, tecnologia: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-                    placeholder="ex: GPON, XGSPON" />
+                  <select value={form.tecnologia} onChange={(e) => setForm((f) => ({ ...f, tecnologia: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                    <option value="">Selecione...</option>
+                    <option value="FTTA">FTTA</option>
+                    <option value="UTP">UTP</option>
+                  </select>
                 </div>
                 <div className="flex flex-col justify-end">
                   <label className="flex items-center gap-2 cursor-pointer py-2">
