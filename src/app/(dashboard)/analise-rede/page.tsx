@@ -14,13 +14,13 @@ const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"),
 
 // ── Constantes ────────────────────────────────────────────
 const TIPOS_SERVICO = [
-  "Splitter",
-  "Fusão",
-  "Puxada de cabo",
+  "Troca de Splitter",
+  "Melhoria de Sinal",
+  "Lançamento de Fibra",
   "Manutenção CTO",
-  "Manutenção ODN",
-  "Troca de equipamento",
-  "Levantamento de rede",
+  "Readequação",
+  "Mutirão",
+  "Migração",
   "Outro",
 ];
 
