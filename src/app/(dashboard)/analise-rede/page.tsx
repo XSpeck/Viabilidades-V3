@@ -11,6 +11,7 @@ import { TECNICOS_REDE } from "@/types";
 import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle } from "lucide-react";
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
+const DemandasMap    = dynamic(() => import("@/components/analise-rede/DemandasMap"),  { ssr: false });
 
 // ── Constantes ────────────────────────────────────────────
 const TIPOS_SERVICO = [
@@ -56,6 +57,7 @@ export default function AnaliseRedePage() {
   const [demandas, setDemandas]     = useState<DemandaRede[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showModal, setShowModal]   = useState(false);
+  const [showMap, setShowMap]       = useState(false);
   const [tecnicoTab, setTecnicoTab] = useState<"todos" | TecnicoRede>("todos");
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "em_andamento" | "concluida">("todas");
 
@@ -94,6 +96,12 @@ export default function AnaliseRedePage() {
             className="flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
+          <button onClick={() => setShowMap((s) => !s)}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${
+              showMap ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "hover:bg-gray-50 text-gray-700"
+            }`}>
+            🗺️ {showMap ? "Fechar mapa" : "Ver mapa"}
+          </button>
           <button onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
             <Plus className="w-4 h-4" /> Nova Demanda
@@ -114,6 +122,21 @@ export default function AnaliseRedePage() {
           </div>
         ))}
       </div>
+
+      {/* Mapa de demandas */}
+      {showMap && (
+        <div className="bg-white rounded-xl border shadow-sm p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-gray-800">🗺️ Mapa de Demandas</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {filtradas.filter((d) => d.local).length} de {filtradas.length} demanda(s) com localização · pin maior = maior prioridade
+              </p>
+            </div>
+          </div>
+          <DemandasMap demandas={filtradas} />
+        </div>
+      )}
 
       {/* Tabs técnico */}
       <div className="bg-white rounded-xl border overflow-hidden">
