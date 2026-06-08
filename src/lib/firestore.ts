@@ -720,3 +720,7 @@ export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
   const snap = await getDocs(collection(db, "viabilizacoes"));
   return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
 }
+
+export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
+  await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
+}
