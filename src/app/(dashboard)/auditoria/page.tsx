@@ -321,17 +321,19 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     finally { setLoading(false); }
   }
 
-  const isContestacao = v.status === "em_revisao" && v.revisao_tipo === "contestado";
+  const isContestacao       = v.status === "em_revisao"    && v.revisao_tipo === "contestado";
+  const isRevisandoContest  = v.status === "em_auditoria" && v.revisao_tipo === "contestado";
   const tipoIcon = tipoLocal === "FTTH" ? "🏠" : tipoLocal === "Prédio" ? "🏢" : "🏘️";
   const titulo = `${tipoIcon} ${nomeClienteLocal || "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : isContestacao ? "border-orange-400" : "border-indigo-400"}`}>
+    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : (isContestacao || isRevisandoContest) ? "border-orange-400" : "border-indigo-400"}`}>
       <button onClick={() => setOpen(!open)} className="w-full text-left px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="font-semibold text-gray-900">{titulo}</p>
           <div className="flex items-center gap-2 shrink-0">
-            {isContestacao && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
+            {isContestacao       && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
+            {isRevisandoContest  && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔁 Reanalisando</span>}
             <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
           </div>
         </div>
@@ -344,6 +346,17 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
           {successMsg && (
             <div className="col-span-2 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-green-800 text-sm font-medium">
               <span className="text-xl">🎉</span><span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* ── Banner de reanálise pós-contestação ── */}
+          {isRevisandoContest && !successMsg && (
+            <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm">
+              <p className="font-semibold text-orange-800">🔁 Reanalisando após contestação</p>
+              <p className="text-orange-700 text-xs mt-0.5">
+                O usuário contestou a decisão anterior
+                {v.status_anterior ? ` (${v.status_anterior})` : ""}. Analise as mensagens abaixo e tome uma nova decisão.
+              </p>
             </div>
           )}
 
@@ -448,7 +461,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
             {/* Ações gerais */}
             <div className="flex flex-wrap gap-2 pt-2">
-              {!v.status_predio && (
+              {!v.status_predio && !isRevisandoContest && (
                 <>
                   <button onClick={handleDevolver} disabled={loading}
                     className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
@@ -460,15 +473,17 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   </button>
                 </>
               )}
-              {confirmDelete ? (
-                <div className="flex gap-2">
-                  <button onClick={handleDelete} disabled={loading} className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg">Confirmar</button>
-                  <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 border rounded-lg">Cancelar</button>
-                </div>
-              ) : (
-                <button onClick={() => setConfirmDelete(true)} className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1">
-                  <Trash2 className="w-3 h-3" /> Excluir
-                </button>
+              {!isRevisandoContest && (
+                confirmDelete ? (
+                  <div className="flex gap-2">
+                    <button onClick={handleDelete} disabled={loading} className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg">Confirmar</button>
+                    <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 border rounded-lg">Cancelar</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1">
+                    <Trash2 className="w-3 h-3" /> Excluir
+                  </button>
+                )
               )}
             </div>
 
