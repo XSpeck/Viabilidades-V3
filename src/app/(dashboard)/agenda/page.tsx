@@ -279,17 +279,21 @@ function VisitaChip({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className={`w-full text-left bg-white border ${corBorder} rounded-lg px-2.5 py-2 hover:shadow-md hover:scale-[1.02] transition-all group`}>
+        className={`w-full text-left bg-white border ${corBorder} rounded-lg px-2.5 py-2 hover:shadow-md hover:scale-[1.02] transition-all`}>
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`w-2 h-2 rounded-full shrink-0 ${corDot}`} />
-          <span className="text-xs font-semibold text-gray-800 truncate flex-1">{v.predio_ftta ?? "Prédio"}</span>
+          <span className="text-xs font-semibold text-gray-800 truncate flex-1">
+            {v.predio_ftta ?? "Prédio"}
+          </span>
           {(v.giga || v.tecnologia_predio === "FTTA" || v.tipo_instalacao === "Condomínio") && (
             <span className="text-xs text-yellow-500 shrink-0">⚡</span>
           )}
+          <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${
+            tecnologia === "FTTA" ? "bg-blue-100 text-blue-700" :
+            tecnologia === "UTP"  ? "bg-green-100 text-green-700" :
+                                    "bg-orange-100 text-orange-700"
+          }`}>{tecnologia}</span>
         </div>
-        {v.nome_cliente_predio && (
-          <p className="text-xs text-gray-400 truncate mt-0.5 pl-3.5">{v.nome_cliente_predio}</p>
-        )}
       </button>
       {open && (
         <VisitaModal v={v} userName={userName} onRefresh={onRefresh} onClose={() => setOpen(false)} />
@@ -312,7 +316,6 @@ function DemandaChip({ d, onRefresh }: { d: DemandaRede; onRefresh: () => void }
             {PRIORIDADE_LABEL[d.prioridade]}
           </span>
         </div>
-        <p className="text-xs text-gray-400 truncate mt-0.5 pl-3.5">{d.descricao}</p>
       </button>
       {open && (
         <DemandaModal d={d} onRefresh={onRefresh} onClose={() => setOpen(false)} />
@@ -333,7 +336,7 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onMouseDown={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}>
         {children}
       </div>
