@@ -9,9 +9,10 @@ import {
   getPrediosAtendidos, createPredioAtendido, updatePredioAtendido, deletePredioAtendido,
   deleteAllPrediosAtendidos, batchCreatePrediosAtendidos,
   getPrediosSemViabilidade, createPredioSemViabilidade, updatePredioSemViabilidade, deletePredioSemViabilidade,
+  batchImportViabilizacoes,
 } from "@/lib/firestore";
-import type { AppUser, UserCargo, PredioAtendido, PredioSemViabilidade } from "@/types";
-import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle } from "lucide-react";
+import type { AppUser, UserCargo, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio } from "@/types";
+import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 export default function AdminPage() {
@@ -52,6 +53,9 @@ export default function AdminPage() {
 
         {/* Prédios sem viabilidade */}
         <GerenciarPrediosSemViabilidade />
+
+        {/* Importação Supabase */}
+        <ImportacaoSupabase />
 
         <PlaceholderCard
           icon="🔔"
@@ -681,6 +685,82 @@ function csvToPredios(rows: string[][], autor: string): PredioCSVItem[] {
       estruturado_por: autor,
       viabilizacao_id: "manual",
     }));
+}
+
+// ── Supabase CSV/TSV parser ───────────────────────────────────────
+function parseSupabaseTSVOrCSV(text: string): { headers: string[]; rows: string[][] } {
+  const firstLine = text.split(/\r?\n/)[0] ?? "";
+  if (firstLine.includes("\t")) {
+    const lines = text.split(/\r?\n/);
+    const headers = firstLine.split("\t").map((h) => h.trim().replace(/^"|"$/g, ""));
+    const rows = lines.slice(1)
+      .filter((l) => l.trim())
+      .map((l) => l.split("\t").map((v) => v.trim().replace(/^"|"$/g, "")));
+    return { headers, rows };
+  }
+  const all = parseCSV(text);
+  return all.length < 2 ? { headers: [], rows: [] } : { headers: all[0], rows: all.slice(1) };
+}
+
+function supabaseRowToViabilizacao(row: string[], headers: string[]): Viabilizacao | null {
+  const g = (col: string) => { const i = headers.indexOf(col); return i >= 0 ? (row[i]?.trim() ?? "") : ""; };
+  const s = (col: string): string | undefined => g(col) || undefined;
+  const b = (col: string): boolean | undefined => {
+    const v = g(col);
+    return v === "true" || v === "t" ? true : v === "false" || v === "f" ? false : undefined;
+  };
+  const n = (col: string): number | undefined => { const v = g(col); return v ? (parseInt(v) || undefined) : undefined; };
+  const d = (col: string): string | undefined => {
+    const v = g(col); if (!v) return undefined;
+    try { const dt = new Date(v); return isNaN(dt.getTime()) ? undefined : dt.toISOString(); } catch { return undefined; }
+  };
+
+  const id = g("id");
+  if (!id) return null;
+
+  return {
+    id,
+    usuario:            g("usuario") || "importado",
+    plus_code_cliente:  g("plus_code_cliente"),
+    tipo_instalacao:    (g("tipo_instalacao") || "FTTH") as TipoInstalacao,
+    urgente:            b("urgente") ?? false,
+    status:             (g("status") || "pendente") as StatusViabilizacao,
+    nome_cliente:          s("nome_cliente"),
+    auditor_responsavel:   s("auditor_responsavel"),
+    auditado_por:          s("auditado_por"),
+    status_predio:         s("status_predio") as StatusPredio | undefined,
+    status_busca:          s("status_busca"),
+    predio_ftta:           s("predio_ftta"),
+    andar_predio:          s("andar_predio"),
+    bloco_predio:          s("bloco_predio"),
+    cto_numero:            s("cto_numero"),
+    portas_disponiveis:    n("portas_disponiveis"),
+    menor_rx:              s("menor_rx"),
+    distancia_cliente:     s("distancia_cliente"),
+    localizacao_caixa:     s("localizacao_caixa"),
+    cdoi:                  s("cdoi"),
+    media_rx:              s("media_rx"),
+    nome_sindico:          s("nome_sindico"),
+    contato_sindico:       s("contato_sindico"),
+    nome_cliente_predio:   s("nome_cliente_predio"),
+    contato_cliente_predio:s("contato_cliente_predio"),
+    apartamento:           s("apartamento"),
+    obs_agendamento:       s("obs_agendamento"),
+    data_visita:           s("data_visita"),
+    periodo_visita:        s("periodo_visita"),
+    tecnico_responsavel:   s("tecnico_responsavel"),
+    tecnologia_predio:     s("tecnologia_predio"),
+    status_agendamento:    s("status_agendamento"),
+    data_agendamento:      d("data_agendamento"),
+    historico_reagendamento: s("historico_reagendamento"),
+    giga:                  b("giga"),
+    motivo_rejeicao:       s("motivo_rejeicao"),
+    observacoes:           s("observacoes"),
+    data_solicitacao:      d("data_solicitacao") ?? d("created_at"),
+    data_auditoria:        d("data_auditoria"),
+    data_finalizacao:      d("data_finalizacao"),
+    data_solicitacao_predio: d("data_solicitacao_predio"),
+  };
 }
 
 // =====================
@@ -1316,6 +1396,238 @@ function GerenciarPrediosSemViabilidade() {
               <button onClick={() => handleDelete(confirmDel)} disabled={saving}
                 className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// =====================
+// Card: Importação Supabase → Firebase
+// =====================
+const STATUS_VIAB_COLOR: Record<string, string> = {
+  pendente: "bg-yellow-100 text-yellow-700",
+  em_auditoria: "bg-blue-100 text-blue-700",
+  em_revisao: "bg-orange-100 text-orange-700",
+  aprovado: "bg-green-100 text-green-700",
+  rejeitado: "bg-red-100 text-red-700",
+  utp: "bg-purple-100 text-purple-700",
+  finalizado: "bg-gray-100 text-gray-600",
+};
+
+function ImportacaoSupabase() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ items: Viabilizacao[]; skipped: number } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [result, setResult] = useState<string | null>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const { headers, rows } = parseSupabaseTSVOrCSV(text);
+      if (headers.length === 0) { alert("Arquivo inválido ou vazio."); return; }
+      if (!headers.includes("id") || !headers.includes("status")) {
+        alert('Colunas "id" e "status" não encontradas. Exporte direto do Supabase (CSV ou TSV).');
+        return;
+      }
+      let skipped = 0;
+      const items: Viabilizacao[] = [];
+      rows.forEach((row) => {
+        const v = supabaseRowToViabilizacao(row, headers);
+        if (v) items.push(v); else skipped++;
+      });
+      if (items.length === 0) { alert("Nenhuma linha válida encontrada."); return; }
+      setPreview({ items, skipped });
+      setResult(null);
+    };
+    reader.readAsText(f, "utf-8");
+    e.target.value = "";
+  }
+
+  async function handleImport() {
+    if (!preview) return;
+    setImporting(true);
+    setProgress({ done: 0, total: preview.items.length });
+    try {
+      await batchImportViabilizacoes(preview.items, (done, total) => setProgress({ done, total }));
+      setResult(`✅ ${preview.items.length} viabilizações importadas com sucesso!`);
+      setPreview(null);
+    } catch (e) {
+      setResult(`❌ Erro: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // preview stats
+  const byTipo = preview ? preview.items.reduce<Record<string, number>>((acc, v) => {
+    acc[v.tipo_instalacao] = (acc[v.tipo_instalacao] ?? 0) + 1; return acc;
+  }, {}) : {};
+  const byStatus = preview ? preview.items.reduce<Record<string, number>>((acc, v) => {
+    acc[v.status] = (acc[v.status] ?? 0) + 1; return acc;
+  }, {}) : {};
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden lg:col-span-2">
+        <div className="flex items-center gap-3 px-5 py-4 border-b bg-gray-50">
+          <Database className="w-5 h-5 text-violet-600" />
+          <div>
+            <h3 className="font-semibold text-gray-800">Importar Viabilizações (Supabase)</h3>
+            <p className="text-xs text-gray-500">Migrar dados do banco anterior — CSV ou TSV exportado do Supabase</p>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-3 text-xs text-violet-700 space-y-1">
+            <p className="font-semibold">Como exportar do Supabase:</p>
+            <ol className="list-decimal list-inside space-y-0.5 text-violet-600">
+              <li>Table Editor → tabela <code className="bg-violet-100 px-1 rounded">viabilizacoes</code></li>
+              <li>Botão <strong>Export</strong> → <strong>Export to CSV</strong></li>
+              <li>Faça upload do arquivo aqui</li>
+            </ol>
+            <p className="text-violet-500 mt-1">O ID do Supabase é preservado como ID do documento no Firebase — reimportar é seguro.</p>
+          </div>
+
+          <div
+            onClick={() => fileRef.current?.click()}
+            className="border-2 border-dashed border-gray-300 hover:border-violet-400 rounded-xl p-6 text-center cursor-pointer transition-colors group"
+          >
+            <Upload className="w-8 h-8 text-gray-400 group-hover:text-violet-500 mx-auto mb-2 transition-colors" />
+            <p className="text-sm font-medium text-gray-600 group-hover:text-violet-600">
+              Clique para selecionar o arquivo CSV ou TSV
+            </p>
+            <p className="text-xs text-gray-400 mt-1">.csv, .tsv ou .txt</p>
+            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleFile} />
+          </div>
+
+          {result && (
+            <div className={`flex items-start gap-2 rounded-lg px-4 py-3 text-sm ${
+              result.startsWith("✅") ? "bg-green-50 border border-green-200 text-green-700"
+                                      : "bg-red-50 border border-red-200 text-red-700"
+            }`}>
+              {result.startsWith("✅") ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />}
+              {result}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preview modal */}
+      {preview && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 rounded-t-xl">
+              <h3 className="text-lg font-bold text-white">Importar Viabilizações do Supabase</h3>
+              <p className="text-violet-100 text-sm mt-0.5">
+                {preview.items.length} registros prontos para importar
+                {preview.skipped > 0 && ` · ${preview.skipped} ignorados (sem ID)`}
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3 border">
+                  <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Por Tipo</p>
+                  <div className="space-y-1">
+                    {Object.entries(byTipo).map(([tipo, count]) => (
+                      <div key={tipo} className="flex justify-between text-sm">
+                        <span className="text-gray-700">{tipo}</span>
+                        <span className="font-semibold text-gray-800">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 border">
+                  <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Por Status</p>
+                  <div className="space-y-1">
+                    {Object.entries(byStatus).map(([status, count]) => (
+                      <div key={status} className="flex items-center justify-between text-sm gap-2">
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_VIAB_COLOR[status] ?? "bg-gray-100 text-gray-600"}`}>
+                          {status}
+                        </span>
+                        <span className="font-semibold text-gray-800">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview table */}
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">
+                  Primeiros {Math.min(8, preview.items.length)} registros
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["ID", "Usuário", "Tipo", "Status", "Plus Code", "Nome"].map((h) => (
+                          <th key={h} className="text-left px-3 py-2 font-medium text-gray-500">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {preview.items.slice(0, 8).map((v) => (
+                        <tr key={v.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-mono text-gray-400">{v.id.slice(0, 8)}…</td>
+                          <td className="px-3 py-2 text-gray-700">{v.usuario}</td>
+                          <td className="px-3 py-2">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">{v.tipo_instalacao}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded font-medium ${STATUS_VIAB_COLOR[v.status] ?? "bg-gray-100 text-gray-600"}`}>
+                              {v.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-gray-500">{v.plus_code_cliente || "—"}</td>
+                          <td className="px-3 py-2 text-gray-600 max-w-[140px] truncate">{v.nome_cliente || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {preview.items.length > 8 && (
+                  <p className="text-xs text-gray-400 mt-1 text-right">
+                    + {preview.items.length - 8} registros não exibidos
+                  </p>
+                )}
+              </div>
+
+              {/* Progresso */}
+              {importing && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Importando para Firebase...</span>
+                    <span>{progress.done} / {progress.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-violet-600 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 pb-5 flex gap-2 justify-end border-t pt-4">
+              <button onClick={() => setPreview(null)} disabled={importing}
+                className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleImport} disabled={importing}
+                className="flex items-center gap-2 px-5 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-lg text-sm font-semibold">
+                {importing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
+                  : <><Database className="w-4 h-4" /> Importar {preview.items.length} viabilizações</>
+                }
               </button>
             </div>
           </div>
