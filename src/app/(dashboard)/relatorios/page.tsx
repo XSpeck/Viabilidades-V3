@@ -167,8 +167,14 @@ export default function RelatoriosPage() {
   const filtrado = viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao));
 
   // ── Derived data ─────────────────────────────────────────────
-  const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status));
-  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado");
+  const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
+    v.status === "aprovado" ||
+    (v.status === "finalizado" && v.status_instalacao === "instalado")
+  ));
+  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
+    v.status === "rejeitado" ||
+    (v.status === "finalizado" && !!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")
+  ));
   const prediosViab    = filtrado.filter((v) => v.tipo_instalacao === "Prédio" && v.status_predio !== "estruturado");
   const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio !== "estruturado");
 
@@ -192,6 +198,14 @@ export default function RelatoriosPage() {
     rejeitado:    "Sem viabilidade",
     utp:          "UTP",
     finalizado:   "Finalizado",
+  };
+  const labelForStatus = (v: Viabilizacao): string => {
+    if (v.status !== "finalizado") return statusLabelRel[v.status] ?? v.status;
+    if (v.status_instalacao === "instalado")      return "Instalado";
+    if (v.status_predio === "estruturado")        return "Estruturado";
+    if (v.motivo_rejeicao === "Atendemos UTP")    return "UTP";
+    if (v.motivo_rejeicao)                        return "Sem viabilidade";
+    return "Finalizado";
   };
 
   // ── Rows for CSV / table ──────────────────────────────────────
@@ -223,7 +237,7 @@ export default function RelatoriosPage() {
     "Prédio/Cond.": v.predio_ftta ?? "-",
     "Casa/Apto": v.andar_predio ?? "-",
     Bloco:       v.bloco_predio ?? "-",
-    Status:      statusLabelRel[v.status] ?? v.status,
+    Status:      labelForStatus(v),
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
     Solicitante: v.usuario,
     Cliente:     v.nome_cliente ?? "-",
@@ -240,7 +254,7 @@ export default function RelatoriosPage() {
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Condomínio:    v.predio_ftta ?? "-",
     "Casa/Lote":   v.andar_predio ?? "-",
-    Status:        statusLabelRel[v.status] ?? v.status,
+    Status:        labelForStatus(v),
     "Plus Code":   locationToPlusCode(v.plus_code_cliente),
     Solicitante:   v.usuario,
     Cliente:       v.nome_cliente ?? "-",

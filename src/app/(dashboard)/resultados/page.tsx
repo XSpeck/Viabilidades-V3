@@ -335,11 +335,23 @@ export default function ResultadosPage() {
                       </thead>
                       <tbody className="divide-y">
                         {historicoFiltrado.map((v) => {
+                          const finalizadoColor =
+                            v.status_instalacao === "instalado"   ? "bg-green-100 text-green-700" :
+                            v.status_predio === "estruturado"     ? "bg-green-100 text-green-700" :
+                            v.motivo_rejeicao === "Atendemos UTP" ? "bg-purple-100 text-purple-700" :
+                            v.motivo_rejeicao                     ? "bg-red-100 text-red-700" :
+                            "bg-gray-100 text-gray-600";
+                          const finalizadoLabel =
+                            v.status_instalacao === "instalado"   ? "✅ Instalado" :
+                            v.status_predio === "estruturado"     ? "✅ Estruturado" :
+                            v.motivo_rejeicao === "Atendemos UTP" ? "📡 UTP" :
+                            v.motivo_rejeicao                     ? "❌ Sem viab." :
+                            "📁 Finalizado";
                           const statusColors: Record<string, string> = {
                             aprovado:     "bg-green-100 text-green-700",
                             rejeitado:    "bg-red-100 text-red-700",
                             utp:          "bg-purple-100 text-purple-700",
-                            finalizado:   "bg-gray-100 text-gray-600",
+                            finalizado:   finalizadoColor,
                             em_auditoria: "bg-yellow-100 text-yellow-700",
                             pendente:     "bg-blue-100 text-blue-600",
                             em_revisao:   "bg-orange-100 text-orange-700",
@@ -348,7 +360,7 @@ export default function ResultadosPage() {
                             aprovado:     "✅ Aprovado",
                             rejeitado:    "❌ Sem viab.",
                             utp:          "📡 UTP",
-                            finalizado:   "📁 Finalizado",
+                            finalizado:   finalizadoLabel,
                             em_auditoria: "🔍 Em análise",
                             pendente:     "⏳ Pendente",
                             em_revisao:   v.revisao_tipo === "contestado" ? "💬 Contestado" : "↩️ Devolvida",
