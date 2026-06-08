@@ -11,7 +11,7 @@ import FluxoStepper from "@/components/resultados/FluxoStepper";
 
 type StatusFilter =
   | "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp"
-  | "ag_inst" | "neg_inst" | "inst_agendado" | "instalado" | "em_revisao";
+  | "ag_inst" | "neg_inst" | "inst_agendado" | "instalado" | "em_revisao" | "contestado";
 type TipoFilter = "todos" | "FTTH" | "Prédio" | "Condomínio";
 
 export default function ResultadosPage() {
@@ -121,6 +121,7 @@ export default function ResultadosPage() {
     semViab:      results.filter((r) => r.status === "rejeitado").length,
     utp:          results.filter((r) => r.status === "utp").length,
     em_revisao:   results.filter((r) => r.status === "em_revisao" && r.revisao_tipo === "devolvido").length,
+    contestado:   results.filter((r) => r.status === "em_revisao" && r.revisao_tipo === "contestado").length,
     ag_inst:      results.filter((r) => r.status_instalacao === "aguardando_proposta").length,
     neg_inst:     results.filter((r) => ["proposta_enviada", "aguardando_confirmacao"].includes(r.status_instalacao ?? "")).length,
     inst_agendado:results.filter((r) => r.status_instalacao === "agendado").length,
@@ -137,6 +138,7 @@ export default function ResultadosPage() {
       case "sem_viab":     return r.status === "rejeitado";
       case "utp":          return r.status === "utp";
       case "em_revisao":   return r.status === "em_revisao" && r.revisao_tipo === "devolvido";
+      case "contestado":   return r.status === "em_revisao" && r.revisao_tipo === "contestado";
       case "ag_inst":      return r.status_instalacao === "aguardando_proposta";
       case "neg_inst":     return ["proposta_enviada", "aguardando_confirmacao"].includes(r.status_instalacao ?? "");
       case "inst_agendado":return r.status_instalacao === "agendado";
@@ -168,6 +170,7 @@ export default function ResultadosPage() {
       { key: "agendado",     label: "📅 Agendado",          count: counts.agendado    },
       { key: "estruturado",  label: "🎉 Estruturado",       count: counts.estruturado },
       { key: "em_revisao",   label: "↩️ Devolvida",          count: counts.em_revisao  },
+      { key: "contestado",   label: "💬 Contestado",         count: counts.contestado  },
       { key: "sem_viab",     label: "❌ Sem viab.",         count: counts.semViab     },
       { key: "utp",          label: "📡 UTP",               count: counts.utp         },
       { key: "ag_inst",      label: "⚠️ Propor data",       count: counts.ag_inst     },
@@ -541,6 +544,20 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     agendado:         "bg-green-100 text-green-700",
     estruturado:      "bg-green-100 text-green-700",
   };
+  const instLabel: Record<string, string> = {
+    aguardando_proposta:    "⚠️ Propor data",
+    proposta_enviada:       "⏳ Proposta enviada",
+    aguardando_confirmacao: "⚠️ Confirmar data",
+    agendado:               "📅 Inst. agendada",
+    instalado:              "🎉 Instalado",
+  };
+  const instColor: Record<string, string> = {
+    aguardando_proposta:    "bg-orange-100 text-orange-700",
+    proposta_enviada:       "bg-yellow-100 text-yellow-700",
+    aguardando_confirmacao: "bg-orange-100 text-orange-700",
+    agendado:               "bg-green-100 text-green-700",
+    instalado:              "bg-blue-100 text-blue-700",
+  };
 
   async function handleEnviarDados() {
     if (!nomeSindico || !contatoSindico || !nomeClientePredio || !contatoClientePredio || !apartamento) {
@@ -575,9 +592,12 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               isDevolvida ? "bg-orange-100 text-orange-700" :
               isContestacaoPendente ? "bg-blue-100 text-blue-700" :
               r.status_predio ? (predioStatusColor[r.status_predio] ?? "bg-gray-100 text-gray-500") :
+              r.status_instalacao ? (instColor[r.status_instalacao] ?? "bg-gray-100 text-gray-500") :
               "bg-gray-100 text-gray-500"
             }`}>
-              {r.status_predio ? (predioStatusLabel[r.status_predio] ?? r.status_predio) : (statusLabel[r.status] ?? r.status)}
+              {r.status_predio ? (predioStatusLabel[r.status_predio] ?? r.status_predio) :
+               r.status_instalacao ? (instLabel[r.status_instalacao] ?? r.status_instalacao) :
+               (statusLabel[r.status] ?? r.status)}
             </span>
             {canExpand && <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>}
           </div>

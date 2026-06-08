@@ -46,8 +46,8 @@ const STEPS_SIMPLES: Step[] = [
 function getCurrentStep(v: Viabilizacao): number {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
 
-  // FTTH ou FTTA direto (sem visita estrutural) com instalação
-  if (["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) {
+  // FTTH / Prédio / Condomínio direto (sem visita estrutural) com instalação
+  if (["FTTH", "Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) {
     if (v.status_instalacao === "instalado") return 4;
     if (v.status_instalacao === "agendado") return 3;
     if (["proposta_enviada", "aguardando_confirmacao"].includes(v.status_instalacao)) return 3;
@@ -67,15 +67,14 @@ function getCurrentStep(v: Viabilizacao): number {
   if (isFtta && v.status_predio) {
     // Fluxo de estruturação de prédio (sem instalação ainda)
     if (v.status_predio === "estruturado" || v.status === "finalizado") return 4;
-    if (v.status_predio === "agendado") return 3;
-    if (v.status_predio === "pronto_auditoria") return 3;
+    if (["agendado", "pronto_auditoria", "proposta_visita"].includes(v.status_predio)) return 3;
     if (v.status_predio === "aguardando_dados") return 2;
     return 1;
   }
 
   // Resolução direta sem instalação (FTTA Condomínio, rejeitado, utp)
   if (["aprovado", "rejeitado", "utp", "finalizado"].includes(v.status)) return 2;
-  if (v.status === "em_auditoria") return 1;
+  if (["em_auditoria", "em_revisao"].includes(v.status)) return 1;
   return 0;
 }
 
@@ -90,7 +89,7 @@ interface Props {
 export default function FluxoStepper({ v }: Props) {
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
   const steps = (
-    (["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) ? STEPS_FTTH_INSTALACAO :
+    (["FTTH", "Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_instalacao && !v.status_predio) ? STEPS_FTTH_INSTALACAO :
     (isFtta && v.status_predio === "estruturado" && v.status_instalacao) ? STEPS_FTTA_INSTALACAO :
     (isFtta && v.status_predio) ? STEPS_FTTA_FLOW :
     STEPS_SIMPLES
