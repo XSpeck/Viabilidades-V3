@@ -394,7 +394,7 @@ function GestaoUsuarios() {
   async function load() {
     setLoading(true);
     try { setUsers(await listUsers()); }
-    catch { alert("Erro ao carregar usuários."); }
+    catch (e) { alert(`Erro ao carregar usuários: ${e instanceof Error ? e.message : String(e)}`); }
     finally { setLoading(false); }
   }
 

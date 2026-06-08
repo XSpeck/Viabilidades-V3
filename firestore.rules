@@ -14,9 +14,10 @@ service cloud.firestore {
       return isAuth() && userNivel() == 1;
     }
 
-    // Usuários — cada um lê o próprio, admin lê todos
+    // Usuários — cada um lê o próprio doc, admin lista todos
     match /users/{uid} {
-      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow get: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
 
