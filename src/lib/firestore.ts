@@ -780,6 +780,24 @@ export async function deleteDemanda(id: string): Promise<void> {
   await deleteDoc(doc(db, "demandas_rede", id));
 }
 
+export async function getDemandasArquivadas(): Promise<DemandaRede[]> {
+  const q = query(collection(db, "demandas_rede"), where("status", "==", "arquivada"));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => fromFirestore<DemandaRede>(d))
+    .sort((a, b) =>
+      (b.data_conclusao ?? b.data_criacao) > (a.data_conclusao ?? a.data_criacao) ? 1 : -1
+    );
+}
+
+export async function arquivarDemanda(id: string): Promise<void> {
+  await updateDemanda(id, { status: "arquivada" });
+}
+
+export async function desarquivarDemanda(id: string): Promise<void> {
+  await updateDemanda(id, { status: "concluida" });
+}
+
 export async function editarInfoDemanda(
   id: string,
   data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local">,

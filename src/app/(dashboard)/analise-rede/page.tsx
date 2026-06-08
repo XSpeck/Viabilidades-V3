@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, avancarStatusDemanda, deleteDemanda } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, avancarStatusDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -51,6 +51,13 @@ const STATUS_COLOR: Record<string, string> = {
   concluida:    "bg-green-100 text-green-700",
 };
 
+const TECNICO_DOT: Record<string, string> = {
+  Eduardo: "bg-blue-500",
+  Ulisses: "bg-green-600",
+  Zilli:   "bg-orange-500",
+  Andre:   "bg-purple-600",
+};
+
 // ── Componente principal ──────────────────────────────────
 export default function AnaliseRedePage() {
   const { user } = useAuth();
@@ -74,6 +81,7 @@ export default function AnaliseRedePage() {
   useEffect(() => { load(); }, [load]);
 
   const filtradas = demandas
+    .filter((d) => d.status !== "arquivada")
     .filter((d) => tecnicoTab === "todos" || d.tecnico === tecnicoTab)
     .filter((d) => statusFiltro === "todas" || d.status === statusFiltro);
 
@@ -84,7 +92,7 @@ export default function AnaliseRedePage() {
   };
 
   const countTecnico = (t: TecnicoRede) =>
-    demandas.filter((d) => d.tecnico === t && d.status !== "concluida").length;
+    demandas.filter((d) => d.tecnico === t && d.status !== "concluida" && d.status !== "arquivada").length;
 
   return (
     <div className="space-y-6">
@@ -172,7 +180,7 @@ export default function AnaliseRedePage() {
             <button key={f.key} onClick={() => setStatusFiltro(f.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFiltro === f.key ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
               {f.key === "todas"
-                ? `Todas (${demandas.filter((d) => tecnicoTab === "todos" || d.tecnico === tecnicoTab).length})`
+                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnico === tecnicoTab)).length})`
                 : f.label}
             </button>
           ))}
@@ -191,6 +199,8 @@ export default function AnaliseRedePage() {
           </div>
         )}
       </div>
+
+      <ArquivoPanel tecnicoTab={tecnicoTab} onRestored={load} />
 
       {showModal && (
         <NovaDemandaModal
@@ -241,6 +251,14 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     setSaving(true);
     try {
       await updateDemanda(d.id, { status: "aberta", data_agendamento: undefined, periodo_agendamento: undefined, data_conclusao: undefined, obs_conclusao: undefined });
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
+  async function handleArquivar() {
+    setSaving(true);
+    try {
+      await arquivarDemanda(d.id);
       onRefresh();
     } finally { setSaving(false); }
   }
@@ -315,10 +333,16 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             </button>
           )}
           {d.status === "concluida" && (
-            <button onClick={handleReabrir} disabled={saving}
-              className="text-xs text-gray-500 hover:text-gray-700 underline">
-              ↩ Reabrir
-            </button>
+            <div className="flex flex-col gap-1 items-end">
+              <button onClick={handleArquivar} disabled={saving}
+                className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 font-medium border border-amber-200 px-2 py-1 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-50">
+                📦 Arquivar
+              </button>
+              <button onClick={handleReabrir} disabled={saving}
+                className="text-xs text-gray-400 hover:text-gray-600 underline">
+                ↩ Reabrir
+              </button>
+            </div>
           )}
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
@@ -567,5 +591,150 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
         />
       )}
     </>
+  );
+}
+
+// ── Painel de arquivo ─────────────────────────────────────
+function ArquivoPanel({ tecnicoTab, onRestored }: { tecnicoTab: "todos" | TecnicoRede; onRestored: () => void }) {
+  const [open, setOpen]             = useState(false);
+  const [loaded, setLoaded]         = useState(false);
+  const [demandas, setDemandas]     = useState<DemandaRede[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      setDemandas(await getDemandasArquivadas());
+      setLoaded(true);
+    } finally { setLoading(false); }
+  }
+
+  function toggle() {
+    if (!open && !loaded) load();
+    setOpen((v) => !v);
+  }
+
+  const filtradas = demandas
+    .filter((d) => tecnicoTab === "todos" || d.tecnico === tecnicoTab)
+    .sort((a, b) =>
+      (b.data_conclusao ?? b.data_criacao) > (a.data_conclusao ?? a.data_criacao) ? 1 : -1
+    );
+
+  async function handleRestaurar(id: string) {
+    await desarquivarDemanda(id);
+    await load();
+    onRestored();
+  }
+
+  async function handleExcluir(id: string) {
+    await deleteDemanda(id);
+    setDemandas((prev) => prev.filter((d) => d.id !== id));
+    setConfirmDel(null);
+  }
+
+  return (
+    <div className="bg-white rounded-xl border overflow-hidden">
+      <button onClick={toggle}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <span>📦 Arquivo de Demandas</span>
+          {loaded && filtradas.length > 0 && (
+            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-bold">
+              {filtradas.length}
+            </span>
+          )}
+        </div>
+        <span className={`text-gray-400 text-xs transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
+      </button>
+
+      {open && (
+        <div className="border-t">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            </div>
+          ) : filtradas.length === 0 ? (
+            <p className="text-center py-8 text-sm text-gray-400">
+              Nenhuma demanda arquivada{tecnicoTab !== "todos" ? ` para ${tecnicoTab}` : ""}.
+            </p>
+          ) : (
+            <div className="divide-y">
+              {filtradas.map((d) => (
+                <ArquivoRow
+                  key={d.id} demanda={d}
+                  confirmDel={confirmDel} setConfirmDel={setConfirmDel}
+                  onRestaurar={handleRestaurar} onExcluir={handleExcluir}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArquivoRow({ demanda: d, confirmDel, setConfirmDel, onRestaurar, onExcluir }: {
+  demanda: DemandaRede;
+  confirmDel: string | null;
+  setConfirmDel: (id: string | null) => void;
+  onRestaurar: (id: string) => Promise<void>;
+  onExcluir: (id: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="px-4 py-3 flex items-start gap-3 hover:bg-gray-50">
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PRIORIDADE_COLOR[d.prioridade]}`}>
+            {PRIORIDADE_LABEL[d.prioridade]}
+          </span>
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+            {d.tipo}
+          </span>
+          <span className="flex items-center gap-1 text-xs text-gray-500">
+            <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[d.tecnico] ?? "bg-gray-400"}`} />
+            {d.tecnico}
+          </span>
+        </div>
+        <p className="text-sm text-gray-700 truncate">{d.descricao}</p>
+        {d.obs_conclusao && (
+          <p className="text-xs text-gray-500 truncate mt-0.5">📝 {d.obs_conclusao}</p>
+        )}
+        <p className="text-xs text-gray-400 mt-0.5">
+          Concluído em {d.data_conclusao ? formatDateTime(d.data_conclusao) : "—"}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={async () => { setBusy(true); await onRestaurar(d.id); setBusy(false); }}
+          disabled={busy}
+          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50">
+          ↩ Restaurar
+        </button>
+        {confirmDel !== d.id ? (
+          <button onClick={() => setConfirmDel(d.id)}
+            className="text-gray-300 hover:text-red-500 transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        ) : (
+          <div className="flex gap-1">
+            <button
+              onClick={async () => { setBusy(true); await onExcluir(d.id); setBusy(false); }}
+              disabled={busy}
+              className="text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg disabled:opacity-50">
+              Excluir
+            </button>
+            <button onClick={() => setConfirmDel(null)}
+              className="text-xs border px-2 py-1 rounded-lg">
+              Não
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

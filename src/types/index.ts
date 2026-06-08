@@ -163,7 +163,7 @@ export const TIPOS_SERVICO_REDE = [
 export const TECNICOS_REDE = ["Eduardo", "Ulisses", "Zilli", "Andre"] as const;
 export type TecnicoRede = typeof TECNICOS_REDE[number];
 
-export type StatusDemanda    = "aberta" | "em_andamento" | "concluida";
+export type StatusDemanda    = "aberta" | "em_andamento" | "concluida" | "arquivada";
 export type PrioridadeDemanda = "baixa" | "media" | "alta" | "urgente";
 
 export interface DemandaRede {
