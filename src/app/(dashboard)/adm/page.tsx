@@ -720,7 +720,7 @@ function supabaseRowToViabilizacao(row: string[], headers: string[]): Viabilizac
 
   return {
     id,
-    usuario:            g("usuario") || "importado",
+    usuario:            (() => { const u = g("usuario"); return u ? (u.includes("@") ? u : `${u}@viabilidade.com`) : "importado"; })(),
     plus_code_cliente:  g("plus_code_cliente"),
     tipo_instalacao:    (g("tipo_instalacao") || "FTTH") as TipoInstalacao,
     urgente:            b("urgente") ?? false,
