@@ -58,6 +58,24 @@ function fDate(iso?: string) {
   if (!iso) return "—";
   return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR");
 }
+function fMonthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  return toISODate(new Date(y, m - 1 + delta, 1)).slice(0, 7);
+}
+function getMonthDays(ym: string): (string | null)[] {
+  const [y, m] = ym.split("-").map(Number);
+  const dow    = new Date(y, m - 1, 1).getDay();
+  const offset = dow === 0 ? 6 : dow - 1;
+  const total  = new Date(y, m, 0).getDate();
+  const cells: (string | null)[] = Array(offset).fill(null);
+  for (let d = 1; d <= total; d++) cells.push(`${ym}-${String(d).padStart(2, "0")}`);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
 
 // ─── Page ─────────────────────────────────────────────────────────
 export default function AgendaPage() {
@@ -66,6 +84,8 @@ export default function AgendaPage() {
   const [demandas, setDemandas] = useState<DemandaRede[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(todayISO());
+  const [calView, setCalView]   = useState<"week" | "month">("week");
+  const [viewMonth, setViewMonth] = useState<string>(todayISO().slice(0, 7));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,48 +142,119 @@ export default function AgendaPage() {
         </button>
       </div>
 
-      {/* Navegação semanal */}
-      <div className="bg-white rounded-xl border shadow-sm p-4">
+      {/* Navegação */}
+      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+
+        {/* Linha de controle: prev | mês/ano clicável | next | toggle | hoje */}
         <div className="flex items-center gap-2">
-          <button onClick={() => setSelectedDate((d) => addDays(d, -7))}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+          <button
+            onClick={() => calView === "week"
+              ? setSelectedDate((d) => addDays(d, -7))
+              : setViewMonth((m) => shiftMonth(m, -1))}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <div className="flex-1 grid grid-cols-7 gap-1">
-            {weekDays.map((iso) => {
-              const cnt  = countDay(iso);
-              const sel  = iso === selectedDate;
-              const isT  = iso === today;
-              return (
-                <button key={iso} onClick={() => setSelectedDate(iso)}
-                  className={`flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${
-                    sel ? "bg-indigo-600 shadow-sm" : isT ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"
-                  }`}>
-                  <span className={`text-xs font-medium ${sel ? "text-indigo-200" : "text-gray-400"}`}>
-                    {fWdShort(iso)}
-                  </span>
-                  <span className={`text-sm font-bold ${sel ? "text-white" : isT ? "text-indigo-700" : "text-gray-800"}`}>
-                    {fDayNum(iso)}
-                  </span>
-                  <span className={`text-xs font-semibold h-4 leading-4 ${
-                    cnt > 0 ? (sel ? "text-indigo-200" : "text-indigo-500") : "text-transparent"
-                  }`}>{cnt || "·"}</span>
-                </button>
-              );
-            })}
-          </div>
-          <button onClick={() => setSelectedDate((d) => addDays(d, 7))}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+
+          <button
+            onClick={() => {
+              setCalView((v) => {
+                const next = v === "week" ? "month" : "week";
+                if (next === "month") setViewMonth(selectedDate.slice(0, 7));
+                return next;
+              });
+            }}
+            className="flex-1 text-center text-sm font-bold text-gray-800 hover:text-indigo-600 capitalize transition-colors">
+            {calView === "month" ? fMonthLabel(viewMonth) : fMonthLabel(selectedDate.slice(0, 7))}
+          </button>
+
+          <button
+            onClick={() => calView === "week"
+              ? setSelectedDate((d) => addDays(d, 7))
+              : setViewMonth((m) => shiftMonth(m, 1))}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
             <ChevronRight className="w-4 h-4" />
           </button>
+
+          <div className="w-px h-5 bg-gray-200 shrink-0" />
+
+          <button
+            onClick={() => { setCalView("week"); setSelectedDate(today); }}
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors shrink-0">
+            Hoje
+          </button>
+
+          <button
+            onClick={() => {
+              setCalView((v) => {
+                const next = v === "week" ? "month" : "week";
+                if (next === "month") setViewMonth(selectedDate.slice(0, 7));
+                return next;
+              });
+            }}
+            className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors shrink-0 ${
+              calView === "month" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}>
+            {calView === "month" ? "Semana" : "Mês"}
+          </button>
         </div>
-        <div className="flex items-center justify-between mt-3 pt-3 border-t">
-          <p className="text-sm font-semibold text-gray-700 capitalize">{fDayFull(selectedDate)}</p>
-          {selectedDate !== today && (
-            <button onClick={() => setSelectedDate(today)}
-              className="text-xs text-indigo-600 hover:underline font-medium">Ir para hoje</button>
-          )}
-        </div>
+
+        {/* Visão de semana */}
+        {calView === "week" && (
+          <>
+            <div className="flex items-center gap-1">
+              {weekDays.map((iso) => {
+                const cnt = countDay(iso);
+                const sel = iso === selectedDate;
+                const isT = iso === today;
+                return (
+                  <button key={iso} onClick={() => setSelectedDate(iso)}
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${
+                      sel ? "bg-indigo-600 shadow-sm" : isT ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"
+                    }`}>
+                    <span className={`text-xs font-medium ${sel ? "text-indigo-200" : "text-gray-400"}`}>{fWdShort(iso)}</span>
+                    <span className={`text-sm font-bold ${sel ? "text-white" : isT ? "text-indigo-700" : "text-gray-800"}`}>{fDayNum(iso)}</span>
+                    <span className={`text-xs font-semibold h-4 leading-4 ${cnt > 0 ? (sel ? "text-indigo-200" : "text-indigo-500") : "text-transparent"}`}>
+                      {cnt || "·"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-sm font-medium text-gray-500 text-center capitalize">{fDayFull(selectedDate)}</p>
+          </>
+        )}
+
+        {/* Visão de mês */}
+        {calView === "month" && (
+          <>
+            <div className="grid grid-cols-7 gap-0.5">
+              {["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].map((d) => (
+                <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>
+              ))}
+              {getMonthDays(viewMonth).map((iso, i) => {
+                if (!iso) return <div key={`e-${i}`} />;
+                const cnt = countDay(iso);
+                const sel = iso === selectedDate;
+                const isT = iso === today;
+                return (
+                  <button key={iso}
+                    onClick={() => { setSelectedDate(iso); setCalView("week"); }}
+                    className={`flex flex-col items-center py-1.5 rounded-lg transition-all hover:scale-105 ${
+                      sel ? "bg-indigo-600 shadow-sm" : isT ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"
+                    }`}>
+                    <span className={`text-sm font-bold leading-none ${sel ? "text-white" : isT ? "text-indigo-700" : "text-gray-800"}`}>
+                      {iso.slice(8)}
+                    </span>
+                    <span className={`text-xs font-semibold mt-0.5 h-3.5 leading-3.5 ${cnt > 0 ? (sel ? "text-indigo-200" : "text-indigo-500") : "text-transparent"}`}>
+                      {cnt > 0 ? cnt : "·"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-center text-gray-400">Clique em um dia para ver a agenda</p>
+          </>
+        )}
       </div>
 
       {/* Atrasadas */}
