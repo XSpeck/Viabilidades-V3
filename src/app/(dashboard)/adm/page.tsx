@@ -7,6 +7,7 @@ import { importRedeToFirestore, listRedesImportadas, EMPRESAS } from "@/lib/rede
 import { listUsers, createUser, updateUser, deleteUser } from "@/lib/users";
 import {
   getPrediosAtendidos, createPredioAtendido, updatePredioAtendido, deletePredioAtendido,
+  deleteAllPrediosAtendidos, batchCreatePrediosAtendidos,
   getPrediosSemViabilidade, createPredioSemViabilidade, updatePredioSemViabilidade, deletePredioSemViabilidade,
 } from "@/lib/firestore";
 import type { AppUser, UserCargo, PredioAtendido, PredioSemViabilidade } from "@/types";
@@ -640,6 +641,48 @@ function GestaoUsuarios() {
   );
 }
 
+// ── CSV parser ────────────────────────────────────────────
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field.trim()); field = ""; }
+      else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
+        if (c === '\r') i++;
+        row.push(field.trim());
+        if (row.some((v) => v)) rows.push(row);
+        row = []; field = "";
+      } else field += c;
+    }
+  }
+  if (field || row.length) { row.push(field.trim()); if (row.some((v) => v)) rows.push(row); }
+  return rows;
+}
+
+type PredioCSVItem = Omit<PredioAtendido, "id" | "data_estruturacao">;
+
+function csvToPredios(rows: string[][], autor: string): PredioCSVItem[] {
+  return rows.slice(1) // pula cabeçalho
+    .filter((r) => r.length >= 2 && r[1])
+    .map((r) => ({
+      condominio:      r[1]?.trim() ?? "",
+      tecnologia:      r[2]?.trim() ?? "",
+      giga:            r[3]?.trim().toLowerCase() === "sim",
+      localizacao:     r[4]?.trim() ?? "",
+      observacao:      r[5]?.trim() ?? "",
+      estruturado_por: autor,
+      viabilizacao_id: "manual",
+    }));
+}
+
 // =====================
 // Card: Prédios Atendidos
 // =====================
@@ -663,6 +706,48 @@ function GerenciarPrediosAtendidos() {
   const [saving, setSaving]           = useState(false);
   const [confirmDel, setConfirmDel]   = useState<PredioAtendido | null>(null);
   const [formErr, setFormErr]         = useState<string | null>(null);
+
+  // CSV import
+  const csvRef                                = useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview]           = useState<{ items: PredioCSVItem[]; replace: boolean } | null>(null);
+  const [importing, setImporting]             = useState(false);
+  const [importProgress, setImportProgress]   = useState({ done: 0, total: 0 });
+  const [importResult, setImportResult]       = useState<string | null>(null);
+
+  function handleCSVFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCSV(text);
+      const parsed = csvToPredios(rows, user?.nome ?? "importado");
+      if (parsed.length === 0) { alert("Nenhum registro encontrado no arquivo."); return; }
+      setCsvPreview({ items: parsed, replace: true });
+    };
+    reader.readAsText(f, "utf-8");
+    e.target.value = "";
+  }
+
+  async function handleImportCSV() {
+    if (!csvPreview) return;
+    setImporting(true);
+    setImportProgress({ done: 0, total: csvPreview.items.length });
+    setImportResult(null);
+    try {
+      if (csvPreview.replace) await deleteAllPrediosAtendidos();
+      await batchCreatePrediosAtendidos(csvPreview.items, (done, total) => {
+        setImportProgress({ done, total });
+      });
+      setImportResult(`✅ ${csvPreview.items.length} prédios importados com sucesso!`);
+      setCsvPreview(null);
+      await load();
+    } catch (e) {
+      setImportResult(`❌ Erro: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -740,12 +825,27 @@ function GerenciarPrediosAtendidos() {
                 placeholder="Buscar condomínio..."
                 className="pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 w-48" />
             </div>
+            <button onClick={() => csvRef.current?.click()}
+              className="flex items-center gap-1.5 bg-white border border-green-400 text-green-700 hover:bg-green-50 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors">
+              <Upload className="w-4 h-4" /> Importar CSV
+            </button>
+            <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCSVFile} />
             <button onClick={openCreate}
               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
               <Plus className="w-4 h-4" /> Adicionar
             </button>
           </div>
         </div>
+
+        {/* Resultado de importação */}
+        {importResult && (
+          <div className={`mx-5 mb-4 flex items-start gap-2 rounded-lg px-4 py-3 text-sm ${
+            importResult.startsWith("✅") ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"
+          }`}>
+            {importResult}
+            <button onClick={() => setImportResult(null)} className="ml-auto text-xs underline opacity-70">fechar</button>
+          </div>
+        )}
 
         <div className="p-5">
           {loading ? (
@@ -809,6 +909,105 @@ function GerenciarPrediosAtendidos() {
         </div>
       </div>
 
+      {/* Modal de importação CSV */}
+      {csvPreview && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-5 rounded-t-xl">
+              <h3 className="text-lg font-bold text-white">📥 Importar CSV — Prédios Atendidos</h3>
+              <p className="text-green-100 text-sm mt-0.5">{csvPreview.items.length} registros encontrados</p>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Modo de importação */}
+              <div className="flex flex-col gap-2">
+                <label className="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors hover:bg-red-50"
+                  style={{ borderColor: csvPreview.replace ? "#ef4444" : "#e5e7eb" }}>
+                  <input type="radio" checked={csvPreview.replace} onChange={() => setCsvPreview((p) => p && ({ ...p, replace: true }))}
+                    className="mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">🔄 Substituir lista completa</p>
+                    <p className="text-xs text-gray-500">Apaga todos os registros existentes e importa o CSV do zero</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors hover:bg-green-50"
+                  style={{ borderColor: !csvPreview.replace ? "#16a34a" : "#e5e7eb" }}>
+                  <input type="radio" checked={!csvPreview.replace} onChange={() => setCsvPreview((p) => p && ({ ...p, replace: false }))}
+                    className="mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">➕ Adicionar aos existentes</p>
+                    <p className="text-xs text-gray-500">Mantém os registros atuais e adiciona os do CSV</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Preview primeiros 6 */}
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">
+                  Primeiros {Math.min(6, csvPreview.items.length)} registros
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["Condomínio", "Tecnologia", "Giga", "Localização", "Observação"].map((h) => (
+                          <th key={h} className="text-left px-3 py-2 font-medium text-gray-500">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {csvPreview.items.slice(0, 6).map((item, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-800 max-w-[150px] truncate">{item.condominio}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                              item.tecnologia === "FTTA" ? "bg-blue-100 text-blue-700"
+                              : item.tecnologia === "FTTH" ? "bg-purple-100 text-purple-700"
+                              : "bg-green-100 text-green-700"
+                            }`}>{item.tecnologia}</span>
+                          </td>
+                          <td className="px-3 py-2">{item.giga ? "⚡ Sim" : "—"}</td>
+                          <td className="px-3 py-2 font-mono text-gray-500 max-w-[100px] truncate">{item.localizacao || "—"}</td>
+                          <td className="px-3 py-2 text-gray-500 max-w-[160px] truncate">{item.observacao || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {csvPreview.items.length > 6 && (
+                  <p className="text-xs text-gray-400 mt-1 text-right">
+                    + {csvPreview.items.length - 6} registros não exibidos
+                  </p>
+                )}
+              </div>
+
+              {/* Progresso */}
+              {importing && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Importando...</span>
+                    <span>{importProgress.done} / {importProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${importProgress.total > 0 ? Math.round(importProgress.done / importProgress.total * 100) : 0}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-5 pb-5 flex gap-2 justify-end border-t pt-4">
+              <button onClick={() => setCsvPreview(null)} disabled={importing}
+                className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleImportCSV} disabled={importing}
+                className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg text-sm font-semibold">
+                {importing ? <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</> : `Importar ${csvPreview.items.length} prédios`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -830,6 +1029,7 @@ function GerenciarPrediosAtendidos() {
                     <option value="">Selecione...</option>
                     <option value="FTTA">FTTA</option>
                     <option value="UTP">UTP</option>
+                    <option value="FTTH">FTTH</option>
                   </select>
                 </div>
                 <div className="flex flex-col justify-end">

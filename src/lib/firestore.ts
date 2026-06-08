@@ -13,6 +13,7 @@ import {
   Timestamp,
   deleteField,
   arrayUnion,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type {
@@ -725,6 +726,32 @@ export async function updatePredioAtendido(
 
 export async function deletePredioAtendido(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_atendidos", id));
+}
+
+export async function deleteAllPrediosAtendidos(): Promise<void> {
+  const snap = await getDocs(collection(db, "predios_atendidos"));
+  const CHUNK = 400;
+  for (let i = 0; i < snap.docs.length; i += CHUNK) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + CHUNK).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+export async function batchCreatePrediosAtendidos(
+  items: Omit<PredioAtendido, "id" | "data_estruturacao">[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  const CHUNK = 400;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const batch = writeBatch(db);
+    items.slice(i, i + CHUNK).forEach((item) => {
+      const ref = doc(collection(db, "predios_atendidos"));
+      batch.set(ref, { ...stripUndefined(item as Record<string, unknown>), data_estruturacao: serverTimestamp() });
+    });
+    await batch.commit();
+    onProgress?.(Math.min(i + CHUNK, items.length), items.length);
+  }
 }
 
 export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]> {
