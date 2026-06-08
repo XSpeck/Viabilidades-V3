@@ -147,3 +147,23 @@ export interface PredioSemViabilidade {
   registrado_por: string;
   data_registro?: string;
 }
+
+export const TECNICOS_REDE = ["Eduardo", "Ulisses", "Zilli", "Andre"] as const;
+export type TecnicoRede = typeof TECNICOS_REDE[number];
+
+export type StatusDemanda    = "aberta" | "em_andamento" | "concluida";
+export type PrioridadeDemanda = "baixa" | "media" | "alta" | "urgente";
+
+export interface DemandaRede {
+  id: string;
+  tecnico: TecnicoRede;
+  tipo: string;
+  local?: string;
+  prioridade: PrioridadeDemanda;
+  descricao: string;
+  status: StatusDemanda;
+  criado_por: string;
+  data_criacao: string;
+  data_conclusao?: string;
+  obs_conclusao?: string;
+}

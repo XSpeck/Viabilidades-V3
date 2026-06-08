@@ -46,5 +46,11 @@ service cloud.firestore {
       allow read: if isAuth();
       allow write: if isAuth();
     }
+
+    // Demandas de rede
+    match /demandas_rede/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
   }
 }

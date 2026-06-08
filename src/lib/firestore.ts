@@ -21,6 +21,8 @@ import type {
   StatusViabilizacao,
   TipoInstalacao,
   MensagemViabilizacao,
+  DemandaRede,
+  StatusDemanda,
 } from "@/types";
 
 // =====================
@@ -723,4 +725,35 @@ export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
 
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
+}
+
+// =====================
+// Demandas de Rede
+// =====================
+
+export async function getDemandas(): Promise<DemandaRede[]> {
+  const q = query(collection(db, "demandas_rede"), orderBy("data_criacao", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => fromFirestore<DemandaRede>(d));
+}
+
+export async function createDemanda(data: Omit<DemandaRede, "id">): Promise<void> {
+  await addDoc(collection(db, "demandas_rede"), stripUndefined(data as Record<string, unknown>));
+}
+
+export async function updateDemanda(id: string, data: Partial<DemandaRede>): Promise<void> {
+  await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
+}
+
+export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): Promise<void> {
+  const next: StatusDemanda =
+    demanda.status === "aberta" ? "em_andamento" : "concluida";
+  const extra = next === "concluida"
+    ? { data_conclusao: new Date().toISOString(), obs_conclusao: obs ?? undefined }
+    : {};
+  await updateDemanda(demanda.id, { status: next, ...extra });
+}
+
+export async function deleteDemanda(id: string): Promise<void> {
+  await deleteDoc(doc(db, "demandas_rede", id));
 }
