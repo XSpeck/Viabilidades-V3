@@ -761,30 +761,33 @@ function GerenciarPrediosAtendidos() {
                   <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pr-4 font-medium">Condomínio</th>
                     <th className="text-left py-2 pr-4 font-medium">Tecnologia</th>
+                    <th className="text-left py-2 pr-4 font-medium">Giga</th>
+                    <th className="text-left py-2 pr-4 font-medium hidden md:table-cell">Observação</th>
                     <th className="text-left py-2 pr-4 font-medium hidden sm:table-cell">Localização</th>
-                    <th className="text-left py-2 pr-4 font-medium hidden md:table-cell">Estruturado por</th>
-                    <th className="text-left py-2 pr-4 font-medium hidden lg:table-cell">Data</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
                 <tbody>
                   {filtrados.map((item) => (
                     <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="py-2.5 pr-4 font-medium text-gray-800">
-                        {item.condominio}
-                        {item.giga && <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-bold">GIGA</span>}
-                      </td>
+                      <td className="py-2.5 pr-4 font-medium text-gray-800">{item.condominio}</td>
                       <td className="py-2.5 pr-4">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          item.tecnologia === "FTTA" ? "bg-blue-100 text-blue-700"
+                          : item.tecnologia === "UTP" ? "bg-green-100 text-green-700"
+                          : "bg-orange-100 text-orange-700"
+                        }`}>
                           {item.tecnologia}
                         </span>
                       </td>
+                      <td className="py-2.5 pr-4 text-xs">
+                        {item.tecnologia === "FTTA" || item.giga ? "⚡ Giga" : "—"}
+                      </td>
+                      <td className="py-2.5 pr-4 text-gray-500 text-xs hidden md:table-cell max-w-[200px] truncate">
+                        {item.observacao ?? "—"}
+                      </td>
                       <td className="py-2.5 pr-4 text-gray-500 font-mono text-xs hidden sm:table-cell max-w-[160px] truncate">
                         {item.localizacao || "—"}
-                      </td>
-                      <td className="py-2.5 pr-4 text-gray-500 hidden md:table-cell">{item.estruturado_por}</td>
-                      <td className="py-2.5 pr-4 text-gray-400 text-xs hidden lg:table-cell">
-                        {item.data_estruturacao ? new Date(item.data_estruturacao).toLocaleDateString("pt-BR") : "—"}
                       </td>
                       <td className="py-2.5">
                         <div className="flex items-center gap-1 justify-end">
