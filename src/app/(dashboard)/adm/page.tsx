@@ -193,7 +193,8 @@ function ImportCtos() {
           )}
         </div>
 
-        {/* Sincronizar via IXC Soft */}
+        {/* Sincronizar via IXC Soft — só funciona rodando localmente (IP liberado no IXC) */}
+        {process.env.NODE_ENV === "development" && (
         <div className="space-y-2 border border-teal-200 bg-teal-50 rounded-lg p-3">
           <p className="text-xs text-teal-800 font-medium">
             IXC Soft — busca todas as CTOs direto do sistema de gestão.
@@ -220,6 +221,7 @@ function ImportCtos() {
             {syncing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...</> : <><RefreshCw className="w-3.5 h-3.5" /> Sincronizar CTOs via IXC Soft</>}
           </button>
         </div>
+        )}
 
         {/* Upload */}
         <div
