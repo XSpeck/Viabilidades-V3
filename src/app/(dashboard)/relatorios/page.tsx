@@ -150,11 +150,11 @@ export default function RelatoriosPage() {
 
   useEffect(() => { if (user?.nivel === 1) load(); }, [user]);
 
-  // Rebuilds map whenever date filter changes while map is open
+  // Rebuilds map whenever date filter or data changes while map is open
   useEffect(() => {
     if (showMap && !loading) buildMapPoints(filtrado, atendidos, semViab);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicio, dataFim, showMap]);
+  }, [dataInicio, dataFim, showMap, loading]);
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
