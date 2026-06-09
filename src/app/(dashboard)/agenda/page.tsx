@@ -764,6 +764,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
   const [editPrior, setEditPrior]   = useState(d.prioridade);
   const [editDesc, setEditDesc]     = useState(d.descricao);
   const [editLocal, setEditLocal]   = useState(d.local ?? "");
+  const [editTecnico, setEditTecnico] = useState(d.tecnico);
   const [savingEdit, setSavingEdit] = useState(false);
 
   async function handleSaveEdit() {
@@ -771,7 +772,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
     try {
       await editarInfoDemanda(d.id, {
         tipo: editTipo, prioridade: editPrior, descricao: editDesc,
-        local: editLocal || undefined,
+        local: editLocal || undefined, tecnico: editTecnico,
       });
       setEditMode(false);
       onRefresh();
@@ -865,6 +866,13 @@ function DemandaModal({ d, onRefresh, onClose }: {
                 <input value={editLocal} onChange={(e) => setEditLocal(e.target.value)}
                   placeholder="Plus code ou coordenadas"
                   className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Técnico</label>
+                <select value={editTecnico} onChange={(e) => setEditTecnico(e.target.value as typeof editTecnico)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                  {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
+                </select>
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Descrição</label>

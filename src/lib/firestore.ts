@@ -930,7 +930,7 @@ export async function desarquivarDemanda(id: string): Promise<void> {
 
 export async function editarInfoDemanda(
   id: string,
-  data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local">,
+  data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnico">,
 ): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
 }
