@@ -53,7 +53,7 @@ function matchSearch(row: Record<string, string | number | undefined>, q: string
 }
 
 // ─── Page ─────────────────────────────────────────────────────────
-type TabKey = "ftth_ap" | "ftth_rej" | "predios" | "condominios" | "estruturados" | "sem_viab";
+type TabKey = "ftth_ap" | "ftth_rej" | "predios" | "condominios" | "utp" | "estruturados" | "sem_viab";
 
 export default function RelatoriosPage() {
   const { user } = useAuth();
@@ -64,7 +64,7 @@ export default function RelatoriosPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
-  const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", estruturados: "", sem_viab: "" });
+  const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", utp: "", estruturados: "", sem_viab: "" });
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
   const [loadingMap, setLoadingMap] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -187,9 +187,18 @@ export default function RelatoriosPage() {
   const prediosEstruturados     = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio === "estruturado");
   const condominiosEstruturados = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio === "estruturado");
 
-  // Para tabs de detalhamento
-  const prediosViab    = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio !== "estruturado");
-  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio !== "estruturado");
+  // Todos os prédios/condomínios do filtro (para as abas de detalhe)
+  const prediosViab     = filtrado.filter((v) => v.tipo_instalacao === "Prédio");
+  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio");
+  const utpFiltrado     = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP");
+
+  // Atendidos filtrados por data de estruturação (para contar igual ao KPI)
+  const atendidosFiltrados = atendidos.filter((a) => {
+    const d = typeof a.data_estruturacao === "string" ? a.data_estruturacao.slice(0, 10) : "";
+    if (dataInicio && d < dataInicio) return false;
+    if (dataFim    && d > dataFim)    return false;
+    return true;
+  });
 
   const statusLabelRel: Record<string, string> = {
     pendente:     "Pendente",
@@ -267,9 +276,19 @@ export default function RelatoriosPage() {
     Auditor:       v.auditado_por ?? "-",
   }));
 
-  const rowsEstru = atendidos.map((a) => ({
+  const rowsUtp = utpFiltrado.map((v) => ({
+    Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    "Plus Code": locationToPlusCode(v.plus_code_cliente),
+    Tipo:        v.tipo_instalacao,
+    Prédio:      v.predio_ftta ?? "-",
+    Cliente:     v.nome_cliente ?? "-",
+    Usuário:     v.usuario,
+    Auditor:     v.auditado_por ?? "-",
+  }));
+
+  const rowsEstru = atendidosFiltrados.map((a) => ({
     Data:        formatDateTime(a.data_estruturacao),
-    Condomínio:  a.condominio,
+    Prédio:      a.condominio,
     Tecnologia:  a.tecnologia,
     Giga:        a.tecnologia === "FTTA" || a.giga ? "Sim" : "Não",
     Localização: locationToPlusCode(a.localizacao),
@@ -287,12 +306,13 @@ export default function RelatoriosPage() {
 
   // Tab config
   const tabs: { key: TabKey; label: string; count: number }[] = [
-    { key: "ftth_ap",      label: "✅ FTTH Aprovadas",    count: ftthAprovadas.length },
-    { key: "ftth_rej",     label: "❌ FTTH Rejeitadas",   count: ftthRejeitadas.length },
-    { key: "predios",      label: "🏢 Prédios",           count: prediosViab.length },
-    { key: "condominios",  label: "🏘️ Condomínios",       count: condominiosViab.length },
-    { key: "estruturados", label: "🏗️ Estruturados",      count: atendidos.length },
-    { key: "sem_viab",     label: "🚫 Sem Viabilidade",   count: semViab.length },
+    { key: "ftth_ap",      label: "✅ FTTH Aprovadas",      count: ftthAprovadas.length },
+    { key: "ftth_rej",     label: "❌ FTTH Rejeitadas",     count: ftthRejeitadas.length },
+    { key: "predios",      label: "🏢 FTTA Prédios",        count: prediosViab.length },
+    { key: "condominios",  label: "🏘️ FTTA Condomínios",    count: condominiosViab.length },
+    { key: "utp",          label: "🔌 UTPs",                count: utpFiltrado.length },
+    { key: "estruturados", label: "🏗️ Estruturados",        count: atendidosFiltrados.length },
+    { key: "sem_viab",     label: "🚫 Sem Viabilidade",     count: semViab.length },
   ];
 
   const barTecnologias = [
@@ -307,8 +327,8 @@ export default function RelatoriosPage() {
 
   // Row for active tab
   type RowType = Record<string, string | number | undefined>;
-  const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, estruturados: rowsEstru, sem_viab: rowsSemViab };
-  const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "viabilizacoes_predios.csv", condominios: "viabilizacoes_condominios.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
+  const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, utp: rowsUtp, estruturados: rowsEstru, sem_viab: rowsSemViab };
+  const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "ftta_predios.csv", condominios: "ftta_condominios.csv", utp: "utps.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
   const currentRows = allRows[activeTab].filter((r) => matchSearch(r, searches[activeTab]));
 
   return (
