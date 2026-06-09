@@ -1218,6 +1218,7 @@ function GerenciarPrediosSemViabilidade() {
   const [items, setItems]             = useState<PredioSemViabilidade[]>([]);
   const [loading, setLoading]         = useState(true);
   const [busca, setBusca]             = useState("");
+  const [pagina, setPagina]           = useState(1);
   const [modal, setModal]             = useState<{ mode: "create" | "edit"; item?: PredioSemViabilidade } | null>(null);
   const [form, setForm]               = useState<PredioSemViabForm>(BLANK_PSV);
   const [saving, setSaving]           = useState(false);
@@ -1270,6 +1271,10 @@ function GerenciarPrediosSemViabilidade() {
   const filtrados = items.filter((i) =>
     !busca || i.condominio.toLowerCase().includes(busca.toLowerCase())
   );
+  const POR_PAGINA = 10;
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const paginados = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
   return (
     <>
@@ -1285,7 +1290,7 @@ function GerenciarPrediosSemViabilidade() {
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input value={busca} onChange={(e) => setBusca(e.target.value)}
+              <input value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }}
                 placeholder="Buscar condomínio..."
                 className="pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 w-48" />
             </div>
@@ -1317,7 +1322,7 @@ function GerenciarPrediosSemViabilidade() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtrados.map((item) => (
+                  {paginados.map((item) => (
                     <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
                       <td className="py-2.5 pr-4 font-medium text-gray-800">{item.condominio}</td>
                       <td className="py-2.5 pr-4 text-gray-500 font-mono text-xs hidden sm:table-cell max-w-[140px] truncate">
@@ -1342,7 +1347,23 @@ function GerenciarPrediosSemViabilidade() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-xs text-gray-400 mt-3">{filtrados.length} prédio(s) encontrado(s)</p>
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-xs text-gray-400">{filtrados.length} prédio(s) encontrado(s)</p>
+                {totalPaginas > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaAtual === 1}
+                      className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50">‹</button>
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((p) => (
+                      <button key={p} onClick={() => setPagina(p)}
+                        className={`px-2.5 py-1 text-xs border rounded ${p === paginaAtual ? "bg-red-600 text-white border-red-600" : "hover:bg-gray-50"}`}>
+                        {p}
+                      </button>
+                    ))}
+                    <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaAtual === totalPaginas}
+                      className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50">›</button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
