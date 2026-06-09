@@ -293,11 +293,11 @@ export default function AgendaPage() {
                 </tr>
               </thead>
               <tbody>
-                {(["Manhã", "Tarde"] as const).map((periodo, idx) => (
-                  <tr key={periodo} className={idx === 0 ? "border-b" : ""}>
+                {(["Manhã", "Tarde", "Dia todo"] as const).map((periodo, idx) => (
+                  <tr key={periodo} className={idx < 2 ? "border-b" : ""}>
                     <td className="py-5 px-3 border-r bg-gray-50 align-middle sticky left-0 z-10">
                       <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-base">{periodo === "Manhã" ? "🌅" : "🌇"}</span>
+                        <span className="text-base">{periodo === "Manhã" ? "🌅" : periodo === "Tarde" ? "🌇" : "☀️"}</span>
                         <span className="text-xs font-semibold text-gray-600">{periodo}</span>
                       </div>
                     </td>
@@ -690,7 +690,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
                 className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
               <select value={novoPeriodo} onChange={(e) => setNovoPeriodo(e.target.value)}
                 className="px-3 py-2 text-sm border rounded-lg focus:outline-none">
-                <option>Manhã</option><option>Tarde</option>
+                <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
               </select>
             </div>
             <input placeholder="Técnico *" value={novoTecnico} onChange={(e) => setNovoTecnico(e.target.value)}
@@ -927,7 +927,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
                 className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
               <select value={novoPeriodo} onChange={(e) => setNovoPeriodo(e.target.value)}
                 className="px-3 py-2 text-sm border rounded-lg focus:outline-none">
-                <option>Manhã</option><option>Tarde</option>
+                <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
               </select>
             </div>
             <button onClick={handleReagendar} disabled={saving || !novaData}

@@ -667,7 +667,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 <div className="grid grid-cols-2 gap-2">
                   <input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <option>Manhã</option><option>Tarde</option>
+                    <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
                   </select>
                   <input placeholder="Técnico *" value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <select value={tecnologia} onChange={(e) => { setTecnologia(e.target.value); if (e.target.value === "FTTA") setGiga(true); }} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
