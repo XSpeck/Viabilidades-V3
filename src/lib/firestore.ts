@@ -880,6 +880,26 @@ export async function agendarDemanda(id: string, data: string, periodo: string):
   await updateDemanda(id, { status: "em_andamento", data_agendamento: data, periodo_agendamento: periodo });
 }
 
+export async function continuarDemanda(
+  id: string, dataAnterior: string, novaData: string, periodo: string, por: string,
+): Promise<void> {
+  const nota: NotaAtividade = {
+    texto: `Serviço iniciado em ${formatDateBR(dataAnterior)} — continua em ${formatDateBR(novaData)}.`,
+    por,
+    data: new Date().toISOString(),
+  };
+  await updateDoc(doc(db, "demandas_rede", id), {
+    data_agendamento: novaData,
+    periodo_agendamento: periodo,
+    notas_atividade: arrayUnion(nota),
+  });
+  bustCache("viab_demandas_rede_v1");
+}
+
+function formatDateBR(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR");
+}
+
 export async function concluirDemanda(id: string, obs?: string): Promise<void> {
   await updateDemanda(id, {
     status: "concluida",

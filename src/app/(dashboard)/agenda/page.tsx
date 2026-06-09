@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
-  getDemandasAgendadas, agendarDemanda, concluirDemanda,
+  getDemandasAgendadas, agendarDemanda, concluirDemanda, continuarDemanda,
   addNotaDemanda, addNotaVisita, editarInfoDemanda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
@@ -745,7 +745,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
 }
 
 // ─── Modal de demanda ─────────────────────────────────────────────
-type DemandaAction = "concluir" | "reagendar" | null;
+type DemandaAction = "concluir" | "reagendar" | "continuar" | null;
 
 function DemandaModal({ d, onRefresh, onClose }: {
   d: DemandaRede; onRefresh: () => void; onClose: () => void;
@@ -802,6 +802,16 @@ function DemandaModal({ d, onRefresh, onClose }: {
       await agendarDemanda(d.id, novaData, novoPeriodo);
       done(`🔄 Reagendado para ${fDate(novaData)} — ${novoPeriodo}.`);
     } catch { alert("Erro ao reagendar."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleContinuar() {
+    if (!novaData) { alert("Informe a data!"); return; }
+    setSaving(true);
+    try {
+      await continuarDemanda(d.id, d.data_agendamento ?? "", novaData, novoPeriodo, user?.nome ?? "—");
+      done(`➡️ Continuação registrada para ${fDate(novaData)} — ${novoPeriodo}.`);
+    } catch { alert("Erro ao registrar continuação."); }
     finally { setSaving(false); }
   }
 
@@ -930,6 +940,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
 
         {action === "reagendar" && (
           <ActionForm title="🔄 Reagendar Demanda" color="yellow" onCancel={() => setAction(null)}>
+            <p className="text-xs text-yellow-700">Use quando o serviço ainda não foi iniciado.</p>
             <div className="grid grid-cols-2 gap-2">
               <input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)}
                 className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
@@ -941,6 +952,24 @@ function DemandaModal({ d, onRefresh, onClose }: {
             <button onClick={handleReagendar} disabled={saving || !novaData}
               className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar Reagendamento"}
+            </button>
+          </ActionForm>
+        )}
+
+        {action === "continuar" && (
+          <ActionForm title="➡️ Continuar em Outro Dia" color="yellow" onCancel={() => setAction(null)}>
+            <p className="text-xs text-yellow-700">Serviço iniciado mas não concluído — registra a continuação e atualiza a agenda.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)}
+                className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+              <select value={novoPeriodo} onChange={(e) => setNovoPeriodo(e.target.value)}
+                className="px-3 py-2 text-sm border rounded-lg focus:outline-none">
+                <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+              </select>
+            </div>
+            <button onClick={handleContinuar} disabled={saving || !novaData}
+              className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Registrar Continuação"}
             </button>
           </ActionForm>
         )}
@@ -959,7 +988,11 @@ function DemandaModal({ d, onRefresh, onClose }: {
             className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-colors">
             ✅ Concluído
           </button>
-          <button onClick={() => setAction("reagendar")}
+          <button onClick={() => { setNovaData(""); setAction("continuar"); }}
+            className="flex-1 py-2.5 border-2 border-blue-300 hover:border-blue-400 text-blue-600 rounded-xl text-sm font-semibold transition-colors hover:bg-blue-50">
+            ➡️ Continuar
+          </button>
+          <button onClick={() => { setNovaData(""); setAction("reagendar"); }}
             className="flex-1 py-2.5 border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-xl text-sm font-semibold transition-colors hover:bg-white">
             🔄 Reagendar
           </button>
