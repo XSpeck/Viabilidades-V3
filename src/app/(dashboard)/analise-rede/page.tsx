@@ -151,7 +151,7 @@ export default function AnaliseRedePage() {
         <div className="flex overflow-x-auto border-b">
           {(["todos", ...TECNICOS_REDE] as ("todos" | TecnicoRede)[]).map((t) => {
             const pendentes = t === "todos"
-              ? demandas.filter((d) => d.status !== "concluida").length
+              ? demandas.filter((d) => d.status !== "concluida" && d.status !== "arquivada").length
               : countTecnico(t);
             return (
               <button key={t} onClick={() => setTecnicoTab(t)}
