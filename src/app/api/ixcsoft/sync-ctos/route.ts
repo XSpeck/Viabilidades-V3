@@ -52,7 +52,12 @@ export async function GET() {
 
     while (true) {
       const data = await fetchPage(ixcUrl, auth, page);
-      const registros = data.registros ?? [];
+
+      if (!Array.isArray(data.registros)) {
+        throw new Error(`Resposta inesperada do IXC Soft: ${JSON.stringify(data).slice(0, 200)}`);
+      }
+
+      const registros = data.registros;
 
       for (const r of registros) {
         const lat = parseFloat(r.latitude);
