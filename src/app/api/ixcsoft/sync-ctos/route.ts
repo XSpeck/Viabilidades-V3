@@ -10,9 +10,10 @@ interface IxcCto {
 interface IxcResponse {
   registros: IxcCto[];
   total: string;
+  page: number;
 }
 
-async function fetchPage(url: string, auth: string, pagina: number): Promise<IxcResponse> {
+async function fetchPage(url: string, auth: string, page: number): Promise<IxcResponse> {
   const res = await fetch(`${url}/webservice/v1/rad_caixa_ftth`, {
     method: "POST",
     headers: {
@@ -24,9 +25,8 @@ async function fetchPage(url: string, auth: string, pagina: number): Promise<Ixc
       qtype: "rad_caixa_ftth.id",
       query: "0",
       oper: ">",
-      linhask: "1000",
-      pagina: String(pagina),
-      ordenarPor: "rad_caixa_ftth.id",
+      rp: "1000",
+      page: String(page),
     }),
   });
   if (!res.ok) throw new Error(`IXC Soft retornou ${res.status}`);
@@ -48,10 +48,10 @@ export async function GET() {
 
   try {
     const allCtos: Cto[] = [];
-    let pagina = 1;
+    let page = 1;
 
     while (true) {
-      const data = await fetchPage(ixcUrl, auth, pagina);
+      const data = await fetchPage(ixcUrl, auth, page);
       const registros = data.registros ?? [];
 
       for (const r of registros) {
@@ -67,7 +67,7 @@ export async function GET() {
       }
 
       if (registros.length < 1000) break;
-      pagina++;
+      page++;
     }
 
     return Response.json({ ctos: allCtos, total: allCtos.length });
