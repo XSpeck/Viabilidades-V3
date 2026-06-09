@@ -113,19 +113,13 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // Prédio aprovado direto (excluindo UTP e fluxo estrutural)
-    viabs.filter((v) => v.tipo_instalacao === "Prédio" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v) && !v.status_predio).forEach((v) => {
+    // FTTA aprovados (Prédio ou Condomínio estruturado)
+    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado").forEach((v) => {
       const geo = decode(v.plus_code_cliente);
-      if (geo) points.push({ id: `predio_ap_${v.id}`, ...geo, category: "predio_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+      if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // Condomínio aprovado direto (excluindo fluxo estrutural)
-    viabs.filter((v) => v.tipo_instalacao === "Condomínio" && ["aprovado", "finalizado"].includes(v.status) && !v.status_predio).forEach((v) => {
-      const geo = decode(v.plus_code_cliente);
-      if (geo) points.push({ id: `cond_ap_${v.id}`, ...geo, category: "cond_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
-    });
-
-    // Prédio/Condomínio rejeitados
+    // FTTA rejeitados (Prédio ou Condomínio sem viabilidade)
     viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status === "rejeitado").forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftta_rej_${v.id}`, ...geo, category: "ftta_rej", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });

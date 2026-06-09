@@ -20,7 +20,7 @@ const LAYERS = {
 type LayerKey = keyof typeof LAYERS;
 
 // ─── Tipos de ponto ───────────────────────────────────────────────
-export type PointCategory = "ftth_ap" | "ftth_rej" | "utp" | "predio_ap" | "cond_ap" | "ftta_rej" | "sem_viab";
+export type PointCategory = "ftth_ap" | "ftth_rej" | "ftta_ap" | "ftta_rej" | "utp" | "sem_viab";
 
 export interface MapPoint {
   id: string;
@@ -34,13 +34,12 @@ export interface MapPoint {
 }
 
 const CATEGORIES: Record<PointCategory, { label: string; color: string; emoji: string }> = {
-  ftth_ap:   { label: "FTTH Aprovado",          color: "#22c55e", emoji: "✅" },
-  ftth_rej:  { label: "FTTH Sem Viabilidade",   color: "#ef4444", emoji: "❌" },
-  utp:       { label: "UTP",                     color: "#8b5cf6", emoji: "📡" },
-  predio_ap: { label: "Prédio Aprovado",         color: "#3b82f6", emoji: "🏢" },
-  cond_ap:   { label: "Condomínio Aprovado",    color: "#f97316", emoji: "🏘️" },
-  ftta_rej:  { label: "Prédio/Cond. Sem Viab.", color: "#b91c1c", emoji: "❌" },
-  sem_viab:  { label: "Sem Viab. (Cadastro)",   color: "#eab308", emoji: "🚫" },
+  ftth_ap:  { label: "FTTH Aprovada",       color: "#22c55e", emoji: "✅" },
+  ftth_rej: { label: "FTTH Rejeitada",      color: "#ef4444", emoji: "❌" },
+  ftta_ap:  { label: "FTTA Aprovado",       color: "#3b82f6", emoji: "✅" },
+  ftta_rej: { label: "FTTA Rejeitado",      color: "#f97316", emoji: "❌" },
+  utp:      { label: "UTP",                 color: "#8b5cf6", emoji: "🔌" },
+  sem_viab: { label: "Sem Viab. (Cadastro)",color: "#eab308", emoji: "🚫" },
 };
 
 // ─── Ícone SVG por categoria ──────────────────────────────────────
@@ -91,7 +90,7 @@ interface Props {
 export default function RelatorioMapa({ points }: Props) {
   const [layer, setLayer] = useState<LayerKey>("map");
   const [visible, setVisible] = useState<Record<PointCategory, boolean>>({
-    ftth_ap: true, ftth_rej: true, utp: true, predio_ap: true, cond_ap: true, ftta_rej: true, sem_viab: true,
+    ftth_ap: true, ftth_rej: true, ftta_ap: true, ftta_rej: true, utp: true, sem_viab: true,
   });
 
   function toggle(cat: PointCategory) {
