@@ -12,7 +12,7 @@ import {
   batchImportViabilizacoes,
 } from "@/lib/firestore";
 import type { AppUser, UserCargo, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio } from "@/types";
-import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, RefreshCw } from "lucide-react";
+import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 export default function AdminPage() {
@@ -80,8 +80,6 @@ function ImportCtos() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     countCtosInFirestore()
@@ -144,29 +142,6 @@ function ImportCtos() {
     }
   }
 
-  async function handleIxcSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch("/api/ixcsoft/sync-ctos");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-
-      const { ctos } = data as { ctos: import("@/lib/ctos").Cto[]; total: number };
-      if (!ctos?.length) throw new Error("Nenhuma CTO retornada pelo IXC Soft.");
-
-      await importCtosToFirestore(ctos, (done, total) => setProgress({ done, total }));
-      setCtosNoFirebase(ctos.length);
-      setSyncResult({ ok: true, msg: `✅ ${ctos.length} CTOs sincronizadas do IXC Soft!` });
-      try { sessionStorage.removeItem("viab_ctos_v3"); } catch {}
-    } catch (e) {
-      setSyncResult({ ok: false, msg: `❌ Erro: ${e instanceof Error ? e.message : String(e)}` });
-    } finally {
-      setSyncing(false);
-      setProgress({ done: 0, total: 0 });
-    }
-  }
-
   const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
@@ -192,36 +167,6 @@ function ImportCtos() {
             </span>
           )}
         </div>
-
-        {/* Sincronizar via IXC Soft — só funciona rodando localmente (IP liberado no IXC) */}
-        {process.env.NODE_ENV === "development" && (
-        <div className="space-y-2 border border-teal-200 bg-teal-50 rounded-lg p-3">
-          <p className="text-xs text-teal-800 font-medium">
-            IXC Soft — busca todas as CTOs direto do sistema de gestão.
-          </p>
-          {syncing && progress.total > 0 && (
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-teal-600">
-                <span>Salvando...</span>
-                <span>{progress.done} / {progress.total}</span>
-              </div>
-              <div className="w-full bg-teal-200 rounded-full h-1.5">
-                <div className="bg-teal-600 h-1.5 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPct}%` }} />
-              </div>
-            </div>
-          )}
-          {syncResult && (
-            <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${syncResult.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-              {syncResult.msg}
-            </div>
-          )}
-          <button onClick={handleIxcSync} disabled={syncing}
-            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
-            {syncing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...</> : <><RefreshCw className="w-3.5 h-3.5" /> Sincronizar CTOs via IXC Soft</>}
-          </button>
-        </div>
-        )}
 
         {/* Upload */}
         <div
