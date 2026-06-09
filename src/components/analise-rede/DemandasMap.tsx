@@ -184,7 +184,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                   <Popup>
                     <div style={{ minWidth: 190, fontFamily: "inherit" }}>
                       <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{p.demanda.tipo}</p>
-                      <p style={{ color: "#6b7280", fontSize: 12, marginBottom: 8, whiteSpace: "pre-wrap" }}>{p.demanda.descricao}</p>
+                      <p style={{ color: "#6b7280", fontSize: 12, marginBottom: 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}>{p.demanda.descricao}</p>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                         <span style={{
                           width: 10, height: 10, borderRadius: "50%",
