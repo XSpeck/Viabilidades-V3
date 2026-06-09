@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { OpenLocationCode } from "open-location-code";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
@@ -81,7 +82,6 @@ export default function RelatoriosPage() {
 
     function decode(plusCode: string): { lat: number; lon: number } | null {
       try {
-        const { OpenLocationCode } = require("open-location-code");
         const olc = new OpenLocationCode();
         const m = plusCode.trim().match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
         if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
@@ -145,6 +145,7 @@ export default function RelatoriosPage() {
     setLoading(true);
     Promise.all([getAllViabilizacoes(), getPrediosAtendidos(), getPrediosSemViabilidade()])
       .then(([v, a, s]) => { setViabilizacoes(v); setAtendidos(a); setSemViab(s); })
+      .catch(console.error)
       .finally(() => setLoading(false));
   }
 
@@ -167,7 +168,11 @@ export default function RelatoriosPage() {
     return true;
   }
 
-  const filtrado = viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao));
+  const filtrado = useMemo(
+    () => viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viabilizacoes, dataInicio, dataFim],
+  );
 
   // ── Derived data ─────────────────────────────────────────────
   const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (

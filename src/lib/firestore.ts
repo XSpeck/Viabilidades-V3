@@ -467,6 +467,7 @@ export async function finalizarEstruturado(
     giga: dados.giga,
     data_estruturacao: serverTimestamp(),
   });
+  bustCache("viab_predios_atendidos_v1");
   await updateViabilizacao(id, {
     status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
@@ -489,6 +490,7 @@ export async function rejeitarPredio(
     registrado_por: registradoPor,
     data_registro: serverTimestamp(),
   });
+  bustCache("viab_predios_sem_viab_v1");
   // 2. Atualizar viabilização
   await updateViabilizacao(id, {
     status: "rejeitado",
@@ -953,6 +955,7 @@ export async function editarInfoDemanda(
   data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnico">,
 ): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
+  bustCache("viab_demandas_rede_v1");
 }
 
 export async function addNotaDemanda(id: string, texto: string, por: string): Promise<void> {
