@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { OpenLocationCode } from "open-location-code";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
@@ -168,11 +168,7 @@ export default function RelatoriosPage() {
     return true;
   }
 
-  const filtrado = useMemo(
-    () => viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viabilizacoes, dataInicio, dataFim],
-  );
+  const filtrado = viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao));
 
   // ── Derived data ─────────────────────────────────────────────
   const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
