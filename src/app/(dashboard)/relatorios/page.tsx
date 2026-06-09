@@ -171,28 +171,31 @@ export default function RelatoriosPage() {
   const filtrado = viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao));
 
   // ── Derived data ─────────────────────────────────────────────
+  // FTTH
   const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
     v.status === "aprovado" ||
     (v.status === "finalizado" && v.status_instalacao === "instalado")
   ));
-  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
-    v.status === "rejeitado" ||
-    (v.status === "finalizado" && !!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")
-  ));
-  const prediosViab    = filtrado.filter((v) => v.tipo_instalacao === "Prédio" && v.status_predio !== "estruturado");
-  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio !== "estruturado");
+  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado");
 
-  const taxaAprovacao = ftthAprovadas.length + ftthRejeitadas.length > 0
+  const taxaAprovacaoFTTH = ftthAprovadas.length + ftthRejeitadas.length > 0
     ? ((ftthAprovadas.length / (ftthAprovadas.length + ftthRejeitadas.length)) * 100).toFixed(1)
     : "0.0";
 
-  const fttaCount     = atendidos.filter((a) => a.tecnologia === "FTTA").length;
-  const utpCount      = atendidos.filter((a) => a.tecnologia === "UTP").length;
-  const ftthCondCount = atendidos.filter((a) => a.tecnologia === "FTTH").length;
-  const gigaCount     = atendidos.filter((a) => a.tecnologia === "FTTA" || a.giga).length;
-  // UTP direto (via marcarUTP) — não passa por predios_atendidos
-  const utpDiretoCount = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
-  const utpTotal = utpCount + utpDiretoCount;
+  // FTTA (Prédio + Condomínio estruturados/rejeitados)
+  const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado");
+  const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status === "rejeitado");
+
+  // UTP
+  const utpTotal = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
+
+  // Prédios e Condomínios estruturados (separados)
+  const prediosEstruturados     = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio === "estruturado");
+  const condominiosEstruturados = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio === "estruturado");
+
+  // Para tabs de detalhamento
+  const prediosViab    = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio !== "estruturado");
+  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio !== "estruturado");
 
   const statusLabelRel: Record<string, string> = {
     pendente:     "Pendente",
@@ -298,15 +301,14 @@ export default function RelatoriosPage() {
     { key: "sem_viab",     label: "🚫 Sem Viabilidade",   count: semViab.length },
   ];
 
-  const pieData = [
-    { name: "Aprovadas",  value: ftthAprovadas.length,  color: "#22c55e" },
-    { name: "Rejeitadas", value: ftthRejeitadas.length, color: "#ef4444" },
+  const barTecnologias = [
+    { name: "FTTH", Aprovado: ftthAprovadas.length, Rejeitado: ftthRejeitadas.length },
+    { name: "FTTA", Aprovado: fttaAprovados.length, Rejeitado: fttaRejeitados.length },
   ];
 
-  const barPredios = [
-    { name: "FTTA",  value: fttaCount,     fill: "#3b82f6" },
-    { name: "UTP",   value: utpTotal,      fill: "#22c55e" },
-    { name: "FTTH",  value: ftthCondCount, fill: "#f97316" },
+  const pieEstruturados = [
+    { name: "Prédios",     value: prediosEstruturados.length,     color: "#3b82f6" },
+    { name: "Condomínios", value: condominiosEstruturados.length, color: "#f97316" },
   ];
 
   // Row for active tab
@@ -348,68 +350,100 @@ export default function RelatoriosPage() {
         )}
       </div>
 
-      {/* KPIs FTTH */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "✅ FTTH Aprovadas",     value: ftthAprovadas.length,  color: "green" },
-          { label: "🏢 Prédios Estruturados",value: atendidos.length,      color: "blue"  },
-          { label: "📈 Taxa de Aprovação",   value: `${taxaAprovacao}%`,   color: "indigo"},
-          { label: "📍 FTTH Sem Viabilidade",value: ftthRejeitadas.length, color: "red"   },
-        ].map((k) => (
-          <div key={k.label} className="bg-white rounded-xl border p-4 text-center">
-            <p className="text-3xl font-bold text-gray-900">{k.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{k.label}</p>
+      {/* KPIs — Tecnologias */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+        {/* FTTH */}
+        <div className="bg-white rounded-xl border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-widest text-blue-600">FTTH</span>
+            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+              {taxaAprovacaoFTTH}% aprovação
+            </span>
           </div>
-        ))}
+          <div className="grid grid-cols-2 divide-x">
+            <div className="text-center pr-4">
+              <p className="text-4xl font-bold text-green-600">{ftthAprovadas.length}</p>
+              <p className="text-xs text-gray-500 mt-1">✅ Aprovadas</p>
+            </div>
+            <div className="text-center pl-4">
+              <p className="text-4xl font-bold text-red-500">{ftthRejeitadas.length}</p>
+              <p className="text-xs text-gray-500 mt-1">❌ Rejeitadas</p>
+            </div>
+          </div>
+        </div>
+
+        {/* FTTA */}
+        <div className="bg-white rounded-xl border p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-widest text-orange-600">FTTA</span>
+            <span className="text-xs text-gray-400">Prédios &amp; Condomínios</span>
+          </div>
+          <div className="grid grid-cols-2 divide-x">
+            <div className="text-center pr-4">
+              <p className="text-4xl font-bold text-green-600">{fttaAprovados.length}</p>
+              <p className="text-xs text-gray-500 mt-1">✅ Aprovados</p>
+            </div>
+            <div className="text-center pl-4">
+              <p className="text-4xl font-bold text-red-500">{fttaRejeitados.length}</p>
+              <p className="text-xs text-gray-500 mt-1">❌ Rejeitados</p>
+            </div>
+          </div>
+        </div>
+
+        {/* UTP */}
+        <div className="bg-white rounded-xl border p-5 flex flex-col items-center justify-center gap-1">
+          <p className="text-5xl font-bold text-gray-900">{utpTotal}</p>
+          <p className="text-sm font-semibold text-gray-500 mt-1">🔌 UTPs</p>
+        </div>
+
+      </div>
+
+      {/* KPIs — Estruturados */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border p-5 text-center">
+          <p className="text-5xl font-bold text-gray-900">{prediosEstruturados.length}</p>
+          <p className="text-sm font-semibold text-gray-500 mt-2">🏢 Prédios Estruturados</p>
+        </div>
+        <div className="bg-white rounded-xl border p-5 text-center">
+          <p className="text-5xl font-bold text-gray-900">{condominiosEstruturados.length}</p>
+          <p className="text-sm font-semibold text-gray-500 mt-2">🏘️ Condomínios Estruturados</p>
+        </div>
       </div>
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Grouped bar: FTTH vs FTTA */}
         <div className="bg-white rounded-xl border p-4">
-          <h3 className="font-semibold text-gray-700 mb-4">🥧 FTTH — Aprovadas vs Rejeitadas</h3>
+          <h3 className="font-semibold text-gray-700 mb-4">📊 Aprovados vs Rejeitados por Tecnologia</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value"
-                label={({ name, value, percent }) => `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`}>
-                {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <h3 className="font-semibold text-gray-700 mb-4">📊 Prédios Estruturados por Tecnologia</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={barPredios} barSize={48}>
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+            <BarChart data={barTecnologias} barCategoryGap="35%">
+              <XAxis dataKey="name" tick={{ fontSize: 13, fontWeight: 600 }} />
               <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }}>
-                {barPredios.map((e, i) => <Cell key={i} fill={e.fill} />)}
-              </Bar>
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="Aprovado" fill="#22c55e" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 11 }} />
+              <Bar dataKey="Rejeitado" fill="#ef4444" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 11 }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
 
-      {/* KPIs Prédios */}
-      <div className="bg-white rounded-xl border p-4">
-        <h3 className="font-semibold text-gray-700 mb-4">🏢 Resumo de Prédios / Condomínios</h3>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
-          {[
-            { label: "Total Estruturados", value: atendidos.length  },
-            { label: "⚡ Giga",            value: gigaCount          },
-            { label: "FTTA",               value: fttaCount          },
-            { label: "UTP",                value: utpTotal           },
-            { label: "FTTH (Cond.)",       value: ftthCondCount      },
-            { label: "Sem Viabilidade",    value: semViab.length     },
-          ].map((k) => (
-            <div key={k.label} className="bg-gray-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-gray-900">{k.value}</p>
-              <p className="text-xs text-gray-500">{k.label}</p>
-            </div>
-          ))}
+        {/* Pie: Prédios vs Condomínios estruturados */}
+        <div className="bg-white rounded-xl border p-4">
+          <h3 className="font-semibold text-gray-700 mb-4">🥧 Estruturados por Tipo</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={pieEstruturados} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value"
+                label={({ name, value, percent }) => value > 0 ? `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)` : ""}>
+                {pieEstruturados.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
+
       </div>
 
       {/* Tabelas com abas */}
