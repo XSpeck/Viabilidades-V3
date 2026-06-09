@@ -31,10 +31,10 @@ const navItems: NavItem[] = [
   { href: "/resultados",     label: "Meus Resultados",        icon: <BarChart2 className="w-4 h-4" />,    page: "resultados" },
   { href: "/viabilidades",   label: "Viabilidades",           icon: <ClipboardList className="w-4 h-4" />, page: "viabilidades" },
   { href: "/auditoria",      label: "Auditoria",              icon: <Search className="w-4 h-4" />,        page: "auditoria" },
+  { href: "/analise-rede",   label: "Análise da Rede",        icon: <Network className="w-4 h-4" />,      page: "analise-rede" },
   { href: "/agenda",         label: "Agenda FTTA/UTP",        icon: <CalendarDays className="w-4 h-4" />, page: "agenda" },
   { href: "/agenda-tecnica", label: "Agenda Técnica",         icon: <Wrench className="w-4 h-4" />,       page: "agenda-tecnica" },
   { href: "/relatorios",     label: "Relatórios",             icon: <FileText className="w-4 h-4" />,     page: "relatorios" },
-  { href: "/analise-rede",   label: "Análise da Rede",        icon: <Network className="w-4 h-4" />,      page: "analise-rede" },
   { href: "/adm",            label: "Administração",          icon: <Settings className="w-4 h-4" />,     page: "adm" },
 ];
 
