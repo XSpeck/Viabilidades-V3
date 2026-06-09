@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, avancarStatusDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -223,10 +223,6 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   const [dataAgendar, setDataAgendar]     = useState("");
   const [periodoAgendar, setPeriodoAgendar] = useState("Manhã");
 
-  // Concluir (em_andamento → concluida)
-  const [showObsConc, setShowObsConc]     = useState(false);
-  const [obsConc, setObsConc]             = useState("");
-
   async function handleAgendar() {
     if (!dataAgendar) { alert("Informe a data!"); return; }
     setSaving(true);
@@ -236,14 +232,6 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
       onRefresh();
     } catch (e) {
       alert("Erro ao agendar: " + (e instanceof Error ? e.message : "verifique as permissões e tente novamente."));
-    } finally { setSaving(false); }
-  }
-
-  async function handleConcluir() {
-    setSaving(true);
-    try {
-      await avancarStatusDemanda(d, obsConc || undefined);
-      onRefresh();
     } finally { setSaving(false); }
   }
 
@@ -321,15 +309,15 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
         {/* Ações */}
         <div className="flex flex-col items-end gap-2 shrink-0">
           {d.status === "aberta" && (
-            <button onClick={() => { setShowAgendar(!showAgendar); setShowObsConc(false); }}
+            <button onClick={() => setShowAgendar(!showAgendar)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50">
               <ChevronRight className="w-3 h-3" /> 📅 Agendar
             </button>
           )}
           {d.status === "em_andamento" && (
-            <button onClick={() => { setShowObsConc(!showObsConc); setShowAgendar(false); }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50">
-              <ChevronRight className="w-3 h-3" /> ✅ Concluir
+            <button onClick={handleReabrir} disabled={saving}
+              className="text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50">
+              ↩ Cancelar agendamento
             </button>
           )}
           {d.status === "concluida" && (
@@ -389,27 +377,6 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
         </div>
       )}
 
-      {/* Form concluir */}
-      {showObsConc && (
-        <div className="mt-3 space-y-2">
-          <textarea
-            placeholder="Observação de conclusão (opcional)..."
-            value={obsConc} onChange={(e) => setObsConc(e.target.value)}
-            rows={2}
-            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-          />
-          <div className="flex gap-2">
-            <button onClick={handleConcluir} disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "✅ Confirmar conclusão"}
-            </button>
-            <button onClick={() => setShowObsConc(false)}
-              className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-gray-50">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
