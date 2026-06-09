@@ -41,11 +41,6 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // CTOs legado — leitura para migração
-    match /ctos/{id} {
-      allow read: if isAuth();
-    }
-
     // Redes distribuidoras
     match /redes_distribuidoras/{id} {
       allow read: if isAuth();

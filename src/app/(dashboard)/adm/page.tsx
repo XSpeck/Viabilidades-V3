@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { parseCtoKml, importCtosToFirestore, countCtosInFirestore, migrarCtosLegado } from "@/lib/ctos";
+import { parseCtoKml, importCtosToFirestore, countCtosInFirestore } from "@/lib/ctos";
 import { importRedeToFirestore, listRedesImportadas, EMPRESAS } from "@/lib/redes";
 import { listUsers, createUser, updateUser, deleteUser } from "@/lib/users";
 import {
@@ -80,8 +80,6 @@ function ImportCtos() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [migrating, setMigrating] = useState(false);
-  const [migrateResult, setMigrateResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -171,26 +169,6 @@ function ImportCtos() {
 
   const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
-  async function handleMigrar() {
-    setMigrating(true);
-    setMigrateResult(null);
-    try {
-      const total = await migrarCtosLegado((done, t) => setProgress({ done, total: t }));
-      if (total === 0) {
-        setMigrateResult({ ok: false, msg: "⚠️ Nenhuma CTO encontrada no formato antigo." });
-      } else {
-        setCtosNoFirebase(total);
-        setMigrateResult({ ok: true, msg: `✅ ${total} CTOs migradas para o novo formato!` });
-        try { sessionStorage.removeItem("viab_ctos_v3"); } catch {}
-      }
-    } catch (err) {
-      setMigrateResult({ ok: false, msg: `❌ Erro: ${err instanceof Error ? err.message : String(err)}` });
-    } finally {
-      setMigrating(false);
-      setProgress({ done: 0, total: 0 });
-    }
-  }
-
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
       {/* Header do card */}
@@ -214,24 +192,6 @@ function ImportCtos() {
             </span>
           )}
         </div>
-
-        {/* Migração do formato antigo */}
-        {(ctosNoFirebase ?? 0) === 0 && !loadingCount && (
-          <div className="space-y-2 border border-amber-200 bg-amber-50 rounded-lg p-3">
-            <p className="text-xs text-amber-800 font-medium">
-              🔄 Dados no formato antigo? Migre sem precisar re-uploadar o KML.
-            </p>
-            {migrateResult && (
-              <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${migrateResult.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-                {migrateResult.msg}
-              </div>
-            )}
-            <button onClick={handleMigrar} disabled={migrating}
-              className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
-              {migrating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Migrando...</> : "Migrar CTOs do formato antigo"}
-            </button>
-          </div>
-        )}
 
         {/* Sincronizar via IXC Soft */}
         <div className="space-y-2 border border-teal-200 bg-teal-50 rounded-lg p-3">

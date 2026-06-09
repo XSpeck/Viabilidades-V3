@@ -106,18 +106,6 @@ export async function countCtosInFirestore(): Promise<number> {
   return (snap.data().total as number) ?? 0;
 }
 
-export async function migrarCtosLegado(
-  onProgress?: (done: number, total: number) => void
-): Promise<number> {
-  const { db } = await import("./firebase");
-  const { getDocs, collection } = await import("firebase/firestore");
-  const snap = await getDocs(collection(db, "ctos"));
-  if (snap.empty) return 0;
-  const ctos: Cto[] = snap.docs.map((d) => d.data() as Cto);
-  await importCtosToFirestore(ctos, onProgress);
-  return ctos.length;
-}
-
 // =====================
 // Buscar CTOs (Firestore + cache sessionStorage)
 // =====================
