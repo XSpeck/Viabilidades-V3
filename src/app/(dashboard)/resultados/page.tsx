@@ -645,7 +645,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   "bg-gray-50 border border-gray-200"
                 }`}>
                   <p className="text-xs font-medium text-gray-500 mb-0.5">{m.de} · {formatDateTime(m.data)}</p>
-                  <p className="text-gray-800">{m.texto}</p>
+                  <p className="text-gray-800 whitespace-pre-wrap">{m.texto}</p>
                 </div>
               ))}
             </div>
@@ -706,7 +706,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
               <p><strong>Distância:</strong> {r.distancia_cliente}</p>
               <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
-              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+              {r.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {r.observacoes}</p>}
             </div>
           )}
 
@@ -738,7 +738,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p><strong>Menor RX:</strong> {r.menor_rx} dBm</p>
               <p><strong>Distância:</strong> {r.distancia_cliente}</p>
               <p><strong>Localização CTO:</strong> {r.localizacao_caixa}</p>
-              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+              {r.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {r.observacoes}</p>}
             </div>
           )}
 
@@ -768,7 +768,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-1 text-sm">
                   <p className="font-medium text-yellow-800">⏳ Proposta enviada ao setor de agendamento</p>
                   <p>📆 Sua preferência: <strong>{r.proposta_data ? new Date(r.proposta_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.proposta_periodo}</p>
-                  {r.proposta_obs && <p className="text-gray-600">📝 {r.proposta_obs}</p>}
+                  {r.proposta_obs && <p className="text-gray-600 whitespace-pre-wrap">📝 {r.proposta_obs}</p>}
                   <p className="text-xs text-yellow-700 mt-1">Aguardando análise e confirmação do agendamento.</p>
                 </div>
               )}
@@ -779,7 +779,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                     <p className="font-medium text-orange-800">⚠️ Setor de agendamento propôs uma nova data</p>
                     <p>📆 Nova data: <strong>{r.agendamento_data ? new Date(r.agendamento_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.agendamento_periodo}</p>
                     <p>👷 Técnico: {r.agendamento_tecnico}</p>
-                    {r.agendamento_obs && <p className="text-gray-600">📝 {r.agendamento_obs}</p>}
+                    {r.agendamento_obs && <p className="text-gray-600 whitespace-pre-wrap">📝 {r.agendamento_obs}</p>}
                   </div>
                   <div className="flex gap-2">
                     <button onClick={handleConfirmarProposta} disabled={enviandoProposta} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">
@@ -847,7 +847,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p><strong>Prédio:</strong> {r.predio_ftta}</p>
               <p><strong>Portas:</strong> {r.portas_disponiveis}</p>
               <p><strong>Média RX:</strong> {r.media_rx} dBm</p>
-              {r.observacoes && <p><strong>Obs:</strong> {r.observacoes}</p>}
+              {r.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {r.observacoes}</p>}
             </div>
           )}
 
@@ -949,7 +949,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               {r.obs_agendamento && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
                   <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Sua observação</p>
-                  <p className="text-gray-700 italic">"{r.obs_agendamento}"</p>
+                  <p className="text-gray-700 italic whitespace-pre-wrap">"{r.obs_agendamento}"</p>
                 </div>
               )}
             </div>
@@ -962,7 +962,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                 <p className="font-medium text-orange-800">⚠️ O auditor propôs uma data para a visita técnica</p>
                 <p>📆 Data proposta: <strong>{r.proposta_visita_data ? new Date(r.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {r.proposta_visita_periodo}</p>
                 {r.proposta_visita_tecnico && <p>👷 Técnico: {r.proposta_visita_tecnico}</p>}
-                {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
+                {r.obs_agendamento && <p className="text-gray-600 whitespace-pre-wrap">📝 {r.obs_agendamento}</p>}
               </div>
               {r.historico_visita && (
                 <details className="text-xs">
@@ -1002,7 +1002,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p>👷 Técnico: {r.tecnico_responsavel}</p>
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
               {(r.giga || r.tecnologia_predio === "FTTA" || r.tipo_instalacao === "Condomínio") && <p>⚡ Giga: Sim</p>}
-              {r.obs_agendamento && <p className="text-gray-600">📝 {r.obs_agendamento}</p>}
+              {r.obs_agendamento && <p className="text-gray-600 whitespace-pre-wrap">📝 {r.obs_agendamento}</p>}
               {r.historico_visita && (
                 <details className="text-xs mt-1">
                   <summary className="cursor-pointer text-gray-400 hover:text-gray-600">📋 Histórico de negociação</summary>

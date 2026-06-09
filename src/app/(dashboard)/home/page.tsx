@@ -381,7 +381,7 @@ export default function HomePage() {
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{p.condominio}</td>
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">{locationToPlusCode(p.localizacao)}</td>
-                          <td className="px-4 py-3 text-gray-600">{p.observacao}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-pre-wrap">{p.observacao}</td>
                         </tr>
                       ))}
                   </tbody>

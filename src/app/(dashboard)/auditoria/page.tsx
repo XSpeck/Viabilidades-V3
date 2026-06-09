@@ -371,7 +371,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   "bg-gray-50 border border-gray-200"
                 }`}>
                   <p className="text-xs font-medium text-gray-500 mb-0.5">{m.de} · {formatDateTime(m.data)}</p>
-                  <p className="text-gray-800">{m.texto}</p>
+                  <p className="text-gray-800 whitespace-pre-wrap">{m.texto}</p>
                 </div>
               ))}
             </div>
@@ -646,7 +646,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 {v.obs_agendamento && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm">
                     <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Observação do usuário</p>
-                    <p className="text-gray-700 italic">"{v.obs_agendamento}"</p>
+                    <p className="text-gray-700 italic whitespace-pre-wrap">"{v.obs_agendamento}"</p>
                   </div>
                 )}
                 {v.data_preferencia_visita && (

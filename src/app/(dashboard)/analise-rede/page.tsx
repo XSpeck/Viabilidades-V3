@@ -290,7 +290,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
           {/* Técnico + descrição */}
           <p className="font-medium text-gray-900 text-sm">👷 {d.tecnico}</p>
-          <p className="text-sm text-gray-700">{d.descricao}</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.descricao}</p>
 
           {/* Local */}
           {d.local && (
@@ -312,7 +312,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
           {/* Obs conclusão */}
           {d.obs_conclusao && (
-            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 mt-1">
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 mt-1 whitespace-pre-wrap">
               📝 {d.obs_conclusao}
             </p>
           )}
@@ -841,7 +841,7 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
           {/* Descrição */}
           <div>
             <p className="text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wide">Descrição</p>
-            <p className="text-sm text-gray-800 leading-relaxed">{d.descricao}</p>
+            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{d.descricao}</p>
           </div>
 
           {/* Local */}
@@ -882,7 +882,7 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
           {d.obs_conclusao && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <p className="text-xs text-green-600 mb-1 font-semibold">📝 Observação de conclusão</p>
-              <p className="text-sm text-green-800 leading-relaxed">{d.obs_conclusao}</p>
+              <p className="text-sm text-green-800 leading-relaxed whitespace-pre-wrap">{d.obs_conclusao}</p>
             </div>
           )}
 
@@ -900,7 +900,7 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
                       {i < notas.length - 1 && <div className="w-px flex-1 bg-gray-200 my-1" />}
                     </div>
                     <div className="pb-4 flex-1">
-                      <p className="text-sm text-gray-700 leading-relaxed">{n.texto}</p>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{n.texto}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {n.por} · {new Date(n.data).toLocaleString("pt-BR")}
                       </p>

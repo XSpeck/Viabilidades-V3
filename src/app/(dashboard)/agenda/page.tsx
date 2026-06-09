@@ -565,7 +565,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
             <p className="text-white/70 text-sm">{v.nome_cliente_predio}</p>
           )}
           {v.historico_reagendamento && (
-            <p className="text-yellow-200 text-xs mt-1">🔄 {v.historico_reagendamento}</p>
+            <p className="text-yellow-200 text-xs mt-1 whitespace-pre-wrap">🔄 {v.historico_reagendamento}</p>
           )}
         </div>
         <button onClick={onClose} className="text-white/60 hover:text-white ml-4 mt-0.5 shrink-0 transition-colors">
@@ -630,7 +630,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
               </div>
             </div>
           ) : v.obs_agendamento ? (
-            <p className="text-sm text-gray-700 italic">"{v.obs_agendamento}"</p>
+            <p className="text-sm text-gray-700 italic whitespace-pre-wrap">"{v.obs_agendamento}"</p>
           ) : (
             <p className="text-sm text-yellow-400 italic">Sem observação — clique no lápis para adicionar.</p>
           )}
@@ -882,7 +882,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
         <div className="grid grid-cols-2 gap-4">
           <InfoBox title="📋 Serviço">
             <p className="font-semibold text-gray-800">{d.tipo}</p>
-            <p className="text-gray-600 mt-1">{d.descricao}</p>
+            <p className="text-gray-600 mt-1 whitespace-pre-wrap">{d.descricao}</p>
           </InfoBox>
           <InfoBox title="📅 Agendamento">
             <p>Data: <span className="font-semibold text-gray-800">{fDate(d.data_agendamento)}</span></p>
@@ -998,7 +998,7 @@ function NotasAndamento({ notas, onAdd }: {
                 {i < sorted.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
               </div>
               <div className="flex-1 min-w-0 pb-1">
-                <p className="text-sm text-gray-800 leading-snug">{n.texto}</p>
+                <p className="text-sm text-gray-800 leading-snug whitespace-pre-wrap">{n.texto}</p>
                 <p className="text-xs text-gray-400 mt-1">
                   {n.por} · {new Date(n.data).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </p>
