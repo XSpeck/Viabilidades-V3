@@ -72,68 +72,44 @@ export function parseCtoKml(kmlText: string): Cto[] {
 // Firestore — importar e buscar CTOs
 // =====================
 
+const CTOS_DOC = "ctos_data/all";
+
 export async function importCtosToFirestore(
   ctos: Cto[],
   onProgress?: (done: number, total: number) => void
 ): Promise<void> {
   const { db } = await import("./firebase");
-  const { writeBatch, doc, collection, getDocs, deleteDoc } = await import("firebase/firestore");
+  const { doc, setDoc } = await import("firebase/firestore");
 
-  const BATCH_SIZE = 400;
-  const total = ctos.length;
-  let done = 0;
-
-  // Deletar CTOs existentes em batches
-  const existingSnap = await getDocs(collection(db, "ctos"));
-  const deleteBatches: ReturnType<typeof writeBatch>[] = [];
-  let currentBatch = writeBatch(db);
-  let batchCount = 0;
-
-  for (const d of existingSnap.docs) {
-    currentBatch.delete(d.ref);
-    batchCount++;
-    if (batchCount >= BATCH_SIZE) {
-      deleteBatches.push(currentBatch);
-      currentBatch = writeBatch(db);
-      batchCount = 0;
-    }
-  }
-  if (batchCount > 0) deleteBatches.push(currentBatch);
-  await Promise.all(deleteBatches.map((b) => b.commit()));
-
-  // Inserir novas CTOs em batches
-  for (let i = 0; i < total; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const slice = ctos.slice(i, i + BATCH_SIZE);
-    slice.forEach((cto) => {
-      const safeName = cto.name.replace(/[\/\\.#\[\]]/g, "_");
-      const ref = doc(db, "ctos", safeName);
-      batch.set(ref, { name: cto.name, lat: cto.lat, lon: cto.lon });
-    });
-    await batch.commit();
-    done = Math.min(i + BATCH_SIZE, total);
-    onProgress?.(done, total);
-  }
+  onProgress?.(0, ctos.length);
+  await setDoc(doc(db, CTOS_DOC), {
+    ctos,
+    total: ctos.length,
+    atualizado_em: new Date().toISOString(),
+  });
+  onProgress?.(ctos.length, ctos.length);
 }
 
 export async function getCtosFromFirestore(): Promise<Cto[]> {
   const { db } = await import("./firebase");
-  const { getDocs, collection } = await import("firebase/firestore");
-  const snap = await getDocs(collection(db, "ctos"));
-  return snap.docs.map((d) => d.data() as Cto);
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, CTOS_DOC));
+  if (!snap.exists()) return [];
+  return (snap.data().ctos as Cto[]) ?? [];
 }
 
 export async function countCtosInFirestore(): Promise<number> {
   const { db } = await import("./firebase");
-  const { getDocs, collection } = await import("firebase/firestore");
-  const snap = await getDocs(collection(db, "ctos"));
-  return snap.size;
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, CTOS_DOC));
+  if (!snap.exists()) return 0;
+  return (snap.data().total as number) ?? 0;
 }
 
 // =====================
 // Buscar CTOs (Firestore + cache sessionStorage)
 // =====================
-const SESSION_KEY = "viab_ctos_v2";
+const SESSION_KEY = "viab_ctos_v3";
 
 export async function getCtos(): Promise<Cto[]> {
   // Cache de sessão

@@ -35,10 +35,10 @@ service cloud.firestore {
       allow write: if isAuth();
     }
 
-    // CTOs
-    match /ctos/{id} {
+    // CTOs (documento único agrupado)
+    match /ctos_data/{id} {
       allow read: if isAuth();
-      allow write: if isAuth();
+      allow write: if isAdmin();
     }
 
     // Redes distribuidoras
