@@ -66,7 +66,6 @@ export default function RelatoriosPage() {
   const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", estruturados: "", sem_viab: "" });
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
   const [loadingMap, setLoadingMap] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
   function setSearch(tab: TabKey, v: string) { setSearches((p) => ({ ...p, [tab]: v })); }
@@ -76,7 +75,6 @@ export default function RelatoriosPage() {
     atnd: PredioAtendido[],
     svs: PredioSemViabilidade[]
   ) {
-    if (mapReady) return;
     setLoadingMap(true);
     const REFERENCE_LAT = -28.6775;
     const REFERENCE_LON = -49.3696;
@@ -140,7 +138,6 @@ export default function RelatoriosPage() {
     });
 
     setMapPoints(points);
-    setMapReady(true);
     setLoadingMap(false);
   }
 
@@ -152,6 +149,12 @@ export default function RelatoriosPage() {
   }
 
   useEffect(() => { if (user?.nivel === 1) load(); }, [user]);
+
+  // Rebuilds map whenever date filter changes while map is open
+  useEffect(() => {
+    if (showMap && !loading) buildMapPoints(filtrado, atendidos, semViab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataInicio, dataFim, showMap]);
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
@@ -470,10 +473,7 @@ export default function RelatoriosPage() {
       <div className="bg-white rounded-xl border overflow-hidden">
         <button
           onClick={() => {
-            setShowMap((s) => {
-              if (!s && !mapReady) buildMapPoints(viabilizacoes, atendidos, semViab);
-              return !s;
-            });
+            setShowMap((s) => !s);
           }}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
         >
