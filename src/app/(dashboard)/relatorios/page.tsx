@@ -53,7 +53,7 @@ function matchSearch(row: Record<string, string | number | undefined>, q: string
 }
 
 // ─── Page ─────────────────────────────────────────────────────────
-type TabKey = "ftth_ap" | "ftth_rej" | "predios" | "condominios" | "utp" | "estruturados" | "sem_viab";
+type TabKey = "ftth_ap" | "ftth_rej" | "predios" | "condominios" | "ftta_rej" | "utp" | "estruturados" | "sem_viab";
 
 export default function RelatoriosPage() {
   const { user } = useAuth();
@@ -64,7 +64,7 @@ export default function RelatoriosPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
-  const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", utp: "", estruturados: "", sem_viab: "" });
+  const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", ftta_rej: "", utp: "", estruturados: "", sem_viab: "" });
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
   const [loadingMap, setLoadingMap] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -210,9 +210,9 @@ export default function RelatoriosPage() {
   const prediosEstruturados     = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio === "estruturado");
   const condominiosEstruturados = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio === "estruturado");
 
-  // Todos os prédios/condomínios do filtro (para as abas de detalhe)
-  const prediosViab     = filtrado.filter((v) => v.tipo_instalacao === "Prédio");
-  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio");
+  // Tabs de detalhe FTTA: aprovados = estruturados; rejeitados = tab separado
+  const prediosViab     = prediosEstruturados;
+  const condominiosViab = condominiosEstruturados;
   const utpFiltrado     = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP");
 
   // Atendidos filtrados por data de estruturação (para contar igual ao KPI)
@@ -307,6 +307,17 @@ export default function RelatoriosPage() {
     Auditor:       v.auditado_por ?? "-",
   }));
 
+  const rowsFttaRej = fttaRejeitados.map((v) => ({
+    Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    Tipo:          v.tipo_instalacao,
+    "Prédio/Cond.": v.predio_ftta ?? "-",
+    Motivo:        v.motivo_rejeicao ?? "-",
+    "Plus Code":   locationToPlusCode(v.plus_code_cliente),
+    Solicitante:   v.usuario,
+    Cliente:       v.nome_cliente ?? "-",
+    Auditor:       v.auditado_por ?? "-",
+  }));
+
   const rowsUtp = utpFiltrado.map((v) => ({
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
@@ -340,10 +351,11 @@ export default function RelatoriosPage() {
     { key: "ftth_ap",      label: "✅ FTTH Aprovadas",      count: ftthAprovadas.length },
     { key: "ftth_rej",     label: "❌ FTTH Rejeitadas",     count: ftthRejeitadas.length },
     { key: "predios",      label: "🏢 FTTA Prédios",        count: prediosViab.length },
-    { key: "condominios",  label: "🏘️ FTTA Condomínios",    count: condominiosViab.length },
+    { key: "condominios",  label: "🏘️ FTTA Condomínios",   count: condominiosViab.length },
+    { key: "ftta_rej",     label: "❌ FTTA Rejeitados",     count: fttaRejeitados.length },
     { key: "utp",          label: "🔌 UTPs",                count: utpFiltrado.length },
     { key: "estruturados", label: "🏗️ Estruturados",        count: atendidosFiltrados.length },
-    { key: "sem_viab",     label: "🚫 Sem Viabilidade",     count: semViab.length },
+    { key: "sem_viab",     label: "🚫 Sem Viabilidade",     count: semViabFiltrados.length },
   ];
 
   const barTecnologias = [
@@ -358,8 +370,8 @@ export default function RelatoriosPage() {
 
   // Row for active tab
   type RowType = Record<string, string | number | undefined>;
-  const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, utp: rowsUtp, estruturados: rowsEstru, sem_viab: rowsSemViab };
-  const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "ftta_predios.csv", condominios: "ftta_condominios.csv", utp: "utps.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
+  const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, ftta_rej: rowsFttaRej, utp: rowsUtp, estruturados: rowsEstru, sem_viab: rowsSemViab };
+  const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "ftta_predios.csv", condominios: "ftta_condominios.csv", ftta_rej: "ftta_rejeitados.csv", utp: "utps.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
   const currentRows = allRows[activeTab].filter((r) => matchSearch(r, searches[activeTab]));
 
   return (
