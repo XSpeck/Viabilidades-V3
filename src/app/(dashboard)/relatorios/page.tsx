@@ -95,14 +95,20 @@ export default function RelatoriosPage() {
     const points: MapPoint[] = [];
     const isUTP = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
-    // FTTH aprovadas (excluindo UTP)
-    viabs.filter((v) => v.tipo_instalacao === "FTTH" && ["aprovado", "finalizado"].includes(v.status) && !isUTP(v)).forEach((v) => {
+    // FTTH aprovadas (excluindo UTP e rejeitadas arquivadas)
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && !isUTP(v) && (
+      v.status === "aprovado" ||
+      (v.status === "finalizado" && v.status_instalacao === "instalado")
+    )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
     });
 
-    // FTTH rejeitadas
-    viabs.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado").forEach((v) => {
+    // FTTH rejeitadas (incluindo arquivadas)
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && (
+      v.status === "rejeitado" ||
+      (v.status === "finalizado" && !!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")
+    )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftth_rej_${v.id}`, ...geo, category: "ftth_rej", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
     });
@@ -119,8 +125,11 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
     });
 
-    // FTTA rejeitados (Prédio ou Condomínio sem viabilidade)
-    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status === "rejeitado").forEach((v) => {
+    // FTTA rejeitados (incluindo arquivados)
+    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
+      v.status === "rejeitado" ||
+      (v.status === "finalizado" && v.status_predio === "rejeitado")
+    )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftta_rej_${v.id}`, ...geo, category: "ftta_rej", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
     });
@@ -170,7 +179,10 @@ export default function RelatoriosPage() {
     v.status === "aprovado" ||
     (v.status === "finalizado" && v.status_instalacao === "instalado")
   ));
-  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && v.status === "rejeitado");
+  const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
+    v.status === "rejeitado" ||
+    (v.status === "finalizado" && !!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")
+  ));
 
   const taxaAprovacaoFTTH = ftthAprovadas.length + ftthRejeitadas.length > 0
     ? ((ftthAprovadas.length / (ftthAprovadas.length + ftthRejeitadas.length)) * 100).toFixed(1)
@@ -178,7 +190,10 @@ export default function RelatoriosPage() {
 
   // FTTA (Prédio + Condomínio estruturados/rejeitados)
   const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado");
-  const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status === "rejeitado");
+  const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
+    v.status === "rejeitado" ||
+    (v.status === "finalizado" && v.status_predio === "rejeitado")
+  ));
 
   // UTP
   const utpTotal = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
