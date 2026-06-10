@@ -1,7 +1,7 @@
 import type { AppUser, UserCargo } from "@/types";
 
 export const PAGE_CARGOS: Record<string, UserCargo[]> = {
-  home:             ["adm", "agendamento", "usuario"],
+  home:             ["adm", "agendamento", "auditor", "usuario"],
   resultados:       ["adm", "usuario"],
   viabilidades:     ["adm", "auditor"],
   auditoria:        ["adm", "auditor"],
