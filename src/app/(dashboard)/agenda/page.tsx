@@ -578,7 +578,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
         {/* Info grid */}
         <div className="grid grid-cols-2 gap-4">
           <InfoBox title="📍 Localização">
-            <p className="font-mono text-xs text-indigo-600 font-semibold">{locationToPlusCode(v.plus_code_cliente)}</p>
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-indigo-600 font-semibold hover:underline" title="Ver no Google Maps">{locationToPlusCode(v.plus_code_cliente)}</a>
             <p className="mt-1">{isCond ? "Condomínio" : "Edifício"}: <span className="font-medium">{v.predio_ftta}</span></p>
             {v.apartamento && <p>Apto/Casa: <span className="font-medium">{v.apartamento}</span></p>}
           </InfoBox>
@@ -910,7 +910,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
 
         {d.local && (
           <InfoBox title="📍 Localização">
-            <p className="font-mono text-xs text-indigo-600 font-semibold">{locationToPlusCode(d.local)}</p>
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(d.local)}`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-indigo-600 font-semibold hover:underline" title="Ver no Google Maps">{locationToPlusCode(d.local)}</a>
           </InfoBox>
         )}
 

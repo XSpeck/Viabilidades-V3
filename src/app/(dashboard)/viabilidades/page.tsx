@@ -177,7 +177,7 @@ function CardViabilidade({ v, position, urgente, onPegar, pegando }: {
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
           <span>👤 {v.usuario}</span>
-          <span className="font-mono">📍 {locationToPlusCode(v.plus_code_cliente)}</span>
+          <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline" title="Ver no Google Maps">📍 {locationToPlusCode(v.plus_code_cliente)}</a>
           {v.predio_ftta && <span>🏢 {v.predio_ftta}{v.andar_predio ? ` · ${v.andar_predio}` : ""}{v.bloco_predio ? ` · Bl. ${v.bloco_predio}` : ""}</span>}
         </div>
       </div>

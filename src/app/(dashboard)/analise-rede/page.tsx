@@ -282,7 +282,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
           {/* Local */}
           {d.local && (
-            <p className="text-xs text-gray-500 font-mono">📍 {locationToPlusCode(d.local)}</p>
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(d.local)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 font-mono hover:text-indigo-600 hover:underline" title="Ver no Google Maps">📍 {locationToPlusCode(d.local)}</a>
           )}
 
           {/* Data agendada */}

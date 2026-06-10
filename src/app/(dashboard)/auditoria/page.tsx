@@ -451,7 +451,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             ) : (
               <div className="text-sm text-gray-600 space-y-1">
                 {nomeClienteLocal && <p>🙋 Cliente: {nomeClienteLocal}</p>}
-                <p>📍 Plus Code: <span className="font-mono">{locationToPlusCode(v.plus_code_cliente)}</span></p>
+                <p>📍 Plus Code: <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(v.plus_code_cliente)}</a></p>
                 <p>🏷️ Tipo: {tipoLocal}{tipoLocal !== v.tipo_instalacao && <span className="ml-1 text-xs text-amber-600 font-medium">(alterado — não salvo)</span>}</p>
                 {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
                 {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}

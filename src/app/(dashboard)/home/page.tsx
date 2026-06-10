@@ -361,7 +361,7 @@ export default function HomePage() {
                             {p.tecnologia === "FTTA" || p.giga ? "⚡ Giga" : "—"}
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs max-w-[180px] truncate">{p.observacao ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-500 font-mono text-xs">{locationToPlusCode(p.localizacao)}</td>
+                          <td className="px-4 py-3 text-gray-500 font-mono text-xs"><a href={`https://maps.google.com/?q=${encodeURIComponent(p.localizacao)}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(p.localizacao)}</a></td>
                         </tr>
                       ))}
                   </tbody>
@@ -388,7 +388,7 @@ export default function HomePage() {
                       : filteredSemViab.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{p.condominio}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-500">{locationToPlusCode(p.localizacao)}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-500"><a href={`https://maps.google.com/?q=${encodeURIComponent(p.localizacao)}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(p.localizacao)}</a></td>
                           <td className="px-4 py-3 text-gray-600 whitespace-pre-wrap">{p.observacao}</td>
                         </tr>
                       ))}

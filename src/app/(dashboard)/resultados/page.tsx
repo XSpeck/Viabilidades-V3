@@ -378,7 +378,7 @@ export default function ResultadosPage() {
                                 })()}
                               </td>
                               <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
-                              <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap">{locationToPlusCode(v.plus_code_cliente)}</td>
+                              <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap"><a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(v.plus_code_cliente)}</a></td>
                               <td className="px-3 py-2.5 max-w-[140px] truncate text-gray-600">{v.predio_ftta ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cdoi ?? v.cto_numero ?? "-"}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
@@ -584,7 +584,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               {r.urgente && " 🔥"}
             </p>
             <p className="text-xs text-gray-400">
-              📍 {locationToPlusCode(r.plus_code_cliente)} · {formatDateTime(r.data_solicitacao)}
+              📍 <a href={`https://maps.google.com/?q=${encodeURIComponent(r.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(r.plus_code_cliente)}</a> · {formatDateTime(r.data_solicitacao)}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
