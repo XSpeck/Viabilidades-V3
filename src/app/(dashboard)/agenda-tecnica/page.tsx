@@ -458,7 +458,14 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
             )}
           </div>
           <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
-            <span className="font-mono">📍 {locationToPlusCode(v.plus_code_cliente)}</span>
+            <a
+              href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="font-mono hover:text-indigo-600 hover:underline"
+              title="Ver no Google Maps"
+            >
+              📍 {locationToPlusCode(v.plus_code_cliente)}
+            </a>
             <span>👤 {v.usuario}</span>
             {status === "proposta_enviada" && v.proposta_data && (
               <span className="font-medium text-orange-600">
@@ -726,7 +733,17 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-1 text-sm text-gray-700">
               <p><span className="text-gray-400">Nome:</span> {v.nome_cliente ?? "-"}</p>
               <p><span className="text-gray-400">Solicitante:</span> {v.usuario}</p>
-              <p><span className="text-gray-400">Plus Code:</span> <span className="font-mono text-xs">{locationToPlusCode(v.plus_code_cliente)}</span></p>
+              <p>
+                <span className="text-gray-400">Plus Code:</span>{" "}
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="font-mono text-xs hover:text-indigo-600 hover:underline"
+                  title="Ver no Google Maps"
+                >
+                  {locationToPlusCode(v.plus_code_cliente)}
+                </a>
+              </p>
             </div>
           </div>
 
