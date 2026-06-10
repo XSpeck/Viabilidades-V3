@@ -567,7 +567,7 @@ export async function enviarPropostaInstalacao(
 // Se alterou data/período → aguarda confirmação do usuário
 export async function confirmarAgendamentoTecnico(
   id: string,
-  dados: { agendamento_data: string; agendamento_periodo: string; agendamento_tecnico: string; agendamento_obs?: string },
+  dados: { agendamento_data: string; agendamento_periodo: string; agendamento_obs?: string },
   proposta: { proposta_data?: string; proposta_periodo?: string },
   historicoAnterior?: string
 ): Promise<void> {
@@ -583,10 +583,8 @@ export async function confirmarAgendamentoTecnico(
       status_instalacao: "agendado",
       agendamento_data: dados.agendamento_data,
       agendamento_periodo: dados.agendamento_periodo,
-      agendamento_tecnico: dados.agendamento_tecnico,
       data_instalacao: dados.agendamento_data,
       periodo_instalacao: dados.agendamento_periodo,
-      tecnico_instalacao: dados.agendamento_tecnico,
       historico_agendamento: historico,
     });
   } else {
@@ -594,7 +592,6 @@ export async function confirmarAgendamentoTecnico(
       status_instalacao: "aguardando_confirmacao",
       agendamento_data: dados.agendamento_data,
       agendamento_periodo: dados.agendamento_periodo,
-      agendamento_tecnico: dados.agendamento_tecnico,
       ...(dados.agendamento_obs !== undefined ? { agendamento_obs: dados.agendamento_obs } : {}),
       historico_agendamento: historico,
     });
@@ -604,7 +601,7 @@ export async function confirmarAgendamentoTecnico(
 // Usuário confirma a proposta do agendamento (com alterações)
 export async function confirmarPropostaUsuario(
   id: string,
-  dados: { agendamento_data: string; agendamento_periodo: string; agendamento_tecnico: string },
+  dados: { agendamento_data: string; agendamento_periodo: string },
   historicoAnterior?: string
 ): Promise<void> {
   const historico = `${historicoAnterior ?? ""}\nUsuário confirmou ${dados.agendamento_data} ${dados.agendamento_periodo}`;
@@ -612,9 +609,12 @@ export async function confirmarPropostaUsuario(
     status_instalacao: "agendado",
     data_instalacao: dados.agendamento_data,
     periodo_instalacao: dados.agendamento_periodo,
-    tecnico_instalacao: dados.agendamento_tecnico,
     historico_agendamento: historico,
   });
+}
+
+export async function atribuirTecnicoInstalacao(id: string, tecnico: string): Promise<void> {
+  await updateViabilizacao(id, { tecnico_instalacao: tecnico });
 }
 
 // Setor reagenda instalação confirmada (sem necessidade de reconfirmação do usuário)

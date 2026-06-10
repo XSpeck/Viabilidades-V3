@@ -9,6 +9,7 @@ import {
   marcarInstalado,
   finalizarViabilizacao,
   reagendarInstalacao,
+  atribuirTecnicoInstalacao,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
@@ -344,8 +345,11 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   // ── Confirmar agendamento ──────────────────────────────
   const [agData, setAgData] = useState(v.proposta_data ?? "");
   const [agPeriodo, setAgPeriodo] = useState(v.proposta_periodo ?? "Manhã");
-  const [agTecnico, setAgTecnico] = useState(v.agendamento_tecnico ?? "");
   const [agObs, setAgObs] = useState("");
+
+  // ── Atribuir técnico ───────────────────────────────────
+  const [tecnicoAtribuir, setTecnicoAtribuir] = useState("");
+  const [salvandoTecnico, setSalvandoTecnico] = useState(false);
 
   // ── Reagendar ──────────────────────────────────────────
   const [reagData, setReagData] = useState(v.data_instalacao ?? "");
@@ -359,21 +363,30 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   }
 
   async function handleConfirmar() {
-    if (!agData || !agTecnico.trim()) { alert("Preencha data e técnico!"); return; }
+    if (!agData) { alert("Preencha a data!"); return; }
     setLoading(true);
     try {
       await confirmarAgendamentoTecnico(
         v.id,
-        { agendamento_data: agData, agendamento_periodo: agPeriodo, agendamento_tecnico: agTecnico, agendamento_obs: agObs || undefined },
+        { agendamento_data: agData, agendamento_periodo: agPeriodo, agendamento_obs: agObs || undefined },
         { proposta_data: v.proposta_data, proposta_periodo: v.proposta_periodo },
         v.historico_agendamento
       );
       const alterou = agData !== v.proposta_data || agPeriodo !== v.proposta_periodo;
       finishWithSuccess(alterou
         ? "🔄 Proposta alterada e enviada ao cliente para confirmação."
-        : `📅 ${isFttaUtp ? "Visita agendada" : "Agendado"}! ${new Date(agData + "T12:00:00").toLocaleDateString("pt-BR")} — ${agPeriodo} — ${agTecnico}.`
+        : `📅 ${isFttaUtp ? "Visita agendada" : "Agendado"}! ${new Date(agData + "T12:00:00").toLocaleDateString("pt-BR")} — ${agPeriodo}.`
       );
     } finally { setLoading(false); }
+  }
+
+  async function handleAtribuirTecnico() {
+    if (!tecnicoAtribuir.trim()) return;
+    setSalvandoTecnico(true);
+    try {
+      await atribuirTecnicoInstalacao(v.id, tecnicoAtribuir.trim());
+      finishWithSuccess(`👷 Técnico ${tecnicoAtribuir.trim()} atribuído!`);
+    } finally { setSalvandoTecnico(false); }
   }
 
   async function handleReagendar() {
@@ -437,7 +450,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
             {status === "agendado" && v.data_instalacao && (
               <span className="text-xs font-medium text-green-700 shrink-0">
-                {fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}
+                {fmtData(v.data_instalacao)} · {v.periodo_instalacao}{v.tecnico_instalacao ? ` · 👷 ${v.tecnico_instalacao}` : " · ⚠️ sem técnico"}
               </span>
             )}
             {status === "instalado" && v.data_instalacao && (
@@ -504,8 +517,6 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                     <select value={agPeriodo} onChange={(e) => setAgPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
                       <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
                     </select>
-                    <input placeholder="Técnico *" value={agTecnico} onChange={(e) => setAgTecnico(e.target.value)}
-                      className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                     <textarea placeholder="Observação para o cliente (se alterar data)" value={agObs} onChange={(e) => setAgObs(e.target.value)}
                       rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                   </div>
@@ -537,7 +548,6 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5">
                   <p className="text-xs text-orange-500 font-medium mb-0.5">🔧 Agendamento propôs</p>
                   <p className="font-medium text-gray-800">{fmtData(v.agendamento_data)} — {v.agendamento_periodo}</p>
-                  <p className="text-xs text-gray-600">👷 {v.agendamento_tecnico}</p>
                   {v.agendamento_obs && <p className="text-xs text-gray-500 mt-0.5">📝 {v.agendamento_obs}</p>}
                 </div>
               </div>
@@ -555,12 +565,38 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
                   <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
-                  <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao}</p></div>
+                  <div>
+                    <p className="text-gray-400 text-xs mb-0.5">Técnico</p>
+                    <p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? <span className="text-orange-500 italic">não atribuído</span>}</p>
+                  </div>
                 </div>
                 {(v.agendamento_obs || v.proposta_obs) && (
                   <p className="text-xs text-gray-500 mt-1.5">📝 {v.agendamento_obs ?? v.proposta_obs}</p>
                 )}
               </div>
+
+              {/* Atribuir técnico quando ainda não definido */}
+              {!v.tecnico_instalacao && (
+                <div className="border border-orange-200 bg-orange-50 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-orange-800">👷 Atribuir técnico</p>
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="Nome do técnico *"
+                      value={tecnicoAtribuir}
+                      onChange={(e) => setTecnicoAtribuir(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                    <button
+                      onClick={handleAtribuirTecnico}
+                      disabled={salvandoTecnico || !tecnicoAtribuir.trim()}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-lg text-sm font-medium"
+                    >
+                      {salvandoTecnico ? "..." : "Atribuir"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button onClick={handleInstalado} disabled={loading}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">

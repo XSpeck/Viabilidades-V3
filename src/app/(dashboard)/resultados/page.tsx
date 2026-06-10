@@ -430,10 +430,10 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
   }
 
   async function handleConfirmarProposta() {
-    if (!r.agendamento_data || !r.agendamento_tecnico) return;
+    if (!r.agendamento_data) return;
     setEnviandoProposta(true);
     try {
-      await confirmarPropostaUsuario(r.id, { agendamento_data: r.agendamento_data, agendamento_periodo: r.agendamento_periodo ?? "Manhã", agendamento_tecnico: r.agendamento_tecnico }, r.historico_agendamento);
+      await confirmarPropostaUsuario(r.id, { agendamento_data: r.agendamento_data, agendamento_periodo: r.agendamento_periodo ?? "Manhã" }, r.historico_agendamento);
       onRefresh();
     } catch { alert("Erro ao confirmar."); }
     finally { setEnviandoProposta(false); }
