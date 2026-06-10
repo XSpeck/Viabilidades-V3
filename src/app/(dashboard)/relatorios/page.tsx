@@ -156,7 +156,15 @@ export default function RelatoriosPage() {
 
   // Rebuilds map whenever date filter or data changes while map is open
   useEffect(() => {
-    if (showMap && !loading) buildMapPoints(filtrado, atendidos, semViab);
+    if (showMap && !loading) {
+      const semViabF = semViab.filter((s) => {
+        const d = (s.data_registro ?? "").slice(0, 10);
+        if (dataInicio && d < dataInicio) return false;
+        if (dataFim    && d > dataFim)    return false;
+        return true;
+      });
+      buildMapPoints(filtrado, atendidos, semViabF);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicio, dataFim, showMap, loading]);
 
@@ -210,6 +218,14 @@ export default function RelatoriosPage() {
   // Atendidos filtrados por data de estruturação (para contar igual ao KPI)
   const atendidosFiltrados = atendidos.filter((a) => {
     const d = typeof a.data_estruturacao === "string" ? a.data_estruturacao.slice(0, 10) : "";
+    if (dataInicio && d < dataInicio) return false;
+    if (dataFim    && d > dataFim)    return false;
+    return true;
+  });
+
+  // Sem viabilidade filtrados por data de registro
+  const semViabFiltrados = semViab.filter((s) => {
+    const d = (s.data_registro ?? "").slice(0, 10);
     if (dataInicio && d < dataInicio) return false;
     if (dataFim    && d > dataFim)    return false;
     return true;
@@ -311,7 +327,7 @@ export default function RelatoriosPage() {
     Técnico:     a.estruturado_por,
   }));
 
-  const rowsSemViab = semViab.map((s) => ({
+  const rowsSemViab = semViabFiltrados.map((s) => ({
     Data:           formatDateTime(s.data_registro),
     Condomínio:     s.condominio,
     Localização:    locationToPlusCode(s.localizacao),
