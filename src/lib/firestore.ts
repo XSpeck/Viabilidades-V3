@@ -88,6 +88,7 @@ export async function createViabilizacao(
     ...clean,
     data_solicitacao: serverTimestamp(),
   });
+  bustCache("viab_all_viabilizacoes_v1");
   return ref.id;
 }
 
@@ -193,6 +194,7 @@ export async function updateViabilizacao(
   const ref = doc(db, "viabilizacoes", id);
   const clean = stripUndefined(data as Record<string, unknown>);
   await updateDoc(ref, { ...clean });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function pegarViabilizacao(id: string, auditor: string): Promise<void> {
@@ -775,6 +777,7 @@ export async function batchImportViabilizacoes(
     await batch.commit();
     onProgress?.(Math.min(i + CHUNK, items.length), items.length);
   }
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function deleteAllPrediosAtendidos(): Promise<void> {
@@ -846,12 +849,17 @@ export async function deletePredioSemViabilidade(id: string): Promise<void> {
 // =====================
 
 export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_all_viabilizacoes_v1");
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "viabilizacoes"));
-  return snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  const data = snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  setCache("viab_all_viabilizacoes_v1", data);
+  return data;
 }
 
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 // =====================
