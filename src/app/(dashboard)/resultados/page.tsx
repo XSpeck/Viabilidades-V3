@@ -753,7 +753,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                     <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                      <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+                      <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                     </select>
                     <textarea placeholder="Observações (opcional)" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                   </div>
@@ -792,7 +792,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                       <div className="grid grid-cols-2 gap-2">
                         <input type="date" value={propostaData} onChange={(e) => setPropostaData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                         <select value={propostaPeriodo} onChange={(e) => setPropostaPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                          <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+                          <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                         </select>
                         <textarea placeholder="Motivo / observação" value={propostaObs} onChange={(e) => setPropostaObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                       </div>
@@ -919,6 +919,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                     className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     <option>Manhã</option>
                     <option>Tarde</option>
+                    <option>Noturno</option>
                     <option>Dia todo</option>
                   </select>
                 </div>
@@ -981,7 +982,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   <div className="grid grid-cols-2 gap-2">
                     <input type="date" value={contraData} onChange={(e) => setContraData(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                     <select value={contraPeriodo} onChange={(e) => setContraPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                      <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+                      <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                     </select>
                     <textarea placeholder="Motivo / observação (opcional)" value={contraObs} onChange={(e) => setContraObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                   </div>

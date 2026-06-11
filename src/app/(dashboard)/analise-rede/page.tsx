@@ -361,7 +361,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
               className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             <select value={periodoAgendar} onChange={(e) => setPeriodoAgendar(e.target.value)}
               className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+              <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
             </select>
           </div>
           <div className="flex gap-2">

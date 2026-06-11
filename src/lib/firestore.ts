@@ -926,7 +926,8 @@ export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
     .sort((a, b) => {
       if ((a.data_agendamento ?? "") !== (b.data_agendamento ?? ""))
         return (a.data_agendamento ?? "") < (b.data_agendamento ?? "") ? -1 : 1;
-      return (a.periodo_agendamento === "Manhã" ? 0 : 1) - (b.periodo_agendamento === "Manhã" ? 0 : 1);
+      const periodoOrder = (p?: string) => p === "Manhã" ? 0 : p === "Tarde" ? 1 : p === "Noturno" ? 2 : 3;
+      return periodoOrder(a.periodo_agendamento) - periodoOrder(b.periodo_agendamento);
     });
 }
 

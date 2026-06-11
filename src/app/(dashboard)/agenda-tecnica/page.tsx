@@ -522,7 +522,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                     <input type="date" value={agData} onChange={(e) => setAgData(e.target.value)}
                       className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                     <select value={agPeriodo} onChange={(e) => setAgPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                      <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+                      <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                     </select>
                     <textarea placeholder="Observação para o cliente (se alterar data)" value={agObs} onChange={(e) => setAgObs(e.target.value)}
                       rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
@@ -622,7 +622,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                     <input type="date" value={reagData} onChange={(e) => setReagData(e.target.value)}
                       className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
                     <select value={reagPeriodo} onChange={(e) => setReagPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
-                      <option>Manhã</option><option>Tarde</option><option>Dia todo</option>
+                      <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                     </select>
                     <input placeholder="Técnico *" value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)}
                       className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
