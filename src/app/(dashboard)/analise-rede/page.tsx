@@ -41,12 +41,14 @@ const PRIORIDADE_COLOR: Record<PrioridadeDemanda, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   aberta:       "🔴 Aberta",
+  agendada:     "📅 Agendada",
   em_andamento: "🟡 Em andamento",
   concluida:    "✅ Concluída",
 };
 
 const STATUS_COLOR: Record<string, string> = {
   aberta:       "bg-red-100 text-red-700",
+  agendada:     "bg-indigo-100 text-indigo-700",
   em_andamento: "bg-yellow-100 text-yellow-700",
   concluida:    "bg-green-100 text-green-700",
 };
@@ -66,7 +68,7 @@ export default function AnaliseRedePage() {
   const [showModal, setShowModal]   = useState(false);
   const [showMap, setShowMap]       = useState(false);
   const [tecnicoTab, setTecnicoTab] = useState<"todos" | TecnicoRede>("todos");
-  const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "em_andamento" | "concluida">("todas");
+  const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
 
   if (!canAccess(user ?? null, "analise-rede")) return (
     <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>
@@ -87,6 +89,7 @@ export default function AnaliseRedePage() {
 
   const counts = {
     aberta:       demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "aberta").length,
+    agendada:     demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "agendada").length,
     em_andamento: demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "em_andamento").length,
     concluida:    demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "concluida").length,
   };
@@ -118,9 +121,10 @@ export default function AnaliseRedePage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Abertas",       value: demandas.filter((d) => d.status === "aberta").length,       color: "red"    },
+          { label: "Agendadas",     value: demandas.filter((d) => d.status === "agendada").length,     color: "indigo" },
           { label: "Em andamento",  value: demandas.filter((d) => d.status === "em_andamento").length, color: "yellow" },
           { label: "Concluídas",    value: demandas.filter((d) => d.status === "concluida").length,    color: "green"  },
         ].map((k) => (
@@ -174,6 +178,7 @@ export default function AnaliseRedePage() {
           {([
             { key: "todas",       label: `Todas (${filtradas.length + (statusFiltro !== "todas" ? 0 : 0)})` },
             { key: "aberta",       label: `🔴 Abertas (${counts.aberta})` },
+            { key: "agendada",     label: `📅 Agendadas (${counts.agendada})` },
             { key: "em_andamento", label: `🟡 Em andamento (${counts.em_andamento})` },
             { key: "concluida",    label: `✅ Concluídas (${counts.concluida})` },
           ] as { key: typeof statusFiltro; label: string }[]).map((f) => (
@@ -314,7 +319,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
               <ChevronRight className="w-3 h-3" /> 📅 Agendar
             </button>
           )}
-          {d.status === "em_andamento" && (
+          {(d.status === "agendada" || d.status === "em_andamento") && (
             <button onClick={handleReabrir} disabled={saving}
               className="text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50">
               ↩ Cancelar agendamento

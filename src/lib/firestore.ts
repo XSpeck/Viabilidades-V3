@@ -887,7 +887,7 @@ export async function updateDemanda(id: string, data: Partial<DemandaRede>): Pro
 }
 
 export async function agendarDemanda(id: string, data: string, periodo: string): Promise<void> {
-  await updateDemanda(id, { status: "em_andamento", data_agendamento: data, periodo_agendamento: periodo });
+  await updateDemanda(id, { status: "agendada", data_agendamento: data, periodo_agendamento: periodo });
 }
 
 export async function continuarDemanda(
@@ -899,6 +899,7 @@ export async function continuarDemanda(
     data: new Date().toISOString(),
   };
   await updateDoc(doc(db, "demandas_rede", id), {
+    status: "em_andamento",
     data_agendamento: novaData,
     periodo_agendamento: periodo,
     notas_atividade: arrayUnion(nota),
@@ -919,7 +920,7 @@ export async function concluirDemanda(id: string, obs?: string): Promise<void> {
 }
 
 export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
-  const q = query(collection(db, "demandas_rede"), where("status", "==", "em_andamento"));
+  const q = query(collection(db, "demandas_rede"), where("status", "in", ["agendada", "em_andamento"]));
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<DemandaRede>(d))
@@ -932,7 +933,7 @@ export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
 }
 
 export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): Promise<void> {
-  if (demanda.status !== "em_andamento") return;
+  if (demanda.status !== "agendada" && demanda.status !== "em_andamento") return;
   await concluirDemanda(demanda.id, obs);
 }
 

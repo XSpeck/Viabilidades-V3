@@ -26,7 +26,7 @@ const PRIORIDADE_LABEL: Record<PrioridadeDemanda, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  aberta: "Aberta", em_andamento: "Em andamento", concluida: "Concluída",
+  aberta: "Aberta", agendada: "Agendada", em_andamento: "Em andamento", concluida: "Concluída",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
