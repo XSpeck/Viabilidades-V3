@@ -8,7 +8,7 @@ import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemand
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
-import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search, Pencil } from "lucide-react";
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
 const DemandasMap    = dynamic(() => import("@/components/analise-rede/DemandasMap"),  { ssr: false });
@@ -223,10 +223,30 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Agendar (aberta → em_andamento)
+  // Editar
+  const [showEditar, setShowEditar]         = useState(false);
+  const [editTecnico, setEditTecnico]       = useState<TecnicoRede>(d.tecnico);
+  const [editTipo, setEditTipo]             = useState(TIPOS_SERVICO.includes(d.tipo) ? d.tipo : "Outro");
+  const [editTipoCustom, setEditTipoCustom] = useState(TIPOS_SERVICO.includes(d.tipo) ? "" : d.tipo);
+  const [editPrioridade, setEditPrioridade] = useState<PrioridadeDemanda>(d.prioridade);
+  const [editDescricao, setEditDescricao]   = useState(d.descricao);
+
+  // Agendar (aberta → agendada)
   const [showAgendar, setShowAgendar]     = useState(false);
   const [dataAgendar, setDataAgendar]     = useState("");
   const [periodoAgendar, setPeriodoAgendar] = useState("Manhã");
+
+  async function handleEditar() {
+    const tipoFinal = editTipo === "Outro" ? editTipoCustom.trim() : editTipo;
+    if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
+    if (!editDescricao.trim()) { alert("Informe a descrição."); return; }
+    setSaving(true);
+    try {
+      await updateDemanda(d.id, { tecnico: editTecnico, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim() });
+      setShowEditar(false);
+      onRefresh();
+    } finally { setSaving(false); }
+  }
 
   async function handleAgendar() {
     if (!dataAgendar) { alert("Informe a data!"); return; }
@@ -337,6 +357,10 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
               </button>
             </div>
           )}
+          <button onClick={() => { setShowEditar((s) => !s); setShowAgendar(false); }}
+            className={`transition-colors ${showEditar ? "text-indigo-500" : "text-gray-300 hover:text-indigo-500"}`}>
+            <Pencil className="w-4 h-4" />
+          </button>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
               className="text-gray-300 hover:text-red-500 transition-colors">
@@ -356,6 +380,46 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
           )}
         </div>
       </div>
+
+      {/* Form editar */}
+      {showEditar && (
+        <div className="mt-3 space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
+          <p className="text-xs font-semibold text-gray-700">✏️ Editar demanda</p>
+          <div className="grid grid-cols-2 gap-2">
+            <select value={editTecnico} onChange={(e) => setEditTecnico(e.target.value as TecnicoRede)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
+            </select>
+            <select value={editPrioridade} onChange={(e) => setEditPrioridade(e.target.value as PrioridadeDemanda)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              {(["baixa", "media", "alta", "urgente"] as PrioridadeDemanda[]).map((p) => (
+                <option key={p} value={p}>{PRIORIDADE_LABEL[p]}</option>
+              ))}
+            </select>
+            <select value={editTipo} onChange={(e) => setEditTipo(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2">
+              {TIPOS_SERVICO.map((t) => <option key={t}>{t}</option>)}
+            </select>
+            {editTipo === "Outro" && (
+              <input value={editTipoCustom} onChange={(e) => setEditTipoCustom(e.target.value)}
+                placeholder="Descreva o tipo *" className="col-span-2 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            )}
+          </div>
+          <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)}
+            rows={3} placeholder="Descrição *"
+            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+          <div className="flex gap-2">
+            <button onClick={handleEditar} disabled={saving}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
+            </button>
+            <button onClick={() => setShowEditar(false)}
+              className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Form agendar */}
       {showAgendar && (
