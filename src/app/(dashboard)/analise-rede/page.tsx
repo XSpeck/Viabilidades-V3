@@ -230,6 +230,30 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   const [editTipoCustom, setEditTipoCustom] = useState(TIPOS_SERVICO.includes(d.tipo) ? "" : d.tipo);
   const [editPrioridade, setEditPrioridade] = useState<PrioridadeDemanda>(d.prioridade);
   const [editDescricao, setEditDescricao]   = useState(d.descricao);
+  const [editInputMethod, setEditInputMethod]             = useState<InputMethod>(d.local?.includes(",") && !d.local.includes("+") ? "coords" : "pluscode");
+  const [editLocationInput, setEditLocationInput]         = useState(d.local ?? "");
+  const [editValidatedPlusCode, setEditValidatedPlusCode] = useState<string | null>(d.local ?? null);
+  const [editInputValid, setEditInputValid]               = useState<boolean | null>(d.local ? true : null);
+  const [editShowLocationPicker, setEditShowLocationPicker] = useState(false);
+
+  useEffect(() => {
+    if (!editLocationInput) { setEditInputValid(null); setEditValidatedPlusCode(null); return; }
+    if (editInputMethod === "pluscode") {
+      const valid = validatePlusCode(editLocationInput);
+      setEditInputValid(valid);
+      setEditValidatedPlusCode(valid ? editLocationInput.trim().toUpperCase() : null);
+    } else {
+      const parts = editLocationInput.split(",");
+      if (parts.length === 2) {
+        const lat = parseFloat(parts[0].trim());
+        const lon = parseFloat(parts[1].trim());
+        if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          setEditInputValid(true);
+          setEditValidatedPlusCode(`${lat.toFixed(6)},${lon.toFixed(6)}`);
+        } else { setEditInputValid(false); setEditValidatedPlusCode(null); }
+      } else { setEditInputValid(false); setEditValidatedPlusCode(null); }
+    }
+  }, [editLocationInput, editInputMethod]);
 
   // Agendar (aberta → agendada)
   const [showAgendar, setShowAgendar]     = useState(false);
@@ -242,7 +266,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     if (!editDescricao.trim()) { alert("Informe a descrição."); return; }
     setSaving(true);
     try {
-      await updateDemanda(d.id, { tecnico: editTecnico, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim() });
+      await updateDemanda(d.id, { tecnico: editTecnico, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
       setShowEditar(false);
       onRefresh();
     } finally { setSaving(false); }
@@ -405,6 +429,48 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
                 placeholder="Descreva o tipo *" className="col-span-2 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             )}
           </div>
+          {/* Localização */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500">Localização (opcional)</span>
+              {editLocationInput && (
+                <button type="button" onClick={() => { setEditLocationInput(""); setEditInputValid(null); setEditValidatedPlusCode(null); }}
+                  className="text-xs text-red-400 hover:text-red-600">Remover</button>
+              )}
+            </div>
+            <div className="flex gap-2 flex-wrap mb-2">
+              {(["pluscode", "coords"] as InputMethod[]).map((m) => (
+                <button key={m} type="button"
+                  onClick={() => { setEditInputMethod(m); setEditLocationInput(""); setEditInputValid(null); }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${editInputMethod === m ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  {m === "pluscode" ? "Plus Code" : "Coordenadas"}
+                </button>
+              ))}
+              <button type="button" onClick={() => setEditShowLocationPicker(true)}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                🛰️ Mapa
+              </button>
+            </div>
+            <input type="text" value={editLocationInput}
+              onChange={(e) => setEditLocationInput(e.target.value.toUpperCase())}
+              placeholder={editInputMethod === "pluscode" ? "Ex: 8J3G+WGV" : "Ex: -28.695133, -49.373710"}
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 font-mono transition-colors ${
+                editInputValid === null ? "border-gray-300 focus:ring-indigo-400"
+                : editInputValid ? "border-green-400 focus:ring-green-400 bg-green-50"
+                : "border-red-400 focus:ring-red-400 bg-red-50"
+              }`} />
+            {editInputValid === true && (
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" /> {editValidatedPlusCode}
+              </p>
+            )}
+            {editInputValid === false && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <XCircle className="w-3.5 h-3.5" /> Formato inválido
+              </p>
+            )}
+          </div>
+
           <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)}
             rows={3} placeholder="Descrição *"
             className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
@@ -419,6 +485,19 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             </button>
           </div>
         </div>
+      )}
+
+      {editShowLocationPicker && (
+        <LocationPicker
+          onConfirm={(code) => {
+            setEditLocationInput(code);
+            setEditInputMethod("pluscode");
+            setEditInputValid(true);
+            setEditValidatedPlusCode(code);
+            setEditShowLocationPicker(false);
+          }}
+          onClose={() => setEditShowLocationPicker(false)}
+        />
       )}
 
       {/* Form agendar */}
