@@ -233,7 +233,7 @@ export default function AgendaTecnicaPage() {
                 </div>
                 {(dateFrom || dateTo) && (
                   <button onClick={() => { setDateFrom(""); setDateTo(""); }}
-                    className="text-xs text-gray-400 hover:text-gray-600 underline self-end pb-2">Limpar</button>
+                    className="text-xs text-gray-500 hover:text-gray-700 underline self-end pb-2">Limpar</button>
                 )}
               </div>
             </div>
@@ -328,7 +328,7 @@ export default function AgendaTecnicaPage() {
                   </select>
                   {(arquDateFrom || arquDateTo) && (
                     <button onClick={() => { setArquDateFrom(""); setArquDateTo(""); }}
-                      className="text-xs text-gray-400 hover:text-gray-600 underline self-end pb-2">Limpar datas</button>
+                      className="text-xs text-gray-500 hover:text-gray-700 underline self-end pb-2">Limpar datas</button>
                   )}
                   <button onClick={downloadArquivados}
                     className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium self-end">
@@ -694,7 +694,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
             <div className="pt-1">
               {!showDesistencia ? (
                 <button onClick={() => setShowDesistencia(true)}
-                  className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium">
                   ✕ Desistência do cliente
                 </button>
               ) : (
@@ -708,7 +708,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                       className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
                       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar arquivamento"}
                     </button>
-                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                       Cancelar
                     </button>
                   </div>

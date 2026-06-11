@@ -343,12 +343,14 @@ export default function ResultadosPage() {
                             v.status_predio === "estruturado"     ? "bg-green-100 text-green-700" :
                             v.motivo_rejeicao === "Atendemos UTP" ? "bg-purple-100 text-purple-700" :
                             v.motivo_rejeicao                     ? "bg-red-100 text-red-700" :
+                            v.motivo_desistencia                  ? "bg-orange-100 text-orange-700" :
                             "bg-gray-100 text-gray-600";
                           const finalizadoLabel =
                             v.status_instalacao === "instalado"   ? "✅ Instalado" :
                             v.status_predio === "estruturado"     ? "✅ Estruturado" :
                             v.motivo_rejeicao === "Atendemos UTP" ? "📡 UTP" :
                             v.motivo_rejeicao                     ? "❌ Sem viab." :
+                            v.motivo_desistencia                  ? "🚫 Desistência" :
                             "📁 Finalizado";
                           const statusColors: Record<string, string> = {
                             aprovado:     "bg-green-100 text-green-700",
@@ -382,7 +384,7 @@ export default function ResultadosPage() {
                               <td className="px-3 py-2.5 max-w-[140px] truncate text-gray-600">{v.predio_ftta ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cdoi ?? v.cto_numero ?? "-"}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] ?? "bg-gray-100 text-gray-600"}`}>
+                                <span title={v.motivo_desistencia ?? v.motivo_rejeicao ?? undefined} className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] ?? "bg-gray-100 text-gray-600"}`}>
                                   {statusLabel[v.status] ?? v.status}
                                 </span>
                               </td>
@@ -823,13 +825,25 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                   <p className="font-medium text-green-800">📅 Instalação agendada!</p>
                   <p>📆 Data: <strong>{r.data_instalacao ? new Date(r.data_instalacao + "T12:00:00").toLocaleDateString("pt-BR") : "N/A"}</strong></p>
                   <p>🕐 Período: {r.periodo_instalacao} · 👷 Técnico: {r.tecnico_instalacao}</p>
+                  {r.historico_agendamento && (
+                    <details className="text-xs mt-1">
+                      <summary className="cursor-pointer text-green-700 hover:text-green-900">📋 Histórico de negociação</summary>
+                      <pre className="mt-1.5 whitespace-pre-wrap text-gray-600 bg-white border rounded-lg p-2.5 leading-relaxed">{r.historico_agendamento}</pre>
+                    </details>
+                  )}
                 </div>
               )}
 
               {r.status_instalacao === "instalado" && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm space-y-1">
                   <p className="font-medium text-blue-800">🎉 Instalação concluída pelo técnico {r.tecnico_instalacao ?? ""}!</p>
-                  <p className="text-blue-700 mt-1 text-xs">Clique em "Arquivar" para arquivar este agendamento.</p>
+                  <p className="text-blue-700 text-xs">Clique em "Arquivar" para arquivar este agendamento.</p>
+                  {r.historico_agendamento && (
+                    <details className="text-xs mt-1">
+                      <summary className="cursor-pointer text-blue-700 hover:text-blue-900">📋 Histórico de negociação</summary>
+                      <pre className="mt-1.5 whitespace-pre-wrap text-gray-600 bg-white border rounded-lg p-2.5 leading-relaxed">{r.historico_agendamento}</pre>
+                    </details>
+                  )}
                 </div>
               )}
             </div>
@@ -1035,6 +1049,19 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
               <p className="text-green-700 text-xs">A estrutura do prédio foi concluída. Um novo pedido de viabilidade poderá ser feito para solicitar a instalação.</p>
               <p>🔧 Tecnologia: {r.tecnologia_predio}</p>
               <p>👷 Técnico: {r.tecnico_responsavel}</p>
+              {r.notas_visita && r.notas_visita.length > 0 && (
+                <details className="text-xs mt-1">
+                  <summary className="cursor-pointer text-green-700 hover:text-green-900">📝 Notas da visita ({r.notas_visita.length})</summary>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {r.notas_visita.map((n, i) => (
+                      <li key={i} className="bg-white border rounded-lg p-2 text-gray-600">
+                        <span className="font-medium text-gray-700">{n.por}</span> · <span className="text-gray-400">{new Date(n.data).toLocaleDateString("pt-BR")}</span>
+                        <p className="mt-0.5 whitespace-pre-wrap">{n.texto}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           )}
 
@@ -1043,15 +1070,15 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {["aprovado", "rejeitado", "utp"].includes(r.status) && !r.status_instalacao && !r.status_predio && !r.data_finalizacao && (
-            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors font-medium">
               ✅ {r.status === "aprovado" ? "Finalizar" : "OK, Entendi"}
             </button>
           )}
           {r.status_instalacao === "instalado" && (
-            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded-lg transition-colors">📁 Arquivar</button>
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">📁 Arquivar</button>
           )}
           {r.status_predio === "estruturado" && (
-            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">✅ Ciente</button>
+            <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors font-medium">✅ Ciente</button>
           )}
 
           {/* Desistência — visível durante a negociação de agendamento */}
@@ -1059,7 +1086,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             <div className="mt-3">
               {!showDesistencia ? (
                 <button onClick={() => setShowDesistencia(true)}
-                  className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium">
                   ✕ Não tenho mais interesse
                 </button>
               ) : (
@@ -1074,7 +1101,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
                       className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
                       {enviandoDesistencia ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
                     </button>
-                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                       Cancelar
                     </button>
                   </div>
