@@ -867,6 +867,19 @@ export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
   return data;
 }
 
+export async function arquivarViabilizacao(id: string): Promise<void> {
+  await updateViabilizacao(id, {
+    status: "finalizado",
+    data_finalizacao: new Date().toISOString(),
+  });
+  bustCache("viab_all_viabilizacoes_v1");
+}
+
+export async function excluirViabilizacao(id: string): Promise<void> {
+  await deleteDoc(doc(db, "viabilizacoes", id));
+  bustCache("viab_all_viabilizacoes_v1");
+}
+
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
   bustCache("viab_all_viabilizacoes_v1");

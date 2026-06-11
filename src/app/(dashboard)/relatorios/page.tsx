@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { OpenLocationCode } from "open-location-code";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
+import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade, arquivarViabilizacao, excluirViabilizacao } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -24,7 +24,7 @@ const RelatorioMapa = dynamic(() => import("@/components/relatorios/RelatorioMap
 // ─── CSV export ───────────────────────────────────────────────────
 function downloadCSV(rows: Record<string, string | number | undefined>[], filename: string) {
   if (!rows.length) return;
-  const headers = Object.keys(rows[0]);
+  const headers = Object.keys(rows[0]).filter((h) => !h.startsWith("_"));
   const lines = rows.map((r) =>
     headers.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(",")
   );
@@ -68,6 +68,8 @@ export default function RelatoriosPage() {
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
   const [loadingMap, setLoadingMap] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   function setSearch(tab: TabKey, v: string) { setSearches((p) => ({ ...p, [tab]: v })); }
 
@@ -153,6 +155,23 @@ export default function RelatoriosPage() {
   }
 
   useEffect(() => { if (user?.nivel === 1) load(); }, [user]);
+
+  async function handleArquivar(id: string) {
+    setActionPending(id);
+    try {
+      await arquivarViabilizacao(id);
+      setViabilizacoes((prev) => prev.map((v) => v.id === id ? { ...v, status: "finalizado" as const, data_finalizacao: new Date().toISOString() } : v));
+    } finally { setActionPending(null); }
+  }
+
+  async function handleExcluir(id: string) {
+    setActionPending(id);
+    setConfirmDelete(null);
+    try {
+      await excluirViabilizacao(id);
+      setViabilizacoes((prev) => prev.filter((v) => v.id !== id));
+    } finally { setActionPending(null); }
+  }
 
   // Rebuilds map whenever date filter or data changes while map is open
   useEffect(() => {
@@ -251,6 +270,7 @@ export default function RelatoriosPage() {
 
   // ── Rows for CSV / table ──────────────────────────────────────
   const rowsFtthAp = ftthAprovadas.map((v) => ({
+    _id:          v.id,
     Data:         formatDateTime(v.data_auditoria),
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
@@ -264,6 +284,7 @@ export default function RelatoriosPage() {
   }));
 
   const rowsFtthRej = ftthRejeitadas.map((v) => ({
+    _id:          v.id,
     Data:         formatDateTime(v.data_auditoria),
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
@@ -273,6 +294,7 @@ export default function RelatoriosPage() {
   }));
 
   const mapPredioRow = (v: Viabilizacao) => ({
+    _id:         v.id,
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Tipo:        (v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP") ? "UTP" : v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
@@ -292,6 +314,7 @@ export default function RelatoriosPage() {
   const rowsPredios = prediosViab.map(mapPredioRow);
 
   const rowsCondominios = condominiosViab.map((v) => ({
+    _id:           v.id,
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Condomínio:    v.predio_ftta ?? "-",
     "Casa/Lote":   v.andar_predio ?? "-",
@@ -308,6 +331,7 @@ export default function RelatoriosPage() {
   }));
 
   const rowsFttaRej = fttaRejeitados.map((v) => ({
+    _id:           v.id,
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Tipo:          v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
@@ -319,6 +343,7 @@ export default function RelatoriosPage() {
   }));
 
   const rowsUtp = utpFiltrado.map((v) => ({
+    _id:         v.id,
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
     Tipo:        v.tipo_instalacao,
@@ -540,19 +565,44 @@ export default function RelatoriosPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
                 <tr>
-                  {Object.keys(currentRows[0]).map((h) => (
+                  {Object.keys(currentRows[0]).filter((h) => !h.startsWith("_")).map((h) => (
                     <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                   ))}
+                  {"_id" in currentRows[0] && (
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Ações</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {currentRows.map((row, i) => (
                   <tr key={i} className="hover:bg-gray-50">
-                    {Object.values(row).map((val, j) => (
-                      <td key={j} className="px-4 py-3 text-gray-700 whitespace-nowrap text-xs max-w-[200px] truncate">
+                    {Object.entries(row).filter(([k]) => !k.startsWith("_")).map(([k, val]) => (
+                      <td key={k} className="px-4 py-3 text-gray-700 whitespace-nowrap text-xs max-w-[200px] truncate">
                         {String(val ?? "-")}
                       </td>
                     ))}
+                    {"_id" in row && (
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {actionPending === String(row._id) ? (
+                          <span className="text-xs text-gray-400">Aguarde...</span>
+                        ) : confirmDelete === String(row._id) ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-red-600 font-medium">Excluir?</span>
+                            <button onClick={() => handleExcluir(String(row._id))} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-700">Sim</button>
+                            <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 border rounded text-gray-500 hover:bg-gray-50">Não</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleArquivar(String(row._id))} className="text-xs px-2 py-0.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                              📦 Arquivar
+                            </button>
+                            <button onClick={() => setConfirmDelete(String(row._id))} className="text-xs px-2 py-0.5 border border-red-200 rounded text-red-500 hover:bg-red-50">
+                              🗑️ Excluir
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
