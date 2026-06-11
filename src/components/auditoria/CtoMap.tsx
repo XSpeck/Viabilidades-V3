@@ -237,6 +237,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   const [redesVisiveis, setRedesVisiveis] = useState<Record<string, boolean>>({});
   const [loadingRedes, setLoadingRedes] = useState(false);
   const [redesCarregadas, setRedesCarregadas] = useState(false);
+  const [redesMinimizado, setRedesMinimizado] = useState(false);
 
   async function carregarRedes() {
     if (redesCarregadas) return;
@@ -245,7 +246,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       const data = await getRedes();
       setRedes(data);
       const vis: Record<string, boolean> = {};
-      data.forEach((r) => { vis[r.empresa] = true; });
+      data.forEach((r) => { vis[r.empresa] = false; });
       setRedesVisiveis(vis);
       setRedesCarregadas(true);
     } finally {
@@ -336,43 +337,61 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
           boxShadow: "0 2px 6px rgba(0,0,0,0.2)", border: "1px solid #e5e7eb",
           minWidth: 140,
         }}>
-          <button
-            onClick={carregarRedes}
-            disabled={loadingRedes}
-            style={{
-              width: "100%", border: "none", background: "none", cursor: "pointer",
-              fontSize: 11, fontWeight: 700, color: "#374151", padding: "2px 0 4px",
-              fontFamily: "system-ui,sans-serif", display: "flex", alignItems: "center", gap: 4,
-              justifyContent: "space-between",
-            }}
-          >
-            <span>⚡ Redes</span>
-            {loadingRedes
-              ? <span style={{ fontSize: 10, color: "#9ca3af" }}>...</span>
-              : !redesCarregadas
-              ? <span style={{ fontSize: 10, color: "#4f46e5" }}>carregar</span>
-              : null}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+            <button
+              onClick={carregarRedes}
+              disabled={loadingRedes}
+              style={{
+                flex: 1, border: "none", background: "none", cursor: "pointer",
+                fontSize: 11, fontWeight: 700, color: "#374151", padding: "2px 0",
+                fontFamily: "system-ui,sans-serif", display: "flex", alignItems: "center", gap: 4,
+                textAlign: "left",
+              }}
+            >
+              <span>⚡ Redes</span>
+              {loadingRedes
+                ? <span style={{ fontSize: 10, color: "#9ca3af" }}>...</span>
+                : !redesCarregadas
+                ? <span style={{ fontSize: 10, color: "#4f46e5" }}>carregar</span>
+                : null}
+            </button>
+            {redesCarregadas && (
+              <button
+                onClick={() => setRedesMinimizado((v) => !v)}
+                title={redesMinimizado ? "Expandir" : "Minimizar"}
+                style={{
+                  border: "none", background: "none", cursor: "pointer",
+                  fontSize: 10, color: "#9ca3af", padding: "2px 4px", lineHeight: 1,
+                  fontFamily: "system-ui,sans-serif",
+                }}
+              >
+                {redesMinimizado ? "▼" : "▲"}
+              </button>
+            )}
+          </div>
 
-          {redesCarregadas && redes.length === 0 && (
-            <p style={{ fontSize: 10, color: "#9ca3af", margin: 0 }}>Nenhuma rede importada</p>
+          {!redesMinimizado && (
+            <>
+              {redesCarregadas && redes.length === 0 && (
+                <p style={{ fontSize: 10, color: "#9ca3af", margin: "4px 0 0" }}>Nenhuma rede importada</p>
+              )}
+              {redes.map((r) => (
+                <label key={r.empresa} style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  cursor: "pointer", padding: "2px 0", fontSize: 11,
+                  fontFamily: "system-ui,sans-serif", color: "#374151",
+                }}>
+                  <input type="checkbox" checked={redesVisiveis[r.empresa] ?? false}
+                    onChange={() => toggleRede(r.empresa)}
+                    style={{ accentColor: r.cor, width: 12, height: 12 }} />
+                  <div style={{ width: 12, height: 3, borderRadius: 2, background: r.cor, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>
+                    {EMPRESAS[r.empresa]?.label ?? r.empresa}
+                  </span>
+                </label>
+              ))}
+            </>
           )}
-
-          {redes.map((r) => (
-            <label key={r.empresa} style={{
-              display: "flex", alignItems: "center", gap: 5,
-              cursor: "pointer", padding: "2px 0", fontSize: 11,
-              fontFamily: "system-ui,sans-serif", color: "#374151",
-            }}>
-              <input type="checkbox" checked={redesVisiveis[r.empresa] ?? true}
-                onChange={() => toggleRede(r.empresa)}
-                style={{ accentColor: r.cor, width: 12, height: 12 }} />
-              <div style={{ width: 12, height: 3, borderRadius: 2, background: r.cor, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 600 }}>
-                {EMPRESAS[r.empresa]?.label ?? r.empresa}
-              </span>
-            </label>
-          ))}
         </div>
       </div>
 
