@@ -33,7 +33,7 @@ export default function ResultadosPage() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    try { setResults(await getViabilizacoesUsuario([user.nome, user.login])); }
+    try { setResults(await getViabilizacoesUsuario([user.nome, user.login, user.uid])); }
     finally { setLoading(false); }
   }, [user]);
 
@@ -45,7 +45,7 @@ export default function ResultadosPage() {
     if (!user || historicoReady) return;
     setLoadingHistorico(true);
     try {
-      setHistorico(await getViabilizacoesHistorico([user.nome, user.login]));
+      setHistorico(await getViabilizacoesHistorico([user.nome, user.login, user.uid]));
       setHistoricoReady(true);
     } finally { setLoadingHistorico(false); }
   }
