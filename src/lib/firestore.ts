@@ -145,7 +145,7 @@ export async function getViabilizacoesUsuario(usernames: string[]): Promise<Viab
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => !v.data_finalizacao)
+    .filter((v) => !v.data_finalizacao && v.status_instalacao !== "agendado")
     .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
 }
 

@@ -1055,7 +1055,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
 
           {/* Desistência — visível durante a negociação de agendamento */}
-          {r.status === "aprovado" && r.status_instalacao && r.status_instalacao !== "instalado" && !r.data_finalizacao && (
+          {r.status === "aprovado" && r.status_instalacao && r.status_instalacao !== "instalado" && r.status_instalacao !== "agendado" && !r.data_finalizacao && (
             <div className="mt-3">
               {!showDesistencia ? (
                 <button onClick={() => setShowDesistencia(true)}
