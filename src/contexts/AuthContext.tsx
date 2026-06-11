@@ -19,6 +19,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthChange(async (firebaseUser) => {
       if (firebaseUser) {
         const userData = await getUserData(firebaseUser.uid);
+        if (userData && !userData.login && firebaseUser.email) {
+          userData.login = firebaseUser.email;
+        }
         setUser(userData);
       } else {
         setUser(null);
