@@ -13,7 +13,7 @@ import {
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download } from "lucide-react";
+import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 type FilterKey = "todos" | "proposta_enviada" | "aguardando_confirmacao" | "agendado" | "instalado";
@@ -53,6 +53,8 @@ export default function AgendaTecnicaPage() {
   const [loadingArq, setLoadingArq] = useState(false);
   const [arquivadosReady, setArquivadosReady] = useState(false);
   const [showArquivados, setShowArquivados] = useState(false);
+  const [layout, setLayout] = useState<"lista" | "grade">("lista");
+  const [gradeData, setGradeData] = useState(() => new Date().toISOString().slice(0, 10));
   const [arquSearch, setArquSearch] = useState("");
   const [arquDateFrom, setArquDateFrom] = useState("");
   const [arquDateTo, setArquDateTo] = useState("");
@@ -178,9 +180,16 @@ export default function AgendaTecnicaPage() {
             {counts.proposta_enviada > 0 && <span className="text-orange-600 font-medium"> · {counts.proposta_enviada} aguardando análise</span>}
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setLayout((l) => l === "lista" ? "grade" : "lista")}
+            className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
+            {layout === "lista" ? <LayoutGrid className="w-4 h-4" /> : <LayoutList className="w-4 h-4" />}
+            {layout === "lista" ? "Grade" : "Lista"}
+          </button>
+          <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Tabs FTTH / FTTA+UTP */}
@@ -199,62 +208,74 @@ export default function AgendaTecnicaPage() {
         </button>
       </div>
 
-      {/* Filtros ativos */}
-      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
-        <div className="flex flex-wrap gap-2 items-end">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Buscar por cliente, plus code, técnico ou solicitante..."
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          </div>
-          <div className="flex items-end gap-2">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Data de</p>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      {layout === "lista" ? (
+        <>
+          {/* Filtros ativos */}
+          <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="text" placeholder="Buscar por cliente, plus code, técnico ou solicitante..."
+                  value={search} onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Data de</p>
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">até</p>
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+                    className="text-xs text-gray-400 hover:text-gray-600 underline self-end pb-2">Limpar</button>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">até</p>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <div className="flex flex-wrap gap-2">
+              {chips.map((c) => (
+                <button key={c.key} onClick={() => setFilter(c.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    filter === c.key
+                      ? c.key === "proposta_enviada" ? "bg-orange-600 text-white" : "bg-indigo-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}>
+                  {c.label}
+                </button>
+              ))}
             </div>
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(""); setDateTo(""); }}
-                className="text-xs text-gray-400 hover:text-gray-600 underline self-end pb-2">Limpar</button>
-            )}
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {chips.map((c) => (
-            <button key={c.key} onClick={() => setFilter(c.key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filter === c.key
-                  ? c.key === "proposta_enviada" ? "bg-orange-600 text-white" : "bg-indigo-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Lista ativa */}
-      {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
-      ) : activeItems.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border">
-          <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">{view === "ftth" ? "Nenhuma instalação FTTH ativa." : "Nenhum agendamento FTTA/UTP ativo."}</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-10 bg-white rounded-xl border text-gray-400">Nenhum resultado para os filtros aplicados.</div>
+          {/* Lista ativa */}
+          {loading ? (
+            <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
+          ) : activeItems.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border">
+              <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">{view === "ftth" ? "Nenhuma instalação FTTH ativa." : "Nenhum agendamento FTTA/UTP ativo."}</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-xl border text-gray-400">Nenhum resultado para os filtros aplicados.</div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((v) => (
+                <AgendaTecnicaCard key={v.id} v={v} isFttaUtp={view === "ftta_utp"} onRefresh={load} />
+              ))}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((v) => (
-            <AgendaTecnicaCard key={v.id} v={v} isFttaUtp={view === "ftta_utp"} onRefresh={load} />
-          ))}
-        </div>
+        <GradeTecnica
+          items={activeItems}
+          gradeData={gradeData}
+          setGradeData={setGradeData}
+          isFttaUtp={view === "ftta_utp"}
+          onRefresh={load}
+        />
       )}
 
       {/* ─── Arquivados ──────────────────────────────────────────── */}
@@ -789,6 +810,133 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
             </details>
           )}
 
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Grade por período/técnico ─────────────────────────────────────
+const PERIODOS_GRADE = ["Manhã", "Tarde", "Noturno", "Dia todo"] as const;
+
+function GradeTecnica({ items, gradeData, setGradeData, isFttaUtp, onRefresh }: {
+  items: Viabilizacao[];
+  gradeData: string;
+  setGradeData: (d: string) => void;
+  isFttaUtp: boolean;
+  onRefresh: () => void;
+}) {
+  const [selected, setSelected] = useState<Viabilizacao | null>(null);
+
+  const agendados = items.filter(
+    (v) => v.status_instalacao === "agendado" && v.data_instalacao === gradeData
+  );
+
+  const tecnicos = Array.from(
+    new Set(agendados.map((v) => v.tecnico_instalacao ?? "Sem técnico"))
+  ).sort();
+
+  const cell = (tec: string, periodo: string) =>
+    agendados.filter(
+      (v) => (v.tecnico_instalacao ?? "Sem técnico") === tec && v.periodo_instalacao === periodo
+    );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3 bg-white rounded-xl border shadow-sm px-4 py-3">
+        <span className="text-sm font-medium text-gray-700">Data:</span>
+        <input type="date" value={gradeData} onChange={(e) => setGradeData(e.target.value)}
+          className="px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <span className="text-sm text-gray-400">
+          {agendados.length} agendamento{agendados.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {agendados.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border">
+          <p className="text-4xl mb-3">🗓️</p>
+          <p className="font-medium text-gray-400">Nenhuma instalação agendada para este dia.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: `${tecnicos.length * 160 + 88}px` }}>
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="w-20 py-3 px-3 border-r sticky left-0 bg-gray-50 z-10" />
+                  {tecnicos.map((tec) => (
+                    <th key={tec} className="py-3 px-3 text-center border-r last:border-r-0 min-w-[160px]">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-sm">👷</span>
+                        <span className="text-xs font-semibold text-gray-700">{tec}</span>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PERIODOS_GRADE.map((periodo, idx) => (
+                  <tr key={periodo} className={idx < 3 ? "border-b" : ""}>
+                    <td className="py-5 px-3 border-r bg-gray-50 align-middle sticky left-0 z-10">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-base">
+                          {periodo === "Manhã" ? "🌅" : periodo === "Tarde" ? "🌇" : periodo === "Noturno" ? "🌙" : "☀️"}
+                        </span>
+                        <span className="text-xs font-semibold text-gray-600">{periodo}</span>
+                      </div>
+                    </td>
+                    {tecnicos.map((tec) => {
+                      const its = cell(tec, periodo);
+                      return (
+                        <td key={tec} className="py-3 px-3 border-r last:border-r-0 align-top">
+                          {its.length === 0 ? (
+                            <div className="h-12 flex items-center justify-center text-gray-200 text-lg select-none">—</div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {its.map((v) => (
+                                <button key={v.id} onClick={() => setSelected(v)}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm shrink-0">
+                                      {v.status === "utp" ? "📡" : v.tipo_instalacao === "FTTH" ? "🏠" : "🏢"}
+                                    </span>
+                                    <span className="text-xs font-medium text-gray-800 truncate">
+                                      {v.nome_cliente ?? "Cliente"}
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <p className="font-semibold text-gray-800">Detalhes da instalação</p>
+              <button onClick={() => setSelected(null)}
+                className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+            </div>
+            <div className="p-4">
+              <AgendaTecnicaCard
+                v={selected}
+                isFttaUtp={isFttaUtp}
+                onRefresh={() => { setSelected(null); onRefresh(); }}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
