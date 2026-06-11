@@ -22,7 +22,7 @@ const RelatorioMapa = dynamic(() => import("@/components/relatorios/RelatorioMap
 });
 
 // ─── CSV export ───────────────────────────────────────────────────
-function downloadCSV(rows: Record<string, string | number | undefined>[], filename: string) {
+function downloadCSV(rows: Record<string, string | number | boolean | undefined>[], filename: string) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]).filter((h) => !h.startsWith("_"));
   const lines = rows.map((r) =>
@@ -46,7 +46,7 @@ function TableSearch({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function matchSearch(row: Record<string, string | number | undefined>, q: string): boolean {
+function matchSearch(row: Record<string, string | number | boolean | undefined>, q: string): boolean {
   if (!q.trim()) return true;
   const lower = q.toLowerCase().replace(/\+/g, "");
   return Object.values(row).some((v) => String(v ?? "").toLowerCase().replace(/\+/g, "").includes(lower));
@@ -271,6 +271,7 @@ export default function RelatoriosPage() {
   // ── Rows for CSV / table ──────────────────────────────────────
   const rowsFtthAp = ftthAprovadas.map((v) => ({
     _id:          v.id,
+    _arquivado:   v.status === "finalizado" || !!v.data_finalizacao,
     Data:         formatDateTime(v.data_auditoria),
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
@@ -285,6 +286,7 @@ export default function RelatoriosPage() {
 
   const rowsFtthRej = ftthRejeitadas.map((v) => ({
     _id:          v.id,
+    _arquivado:   v.status === "finalizado" || !!v.data_finalizacao,
     Data:         formatDateTime(v.data_auditoria),
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
@@ -295,6 +297,7 @@ export default function RelatoriosPage() {
 
   const mapPredioRow = (v: Viabilizacao) => ({
     _id:         v.id,
+    _arquivado:  v.status === "finalizado" || !!v.data_finalizacao,
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Tipo:        (v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP") ? "UTP" : v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
@@ -315,6 +318,7 @@ export default function RelatoriosPage() {
 
   const rowsCondominios = condominiosViab.map((v) => ({
     _id:           v.id,
+    _arquivado:    v.status === "finalizado" || !!v.data_finalizacao,
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Condomínio:    v.predio_ftta ?? "-",
     "Casa/Lote":   v.andar_predio ?? "-",
@@ -332,6 +336,7 @@ export default function RelatoriosPage() {
 
   const rowsFttaRej = fttaRejeitados.map((v) => ({
     _id:           v.id,
+    _arquivado:    v.status === "finalizado" || !!v.data_finalizacao,
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     Tipo:          v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
@@ -344,6 +349,7 @@ export default function RelatoriosPage() {
 
   const rowsUtp = utpFiltrado.map((v) => ({
     _id:         v.id,
+    _arquivado:  v.status === "finalizado" || !!v.data_finalizacao,
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
     Tipo:        v.tipo_instalacao,
@@ -394,7 +400,7 @@ export default function RelatoriosPage() {
   ];
 
   // Row for active tab
-  type RowType = Record<string, string | number | undefined>;
+  type RowType = Record<string, string | number | boolean | undefined>;
   const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, ftta_rej: rowsFttaRej, utp: rowsUtp, estruturados: rowsEstru, sem_viab: rowsSemViab };
   const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "ftta_predios.csv", condominios: "ftta_condominios.csv", ftta_rej: "ftta_rejeitados.csv", utp: "utps.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
   const currentRows = allRows[activeTab].filter((r) => matchSearch(r, searches[activeTab]));
@@ -593,9 +599,11 @@ export default function RelatoriosPage() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => handleArquivar(String(row._id))} className="text-xs px-2 py-0.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
-                              📦 Arquivar
-                            </button>
+                            {!row._arquivado && (
+                              <button onClick={() => handleArquivar(String(row._id))} className="text-xs px-2 py-0.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                                📦 Arquivar
+                              </button>
+                            )}
                             <button onClick={() => setConfirmDelete(String(row._id))} className="text-xs px-2 py-0.5 border border-red-200 rounded text-red-500 hover:bg-red-50">
                               🗑️ Excluir
                             </button>
