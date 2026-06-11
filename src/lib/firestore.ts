@@ -136,10 +136,11 @@ export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viab
     });
 }
 
-export async function getViabilizacoesUsuario(username: string): Promise<Viabilizacao[]> {
+export async function getViabilizacoesUsuario(usernames: string[]): Promise<Viabilizacao[]> {
+  const ids = [...new Set(usernames.filter(Boolean))];
   const q = query(
     collection(db, "viabilizacoes"),
-    where("usuario", "==", username)
+    where("usuario", "in", ids)
   );
   const snap = await getDocs(q);
   return snap.docs
@@ -148,10 +149,11 @@ export async function getViabilizacoesUsuario(username: string): Promise<Viabili
     .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
 }
 
-export async function getViabilizacoesHistorico(username: string): Promise<Viabilizacao[]> {
+export async function getViabilizacoesHistorico(usernames: string[]): Promise<Viabilizacao[]> {
+  const ids = [...new Set(usernames.filter(Boolean))];
   const q = query(
     collection(db, "viabilizacoes"),
-    where("usuario", "==", username)
+    where("usuario", "in", ids)
   );
   const snap = await getDocs(q);
   return snap.docs
