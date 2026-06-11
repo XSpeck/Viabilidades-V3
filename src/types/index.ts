@@ -115,6 +115,7 @@ export interface Viabilizacao {
   historico_visita?: string;
   // Motivo
   motivo_rejeicao?: string;
+  motivo_desistencia?: string;
   observacoes?: string;
   // Revisão / Contestação
   mensagens?: MensagemViabilizacao[];

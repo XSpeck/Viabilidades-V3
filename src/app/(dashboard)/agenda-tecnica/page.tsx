@@ -8,6 +8,7 @@ import {
   confirmarAgendamentoTecnico,
   marcarInstalado,
   finalizarViabilizacao,
+  arquivarPorDesistencia,
   reagendarInstalacao,
   atribuirTecnicoInstalacao,
 } from "@/lib/firestore";
@@ -437,6 +438,17 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
     finally { setLoading(false); }
   }
 
+  const [showDesistencia, setShowDesistencia] = useState(false);
+  const [obsDesistencia, setObsDesistencia]   = useState("");
+
+  async function handleDesistencia() {
+    setLoading(true);
+    try {
+      await arquivarPorDesistencia(v.id, obsDesistencia || undefined);
+      onRefresh();
+    } finally { setLoading(false); }
+  }
+
   const status = v.status_instalacao;
   const statusCfg: Record<string, { label: string; color: string }> = {
     proposta_enviada:       { label: "📋 Nova proposta",           color: "bg-orange-100 text-orange-700" },
@@ -674,6 +686,34 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                 className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
                 📁 Arquivar
               </button>
+            </div>
+          )}
+
+          {/* ── Desistência do cliente ── */}
+          {status !== "instalado" && !successMsg && (
+            <div className="pt-1">
+              {!showDesistencia ? (
+                <button onClick={() => setShowDesistencia(true)}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                  ✕ Desistência do cliente
+                </button>
+              ) : (
+                <div className="border border-red-200 rounded-lg p-3 space-y-2 bg-red-50">
+                  <p className="text-xs font-semibold text-red-700">Arquivar por desistência do cliente</p>
+                  <textarea value={obsDesistencia} onChange={(e) => setObsDesistencia(e.target.value)}
+                    placeholder="Motivo / observação (opcional)" rows={2}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+                  <div className="flex gap-2">
+                    <button onClick={handleDesistencia} disabled={loading}
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
+                      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar arquivamento"}
+                    </button>
+                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

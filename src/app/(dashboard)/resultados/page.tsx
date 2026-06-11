@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, arquivarPorDesistencia, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
@@ -439,6 +439,20 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     finally { setEnviandoProposta(false); }
   }
 
+
+  // ── Desistência ───────────────────────────────────────
+  const [showDesistencia, setShowDesistencia] = useState(false);
+  const [obsDesistencia, setObsDesistencia]   = useState("");
+  const [enviandoDesistencia, setEnviandoDesistencia] = useState(false);
+
+  async function handleDesistencia() {
+    setEnviandoDesistencia(true);
+    try {
+      await arquivarPorDesistencia(r.id, obsDesistencia || undefined);
+      onRefresh();
+    } catch { alert("Erro ao registrar desistência."); }
+    finally { setEnviandoDesistencia(false); }
+  }
 
   // ── Contestação ────────────────────────────────────────
   const [showContestar, setShowContestar] = useState(false);
@@ -1038,6 +1052,35 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
           )}
           {r.status_predio === "estruturado" && (
             <button onClick={() => onFinalizar(r.id)} className="mt-2 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">✅ Ciente</button>
+          )}
+
+          {/* Desistência — visível durante a negociação de agendamento */}
+          {r.status === "aprovado" && r.status_instalacao && r.status_instalacao !== "instalado" && !r.data_finalizacao && (
+            <div className="mt-3">
+              {!showDesistencia ? (
+                <button onClick={() => setShowDesistencia(true)}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                  ✕ Não tenho mais interesse
+                </button>
+              ) : (
+                <div className="border border-red-200 rounded-lg p-3 space-y-2 bg-red-50 mt-1">
+                  <p className="text-xs font-semibold text-red-700">Confirmar desistência</p>
+                  <p className="text-xs text-red-600">Esta ação arquivará o processo. O histórico ficará disponível.</p>
+                  <textarea value={obsDesistencia} onChange={(e) => setObsDesistencia(e.target.value)}
+                    placeholder="Motivo (opcional)" rows={2}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+                  <div className="flex gap-2">
+                    <button onClick={handleDesistencia} disabled={enviandoDesistencia}
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
+                      {enviandoDesistencia ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
+                    </button>
+                    <button onClick={() => setShowDesistencia(false)} className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

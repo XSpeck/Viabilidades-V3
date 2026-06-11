@@ -291,6 +291,14 @@ export async function finalizarViabilizacao(id: string): Promise<void> {
   });
 }
 
+export async function arquivarPorDesistencia(id: string, obs?: string): Promise<void> {
+  await updateViabilizacao(id, {
+    status: "finalizado" as StatusViabilizacao,
+    motivo_desistencia: obs?.trim() || "Desistência do cliente",
+    data_finalizacao: new Date().toISOString(),
+  });
+}
+
 export async function salvarCTOEscolhida(
   id: string,
   ctoData: { cto_numero: string; distancia_cliente: string; localizacao_caixa: string }
