@@ -1024,6 +1024,13 @@ export async function addNotaVisita(id: string, texto: string, por: string): Pro
   await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
 }
 
+export async function deletarTrajeto(id: string): Promise<void> {
+  await updateDoc(doc(db, "viabilizacoes", id), {
+    trajeto_cabo: deleteField(),
+    trajeto_expira_em: deleteField(),
+  });
+}
+
 export async function salvarTrajeto(id: string, pontos: [number, number][]): Promise<void> {
   const expira = new Date();
   expira.setDate(expira.getDate() + 7);

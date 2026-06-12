@@ -7,7 +7,7 @@ import {
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
   iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
-  manterDecisaoContestacao, revisarContestacao, proporDataVisita,
+  manterDecisaoContestacao, revisarContestacao, proporDataVisita, deletarTrajeto,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
@@ -559,6 +559,13 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                             className="text-xs bg-purple-600 text-white px-2 py-1 rounded font-medium hover:bg-purple-700"
                           >
                             📋 Copiar link
+                          </button>
+                          <button
+                            onClick={async () => { await deletarTrajeto(v.id); setTrajetoLinkLocal(null); onRefresh(); }}
+                            title="Excluir rota"
+                            className="text-purple-400 hover:text-red-500 font-bold text-sm leading-none px-1"
+                          >
+                            ✕
                           </button>
                         </div>
                       );
