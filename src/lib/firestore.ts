@@ -76,6 +76,15 @@ function fromFirestore<T>(doc: { id: string; data(): Record<string, unknown> }):
   return converted as T;
 }
 
+// Normaliza DemandaRede: migra dados antigos com tecnico (string) para tecnicos (array)
+function fromFirestoreDemanda(doc: { id: string; data(): Record<string, unknown> }): DemandaRede {
+  const raw = fromFirestore<Record<string, unknown>>(doc);
+  if (!raw.tecnicos && raw.tecnico) {
+    raw.tecnicos = [raw.tecnico];
+  }
+  return raw as unknown as DemandaRede;
+}
+
 // =====================
 // Viabilizações
 // =====================
@@ -894,7 +903,7 @@ export async function getDemandas(): Promise<DemandaRede[]> {
   if (cached) return cached;
   const q = query(collection(db, "demandas_rede"), orderBy("data_criacao", "desc"));
   const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<DemandaRede>(d));
+  const data = snap.docs.map((d) => fromFirestoreDemanda(d));
   setCache("viab_demandas_rede_v1", data);
   return data;
 }
@@ -946,7 +955,7 @@ export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
   const q = query(collection(db, "demandas_rede"), where("status", "in", ["agendada", "em_andamento"]));
   const snap = await getDocs(q);
   return snap.docs
-    .map((d) => fromFirestore<DemandaRede>(d))
+    .map((d) => fromFirestoreDemanda(d))
     .sort((a, b) => {
       if ((a.data_agendamento ?? "") !== (b.data_agendamento ?? ""))
         return (a.data_agendamento ?? "") < (b.data_agendamento ?? "") ? -1 : 1;
@@ -969,7 +978,7 @@ export async function getDemandasArquivadas(): Promise<DemandaRede[]> {
   const q = query(collection(db, "demandas_rede"), where("status", "==", "arquivada"));
   const snap = await getDocs(q);
   return snap.docs
-    .map((d) => fromFirestore<DemandaRede>(d))
+    .map((d) => fromFirestoreDemanda(d))
     .sort((a, b) =>
       (b.data_conclusao ?? b.data_criacao) > (a.data_conclusao ?? a.data_criacao) ? 1 : -1
     );
@@ -985,7 +994,7 @@ export async function desarquivarDemanda(id: string): Promise<void> {
 
 export async function editarInfoDemanda(
   id: string,
-  data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnico">,
+  data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnicos">,
 ): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
   bustCache("viab_demandas_rede_v1");

@@ -85,18 +85,18 @@ export default function AnaliseRedePage() {
 
   const filtradas = demandas
     .filter((d) => d.status !== "arquivada")
-    .filter((d) => tecnicoTab === "todos" || d.tecnico === tecnicoTab)
+    .filter((d) => tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))
     .filter((d) => statusFiltro === "todas" || d.status === statusFiltro);
 
   const counts = {
-    aberta:       demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "aberta").length,
-    agendada:     demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "agendada").length,
-    em_andamento: demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "em_andamento").length,
-    concluida:    demandas.filter((d) => (tecnicoTab === "todos" || d.tecnico === tecnicoTab) && d.status === "concluida").length,
+    aberta:       demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "aberta").length,
+    agendada:     demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "agendada").length,
+    em_andamento: demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "em_andamento").length,
+    concluida:    demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "concluida").length,
   };
 
   const countTecnico = (t: TecnicoRede) =>
-    demandas.filter((d) => d.tecnico === t && d.status !== "concluida" && d.status !== "arquivada").length;
+    demandas.filter((d) => d.tecnicos.includes(t) && d.status !== "concluida" && d.status !== "arquivada").length;
 
   return (
     <div className="space-y-6">
@@ -140,7 +140,7 @@ export default function AnaliseRedePage() {
       {showMap && (() => {
         const demandasMapa = demandas
           .filter((d) => d.status !== "arquivada")
-          .filter((d) => tecnicoTab === "todos" || d.tecnico === tecnicoTab)
+          .filter((d) => tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))
           .filter((d) => mapStatusFiltro === "todas" || d.status === mapStatusFiltro);
         return (
           <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
@@ -208,7 +208,7 @@ export default function AnaliseRedePage() {
             <button key={f.key} onClick={() => setStatusFiltro(f.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFiltro === f.key ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
               {f.key === "todas"
-                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnico === tecnicoTab)).length})`
+                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length})`
                 : f.label}
             </button>
           ))}
@@ -248,7 +248,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
   // Editar
   const [showEditar, setShowEditar]         = useState(false);
-  const [editTecnico, setEditTecnico]       = useState<TecnicoRede>(d.tecnico);
+  const [editTecnicos, setEditTecnicos]     = useState<TecnicoRede[]>(d.tecnicos);
   const [editTipo, setEditTipo]             = useState(TIPOS_SERVICO.includes(d.tipo) ? d.tipo : "Outro");
   const [editTipoCustom, setEditTipoCustom] = useState(TIPOS_SERVICO.includes(d.tipo) ? "" : d.tipo);
   const [editPrioridade, setEditPrioridade] = useState<PrioridadeDemanda>(d.prioridade);
@@ -287,9 +287,10 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     const tipoFinal = editTipo === "Outro" ? editTipoCustom.trim() : editTipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
     if (!editDescricao.trim()) { alert("Informe a descrição."); return; }
+    if (editTecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
     setSaving(true);
     try {
-      await updateDemanda(d.id, { tecnico: editTecnico, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
+      await updateDemanda(d.id, { tecnicos: editTecnicos, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
       setShowEditar(false);
       onRefresh();
     } finally { setSaving(false); }
@@ -349,7 +350,14 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
           </div>
 
           {/* Técnico + descrição */}
-          <p className="font-medium text-gray-900 text-sm">👷 {d.tecnico}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {d.tecnicos.map((t) => (
+              <span key={t} className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />
+                {t}
+              </span>
+            ))}
+          </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.descricao}</p>
 
           {/* Local */}
@@ -432,11 +440,19 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
       {showEditar && (
         <div className="mt-3 space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
           <p className="text-xs font-semibold text-gray-700">✏️ Editar demanda</p>
+          <div className="flex flex-wrap gap-1.5 col-span-2">
+            {TECNICOS_REDE.map((t) => {
+              const sel = editTecnicos.includes(t);
+              return (
+                <button key={t} type="button"
+                  onClick={() => setEditTecnicos(sel ? editTecnicos.filter((x) => x !== t) : [...editTecnicos, t])}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                  <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                </button>
+              );
+            })}
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <select value={editTecnico} onChange={(e) => setEditTecnico(e.target.value as TecnicoRede)}
-              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
-            </select>
             <select value={editPrioridade} onChange={(e) => setEditPrioridade(e.target.value as PrioridadeDemanda)}
               className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
               {(["baixa", "media", "alta", "urgente"] as PrioridadeDemanda[]).map((p) => (
@@ -558,7 +574,7 @@ type InputMethod = "pluscode" | "coords";
 function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   auditorNome: string; onClose: () => void; onSaved: () => void;
 }) {
-  const [tecnico, setTecnico]       = useState<TecnicoRede>("Eduardo");
+  const [tecnicos, setTecnicos]     = useState<TecnicoRede[]>(["Eduardo"]);
   const [tipo, setTipo]             = useState(TIPOS_SERVICO[0]);
   const [tipoCustom, setTipoCustom] = useState("");
   const [prioridade, setPrioridade] = useState<PrioridadeDemanda>("media");
@@ -595,10 +611,11 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
     const tipoFinal = tipo === "Outro" ? tipoCustom.trim() : tipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
     if (!descricao.trim()) { alert("Informe a descrição."); return; }
+    if (tecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
     setSaving(true);
     try {
       await createDemanda({
-        tecnico,
+        tecnicos,
         tipo: tipoFinal,
         prioridade,
         local: validatedPlusCode ?? undefined,
@@ -622,14 +639,22 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
           </div>
 
           <div className="p-5 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Técnico *</label>
-                <select value={tecnico} onChange={(e) => setTecnico(e.target.value as TecnicoRede)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                  {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
-                </select>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Técnico(s) *</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TECNICOS_REDE.map((t) => {
+                  const sel = tecnicos.includes(t);
+                  return (
+                    <button key={t} type="button"
+                      onClick={() => setTecnicos(sel ? tecnicos.filter((x) => x !== t) : [...tecnicos, t])}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                      <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Prioridade *</label>
                 <select value={prioridade} onChange={(e) => setPrioridade(e.target.value as PrioridadeDemanda)}
@@ -760,14 +785,14 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
   }
 
   const filtradas = demandas
-    .filter((d) => filtroTec === "todos" || d.tecnico === filtroTec)
+    .filter((d) => filtroTec === "todos" || d.tecnicos.includes(filtroTec as TecnicoRede))
     .filter((d) => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
       return (
         d.descricao.toLowerCase().includes(q) ||
         d.tipo.toLowerCase().includes(q) ||
-        d.tecnico.toLowerCase().includes(q) ||
+        d.tecnicos.some((t) => t.toLowerCase().includes(q)) ||
         (d.obs_conclusao ?? "").toLowerCase().includes(q)
       );
     })
@@ -906,10 +931,12 @@ function ArquivoRow({ demanda: d, onClick }: { demanda: DemandaRede; onClick: ()
           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
             {d.tipo}
           </span>
-          <span className="flex items-center gap-1 text-xs text-gray-500">
-            <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[d.tecnico] ?? "bg-gray-400"}`} />
-            {d.tecnico}
-          </span>
+          {d.tecnicos.map((t) => (
+            <span key={t} className="flex items-center gap-1 text-xs text-gray-500">
+              <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />
+              {t}
+            </span>
+          ))}
           {(d.notas_atividade?.length ?? 0) > 0 && (
             <span className="text-xs text-gray-400 ml-1">
               🗒️ {d.notas_atividade!.length} nota(s)
@@ -965,9 +992,13 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
                 </span>
               </div>
               <h3 className="text-lg font-bold text-white">{d.tipo}</h3>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className={`w-2.5 h-2.5 rounded-full border border-white/40 ${TECNICO_DOT[d.tecnico] ?? "bg-gray-400"}`} />
-                <span className="text-white/80 text-sm font-medium">{d.tecnico}</span>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {d.tecnicos.map((t) => (
+                  <span key={t} className="flex items-center gap-1.5">
+                    <span className={`w-2.5 h-2.5 rounded-full border border-white/40 ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />
+                    <span className="text-white/80 text-sm font-medium">{t}</span>
+                  </span>
+                ))}
               </div>
             </div>
             <button onClick={onClose}

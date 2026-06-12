@@ -169,7 +169,7 @@ export type PrioridadeDemanda = "baixa" | "media" | "alta" | "urgente";
 
 export interface DemandaRede {
   id: string;
-  tecnico: TecnicoRede;
+  tecnicos: TecnicoRede[];
   tipo: string;
   local?: string;
   prioridade: PrioridadeDemanda;

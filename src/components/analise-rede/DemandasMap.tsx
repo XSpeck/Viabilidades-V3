@@ -84,7 +84,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
     });
 
   const semLocal   = demandas.filter((d) => !d.local).length;
-  const visible    = allPins.filter((p) => !hidden.has(p.demanda.tecnico));
+  const visible    = allPins.filter((p) => p.demanda.tecnicos.some((t) => !hidden.has(t)));
 
   function toggle(tec: string) {
     setHidden((prev) => {
@@ -101,7 +101,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
       <div className="flex flex-wrap items-start gap-2">
         <div className="flex flex-wrap gap-2 flex-1">
           {TECNICOS_REDE.map((tec) => {
-            const count = allPins.filter((p) => p.demanda.tecnico === tec).length;
+            const count = allPins.filter((p) => p.demanda.tecnicos.includes(tec)).length;
             const off   = hidden.has(tec);
             return (
               <button key={tec} onClick={() => toggle(tec)}
@@ -177,7 +177,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
             <FitBounds pins={visible} />
 
             {visible.map((p) => {
-              const color = TECNICO_COLOR[p.demanda.tecnico] ?? "#666";
+              const color = TECNICO_COLOR[p.demanda.tecnicos[0]] ?? "#666";
               const size  = PRIORIDADE_SIZE[p.demanda.prioridade];
               return (
                 <Marker key={p.demanda.id} position={[p.lat, p.lon]} icon={makeIcon(color, size)}>
@@ -190,7 +190,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                           width: 10, height: 10, borderRadius: "50%",
                           background: color, display: "inline-block", flexShrink: 0,
                         }} />
-                        <strong style={{ fontSize: 13 }}>{p.demanda.tecnico}</strong>
+                        <strong style={{ fontSize: 13 }}>{p.demanda.tecnicos.join(", ")}</strong>
                       </div>
                       <p style={{ fontSize: 12, marginBottom: 2 }}>
                         Prioridade: <strong>{PRIORIDADE_LABEL[p.demanda.prioridade]}</strong>

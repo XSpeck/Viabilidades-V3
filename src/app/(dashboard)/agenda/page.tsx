@@ -122,7 +122,7 @@ export default function AgendaPage() {
     return visitasDay.filter((v) => v.tecnico_responsavel === tec && v.periodo_visita === per);
   }
   function dCell(tec: string, per: string) {
-    return demandasDay.filter((d) => d.tecnico === tec && d.periodo_agendamento === per);
+    return demandasDay.filter((d) => d.tecnicos.includes(tec as typeof TECNICOS_REDE[number]) && d.periodo_agendamento === per);
   }
 
   return (
@@ -764,15 +764,16 @@ function DemandaModal({ d, onRefresh, onClose }: {
   const [editPrior, setEditPrior]   = useState(d.prioridade);
   const [editDesc, setEditDesc]     = useState(d.descricao);
   const [editLocal, setEditLocal]   = useState(d.local ?? "");
-  const [editTecnico, setEditTecnico] = useState(d.tecnico);
+  const [editTecnicos, setEditTecnicos] = useState(d.tecnicos);
   const [savingEdit, setSavingEdit] = useState(false);
 
   async function handleSaveEdit() {
     setSavingEdit(true);
     try {
+      if (editTecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
       await editarInfoDemanda(d.id, {
         tipo: editTipo, prioridade: editPrior, descricao: editDesc,
-        local: editLocal || undefined, tecnico: editTecnico,
+        local: editLocal || undefined, tecnicos: editTecnicos,
       });
       setEditMode(false);
       onRefresh();
@@ -827,7 +828,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
               {PRIORIDADE_LABEL[d.prioridade]}
             </span>
           </div>
-          <p className="text-white/70 text-sm">👷 {d.tecnico}</p>
+          <p className="text-white/70 text-sm">👷 {d.tecnicos.join(", ")}</p>
         </div>
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <button onClick={() => { setEditMode((e) => !e); setAction(null); }}
@@ -877,12 +878,20 @@ function DemandaModal({ d, onRefresh, onClose }: {
                   placeholder="Plus code ou coordenadas"
                   className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Técnico</label>
-                <select value={editTecnico} onChange={(e) => setEditTecnico(e.target.value as typeof editTecnico)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                  {TECNICOS_REDE.map((t) => <option key={t}>{t}</option>)}
-                </select>
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Técnico(s)</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {TECNICOS_REDE.map((t) => {
+                    const sel = editTecnicos.includes(t);
+                    return (
+                      <button key={t} type="button"
+                        onClick={() => setEditTecnicos(sel ? editTecnicos.filter((x) => x !== t) : [...editTecnicos, t])}
+                        className={`px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Descrição</label>
