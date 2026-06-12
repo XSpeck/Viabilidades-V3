@@ -12,7 +12,7 @@ export type TipoNotificacao =
   | "agendado"
   | "instalado";
 
-// Enfileira um evento de notificação sem bloquear o fluxo principal
+// Enfileira um evento e dispara o processamento imediatamente
 export async function enqueueNotificacao(
   viabilizacao_id: string,
   tipo: TipoNotificacao
@@ -24,6 +24,8 @@ export async function enqueueNotificacao(
       processado: false,
       criado_em: serverTimestamp(),
     });
+    // Dispara o bot-tick sem aguardar (fire-and-forget)
+    fetch("/api/bot-tick").catch(() => {});
   } catch (err) {
     console.error("[bot] Falha ao enfileirar notificação:", viabilizacao_id, tipo, err);
   }

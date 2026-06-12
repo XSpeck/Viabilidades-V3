@@ -5,13 +5,7 @@ import { processarNotificacao, type TipoNotificacao } from "@/lib/bot";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function GET(request: Request): Promise<NextResponse> {
-  // Vercel Cron injeta automaticamente: Authorization: Bearer <CRON_SECRET>
-  const auth = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(_request: Request): Promise<NextResponse> {
   const snap = await adminDb
     .collection("bot_notificacoes")
     .where("processado", "==", false)
