@@ -758,6 +758,24 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
+          {/* ===== Rota do cabo (KML) — aparece quando o auditor traçou o caminho ===== */}
+          {r.trajeto_cabo?.length && r.trajeto_expira_em && new Date(r.trajeto_expira_em) > new Date() && (
+            <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2.5">
+              <span className="text-purple-700 text-sm flex-1">
+                🗺️ <strong>Rota do cabo</strong> — traçada pelo auditor
+              </span>
+              <button
+                onClick={() => copyToClipboard(
+                  `${window.location.origin}/api/rota/${r.id}`,
+                  "rota"
+                )}
+                className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors ${copied === "rota" ? "bg-purple-600 text-white" : "bg-white border border-purple-300 text-purple-700 hover:bg-purple-100"}`}
+              >
+                {copied === "rota" ? "✓ Copiado!" : "📋 Copiar link KML"}
+              </button>
+            </div>
+          )}
+
           {/* ===== Fluxo de agendamento de instalação FTTH / Condomínio / FTTA ===== */}
           {["FTTH", "Prédio", "Condomínio"].includes(r.tipo_instalacao) && r.status_instalacao && (
             <div className="space-y-2">
