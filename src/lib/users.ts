@@ -1,6 +1,6 @@
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
-import type { AppUser, UserCargo } from "@/types";
+import type { AppUser, UserCargo, EquipeUsuario } from "@/types";
 
 export async function listUsers(): Promise<AppUser[]> {
   const snap = await getDocs(collection(db, "users"));
@@ -12,6 +12,7 @@ export async function listUsers(): Promise<AppUser[]> {
       login: data.login,
       nivel: data.nivel,
       cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
+      equipe: data.equipe,
     };
   });
 }
@@ -28,7 +29,8 @@ export async function createUser(
   email: string,
   password: string,
   nome: string,
-  cargo: UserCargo
+  cargo: UserCargo,
+  equipe?: EquipeUsuario
 ): Promise<void> {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!;
   const res = await fetch(
@@ -45,18 +47,23 @@ export async function createUser(
   }
   const { localId } = await res.json();
   const nivel = cargo === "usuario" ? 2 : 1;
-  await setDoc(doc(db, "users", localId), { nome, login: email, nivel, cargo });
+  const docData: Record<string, unknown> = { nome, login: email, nivel, cargo };
+  if (equipe) docData.equipe = equipe;
+  await setDoc(doc(db, "users", localId), docData);
 }
 
 export async function updateUser(
   uid: string,
-  data: { nome?: string; cargo?: UserCargo }
+  data: { nome?: string; cargo?: UserCargo; equipe?: EquipeUsuario | null }
 ): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (data.nome !== undefined) updates.nome = data.nome;
   if (data.cargo !== undefined) {
     updates.cargo = data.cargo;
     updates.nivel = data.cargo === "usuario" ? 2 : 1;
+  }
+  if (data.equipe !== undefined) {
+    updates.equipe = data.equipe === null ? deleteField() : data.equipe;
   }
   await updateDoc(doc(db, "users", uid), updates);
 }

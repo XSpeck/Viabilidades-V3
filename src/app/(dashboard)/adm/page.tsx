@@ -11,7 +11,7 @@ import {
   getPrediosSemViabilidade, createPredioSemViabilidade, updatePredioSemViabilidade, deletePredioSemViabilidade,
   batchImportViabilizacoes,
 } from "@/lib/firestore";
-import type { AppUser, UserCargo, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio } from "@/types";
+import type { AppUser, UserCargo, EquipeUsuario, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
@@ -396,13 +396,26 @@ const CARGO_COLOR: Record<UserCargo, string> = {
   usuario: "bg-gray-100 text-gray-700",
 };
 
+const EQUIPE_LABEL: Record<EquipeUsuario, string> = {
+  comercial_mf: "Comercial MF",
+  comercial: "Comercial",
+  atendimento: "Atendimento",
+  comercial_gmarx: "Comercial Gmarx",
+};
+const EQUIPE_COLOR: Record<EquipeUsuario, string> = {
+  comercial_mf: "bg-orange-100 text-orange-700",
+  comercial: "bg-sky-100 text-sky-700",
+  atendimento: "bg-teal-100 text-teal-700",
+  comercial_gmarx: "bg-rose-100 text-rose-700",
+};
+
 type ModalState = { mode: "create" } | { mode: "edit"; user: AppUser };
 
 function GestaoUsuarios() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
@@ -417,13 +430,13 @@ function GestaoUsuarios() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ nome: "", email: "", senha: "", cargo: "usuario" });
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "" });
     setFormError(null);
     setModal({ mode: "create" });
   }
 
   function openEdit(u: AppUser) {
-    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario") });
+    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"), equipe: u.equipe ?? "" });
     setFormError(null);
     setModal({ mode: "edit", user: u });
   }
@@ -438,9 +451,13 @@ function GestaoUsuarios() {
     setFormError(null);
     try {
       if (modal?.mode === "create") {
-        await createUser(form.email, form.senha, form.nome, form.cargo);
+        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined);
       } else if (modal?.mode === "edit") {
-        await updateUser(modal.user.uid, { nome: form.nome, cargo: form.cargo });
+        await updateUser(modal.user.uid, {
+          nome: form.nome,
+          cargo: form.cargo,
+          equipe: form.equipe || null,
+        });
       }
       setModal(null);
       await load();
@@ -498,6 +515,7 @@ function GestaoUsuarios() {
                     <th className="text-left py-2 pr-4 font-medium">Nome</th>
                     <th className="text-left py-2 pr-4 font-medium">Email</th>
                     <th className="text-left py-2 pr-4 font-medium">Cargo</th>
+                    <th className="text-left py-2 pr-4 font-medium hidden sm:table-cell">Equipe</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -512,6 +530,15 @@ function GestaoUsuarios() {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CARGO_COLOR[cargo]}`}>
                             {CARGO_LABEL[cargo]}
                           </span>
+                        </td>
+                        <td className="py-2.5 pr-4 hidden sm:table-cell">
+                          {u.equipe ? (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${EQUIPE_COLOR[u.equipe]}`}>
+                              {EQUIPE_LABEL[u.equipe]}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
                         </td>
                         <td className="py-2.5">
                           <div className="flex items-center gap-1 justify-end">
@@ -585,6 +612,20 @@ function GestaoUsuarios() {
                   <option value="auditor">Auditor</option>
                   <option value="agendamento">Agendamento</option>
                   <option value="adm">ADM</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Equipe <span className="font-normal">(opcional)</span></label>
+                <select
+                  value={form.equipe}
+                  onChange={(e) => setForm((f) => ({ ...f, equipe: e.target.value as EquipeUsuario | "" }))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="">Sem equipe</option>
+                  <option value="comercial_mf">Comercial MF</option>
+                  <option value="comercial">Comercial</option>
+                  <option value="atendimento">Atendimento</option>
+                  <option value="comercial_gmarx">Comercial Gmarx</option>
                 </select>
               </div>
             </div>
