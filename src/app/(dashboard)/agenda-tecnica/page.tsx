@@ -739,9 +739,17 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
 }
 
 // ─── Card de instalação arquivada ──────────────────────────────────
+const statusInstalacaoLabel: Record<string, string> = {
+  proposta_enviada:       "Proposta enviada",
+  aguardando_confirmacao: "Ag. confirmação",
+  agendado:               "Agendado",
+  instalado:              "Instalado",
+};
+
 function ArquivadoCard({ v }: { v: Viabilizacao }) {
   const [open, setOpen] = useState(false);
   const fmtData = (d?: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "-";
+  const isDesistencia = !!v.motivo_desistencia;
 
   const isFTTH = v.tipo_instalacao === "FTTH";
   const isUTP = v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
@@ -755,7 +763,7 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
     : { icon: "🏢", label: "FTTA",       color: "bg-indigo-100 text-indigo-700" };
 
   return (
-    <div className="bg-white rounded-xl border border-l-4 border-l-gray-300 overflow-hidden">
+    <div className={`bg-white rounded-xl border border-l-4 overflow-hidden ${isDesistencia ? "border-l-red-400" : "border-l-gray-300"}`}>
 
       <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
         <span className="text-lg shrink-0">{tipoBadge.icon}</span>
@@ -763,12 +771,24 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-gray-800">{v.nome_cliente ?? "Cliente"}</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${tipoBadge.color}`}>{tipoBadge.label}</span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">Arquivado</span>
+            {isDesistencia
+              ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600 shrink-0">❌ Desistência</span>
+              : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">Arquivado</span>
+            }
           </div>
           <div className="flex flex-wrap gap-x-3 text-xs text-gray-400 mt-0.5">
-            <span>📅 {fmtData(v.data_instalacao)} · {v.periodo_instalacao ?? "-"}</span>
-            <span>👷 {v.tecnico_instalacao ?? "-"}</span>
-            <span>👤 {v.usuario}</span>
+            {isDesistencia ? (
+              <>
+                <span className="text-red-400">Fase: {statusInstalacaoLabel[v.status_instalacao ?? ""] ?? v.status_instalacao ?? "-"}</span>
+                <span>👤 {v.usuario}</span>
+              </>
+            ) : (
+              <>
+                <span>📅 {fmtData(v.data_instalacao)} · {v.periodo_instalacao ?? "-"}</span>
+                <span>👷 {v.tecnico_instalacao ?? "-"}</span>
+                <span>👤 {v.usuario}</span>
+              </>
+            )}
           </div>
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
@@ -777,16 +797,35 @@ function ArquivadoCard({ v }: { v: Viabilizacao }) {
       {open && (
         <div className="px-4 pb-4 border-t pt-3 space-y-4">
 
-          {/* Resumo da instalação */}
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">✅ Instalação concluída</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
-              <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao ?? "-"}</p></div>
-              <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? "-"}</p></div>
-              <div><p className="text-gray-400 text-xs mb-0.5">Arquivado em</p><p className="font-semibold text-gray-800">{formatDateTime(v.data_finalizacao)}</p></div>
+          {/* Resumo da instalação / desistência */}
+          {isDesistencia ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">❌ Desistência do cliente</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-400 text-xs mb-0.5">Fase no cancelamento</p>
+                  <p className="font-semibold text-gray-800">{statusInstalacaoLabel[v.status_instalacao ?? ""] ?? v.status_instalacao ?? "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-0.5">Arquivado em</p>
+                  <p className="font-semibold text-gray-800">{formatDateTime(v.data_finalizacao)}</p>
+                </div>
+              </div>
+              {v.motivo_desistencia && v.motivo_desistencia !== "Desistência do cliente" && (
+                <p className="text-sm text-red-700 bg-red-100 rounded px-2 py-1">📝 {v.motivo_desistencia}</p>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">✅ Instalação concluída</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div><p className="text-gray-400 text-xs mb-0.5">Data</p><p className="font-semibold text-gray-800">{fmtData(v.data_instalacao)}</p></div>
+                <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao ?? "-"}</p></div>
+                <div><p className="text-gray-400 text-xs mb-0.5">Técnico</p><p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? "-"}</p></div>
+                <div><p className="text-gray-400 text-xs mb-0.5">Arquivado em</p><p className="font-semibold text-gray-800">{formatDateTime(v.data_finalizacao)}</p></div>
+              </div>
+            </div>
+          )}
 
           {/* Cliente */}
           <div>
