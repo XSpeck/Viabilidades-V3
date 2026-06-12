@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "bot_notificacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "processado", "order": "ASCENDING" },
+        { "fieldPath": "criado_em", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
