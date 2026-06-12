@@ -7,6 +7,7 @@ import { haversineDistance, formatDistance } from "@/lib/ctos";
 import type { CtoWithRoute } from "@/lib/ctos";
 import { getRedes, EMPRESAS } from "@/lib/redes";
 import type { LinhaRede } from "@/lib/redes";
+import { salvarTrajeto } from "@/lib/firestore";
 
 // =====================
 // Camadas de mapa
@@ -64,7 +65,6 @@ function LayerUpdater({ layer }: { layer: MapLayer }) {
 function ResizeHandler({ expanded }: { expanded: boolean }) {
   const map = useMap();
   useEffect(() => {
-    // Aguarda a transição CSS terminar antes de invalidar
     const timer = setTimeout(() => map.invalidateSize(), 320);
     return () => clearTimeout(timer);
   }, [expanded, map]);
@@ -79,6 +79,9 @@ interface Props {
   onSelect: (name: string) => void;
   onConfirm?: (name: string) => void;
   onExpandChange?: (expanded: boolean) => void;
+  viabilizacaoId?: string;
+  trajetoExistente?: [number, number][];
+  onTrajetoSalvo?: (link: string) => void;
 }
 
 // =====================
@@ -153,9 +156,6 @@ function createClientIcon() {
   });
 }
 
-// =====================
-// Ícone de ponto de medição
-// =====================
 function measurePointIcon(label: string) {
   return L.divIcon({
     html: `<div style="
@@ -172,12 +172,28 @@ function measurePointIcon(label: string) {
   });
 }
 
+function drawPointIcon(index: number) {
+  const label = index === 0 ? "A" : String(index + 1);
+  return L.divIcon({
+    html: `<div style="
+      width:20px;height:20px;border-radius:50%;
+      background:#7c3aed;border:3px solid white;
+      box-shadow:0 2px 4px rgba(0,0,0,0.4);
+      display:flex;align-items:center;justify-content:center;
+      font-size:9px;font-weight:700;color:white;
+      font-family:system-ui,sans-serif;
+    ">${label}</div>`,
+    className: "",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
 // =====================
 // Handler de cliques para medição
 // =====================
 function MeasureHandler({
   active,
-  points,
   onAddPoint,
 }: {
   active: boolean;
@@ -187,7 +203,33 @@ function MeasureHandler({
   const map = useMap();
 
   useEffect(() => {
-    map.getContainer().style.cursor = active ? "crosshair" : "";
+    if (active) map.getContainer().style.cursor = "crosshair";
+  }, [active, map]);
+
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      onAddPoint([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+  return null;
+}
+
+// =====================
+// Handler de cliques para desenho
+// =====================
+function DrawHandler({
+  active,
+  onAddPoint,
+}: {
+  active: boolean;
+  onAddPoint: (p: [number, number]) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (active) map.getContainer().style.cursor = "crosshair";
+    else map.getContainer().style.cursor = "";
   }, [active, map]);
 
   useMapEvents({
@@ -225,11 +267,13 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 // Mapa principal
 // =====================
-export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange }: Props) {
+export default function CtoMap({
+  clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange,
+  viabilizacaoId, trajetoExistente, onTrajetoSalvo,
+}: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
 
-  // Camada de mapa
   const [activeLayer, setActiveLayer] = useState<MapLayer>("map");
 
   // Redes de distribuidoras
@@ -262,12 +306,22 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
   const [expanded, setExpanded] = useState(false);
   const mapHeight = expanded ? "580px" : "400px";
 
-  // Estado da ferramenta de medição
+  // Ferramenta de medição
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
 
   const addMeasurePoint = useCallback((p: [number, number]) => {
     setMeasurePoints((prev) => [...prev, p]);
+  }, []);
+
+  // Ferramenta de desenho de rota
+  const [drawing, setDrawing] = useState(false);
+  const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
+  const [salvandoTrajeto, setSalvandoTrajeto] = useState(false);
+  const [trajetoLink, setTrajetoLink] = useState<string | null>(null);
+
+  const addDrawPoint = useCallback((p: [number, number]) => {
+    setDrawPoints((prev) => [...prev, p]);
   }, []);
 
   function toggleExpand() {
@@ -294,15 +348,48 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
     } else {
       setMeasuring(true);
       setMeasurePoints([]);
+      if (drawing) { setDrawing(false); setDrawPoints([]); }
     }
   }
 
-  // Distâncias acumuladas entre pontos
+  function toggleDraw() {
+    if (drawing) {
+      setDrawing(false);
+    } else {
+      setDrawing(true);
+      if (measuring) { setMeasuring(false); setMeasurePoints([]); }
+    }
+  }
+
+  function limparDesenho() {
+    setDrawPoints([]);
+  }
+
+  async function handleSalvarTrajeto() {
+    if (!viabilizacaoId || drawPoints.length < 2) return;
+    setSalvandoTrajeto(true);
+    try {
+      await salvarTrajeto(viabilizacaoId, drawPoints);
+      const link = `${window.location.origin}/api/rota/${viabilizacaoId}`;
+      setTrajetoLink(link);
+      setDrawing(false);
+      onTrajetoSalvo?.(link);
+    } catch (err) {
+      console.error("[CtoMap] Erro ao salvar trajeto:", err);
+      alert("Erro ao salvar rota. Tente novamente.");
+    } finally {
+      setSalvandoTrajeto(false);
+    }
+  }
+
+  // Distâncias acumuladas entre pontos de medição
   const measureSegments = measurePoints.slice(1).map((p, i) => {
     const prev = measurePoints[i];
     return haversineDistance(prev[0], prev[1], p[0], p[1]);
   });
   const totalMeasure = measureSegments.reduce((a, b) => a + b, 0);
+
+  const canDraw = !!viabilizacaoId;
 
   return (
     <div style={{ position: "relative" }}>
@@ -410,6 +497,8 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         >
           {expanded ? "⬇️" : "⬆️"}
         </button>
+
+        {/* Régua */}
         <button
           onClick={toggleMeasure}
           title={measuring ? "Sair da medição" : "Medir distância"}
@@ -417,16 +506,13 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
             background: measuring ? "#f97316" : "white",
             color: measuring ? "white" : "#374151",
             border: "2px solid " + (measuring ? "#f97316" : "#d1d5db"),
-            borderRadius: 8,
-            padding: "6px 10px",
-            fontSize: 18,
-            cursor: "pointer",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-            lineHeight: 1,
+            borderRadius: 8, padding: "6px 10px", fontSize: 18,
+            cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
           }}
         >
           📏
         </button>
+
         {measuring && measurePoints.length > 0 && (
           <button
             onClick={() => setMeasurePoints([])}
@@ -441,9 +527,41 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
             🗑️
           </button>
         )}
+
+        {/* Lápis de rota — só disponível quando viabilizacaoId é passado */}
+        {canDraw && (
+          <button
+            onClick={toggleDraw}
+            title={drawing ? "Sair do modo de desenho" : "Traçar rota do cabo"}
+            style={{
+              background: drawing ? "#7c3aed" : "white",
+              color: drawing ? "white" : "#374151",
+              border: "2px solid " + (drawing ? "#7c3aed" : "#d1d5db"),
+              borderRadius: 8, padding: "6px 10px", fontSize: 18,
+              cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
+            }}
+          >
+            ✏️
+          </button>
+        )}
+
+        {drawing && drawPoints.length > 0 && (
+          <button
+            onClick={limparDesenho}
+            title="Limpar desenho"
+            style={{
+              background: "white", color: "#374151",
+              border: "2px solid #d1d5db", borderRadius: 8,
+              padding: "6px 10px", fontSize: 16, cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
+            }}
+          >
+            🗑️
+          </button>
+        )}
       </div>
 
-      {/* Painel de resultado da medição */}
+      {/* Painel de medição */}
       {measuring && (
         <div style={{
           position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)",
@@ -471,6 +589,78 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         </div>
       )}
 
+      {/* Painel de desenho de rota */}
+      {drawing && (
+        <div style={{
+          position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)",
+          zIndex: 1000, background: "white", borderRadius: 10,
+          padding: "8px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          fontSize: 13, fontFamily: "system-ui,sans-serif",
+          border: "2px solid #7c3aed", display: "flex", alignItems: "center", gap: 10,
+          whiteSpace: "nowrap",
+        }}>
+          {drawPoints.length === 0 && (
+            <span style={{ color: "#6b7280" }}>✏️ Clique no mapa para iniciar a rota do cabo</span>
+          )}
+          {drawPoints.length === 1 && (
+            <span style={{ color: "#6b7280" }}>📍 Continue clicando para traçar o caminho</span>
+          )}
+          {drawPoints.length >= 2 && (
+            <>
+              <span style={{ color: "#7c3aed" }}>
+                ✏️ <strong>{drawPoints.length} pontos</strong>
+              </span>
+              <button
+                onClick={handleSalvarTrajeto}
+                disabled={salvandoTrajeto}
+                style={{
+                  background: "#7c3aed", color: "white", border: "none",
+                  borderRadius: 6, padding: "4px 12px", fontSize: 12,
+                  fontWeight: 600, cursor: "pointer",
+                  fontFamily: "system-ui,sans-serif",
+                  opacity: salvandoTrajeto ? 0.6 : 1,
+                }}
+              >
+                {salvandoTrajeto ? "Salvando..." : "💾 Salvar Rota"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Painel de link salvo */}
+      {trajetoLink && !drawing && (
+        <div style={{
+          position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)",
+          zIndex: 1000, background: "#f5f3ff", borderRadius: 10,
+          padding: "8px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          fontSize: 12, fontFamily: "system-ui,sans-serif",
+          border: "2px solid #7c3aed", display: "flex", alignItems: "center", gap: 8,
+          whiteSpace: "nowrap",
+        }}>
+          <span style={{ color: "#5b21b6", fontWeight: 600 }}>✅ Rota salva!</span>
+          <button
+            onClick={() => navigator.clipboard.writeText(trajetoLink)}
+            style={{
+              background: "#7c3aed", color: "white", border: "none",
+              borderRadius: 6, padding: "3px 10px", fontSize: 11,
+              fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+            }}
+          >
+            📋 Copiar Link
+          </button>
+          <button
+            onClick={() => setTrajetoLink(null)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: "#9ca3af", fontSize: 14, lineHeight: 1, padding: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
     <div style={{ height: mapHeight, transition: "height 0.3s ease", borderRadius: "12px", overflow: "hidden" }}>
     <MapContainer
       center={[clientLat, clientLon]}
@@ -485,6 +675,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
       <LayerUpdater layer={activeLayer} />
       <ResizeHandler expanded={expanded} />
       <MeasureHandler active={measuring} points={measurePoints} onAddPoint={addMeasurePoint} />
+      <DrawHandler active={drawing} onAddPoint={addDrawPoint} />
 
       {/* Linhas das redes de distribuidoras */}
       {redes.map((r) =>
@@ -499,7 +690,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
           : null
       )}
 
-      {/* Rota da CTO selecionada (atrás dos marcadores) */}
+      {/* Rota da CTO selecionada */}
       {selected?.route && (
         <Polyline
           positions={selected.route.geometry}
@@ -511,6 +702,32 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
           }}
         />
       )}
+
+      {/* Trajeto existente salvo (roxo tracejado) */}
+      {trajetoExistente && trajetoExistente.length >= 2 && !drawPoints.length && (
+        <Polyline
+          positions={trajetoExistente}
+          pathOptions={{ color: "#7c3aed", weight: 3, dashArray: "8, 5", opacity: 0.7 }}
+        />
+      )}
+
+      {/* Trajeto sendo desenhado (roxo sólido) */}
+      {drawPoints.length >= 2 && (
+        <Polyline
+          positions={drawPoints}
+          pathOptions={{ color: "#7c3aed", weight: 4, opacity: 0.9 }}
+        />
+      )}
+
+      {/* Pontos do desenho */}
+      {drawPoints.map((p, i) => (
+        <Marker
+          key={`draw-${i}`}
+          position={p}
+          icon={drawPointIcon(i)}
+          zIndexOffset={3500}
+        />
+      ))}
 
       {/* Marcadores das CTOs */}
       {ctos.map((cto, i) => {
@@ -561,7 +778,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         );
       })}
 
-      {/* Marcador do cliente (por cima de tudo) */}
+      {/* Marcador do cliente */}
       <Marker
         position={[clientLat, clientLon]}
         icon={clientIcon}
@@ -582,7 +799,7 @@ export default function CtoMap({ clientLat, clientLon, ctos, selectedName, onSel
         />
       )}
 
-      {/* Marcadores de medição com distância acumulada */}
+      {/* Marcadores de medição */}
       {measurePoints.map((p, i) => {
         const accumulated = measureSegments.slice(0, i).reduce((a, b) => a + b, 0);
         const label = i === 0 ? "A" : String(i + 1);

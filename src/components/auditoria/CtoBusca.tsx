@@ -31,9 +31,12 @@ interface Props {
   onConfirm: (data: SelectedCto) => void;
   onClose: () => void;
   onExpandChange?: (expanded: boolean) => void;
+  viabilizacaoId?: string;
+  trajetoExistente?: [number, number][];
+  onTrajetoSalvo?: (link: string) => void;
 }
 
-export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm, onClose, onExpandChange }: Props) {
+export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm, onClose, onExpandChange, viabilizacaoId, trajetoExistente, onTrajetoSalvo }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -169,6 +172,9 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               onSelect={setSelectedName}
               onConfirm={confirmCto}
               onExpandChange={onExpandChange}
+              viabilizacaoId={viabilizacaoId}
+              trajetoExistente={trajetoExistente}
+              onTrajetoSalvo={onTrajetoSalvo}
             />
 
             {/* Aviso de linha reta da CTO selecionada */}

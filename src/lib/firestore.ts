@@ -1023,3 +1023,12 @@ export async function addNotaVisita(id: string, texto: string, por: string): Pro
   const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
   await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
 }
+
+export async function salvarTrajeto(id: string, pontos: [number, number][]): Promise<void> {
+  const expira = new Date();
+  expira.setDate(expira.getDate() + 7);
+  await updateDoc(doc(db, "viabilizacoes", id), {
+    trajeto_cabo: pontos,
+    trajeto_expira_em: expira.toISOString(),
+  });
+}

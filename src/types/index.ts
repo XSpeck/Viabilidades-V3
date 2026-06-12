@@ -123,6 +123,9 @@ export interface Viabilizacao {
   mensagens?: MensagemViabilizacao[];
   revisao_tipo?: "devolvido" | "contestado";
   status_anterior?: StatusViabilizacao;
+  // Rota do cabo (traçada pelo auditor)
+  trajeto_cabo?: [number, number][];
+  trajeto_expira_em?: string;
   // Timestamps
   data_solicitacao?: string;
   data_auditoria?: string;
