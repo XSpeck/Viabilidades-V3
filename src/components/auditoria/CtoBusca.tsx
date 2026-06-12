@@ -32,7 +32,7 @@ interface Props {
   onClose: () => void;
   onExpandChange?: (expanded: boolean) => void;
   viabilizacaoId?: string;
-  trajetoExistente?: [number, number][];
+  trajetoExistente?: { lat: number; lon: number }[];
   onTrajetoSalvo?: (link: string) => void;
 }
 

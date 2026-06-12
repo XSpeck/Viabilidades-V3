@@ -12,7 +12,7 @@ export async function GET(
   if (!snap.exists) return new Response("Not found", { status: 404 });
 
   const data = snap.data()!;
-  const pontos: [number, number][] = data.trajeto_cabo ?? [];
+  const pontos: { lat: number; lon: number }[] = data.trajeto_cabo ?? [];
   const expira: string | undefined = data.trajeto_expira_em;
 
   if (!pontos.length || !expira) return new Response("Sem trajeto", { status: 404 });
@@ -21,7 +21,7 @@ export async function GET(
   const nome = data.nome_cliente ?? "Cliente";
   const cto = data.cto_numero ?? "";
 
-  const coords = pontos.map(([lat, lon]) => `${lon},${lat},0`).join("\n                  ");
+  const coords = pontos.map((p) => `${p.lon},${p.lat},0`).join("\n                  ");
 
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">

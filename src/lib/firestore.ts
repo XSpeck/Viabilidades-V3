@@ -1028,7 +1028,7 @@ export async function salvarTrajeto(id: string, pontos: [number, number][]): Pro
   const expira = new Date();
   expira.setDate(expira.getDate() + 7);
   await updateDoc(doc(db, "viabilizacoes", id), {
-    trajeto_cabo: pontos,
+    trajeto_cabo: pontos.map(([lat, lon]) => ({ lat, lon })),
     trajeto_expira_em: expira.toISOString(),
   });
 }

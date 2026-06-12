@@ -80,7 +80,7 @@ interface Props {
   onConfirm?: (name: string) => void;
   onExpandChange?: (expanded: boolean) => void;
   viabilizacaoId?: string;
-  trajetoExistente?: [number, number][];
+  trajetoExistente?: { lat: number; lon: number }[];
   onTrajetoSalvo?: (link: string) => void;
 }
 
@@ -706,7 +706,7 @@ export default function CtoMap({
       {/* Trajeto existente salvo (roxo tracejado) */}
       {trajetoExistente && trajetoExistente.length >= 2 && !drawPoints.length && (
         <Polyline
-          positions={trajetoExistente}
+          positions={trajetoExistente.map((p) => [p.lat, p.lon] as [number, number])}
           pathOptions={{ color: "#7c3aed", weight: 3, dashArray: "8, 5", opacity: 0.7 }}
         />
       )}

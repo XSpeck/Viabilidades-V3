@@ -124,7 +124,7 @@ export interface Viabilizacao {
   revisao_tipo?: "devolvido" | "contestado";
   status_anterior?: StatusViabilizacao;
   // Rota do cabo (traçada pelo auditor)
-  trajeto_cabo?: [number, number][];
+  trajeto_cabo?: { lat: number; lon: number }[];
   trajeto_expira_em?: string;
   // Timestamps
   data_solicitacao?: string;
