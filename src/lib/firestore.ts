@@ -156,7 +156,7 @@ export async function getViabilizacoesUsuario(usernames: string[]): Promise<Viab
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => !v.data_finalizacao && v.status_instalacao !== "agendado")
+    .filter((v) => !v.data_finalizacao)
     .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
 }
 
@@ -218,11 +218,12 @@ export async function pegarViabilizacao(id: string, auditor: string): Promise<vo
 }
 
 export async function devolverViabilizacao(id: string): Promise<void> {
-  const ref = doc(db, "viabilizacoes", id);
-  await updateDoc(ref, {
+  await updateDoc(doc(db, "viabilizacoes", id), {
     status: "pendente",
     auditor_responsavel: null,
+    status_atualizado_em: new Date().toISOString(),
   });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function deleteViabilizacao(id: string): Promise<void> {
@@ -448,7 +449,9 @@ export async function contraproporVisita(
     proposta_visita_data: deleteField(),
     proposta_visita_periodo: deleteField(),
     proposta_visita_tecnico: deleteField(),
+    status_atualizado_em: new Date().toISOString(),
   });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function reagendarVisita(
@@ -1024,6 +1027,7 @@ export async function addNotaDemanda(id: string, texto: string, por: string): Pr
 export async function addNotaVisita(id: string, texto: string, por: string): Promise<void> {
   const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
   await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function deletarTrajeto(id: string): Promise<void> {
@@ -1031,6 +1035,7 @@ export async function deletarTrajeto(id: string): Promise<void> {
     trajeto_cabo: deleteField(),
     trajeto_expira_em: deleteField(),
   });
+  bustCache("viab_all_viabilizacoes_v1");
 }
 
 export async function salvarTrajeto(id: string, pontos: [number, number][]): Promise<void> {
@@ -1040,4 +1045,5 @@ export async function salvarTrajeto(id: string, pontos: [number, number][]): Pro
     trajeto_cabo: pontos.map(([lat, lon]) => ({ lat, lon })),
     trajeto_expira_em: expira.toISOString(),
   });
+  bustCache("viab_all_viabilizacoes_v1");
 }
