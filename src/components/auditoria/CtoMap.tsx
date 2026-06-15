@@ -82,6 +82,7 @@ interface Props {
   viabilizacaoId?: string;
   trajetoExistente?: { lat: number; lon: number }[];
   onTrajetoSalvo?: (link: string) => void;
+  autoStartDraw?: boolean;
 }
 
 // =====================
@@ -269,7 +270,7 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 export default function CtoMap({
   clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange,
-  viabilizacaoId, trajetoExistente, onTrajetoSalvo,
+  viabilizacaoId, trajetoExistente, onTrajetoSalvo, autoStartDraw,
 }: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
@@ -316,6 +317,7 @@ export default function CtoMap({
 
   // Ferramenta de desenho de rota
   const [drawing, setDrawing] = useState(false);
+  useEffect(() => { if (autoStartDraw) setDrawing(true); }, [autoStartDraw]);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [salvandoTrajeto, setSalvandoTrajeto] = useState(false);
   const [trajetoLink, setTrajetoLink] = useState<string | null>(null);
