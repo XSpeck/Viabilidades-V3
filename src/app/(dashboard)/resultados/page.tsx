@@ -9,6 +9,12 @@ import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, His
 import { canAccess } from "@/lib/access";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
 import TempoDecorrido from "@/components/TempoDecorrido";
+import dynamic from "next/dynamic";
+
+const RotaMapaDownload = dynamic(
+  () => import("@/components/resultados/RotaMapaDownload"),
+  { ssr: false, loading: () => <div className="h-[300px] bg-gray-100 rounded-lg animate-pulse mt-2" /> }
+);
 
 type StatusFilter =
   | "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp"
@@ -760,22 +766,15 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </div>
           )}
 
-          {/* ===== Rota do cabo (KML) — aparece quando o auditor traçou o caminho ===== */}
-          {r.trajeto_cabo?.length && r.trajeto_expira_em && new Date(r.trajeto_expira_em) > new Date() && (
-            <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2.5">
-              <span className="text-purple-700 text-sm flex-1">
-                🗺️ <strong>Rota do cabo</strong> — traçada pelo auditor
-              </span>
-              <button
-                onClick={() => copyToClipboard(
-                  `${window.location.origin}/api/rota/${r.id}`,
-                  "rota"
-                )}
-                className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors ${copied === "rota" ? "bg-purple-600 text-white" : "bg-white border border-purple-300 text-purple-700 hover:bg-purple-100"}`}
-              >
-                {copied === "rota" ? "✓ Copiado!" : "📋 Copiar link KML"}
-              </button>
-            </div>
+          {/* ===== Rota do cabo — mapa + download PNG ===== */}
+          {(r.trajeto_cabo?.length ?? 0) > 0 && (
+            <RotaMapaDownload
+              plusCodeCliente={r.plus_code_cliente}
+              localizacaoCaixa={r.localizacao_caixa}
+              trajetoCabo={r.trajeto_cabo ?? []}
+              viabilizacaoId={r.id}
+              nomeCliente={r.nome_cliente}
+            />
           )}
 
           {/* ===== Fluxo de agendamento de instalação FTTH / Condomínio / FTTA ===== */}
