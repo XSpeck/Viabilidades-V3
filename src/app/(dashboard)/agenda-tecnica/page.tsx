@@ -484,7 +484,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
               <span className="px-2 py-0.5 rounded-full text-xs font-medium shrink-0 bg-purple-100 text-purple-700">📡 UTP</span>
             )}
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
-            {status !== "instalado" && <TempoDecorrido iso={v.status_atualizado_em} />}
+            {status !== "instalado" && <TempoDecorrido iso={v.status_atualizado_em ?? v.data_auditoria ?? v.data_solicitacao} />}
             {status === "agendado" && v.data_instalacao && (
               <span className="text-xs font-medium text-green-700 shrink-0">
                 {fmtData(v.data_instalacao)} · {v.periodo_instalacao}{v.tecnico_instalacao ? ` · 👷 ${v.tecnico_instalacao}` : " · ⚠️ sem técnico"}
@@ -504,9 +504,9 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
               📍 {locationToPlusCode(v.plus_code_cliente)}
             </a>
             <span>👤 {v.usuario}</span>
-            {v.ag_chegou_em && (
+            {(v.ag_chegou_em ?? v.data_solicitacao) && (
               <span title="Chegou na fila de agendamento">
-                📥 {new Date(v.ag_chegou_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                📥 {new Date((v.ag_chegou_em ?? v.data_solicitacao)!).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
             {status === "proposta_enviada" && v.proposta_data && (
