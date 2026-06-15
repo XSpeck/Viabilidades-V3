@@ -563,23 +563,6 @@ export default function CtoMap({
           </button>
         )}
 
-        {/* Salvar imagem — visível sempre que há rota (salva agora ou já existente) */}
-        {viabilizacaoId && (trajetoExistente?.length ?? 0) >= 2 && !drawing && (
-          <a
-            href={`/api/rota/${viabilizacaoId}/imagem`}
-            download
-            title="Salvar imagem do mapa"
-            style={{
-              background: "white", color: "#0f766e",
-              border: "2px solid #0f766e", borderRadius: 8,
-              padding: "6px 10px", fontSize: 18, cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
-              textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            📸
-          </a>
-        )}
       </div>
 
       {/* Painel de medição */}
@@ -642,7 +625,7 @@ export default function CtoMap({
                   opacity: salvandoTrajeto ? 0.6 : 1,
                 }}
               >
-                {salvandoTrajeto ? "Salvando..." : "💾 Salvar Rota"}
+                {salvandoTrajeto ? "Salvando..." : "✅ Finalizar Rota"}
               </button>
             </>
           )}
@@ -653,37 +636,37 @@ export default function CtoMap({
       {trajetoLink && !drawing && (
         <div style={{
           position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)",
-          zIndex: 1000, background: "#f5f3ff", borderRadius: 10,
-          padding: "8px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          zIndex: 1000, background: "#f0fdf4", borderRadius: 10,
+          padding: "10px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
           fontSize: 12, fontFamily: "system-ui,sans-serif",
-          border: "2px solid #7c3aed", display: "flex", alignItems: "center", gap: 8,
+          border: "2px solid #16a34a", display: "flex", alignItems: "center", gap: 8,
           whiteSpace: "nowrap",
         }}>
-          <span style={{ color: "#5b21b6", fontWeight: 600 }}>✅ Rota salva!</span>
-          <button
-            onClick={() => navigator.clipboard.writeText(trajetoLink)}
-            style={{
-              background: "#7c3aed", color: "white", border: "none",
-              borderRadius: 6, padding: "3px 10px", fontSize: 11,
-              fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
-            }}
-          >
-            📋 Copiar Link
-          </button>
+          <span style={{ color: "#15803d", fontWeight: 700 }}>✅ Rota finalizada!</span>
           {viabilizacaoId && (
             <a
               href={`/api/rota/${viabilizacaoId}/imagem`}
               download
               style={{
                 background: "#0f766e", color: "white", border: "none",
-                borderRadius: 6, padding: "3px 10px", fontSize: 11,
-                fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
-                textDecoration: "none", display: "inline-flex", alignItems: "center",
+                borderRadius: 6, padding: "5px 12px", fontSize: 12,
+                fontWeight: 700, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4,
               }}
             >
-              📸 Salvar imagem
+              📸 Baixar PNG
             </a>
           )}
+          <button
+            onClick={() => navigator.clipboard.writeText(trajetoLink)}
+            style={{
+              background: "white", color: "#374151", border: "1px solid #d1d5db",
+              borderRadius: 6, padding: "5px 10px", fontSize: 11,
+              fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+            }}
+          >
+            📋 KML
+          </button>
           <button
             onClick={() => setTrajetoLink(null)}
             style={{
