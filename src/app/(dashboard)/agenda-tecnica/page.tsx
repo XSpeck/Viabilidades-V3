@@ -14,7 +14,7 @@ import {
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList } from "lucide-react";
+import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList, Pencil } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 type FilterKey = "todos" | "proposta_enviada" | "aguardando_confirmacao" | "agendado" | "instalado";
