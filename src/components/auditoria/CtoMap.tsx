@@ -743,19 +743,14 @@ export default function CtoMap({
           <span style={{ color: "#15803d", fontWeight: 700 }}>✅ Rota finalizada!</span>
           {onContinuar && (
             <button
-              disabled={salvandoImagem}
-              onClick={async () => {
-                await handleDownloadImagem();
-                onContinuar();
-              }}
+              onClick={onContinuar}
               style={{
-                background: salvandoImagem ? "#9ca3af" : "#16a34a", color: "white", border: "none",
+                background: "#16a34a", color: "white", border: "none",
                 borderRadius: 6, padding: "5px 14px", fontSize: 12,
-                fontWeight: 700, cursor: salvandoImagem ? "default" : "pointer",
-                fontFamily: "system-ui,sans-serif",
+                fontWeight: 700, cursor: "pointer", fontFamily: "system-ui,sans-serif",
               }}
             >
-              {salvandoImagem ? "📸 Baixando..." : "📸 Baixar e Prosseguir →"}
+              Prosseguir →
             </button>
           )}
           <button

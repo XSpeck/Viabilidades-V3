@@ -261,7 +261,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
 
             {/* Instrução */}
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800 font-medium">
-              ✏️ Trace o caminho do cabo clicando nos pontos da rota no mapa. Ao finalizar, clique em <strong>Finalizar Rota</strong> e depois em <strong>Baixar e Prosseguir</strong> — o PNG é salvo automaticamente.
+              ✏️ Trace o caminho do cabo clicando nos pontos da rota no mapa. Ao finalizar, clique em <strong>Finalizar Rota</strong> e depois em <strong>Prosseguir</strong>.
             </div>
 
             {/* Mapa com desenho já ativo — só a CTO selecionada */}
