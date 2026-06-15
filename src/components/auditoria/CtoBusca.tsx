@@ -261,7 +261,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
 
             {/* Instrução */}
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800 font-medium">
-              ✏️ Trace o caminho do cabo clicando nos pontos da rota no mapa. Ao finalizar, clique em <strong>Salvar Rota</strong>.
+              ✏️ Trace o caminho do cabo clicando nos pontos da rota no mapa. Ao finalizar, clique em <strong>Finalizar Rota</strong>, baixe o PNG e clique em <strong>Prosseguir</strong>.
             </div>
 
             {/* Mapa com desenho já ativo — só a CTO selecionada */}
@@ -277,10 +277,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               trajetoExistente={trajetoExistente}
               autoStartDraw
               referenceRouteOnly
-              onTrajetoSalvo={(link) => {
-                onTrajetoSalvo?.(link);
-                onConfirm(confirmedData);
-              }}
+              onTrajetoSalvo={(link) => onTrajetoSalvo?.(link)}
+              onContinuar={() => onConfirm(confirmedData)}
             />
           </>
         )}

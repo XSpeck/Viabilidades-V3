@@ -82,6 +82,7 @@ interface Props {
   viabilizacaoId?: string;
   trajetoExistente?: { lat: number; lon: number }[];
   onTrajetoSalvo?: (link: string) => void;
+  onContinuar?: () => void;
   autoStartDraw?: boolean;
   referenceRouteOnly?: boolean;
 }
@@ -271,7 +272,7 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 export default function CtoMap({
   clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange,
-  viabilizacaoId, trajetoExistente, onTrajetoSalvo, autoStartDraw, referenceRouteOnly,
+  viabilizacaoId, trajetoExistente, onTrajetoSalvo, onContinuar, autoStartDraw, referenceRouteOnly,
 }: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
@@ -667,6 +668,18 @@ export default function CtoMap({
           >
             📋 KML
           </button>
+          {onContinuar && (
+            <button
+              onClick={onContinuar}
+              style={{
+                background: "#16a34a", color: "white", border: "none",
+                borderRadius: 6, padding: "5px 12px", fontSize: 12,
+                fontWeight: 700, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+              }}
+            >
+              Prosseguir →
+            </button>
+          )}
           <button
             onClick={() => setTrajetoLink(null)}
             style={{
