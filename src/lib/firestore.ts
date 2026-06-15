@@ -575,7 +575,8 @@ export async function iniciarAgendamentoInstalacao(id: string): Promise<void> {
 export async function enviarPropostaInstalacao(
   id: string,
   dados: { proposta_data: string; proposta_periodo: string; proposta_obs?: string },
-  historicoAnterior?: string
+  historicoAnterior?: string,
+  agChegouEmExistente?: string
 ): Promise<void> {
   const historico = historicoAnterior
     ? `${historicoAnterior}\nUsuário propôs ${dados.proposta_data} ${dados.proposta_periodo}`
@@ -586,6 +587,7 @@ export async function enviarPropostaInstalacao(
     proposta_periodo: dados.proposta_periodo,
     ...(dados.proposta_obs !== undefined ? { proposta_obs: dados.proposta_obs } : {}),
     historico_agendamento: historico,
+    ...(!agChegouEmExistente ? { ag_chegou_em: new Date().toISOString() } : {}),
   });
   void enqueueNotificacao(id, "proposta_enviada");
 }

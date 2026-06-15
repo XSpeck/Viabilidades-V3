@@ -132,6 +132,7 @@ export interface Viabilizacao {
   data_finalizacao?: string;
   data_solicitacao_predio?: string;
   status_atualizado_em?: string;
+  ag_chegou_em?: string;
   notas_visita?: NotaAtividade[];
 }
 

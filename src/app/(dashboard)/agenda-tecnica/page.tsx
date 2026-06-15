@@ -504,6 +504,11 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
               📍 {locationToPlusCode(v.plus_code_cliente)}
             </a>
             <span>👤 {v.usuario}</span>
+            {v.ag_chegou_em && (
+              <span title="Chegou na fila de agendamento">
+                📥 {new Date(v.ag_chegou_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
             {status === "proposta_enviada" && v.proposta_data && (
               <span className="font-medium text-orange-600">
                 Proposta: {fmtData(v.proposta_data)} — {v.proposta_periodo}

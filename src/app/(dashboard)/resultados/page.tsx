@@ -426,7 +426,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
     if (!propostaData) { alert("Informe a data desejada!"); return; }
     setEnviandoProposta(true);
     try {
-      await enviarPropostaInstalacao(r.id, { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined }, r.historico_agendamento);
+      await enviarPropostaInstalacao(r.id, { proposta_data: propostaData, proposta_periodo: propostaPeriodo, proposta_obs: propostaObs || undefined }, r.historico_agendamento, r.ag_chegou_em);
       onRefresh();
     } catch { alert("Erro ao enviar. Tente novamente."); }
     finally { setEnviandoProposta(false); }
