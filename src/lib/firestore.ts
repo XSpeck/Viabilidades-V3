@@ -30,16 +30,17 @@ import type {
 } from "@/types";
 
 // =====================
-// Session cache (5 min TTL) — evita releituras a cada navegação
+// Session cache — evita releituras a cada navegação
 // =====================
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL      = 5  * 60 * 1000; // 5 min  — queries filtradas
+const CACHE_TTL_LONG = 15 * 60 * 1000; // 15 min — full scans (relatorios)
 
-function getCached<T>(key: string): T | null {
+function getCached<T>(key: string, ttl = CACHE_TTL): T | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw) as { data: T; ts: number };
-    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+    if (Date.now() - ts > ttl) { sessionStorage.removeItem(key); return null; }
     return data;
   } catch { return null; }
 }
@@ -98,7 +99,7 @@ export async function createViabilizacao(
     ...clean,
     data_solicitacao: serverTimestamp(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
   void enqueueNotificacao(ref.id, "nova_viabilizacao");
   return ref.id;
 }
@@ -121,6 +122,8 @@ export async function getViabilizacoesPendentes(): Promise<Viabilizacao[]> {
 }
 
 export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_audit_v1");
+  if (cached) return cached;
   const [snap1, snap2] = await Promise.all([
     getDocs(query(
       collection(db, "viabilizacoes"),
@@ -139,37 +142,39 @@ export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viab
       .map((d) => fromFirestore<Viabilizacao>(d))
       .filter((v) => v.revisao_tipo === "contestado"),
   ];
-  return items
+  const result = items
     .filter((v) => v.status_predio !== "agendado")
     .sort((a, b) => {
       if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
       return (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1;
     });
+  setCache("viab_audit_v1", result);
+  return result;
+}
+
+// Base compartilhada entre getViabilizacoesUsuario e getViabilizacoesHistorico
+// — uma única query por sessão, cache de 5 min.
+async function _fetchViabilizacoesUsuario(ids: string[]): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_user_v1");
+  if (cached) return cached;
+  const q = query(collection(db, "viabilizacoes"), where("usuario", "in", ids));
+  const snap = await getDocs(q);
+  const data = snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
+  setCache("viab_user_v1", data);
+  return data;
 }
 
 export async function getViabilizacoesUsuario(usernames: string[]): Promise<Viabilizacao[]> {
   const ids = [...new Set(usernames.filter(Boolean))];
-  const q = query(
-    collection(db, "viabilizacoes"),
-    where("usuario", "in", ids)
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => !v.data_finalizacao)
-    .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
+  const all = await _fetchViabilizacoesUsuario(ids);
+  return all.filter((v) => !v.data_finalizacao);
 }
 
 export async function getViabilizacoesHistorico(usernames: string[]): Promise<Viabilizacao[]> {
   const ids = [...new Set(usernames.filter(Boolean))];
-  const q = query(
-    collection(db, "viabilizacoes"),
-    where("usuario", "in", ids)
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
-    .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
+  return _fetchViabilizacoesUsuario(ids);
 }
 
 export async function getAgendamentos(): Promise<Viabilizacao[]> {
@@ -207,7 +212,13 @@ export async function updateViabilizacao(
   const ref = doc(db, "viabilizacoes", id);
   const clean = stripUndefined(data as Record<string, unknown>);
   await updateDoc(ref, { ...clean, status_atualizado_em: new Date().toISOString() });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache(
+    "viab_all_viabilizacoes_v1",
+    "viab_user_v1",
+    "viab_instalacoes_pendentes_v1",
+    "viab_instalacoes_arquivadas_v1",
+    "viab_audit_v1",
+  );
 }
 
 export async function pegarViabilizacao(id: string, auditor: string): Promise<void> {
@@ -223,7 +234,7 @@ export async function devolverViabilizacao(id: string): Promise<void> {
     auditor_responsavel: null,
     status_atualizado_em: new Date().toISOString(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1");
 }
 
 export async function deleteViabilizacao(id: string): Promise<void> {
@@ -451,7 +462,7 @@ export async function contraproporVisita(
     proposta_visita_tecnico: deleteField(),
     status_atualizado_em: new Date().toISOString(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function reagendarVisita(
@@ -539,6 +550,8 @@ export async function rejeitarPredio(
 
 // Retorna instalações ativas — FTTH + FTTA aprovação direta (sem visita estrutural) + UTP
 export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_instalacoes_pendentes_v1");
+  if (cached) return cached;
   const [snap1, snap2, snap3, snap4] = await Promise.all([
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "aprovado"))),
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "aprovado"))),
@@ -552,10 +565,12 @@ export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
     ...snap3.docs.map((d) => fromFirestore<Viabilizacao>(d)),
     ...snap4.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !v.status_predio),
   ];
-  return items
+  const result = items
     .filter((v) => ["proposta_enviada", "aguardando_confirmacao", "agendado", "instalado"].includes(v.status_instalacao ?? ""))
     .filter((v) => !v.data_finalizacao)
     .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
+  setCache("viab_instalacoes_pendentes_v1", result);
+  return result;
 }
 
 // Retorna instalações FTTA/Cond via estrutura — gerenciadas na Agenda FTTA/UTP
@@ -677,6 +692,8 @@ export async function marcarInstalado(id: string): Promise<void> {
 
 // Arquivadas da Agenda Técnica: FTTH + FTTA direto
 export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_instalacoes_arquivadas_v1");
+  if (cached) return cached;
   const [snap1, snap2] = await Promise.all([
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "FTTH"), where("status", "==", "finalizado"))),
     getDocs(query(collection(db, "viabilizacoes"), where("tipo_instalacao", "==", "Prédio"), where("status", "==", "finalizado"))),
@@ -685,7 +702,9 @@ export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
     ...snap1.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !!v.status_instalacao),
     ...snap2.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !!v.status_instalacao && !v.status_predio),
   ];
-  return items.sort((a, b) => ((b.data_finalizacao ?? b.data_solicitacao ?? "") > (a.data_finalizacao ?? a.data_solicitacao ?? "") ? 1 : -1));
+  const result = items.sort((a, b) => ((b.data_finalizacao ?? b.data_solicitacao ?? "") > (a.data_finalizacao ?? a.data_solicitacao ?? "") ? 1 : -1));
+  setCache("viab_instalacoes_arquivadas_v1", result);
+  return result;
 }
 
 // Arquivar (ambos os lados usam finalizarViabilizacao existente)
@@ -815,7 +834,7 @@ export async function batchImportViabilizacoes(
     await batch.commit();
     onProgress?.(Math.min(i + CHUNK, items.length), items.length);
   }
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function deleteAllPrediosAtendidos(): Promise<void> {
@@ -887,7 +906,7 @@ export async function deletePredioSemViabilidade(id: string): Promise<void> {
 // =====================
 
 export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
-  const cached = getCached<Viabilizacao[]>("viab_all_viabilizacoes_v1");
+  const cached = getCached<Viabilizacao[]>("viab_all_viabilizacoes_v1", CACHE_TTL_LONG);
   if (cached) return cached;
   const snap = await getDocs(collection(db, "viabilizacoes"));
   const data = snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
@@ -900,17 +919,17 @@ export async function arquivarViabilizacao(id: string): Promise<void> {
     status: "finalizado",
     data_finalizacao: new Date().toISOString(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function excluirViabilizacao(id: string): Promise<void> {
   await deleteDoc(doc(db, "viabilizacoes", id));
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 // =====================
@@ -1027,7 +1046,7 @@ export async function addNotaDemanda(id: string, texto: string, por: string): Pr
 export async function addNotaVisita(id: string, texto: string, por: string): Promise<void> {
   const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
   await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function deletarTrajeto(id: string): Promise<void> {
@@ -1035,7 +1054,7 @@ export async function deletarTrajeto(id: string): Promise<void> {
     trajeto_cabo: deleteField(),
     trajeto_expira_em: deleteField(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function salvarTrajeto(id: string, pontos: [number, number][]): Promise<void> {
@@ -1045,5 +1064,5 @@ export async function salvarTrajeto(id: string, pontos: [number, number][]): Pro
     trajeto_cabo: pontos.map(([lat, lon]) => ({ lat, lon })),
     trajeto_expira_em: expira.toISOString(),
   });
-  bustCache("viab_all_viabilizacoes_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
