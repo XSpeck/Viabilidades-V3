@@ -8,6 +8,7 @@ import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import FluxoStepper from "@/components/resultados/FluxoStepper";
+import TempoDecorrido from "@/components/TempoDecorrido";
 
 type StatusFilter =
   | "todos" | "analise" | "aprovado" | "ag_dados" | "agendado" | "estruturado" | "sem_viab" | "utp"
@@ -604,6 +605,7 @@ function ResultCard({ r, onFinalizar, onRefresh, showData }: {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {r.status !== "finalizado" && r.status !== "rejeitado" && <TempoDecorrido iso={r.status_atualizado_em} />}
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${
               isDevolvida ? "bg-orange-100 text-orange-700" :
               isContestacaoPendente ? "bg-blue-100 text-blue-700" :

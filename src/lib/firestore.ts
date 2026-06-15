@@ -206,7 +206,7 @@ export async function updateViabilizacao(
 ): Promise<void> {
   const ref = doc(db, "viabilizacoes", id);
   const clean = stripUndefined(data as Record<string, unknown>);
-  await updateDoc(ref, { ...clean });
+  await updateDoc(ref, { ...clean, status_atualizado_em: new Date().toISOString() });
   bustCache("viab_all_viabilizacoes_v1");
 }
 

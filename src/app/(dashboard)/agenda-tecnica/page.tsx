@@ -16,6 +16,7 @@ import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList, Pencil } from "lucide-react";
 import { canAccess } from "@/lib/access";
+import TempoDecorrido from "@/components/TempoDecorrido";
 
 type FilterKey = "todos" | "proposta_enviada" | "aguardando_confirmacao" | "agendado" | "instalado";
 
@@ -483,6 +484,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
               <span className="px-2 py-0.5 rounded-full text-xs font-medium shrink-0 bg-purple-100 text-purple-700">📡 UTP</span>
             )}
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.color}`}>{cfg.label}</span>
+            {status !== "instalado" && <TempoDecorrido iso={v.status_atualizado_em} />}
             {status === "agendado" && v.data_instalacao && (
               <span className="text-xs font-medium text-green-700 shrink-0">
                 {fmtData(v.data_instalacao)} · {v.periodo_instalacao}{v.tecnico_instalacao ? ` · 👷 ${v.tecnico_instalacao}` : " · ⚠️ sem técnico"}
