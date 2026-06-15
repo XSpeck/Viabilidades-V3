@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["staticmaps", "sharp"],
+  serverExternalPackages: ["sharp"],
 };
 
 export default nextConfig;
