@@ -369,9 +369,10 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   const [agPeriodo, setAgPeriodo] = useState(v.proposta_periodo ?? "Manhã");
   const [agObs, setAgObs] = useState("");
 
-  // ── Atribuir técnico ───────────────────────────────────
+  // ── Atribuir / editar técnico ──────────────────────────────
   const [tecnicoAtribuir, setTecnicoAtribuir] = useState("");
   const [salvandoTecnico, setSalvandoTecnico] = useState(false);
+  const [showEditarTecnico, setShowEditarTecnico] = useState(false);
 
   // ── Reagendar ──────────────────────────────────────────
   const [reagData, setReagData] = useState(v.data_instalacao ?? "");
@@ -407,6 +408,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
     setSalvandoTecnico(true);
     try {
       await atribuirTecnicoInstalacao(v.id, tecnicoAtribuir.trim());
+      setShowEditarTecnico(false);
       finishWithSuccess(`👷 Técnico ${tecnicoAtribuir.trim()} atribuído!`);
     } finally { setSalvandoTecnico(false); }
   }
@@ -607,7 +609,18 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                   <div><p className="text-gray-400 text-xs mb-0.5">Período</p><p className="font-semibold text-gray-800">{v.periodo_instalacao}</p></div>
                   <div>
                     <p className="text-gray-400 text-xs mb-0.5">Técnico</p>
-                    <p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? <span className="text-orange-500 italic">não atribuído</span>}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-gray-800">{v.tecnico_instalacao ?? <span className="text-orange-500 italic">não atribuído</span>}</p>
+                      {v.tecnico_instalacao && (
+                        <button
+                          onClick={() => { setTecnicoAtribuir(v.tecnico_instalacao!); setShowEditarTecnico(true); }}
+                          title="Editar técnico"
+                          className="text-gray-300 hover:text-indigo-500 transition-colors"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {(v.agendamento_obs || v.proposta_obs) && (
@@ -615,10 +628,12 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                 )}
               </div>
 
-              {/* Atribuir técnico quando ainda não definido */}
-              {!v.tecnico_instalacao && (
+              {/* Atribuir técnico (quando não definido ou editando) */}
+              {(!v.tecnico_instalacao || showEditarTecnico) && (
                 <div className="border border-orange-200 bg-orange-50 rounded-lg p-3 space-y-2">
-                  <p className="text-sm font-medium text-orange-800">👷 Atribuir técnico</p>
+                  <p className="text-sm font-medium text-orange-800">
+                    👷 {v.tecnico_instalacao ? "Editar técnico" : "Atribuir técnico"}
+                  </p>
                   <div className="flex gap-2">
                     <input
                       placeholder="Nome do técnico *"
@@ -631,8 +646,16 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                       disabled={salvandoTecnico || !tecnicoAtribuir.trim()}
                       className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-lg text-sm font-medium"
                     >
-                      {salvandoTecnico ? "..." : "Atribuir"}
+                      {salvandoTecnico ? "..." : "Salvar"}
                     </button>
+                    {v.tecnico_instalacao && (
+                      <button
+                        onClick={() => { setShowEditarTecnico(false); setTecnicoAtribuir(""); }}
+                        className="px-3 py-2 border rounded-lg text-sm text-gray-500 hover:bg-white"
+                      >
+                        Cancelar
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
