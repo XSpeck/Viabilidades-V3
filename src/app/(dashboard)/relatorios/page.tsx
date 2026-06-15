@@ -130,7 +130,7 @@ export default function RelatoriosPage() {
     // FTTA rejeitados (incluindo arquivados)
     viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
       v.status === "rejeitado" ||
-      (v.status === "finalizado" && v.status_predio === "rejeitado")
+      (v.status === "finalizado" && (v.status_predio === "rejeitado" || !!v.motivo_rejeicao))
     )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftta_rej_${v.id}`, ...geo, category: "ftta_rej", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
@@ -216,18 +216,26 @@ export default function RelatoriosPage() {
     : "0.0";
 
   // FTTA (Prédio + Condomínio estruturados/rejeitados)
-  const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado");
+  const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) &&
+    (v.status_predio === "estruturado" || (v.status === "finalizado" && !v.motivo_rejeicao && v.status_predio !== "rejeitado"))
+  );
   const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
     v.status === "rejeitado" ||
-    (v.status === "finalizado" && v.status_predio === "rejeitado")
+    (v.status === "finalizado" && (v.status_predio === "rejeitado" || !!v.motivo_rejeicao))
   ));
 
   // UTP
   const utpTotal = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
 
-  // Prédios e Condomínios estruturados (separados)
-  const prediosEstruturados     = filtrado.filter((v) => v.tipo_instalacao === "Prédio"     && v.status_predio === "estruturado");
-  const condominiosEstruturados = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && v.status_predio === "estruturado");
+  // Prédios e Condomínios estruturados (separados) — inclui finalizados não-rejeitados
+  const prediosEstruturados = filtrado.filter((v) =>
+    v.tipo_instalacao === "Prédio" && v.status_predio !== "rejeitado" && !v.motivo_rejeicao &&
+    (v.status_predio === "estruturado" || v.status === "finalizado")
+  );
+  const condominiosEstruturados = filtrado.filter((v) =>
+    v.tipo_instalacao === "Condomínio" && v.status_predio !== "rejeitado" && !v.motivo_rejeicao &&
+    (v.status_predio === "estruturado" || v.status === "finalizado")
+  );
 
   // Tabs de detalhe FTTA: aprovados = estruturados; rejeitados = tab separado
   const prediosViab     = prediosEstruturados;
