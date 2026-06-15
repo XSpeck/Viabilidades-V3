@@ -90,6 +90,11 @@ export async function importCtosToFirestore(
   onProgress?.(ctos.length, ctos.length);
 }
 
+// =====================
+// Buscar CTOs (Firestore + cache sessionStorage)
+// =====================
+const SESSION_KEY = "viab_ctos_v3";
+
 export async function getCtosFromFirestore(): Promise<Cto[]> {
   const { db } = await import("./firebase");
   const { doc, getDoc } = await import("firebase/firestore");
@@ -99,17 +104,19 @@ export async function getCtosFromFirestore(): Promise<Cto[]> {
 }
 
 export async function countCtosInFirestore(): Promise<number> {
+  try {
+    const cached = sessionStorage.getItem(SESSION_KEY);
+    if (cached) {
+      const parsed: Cto[] = JSON.parse(cached);
+      if (parsed.length > 0) return parsed.length;
+    }
+  } catch {}
   const { db } = await import("./firebase");
   const { doc, getDoc } = await import("firebase/firestore");
   const snap = await getDoc(doc(db, CTOS_DOC));
   if (!snap.exists()) return 0;
   return (snap.data().total as number) ?? 0;
 }
-
-// =====================
-// Buscar CTOs (Firestore + cache sessionStorage)
-// =====================
-const SESSION_KEY = "viab_ctos_v3";
 
 export async function getCtos(): Promise<Cto[]> {
   // Cache de sessão

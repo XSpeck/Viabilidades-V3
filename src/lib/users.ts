@@ -2,19 +2,44 @@ import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } f
 import { db } from "./firebase";
 import type { AppUser, UserCargo, EquipeUsuario } from "@/types";
 
+const USERS_CACHE_KEY = "viab_users_v1";
+const USERS_CACHE_TTL = 5 * 60 * 1000;
+
+function getUsersCache(): AppUser[] | null {
+  try {
+    const raw = sessionStorage.getItem(USERS_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw) as { data: AppUser[]; ts: number };
+    if (Date.now() - ts > USERS_CACHE_TTL) { sessionStorage.removeItem(USERS_CACHE_KEY); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function setUsersCache(data: AppUser[]): void {
+  try { sessionStorage.setItem(USERS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
+function bustUsersCache(): void {
+  try { sessionStorage.removeItem(USERS_CACHE_KEY); } catch {}
+}
+
 export async function listUsers(): Promise<AppUser[]> {
+  const cached = getUsersCache();
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "users"));
-  return snap.docs.map((d) => {
-    const data = d.data();
+  const data = snap.docs.map((d) => {
+    const u = d.data();
     return {
       uid: d.id,
-      nome: data.nome,
-      login: data.login,
-      nivel: data.nivel,
-      cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
-      equipe: data.equipe,
+      nome: u.nome,
+      login: u.login,
+      nivel: u.nivel,
+      cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
+      equipe: u.equipe,
     };
   });
+  setUsersCache(data);
+  return data;
 }
 
 function parseFirebaseAuthError(message: string): string {
@@ -50,6 +75,7 @@ export async function createUser(
   const docData: Record<string, unknown> = { nome, login: email, nivel, cargo };
   if (equipe) docData.equipe = equipe;
   await setDoc(doc(db, "users", localId), docData);
+  bustUsersCache();
 }
 
 export async function updateUser(
@@ -66,8 +92,10 @@ export async function updateUser(
     updates.equipe = data.equipe === null ? deleteField() : data.equipe;
   }
   await updateDoc(doc(db, "users", uid), updates);
+  bustUsersCache();
 }
 
 export async function deleteUser(uid: string): Promise<void> {
   await deleteDoc(doc(db, "users", uid));
+  bustUsersCache();
 }

@@ -178,15 +178,19 @@ export async function getViabilizacoesHistorico(usernames: string[]): Promise<Vi
 }
 
 export async function getAgendamentos(): Promise<Viabilizacao[]> {
+  const cached = getCached<Viabilizacao[]>("viab_agendamentos_v1");
+  if (cached) return cached;
   const q = query(
     collection(db, "viabilizacoes"),
     where("status_predio", "==", "agendado")
   );
   const snap = await getDocs(q);
-  return snap.docs
+  const data = snap.docs
     .map((d) => fromFirestore<Viabilizacao>(d))
     .filter((v) => v.status_agendamento === "pendente")
     .sort((a, b) => (a.data_visita ?? "") < (b.data_visita ?? "") ? -1 : 1);
+  setCache("viab_agendamentos_v1", data);
+  return data;
 }
 
 export async function getFtthPendenteBusca(): Promise<Viabilizacao[]> {
@@ -218,6 +222,7 @@ export async function updateViabilizacao(
     "viab_instalacoes_pendentes_v1",
     "viab_instalacoes_arquivadas_v1",
     "viab_audit_v1",
+    "viab_agendamentos_v1",
   );
 }
 
@@ -234,7 +239,7 @@ export async function devolverViabilizacao(id: string): Promise<void> {
     auditor_responsavel: null,
     status_atualizado_em: new Date().toISOString(),
   });
-  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_agendamentos_v1");
 }
 
 export async function deleteViabilizacao(id: string): Promise<void> {
@@ -948,12 +953,12 @@ export async function getDemandas(): Promise<DemandaRede[]> {
 
 export async function createDemanda(data: Omit<DemandaRede, "id">): Promise<void> {
   await addDoc(collection(db, "demandas_rede"), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_demandas_rede_v1");
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
 export async function updateDemanda(id: string, data: Partial<DemandaRede>): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_demandas_rede_v1");
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
 export async function agendarDemanda(id: string, data: string, periodo: string): Promise<void> {
@@ -990,9 +995,11 @@ export async function concluirDemanda(id: string, obs?: string): Promise<void> {
 }
 
 export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
+  const cached = getCached<DemandaRede[]>("viab_demandas_agendadas_v1");
+  if (cached) return cached;
   const q = query(collection(db, "demandas_rede"), where("status", "in", ["agendada", "em_andamento"]));
   const snap = await getDocs(q);
-  return snap.docs
+  const data = snap.docs
     .map((d) => fromFirestoreDemanda(d))
     .sort((a, b) => {
       if ((a.data_agendamento ?? "") !== (b.data_agendamento ?? ""))
@@ -1000,6 +1007,8 @@ export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
       const periodoOrder = (p?: string) => p === "Manhã" ? 0 : p === "Tarde" ? 1 : p === "Noturno" ? 2 : 3;
       return periodoOrder(a.periodo_agendamento) - periodoOrder(b.periodo_agendamento);
     });
+  setCache("viab_demandas_agendadas_v1", data);
+  return data;
 }
 
 export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): Promise<void> {
@@ -1009,17 +1018,21 @@ export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): 
 
 export async function deleteDemanda(id: string): Promise<void> {
   await deleteDoc(doc(db, "demandas_rede", id));
-  bustCache("viab_demandas_rede_v1");
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
 export async function getDemandasArquivadas(): Promise<DemandaRede[]> {
+  const cached = getCached<DemandaRede[]>("viab_demandas_arquivadas_v1");
+  if (cached) return cached;
   const q = query(collection(db, "demandas_rede"), where("status", "==", "arquivada"));
   const snap = await getDocs(q);
-  return snap.docs
+  const data = snap.docs
     .map((d) => fromFirestoreDemanda(d))
     .sort((a, b) =>
       (b.data_conclusao ?? b.data_criacao) > (a.data_conclusao ?? a.data_criacao) ? 1 : -1
     );
+  setCache("viab_demandas_arquivadas_v1", data);
+  return data;
 }
 
 export async function arquivarDemanda(id: string): Promise<void> {

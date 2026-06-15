@@ -9,7 +9,7 @@ import { Loader2, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { canAccess } from "@/lib/access";
 
-const REFRESH_SECONDS = 30;
+const REFRESH_SECONDS = 60;
 
 function timeAgo(iso?: string): string {
   if (!iso) return "—";
