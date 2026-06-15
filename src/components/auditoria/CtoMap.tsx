@@ -38,6 +38,12 @@ const LAYERS: Record<MapLayer, { label: string; emoji: string; url: string; attr
 
 const MAP_MAX_ZOOM = 18;
 
+function MapInstanceCapture({ onReady }: { onReady: (m: L.Map) => void }) {
+  const map = useMap();
+  useEffect(() => { onReady(map); }, [map, onReady]);
+  return null;
+}
+
 function LayerUpdater({ layer }: { layer: MapLayer }) {
   const map = useMap();
   const baseTileRef = useRef<L.TileLayer | null>(null);
@@ -50,10 +56,11 @@ function LayerUpdater({ layer }: { layer: MapLayer }) {
     baseTileRef.current = L.tileLayer(LAYERS[layer].url, {
       attribution: LAYERS[layer].attribution,
       maxZoom: MAP_MAX_ZOOM,
+      crossOrigin: "anonymous",
     }).addTo(map);
 
     overlayTileRef.current = LAYERS[layer].overlay
-      ? L.tileLayer(LAYERS[layer].overlay!, { maxZoom: MAP_MAX_ZOOM, opacity: 0.85 }).addTo(map)
+      ? L.tileLayer(LAYERS[layer].overlay!, { maxZoom: MAP_MAX_ZOOM, opacity: 0.85, crossOrigin: "anonymous" }).addTo(map)
       : null;
 
     map.setMaxZoom(MAP_MAX_ZOOM);
@@ -325,6 +332,8 @@ export default function CtoMap({
   const [trajetoLink, setTrajetoLink] = useState<string | null>(null);
   const [salvandoImagem, setSalvandoImagem] = useState(false);
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const onMapReady = useCallback((m: L.Map) => { leafletMapRef.current = m; }, []);
 
   const addDrawPoint = useCallback((p: [number, number]) => {
     setDrawPoints((prev) => [...prev, p]);
@@ -389,25 +398,73 @@ export default function CtoMap({
   }
 
   async function handleDownloadImagem() {
-    const container = mapWrapperRef.current?.querySelector(".leaflet-container") as HTMLElement | null;
-    if (!container) return;
+    const map = leafletMapRef.current;
+    if (!map) return;
     setSalvandoImagem(true);
     try {
-      const { default: html2canvas } = await import("html2canvas");
-      // Desativa will-change temporariamente para evitar problema de CSS transform no html2canvas
-      const panes = Array.from(container.querySelectorAll('[class*="leaflet-"]')) as HTMLElement[];
-      const origWC = panes.map(el => el.style.willChange);
-      panes.forEach(el => { el.style.willChange = "auto"; });
+      const size = map.getSize();
+      const canvas = document.createElement("canvas");
+      canvas.width = size.x;
+      canvas.height = size.y;
+      const ctx = canvas.getContext("2d")!;
 
-      const canvas = await html2canvas(container, {
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
+      // Fundo neutro caso alguma tile não carregue
+      ctx.fillStyle = "#b8d4e8";
+      ctx.fillRect(0, 0, size.x, size.y);
+
+      // Desenha as tiles já carregadas (crossOrigin: anonymous foi setado no LayerUpdater)
+      const containerRect = map.getContainer().getBoundingClientRect();
+      const tiles = map.getContainer().querySelectorAll(".leaflet-tile-loaded") as NodeListOf<HTMLImageElement>;
+      tiles.forEach(tile => {
+        const r = tile.getBoundingClientRect();
+        try {
+          ctx.drawImage(tile,
+            Math.round(r.left - containerRect.left),
+            Math.round(r.top - containerRect.top),
+            Math.round(r.width),
+            Math.round(r.height),
+          );
+        } catch { /* tile tachada — ignora */ }
       });
 
-      panes.forEach((el, i) => { el.style.willChange = origWC[i]; });
+      // Rota do cabo
+      const route: L.LatLng[] = (trajetoExistente?.length
+        ? trajetoExistente.map(p => L.latLng(p.lat, p.lon))
+        : drawPoints.map(p => L.latLng(p[0], p[1]))
+      );
+
+      if (route.length >= 2) {
+        const pts = route.map(ll => map.latLngToContainerPoint(ll));
+        const drawLine = (color: string, width: number, alpha: number) => {
+          ctx.beginPath();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.globalAlpha = alpha;
+          ctx.lineCap = ctx.lineJoin = "round";
+          pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        };
+        drawLine("white", 8, 0.5);
+        drawLine("#7c3aed", 5, 0.95);
+      }
+
+      // Marcadores
+      const drawMarker = (lat: number, lon: number, fill: string, label: string) => {
+        const p = map.latLngToContainerPoint(L.latLng(lat, lon));
+        ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+        ctx.fillStyle = "white"; ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.fillStyle = "white";
+        ctx.font = `bold ${label.length > 1 ? 9 : 12}px Arial,sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, p.x, p.y);
+      };
+
+      drawMarker(clientLat, clientLon, "#4f46e5", "C");
+      if (selected) drawMarker(selected.lat, selected.lon, "#16a34a", "CTO");
 
       canvas.toBlob(blob => {
         if (!blob) return;
@@ -420,7 +477,7 @@ export default function CtoMap({
       }, "image/png");
     } catch (err) {
       console.error("[CtoMap] Erro ao capturar imagem:", err);
-      alert("Não foi possível capturar a imagem. Tente tirar um print manual.");
+      alert("Não foi possível capturar a imagem. Tente um print manual.");
     } finally {
       setSalvandoImagem(false);
     }
@@ -740,6 +797,7 @@ export default function CtoMap({
       maxZoom={18}
       scrollWheelZoom
     >
+      <MapInstanceCapture onReady={onMapReady} />
       <FitBounds clientLat={clientLat} clientLon={clientLon} ctos={ctos} />
       <ScaleControl position="bottomleft" imperial={false} />
       <LayerUpdater layer={activeLayer} />
