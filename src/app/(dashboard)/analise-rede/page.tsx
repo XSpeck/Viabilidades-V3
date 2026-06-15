@@ -288,6 +288,10 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   const [showConcluir, setShowConcluir]         = useState(false);
   const [obsConclusao, setObsConclusao]         = useState("");
 
+  // Atribuir técnico
+  const [showAtribuirTecnico, setShowAtribuirTecnico] = useState(false);
+  const [tecnicosAtribuir, setTecnicosAtribuir]       = useState<TecnicoRede[]>(d.tecnicos);
+
   async function handleEditar() {
     const tipoFinal = editTipo === "Outro" ? editTipoCustom.trim() : editTipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
@@ -351,6 +355,16 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     } finally { setSaving(false); }
   }
 
+  async function handleAtribuirTecnico() {
+    if (tecnicosAtribuir.length === 0) { alert("Selecione ao menos um técnico!"); return; }
+    setSaving(true);
+    try {
+      await updateDemanda(d.id, { tecnicos: tecnicosAtribuir });
+      setShowAtribuirTecnico(false);
+      onRefresh();
+    } finally { setSaving(false); }
+  }
+
   async function handleArquivar() {
     setSaving(true);
     try {
@@ -386,12 +400,22 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 
           {/* Técnico + descrição */}
           <div className="flex flex-wrap items-center gap-2">
-            {d.tecnicos.map((t) => (
-              <span key={t} className="flex items-center gap-1 text-sm font-medium text-gray-700">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />
-                {t}
-              </span>
-            ))}
+            {d.tecnicos.length === 0 ? (
+              <span className="text-xs text-gray-400 italic">Sem técnico atribuído</span>
+            ) : (
+              d.tecnicos.map((t) => (
+                <span key={t} className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />
+                  {t}
+                </span>
+              ))
+            )}
+            <button
+              onClick={() => { setTecnicosAtribuir(d.tecnicos); setShowAtribuirTecnico((s) => !s); setShowEditar(false); setShowAgendar(false); setShowStatusChange(false); }}
+              title={d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}
+              className="text-gray-300 hover:text-indigo-500 transition-colors">
+              <Pencil className="w-3 h-3" />
+            </button>
           </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.descricao}</p>
 
@@ -453,7 +477,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             className={`transition-colors text-sm font-medium px-2 py-1 rounded-lg border ${showStatusChange ? "bg-indigo-50 border-indigo-300 text-indigo-600" : "border-gray-200 text-gray-400 hover:text-indigo-500 hover:border-indigo-300"}`}>
             🔄
           </button>
-          <button onClick={() => { setShowEditar((s) => !s); setShowAgendar(false); setShowStatusChange(false); }}
+          <button onClick={() => { setShowEditar((s) => !s); setShowAgendar(false); setShowStatusChange(false); setShowAtribuirTecnico(false); }}
             className={`transition-colors ${showEditar ? "text-indigo-500" : "text-gray-300 hover:text-indigo-500"}`}>
             <Pencil className="w-4 h-4" />
           </button>
@@ -524,6 +548,35 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Atribuir / editar técnico */}
+      {showAtribuirTecnico && (
+        <div className="mt-3 border border-indigo-200 rounded-lg p-3 bg-indigo-50 space-y-2">
+          <p className="text-xs font-semibold text-indigo-800">👷 {d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {TECNICOS_REDE.map((t) => {
+              const sel = tecnicosAtribuir.includes(t);
+              return (
+                <button key={t} type="button"
+                  onClick={() => setTecnicosAtribuir(sel ? tecnicosAtribuir.filter((x) => x !== t) : [...tecnicosAtribuir, t])}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-indigo-50"}`}>
+                  <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAtribuirTecnico} disabled={saving}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
+            </button>
+            <button onClick={() => setShowAtribuirTecnico(false)}
+              className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
@@ -665,7 +718,7 @@ type InputMethod = "pluscode" | "coords";
 function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   auditorNome: string; onClose: () => void; onSaved: () => void;
 }) {
-  const [tecnicos, setTecnicos]     = useState<TecnicoRede[]>(["Eduardo"]);
+  const [tecnicos, setTecnicos]     = useState<TecnicoRede[]>([]);
   const [tipo, setTipo]             = useState(TIPOS_SERVICO[0]);
   const [tipoCustom, setTipoCustom] = useState("");
   const [prioridade, setPrioridade] = useState<PrioridadeDemanda>("media");
@@ -702,7 +755,6 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
     const tipoFinal = tipo === "Outro" ? tipoCustom.trim() : tipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
     if (!descricao.trim()) { alert("Informe a descrição."); return; }
-    if (tecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
     setSaving(true);
     try {
       await createDemanda({
