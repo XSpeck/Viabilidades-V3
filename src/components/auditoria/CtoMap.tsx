@@ -562,6 +562,24 @@ export default function CtoMap({
             🗑️
           </button>
         )}
+
+        {/* Salvar imagem — visível sempre que há rota (salva agora ou já existente) */}
+        {viabilizacaoId && (trajetoExistente?.length ?? 0) >= 2 && !drawing && (
+          <a
+            href={`/api/rota/${viabilizacaoId}/imagem`}
+            download
+            title="Salvar imagem do mapa"
+            style={{
+              background: "white", color: "#0f766e",
+              border: "2px solid #0f766e", borderRadius: 8,
+              padding: "6px 10px", fontSize: 18, cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.2)", lineHeight: 1,
+              textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            📸
+          </a>
+        )}
       </div>
 
       {/* Painel de medição */}
