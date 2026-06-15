@@ -250,6 +250,12 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   // ── Handlers aprovação ─────────────────────────────────
   async function handleAprovarFTTH() {
     if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
+    const temRota = !!trajetoLinkLocal || (
+      (v.trajeto_cabo?.length ?? 0) > 0 &&
+      !!v.trajeto_expira_em &&
+      new Date(v.trajeto_expira_em) > new Date()
+    );
+    if (!temRota) { alert("É necessário traçar a rota do cabo antes de viabilizar."); return; }
     setLoading(true);
     try {
       await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
