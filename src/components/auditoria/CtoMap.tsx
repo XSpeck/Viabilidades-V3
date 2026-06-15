@@ -652,6 +652,20 @@ export default function CtoMap({
           >
             📋 Copiar Link
           </button>
+          {viabilizacaoId && (
+            <a
+              href={`/api/rota/${viabilizacaoId}/imagem`}
+              download
+              style={{
+                background: "#0f766e", color: "white", border: "none",
+                borderRadius: 6, padding: "3px 10px", fontSize: 11,
+                fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+                textDecoration: "none", display: "inline-flex", alignItems: "center",
+              }}
+            >
+              📸 Salvar imagem
+            </a>
+          )}
           <button
             onClick={() => setTrajetoLink(null)}
             style={{
