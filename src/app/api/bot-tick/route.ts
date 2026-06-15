@@ -33,5 +33,24 @@ export async function GET(_request: Request): Promise<NextResponse> {
     }
   }
 
+  // Limpeza oportunista: remove notificações já processadas com mais de 24h
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const velhos = await adminDb
+      .collection("bot_notificacoes")
+      .where("processado", "==", true)
+      .where("criado_em", "<", cutoff)
+      .limit(100)
+      .get();
+
+    if (!velhos.empty) {
+      const batch = adminDb.batch();
+      velhos.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch {
+    // limpeza é best-effort, não afeta o resultado principal
+  }
+
   return NextResponse.json({ ok: true, processado });
 }
