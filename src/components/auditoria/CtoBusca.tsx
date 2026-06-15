@@ -264,18 +264,19 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
               ✏️ Trace o caminho do cabo clicando nos pontos da rota no mapa. Ao finalizar, clique em <strong>Salvar Rota</strong>.
             </div>
 
-            {/* Mapa com desenho já ativo */}
+            {/* Mapa com desenho já ativo — só a CTO selecionada */}
             <CtoMap
               key="step-desenhar"
               clientLat={clientLat}
               clientLon={clientLon}
-              ctos={ctos}
+              ctos={ctos.filter((c) => c.name === selectedName)}
               selectedName={selectedName}
               onSelect={() => {}}
               onExpandChange={onExpandChange}
               viabilizacaoId={viabilizacaoId}
               trajetoExistente={trajetoExistente}
               autoStartDraw
+              referenceRouteOnly
               onTrajetoSalvo={(link) => {
                 onTrajetoSalvo?.(link);
                 onConfirm(confirmedData);

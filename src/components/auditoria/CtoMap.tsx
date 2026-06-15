@@ -83,6 +83,7 @@ interface Props {
   trajetoExistente?: { lat: number; lon: number }[];
   onTrajetoSalvo?: (link: string) => void;
   autoStartDraw?: boolean;
+  referenceRouteOnly?: boolean;
 }
 
 // =====================
@@ -270,7 +271,7 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 // =====================
 export default function CtoMap({
   clientLat, clientLon, ctos, selectedName, onSelect, onConfirm, onExpandChange,
-  viabilizacaoId, trajetoExistente, onTrajetoSalvo, autoStartDraw,
+  viabilizacaoId, trajetoExistente, onTrajetoSalvo, autoStartDraw, referenceRouteOnly,
 }: Props) {
   const selected = ctos.find((c) => c.name === selectedName);
   const clientIcon = createClientIcon();
@@ -698,9 +699,9 @@ export default function CtoMap({
           positions={selected.route.geometry}
           pathOptions={{
             color: selected.route.isStraightLine ? "#f97316" : "#16a34a",
-            weight: 4,
-            opacity: 0.85,
-            dashArray: selected.route.isStraightLine ? "8, 6" : undefined,
+            weight: referenceRouteOnly ? 2 : 4,
+            opacity: referenceRouteOnly ? 0.15 : 0.85,
+            dashArray: referenceRouteOnly ? "6, 10" : (selected.route.isStraightLine ? "8, 6" : undefined),
           }}
         />
       )}
