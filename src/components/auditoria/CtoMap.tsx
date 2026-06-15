@@ -323,6 +323,8 @@ export default function CtoMap({
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [salvandoTrajeto, setSalvandoTrajeto] = useState(false);
   const [trajetoLink, setTrajetoLink] = useState<string | null>(null);
+  const [salvandoImagem, setSalvandoImagem] = useState(false);
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
 
   const addDrawPoint = useCallback((p: [number, number]) => {
     setDrawPoints((prev) => [...prev, p]);
@@ -386,6 +388,44 @@ export default function CtoMap({
     }
   }
 
+  async function handleDownloadImagem() {
+    const container = mapWrapperRef.current?.querySelector(".leaflet-container") as HTMLElement | null;
+    if (!container) return;
+    setSalvandoImagem(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      // Desativa will-change temporariamente para evitar problema de CSS transform no html2canvas
+      const panes = Array.from(container.querySelectorAll('[class*="leaflet-"]')) as HTMLElement[];
+      const origWC = panes.map(el => el.style.willChange);
+      panes.forEach(el => { el.style.willChange = "auto"; });
+
+      const canvas = await html2canvas(container, {
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      panes.forEach((el, i) => { el.style.willChange = origWC[i]; });
+
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `mapa-${viabilizacaoId ?? "rota"}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    } catch (err) {
+      console.error("[CtoMap] Erro ao capturar imagem:", err);
+      alert("Não foi possível capturar a imagem. Tente tirar um print manual.");
+    } finally {
+      setSalvandoImagem(false);
+    }
+  }
+
   // Distâncias acumuladas entre pontos de medição
   const measureSegments = measurePoints.slice(1).map((p, i) => {
     const prev = measurePoints[i];
@@ -396,7 +436,7 @@ export default function CtoMap({
   const canDraw = !!viabilizacaoId;
 
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={mapWrapperRef} style={{ position: "relative" }}>
       {/* Seletor de camadas — canto superior esquerdo */}
       <div style={{
         position: "absolute", top: 10, left: 10, zIndex: 1000,
@@ -644,20 +684,19 @@ export default function CtoMap({
           whiteSpace: "nowrap",
         }}>
           <span style={{ color: "#15803d", fontWeight: 700 }}>✅ Rota finalizada!</span>
-          {viabilizacaoId && (
-            <a
-              href={`/api/rota/${viabilizacaoId}/imagem`}
-              download
-              style={{
-                background: "#0f766e", color: "white", border: "none",
-                borderRadius: 6, padding: "5px 12px", fontSize: 12,
-                fontWeight: 700, cursor: "pointer", fontFamily: "system-ui,sans-serif",
-                textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4,
-              }}
-            >
-              📸 Baixar PNG
-            </a>
-          )}
+          <button
+            onClick={handleDownloadImagem}
+            disabled={salvandoImagem}
+            style={{
+              background: "#0f766e", color: "white", border: "none",
+              borderRadius: 6, padding: "5px 12px", fontSize: 12,
+              fontWeight: 700, cursor: salvandoImagem ? "default" : "pointer",
+              fontFamily: "system-ui,sans-serif",
+              opacity: salvandoImagem ? 0.7 : 1,
+            }}
+          >
+            {salvandoImagem ? "Capturando..." : "📸 Baixar PNG"}
+          </button>
           <button
             onClick={() => navigator.clipboard.writeText(trajetoLink)}
             style={{
