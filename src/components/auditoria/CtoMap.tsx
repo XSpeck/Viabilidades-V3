@@ -741,39 +741,21 @@ export default function CtoMap({
           whiteSpace: "nowrap",
         }}>
           <span style={{ color: "#15803d", fontWeight: 700 }}>✅ Rota finalizada!</span>
-          <button
-            onClick={handleDownloadImagem}
-            disabled={salvandoImagem}
-            style={{
-              background: "#0f766e", color: "white", border: "none",
-              borderRadius: 6, padding: "5px 12px", fontSize: 12,
-              fontWeight: 700, cursor: salvandoImagem ? "default" : "pointer",
-              fontFamily: "system-ui,sans-serif",
-              opacity: salvandoImagem ? 0.7 : 1,
-            }}
-          >
-            {salvandoImagem ? "Capturando..." : "📸 Baixar PNG"}
-          </button>
-          <button
-            onClick={() => navigator.clipboard.writeText(trajetoLink)}
-            style={{
-              background: "white", color: "#374151", border: "1px solid #d1d5db",
-              borderRadius: 6, padding: "5px 10px", fontSize: 11,
-              fontWeight: 600, cursor: "pointer", fontFamily: "system-ui,sans-serif",
-            }}
-          >
-            📋 KML
-          </button>
           {onContinuar && (
             <button
-              onClick={onContinuar}
+              disabled={salvandoImagem}
+              onClick={async () => {
+                await handleDownloadImagem();
+                onContinuar();
+              }}
               style={{
-                background: "#16a34a", color: "white", border: "none",
-                borderRadius: 6, padding: "5px 12px", fontSize: 12,
-                fontWeight: 700, cursor: "pointer", fontFamily: "system-ui,sans-serif",
+                background: salvandoImagem ? "#9ca3af" : "#16a34a", color: "white", border: "none",
+                borderRadius: 6, padding: "5px 14px", fontSize: 12,
+                fontWeight: 700, cursor: salvandoImagem ? "default" : "pointer",
+                fontFamily: "system-ui,sans-serif",
               }}
             >
-              Prosseguir →
+              {salvandoImagem ? "📸 Baixando..." : "📸 Baixar e Prosseguir →"}
             </button>
           )}
           <button
