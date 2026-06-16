@@ -926,13 +926,28 @@ export async function getViabilizacoesRelatorio(
   const cacheKey = `viab_relatorio_${dataInicio}_${dataFim}_v1`;
   const cached = getCached<Viabilizacao[]>(cacheKey);
   if (cached) return cached;
-  const q = query(
+
+  const fim = dataFim + "T23:59:59";
+
+  // Query 1: auditadas no período (aprovadas, rejeitadas, utp)
+  const qAuditoria = query(
     collection(db, "viabilizacoes"),
     where("data_auditoria", ">=", dataInicio),
-    where("data_auditoria", "<=", dataFim + "T23:59:59")
+    where("data_auditoria", "<=", fim)
   );
-  const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  // Query 2: finalizadas/instaladas no período cujo audit foi antes do período
+  const qFinalizacao = query(
+    collection(db, "viabilizacoes"),
+    where("data_finalizacao", ">=", dataInicio),
+    where("data_finalizacao", "<=", fim)
+  );
+
+  const [snap1, snap2] = await Promise.all([getDocs(qAuditoria), getDocs(qFinalizacao)]);
+  const seen = new Set<string>();
+  const data: Viabilizacao[] = [];
+  for (const d of [...snap1.docs, ...snap2.docs]) {
+    if (!seen.has(d.id)) { seen.add(d.id); data.push(fromFirestore<Viabilizacao>(d)); }
+  }
   setCache(cacheKey, data);
   return data;
 }

@@ -101,7 +101,7 @@ export default function RelatoriosPage() {
     // FTTH aprovadas (excluindo UTP e rejeitadas arquivadas)
     viabs.filter((v) => v.tipo_instalacao === "FTTH" && !isUTP(v) && (
       v.status === "aprovado" ||
-      (v.status === "finalizado" && v.status_instalacao === "instalado")
+      (v.status === "finalizado" && !v.motivo_rejeicao)
     )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
@@ -202,7 +202,7 @@ export default function RelatoriosPage() {
   // FTTH
   const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
     v.status === "aprovado" ||
-    (v.status === "finalizado" && v.status_instalacao === "instalado")
+    (v.status === "finalizado" && !v.motivo_rejeicao)
   ));
   const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
     v.status === "rejeitado" ||
