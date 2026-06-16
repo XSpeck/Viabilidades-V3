@@ -356,6 +356,7 @@ export default function RelatoriosPage() {
     _id:         v.id,
     _arquivado:  v.status === "finalizado" || !!v.data_finalizacao,
     Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    Status:      v.status === "finalizado" ? "Arquivado" : "UTP",
     "Plus Code": locationToPlusCode(v.plus_code_cliente),
     Tipo:        v.tipo_instalacao,
     Prédio:      v.predio_ftta ?? "-",
