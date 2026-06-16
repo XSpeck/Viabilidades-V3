@@ -104,7 +104,7 @@ export default function RelatoriosPage() {
       (v.status === "finalizado" && !v.motivo_rejeicao)
     )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
-      if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
+      if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.status === "finalizado" ? (v.data_finalizacao ?? v.data_auditoria) : v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
     });
 
     // FTTH rejeitadas (incluindo arquivadas)
@@ -253,6 +253,15 @@ export default function RelatoriosPage() {
     finalizado:   "Finalizado",
   };
   const labelForStatus = (v: Viabilizacao): string => {
+    if (v.status === "aprovado") {
+      const sub: Record<string, string> = {
+        aguardando_proposta:    "Aprovado — Ag. proposta",
+        proposta_enviada:       "Aprovado — Proposta enviada",
+        aguardando_confirmacao: "Aprovado — Ag. confirmação",
+        agendado:               "Aprovado — Agendado",
+      };
+      return (v.status_instalacao && sub[v.status_instalacao]) ?? "Aprovado";
+    }
     if (v.status !== "finalizado") return statusLabelRel[v.status] ?? v.status;
     if (v.status_instalacao === "instalado")      return "Instalado";
     if (v.status_predio === "estruturado")        return "Estruturado";
