@@ -16,7 +16,7 @@ import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
 
-type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "agendado" | "contestado";
+type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "contestado";
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
@@ -43,7 +43,6 @@ export default function AuditoriaPage() {
     predios:    items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio).length,
     aguardando:  items.filter((i) => i.status_predio === "aguardando_dados").length,
     agendar:     items.filter((i) => ["pronto_auditoria", "proposta_visita"].includes(i.status_predio ?? "")).length,
-    agendado:    items.filter((i) => i.status_predio === "agendado").length,
     contestado:  items.filter((i) => i.status === "em_revisao" && i.revisao_tipo === "contestado").length,
   };
 
@@ -55,7 +54,6 @@ export default function AuditoriaPage() {
       { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
       { key: "aguardando",  label: `⏳ Ag. dados (${counts.aguardando})` },
       { key: "agendar",     label: `📅 Agendar (${counts.agendar})` },
-      { key: "agendado",    label: `✅ Agendado (${counts.agendado})` },
       { key: "contestado",  label: `💬 Contestações (${counts.contestado})` },
     ] as { key: AuditoriaFilter; label: string }[]
   ).filter((c) => c.key === "todos" || counts[c.key] > 0);
@@ -67,7 +65,6 @@ export default function AuditoriaPage() {
       case "predios":    return ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !v.urgente && !v.status_predio;
       case "aguardando":  return v.status_predio === "aguardando_dados";
       case "agendar":     return ["pronto_auditoria", "proposta_visita"].includes(v.status_predio ?? "");
-      case "agendado":    return v.status_predio === "agendado";
       case "contestado":  return v.status === "em_revisao" && v.revisao_tipo === "contestado";
       default:           return true;
     }

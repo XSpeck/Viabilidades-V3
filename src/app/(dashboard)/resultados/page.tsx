@@ -115,7 +115,8 @@ export default function ResultadosPage() {
     });
 
   async function handleFinalizar(id: string) {
-    await finalizarViabilizacao(id);
+    try { await finalizarViabilizacao(id); }
+    catch { alert("Erro ao finalizar. Tente novamente."); return; }
     load();
   }
 
@@ -269,7 +270,6 @@ export default function ResultadosPage() {
                 r={r}
                 onFinalizar={handleFinalizar}
                 onRefresh={load}
-                showData={r.status === "aprovado" || r.status_predio === "estruturado"}
               />
             </div>
           ))}
@@ -412,8 +412,8 @@ export default function ResultadosPage() {
   );
 }
 
-function ResultCard({ r, onFinalizar, onRefresh, showData }: {
-  r: Viabilizacao; onFinalizar: (id: string) => void; onRefresh: () => void; showData?: boolean;
+function ResultCard({ r, onFinalizar, onRefresh }: {
+  r: Viabilizacao; onFinalizar: (id: string) => void; onRefresh: () => void;
 }) {
   const { user } = useAuth();
   const isDevolvida = r.status === "em_revisao" && r.revisao_tipo === "devolvido";

@@ -579,17 +579,6 @@ export async function getInstalacoesPendentes(): Promise<Viabilizacao[]> {
   return result;
 }
 
-// Retorna instalações FTTA/Cond via estrutura — gerenciadas na Agenda FTTA/UTP
-export async function getInstalacoesAgendaFTTA(): Promise<Viabilizacao[]> {
-  const q = query(collection(db, "viabilizacoes"), where("status_predio", "==", "estruturado"));
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
-    .filter((v) => !!v.status_instalacao)
-    .filter((v) => !v.data_finalizacao)
-    .sort((a, b) => (a.data_solicitacao ?? "") < (b.data_solicitacao ?? "") ? -1 : 1);
-}
-
 // Dispara quando FTTH é aprovado — habilita o usuário a propor data
 export async function iniciarAgendamentoInstalacao(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "aguardando_proposta" });
