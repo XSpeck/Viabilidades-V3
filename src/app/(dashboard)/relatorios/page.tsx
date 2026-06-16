@@ -265,7 +265,8 @@ export default function RelatoriosPage() {
   const rowsFtthAp = ftthAprovadas.map((v) => ({
     _id:          v.id,
     _arquivado:   v.status === "finalizado" || !!v.data_finalizacao,
-    Data:         formatDateTime(v.data_auditoria),
+    Data:         formatDateTime(v.status === "finalizado" ? (v.data_finalizacao ?? v.data_auditoria) : v.data_auditoria),
+    Status:       labelForStatus(v),
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
     Usuário:      v.usuario,
