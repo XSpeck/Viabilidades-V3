@@ -49,7 +49,9 @@ function TableSearch({ value, onChange }: { value: string; onChange: (v: string)
 function matchSearch(row: Record<string, string | number | boolean | undefined>, q: string): boolean {
   if (!q.trim()) return true;
   const lower = q.toLowerCase().replace(/\+/g, "");
-  return Object.values(row).some((v) => String(v ?? "").toLowerCase().replace(/\+/g, "").includes(lower));
+  return Object.entries(row)
+    .filter(([k]) => !k.startsWith("_"))
+    .some(([, v]) => String(v ?? "").toLowerCase().replace(/\+/g, "").includes(lower));
 }
 
 // ─── Page ─────────────────────────────────────────────────────────
@@ -71,8 +73,12 @@ export default function RelatoriosPage() {
   const [showMap, setShowMap] = useState(false);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ col: string; dir: "asc" | "desc" } | null>(null);
 
   function setSearch(tab: TabKey, v: string) { setSearches((p) => ({ ...p, [tab]: v })); }
+  function toggleSort(col: string) {
+    setSort((s) => s?.col === col ? { col, dir: s.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
+  }
 
   async function buildMapPoints(
     viabs: Viabilizacao[],
@@ -405,7 +411,14 @@ export default function RelatoriosPage() {
   type RowType = Record<string, string | number | boolean | undefined>;
   const allRows: Record<TabKey, RowType[]> = { ftth_ap: rowsFtthAp, ftth_rej: rowsFtthRej, predios: rowsPredios, condominios: rowsCondominios, ftta_rej: rowsFttaRej, utp: rowsUtp, estruturados: rowsEstru, sem_viab: rowsSemViab };
   const csvNames: Record<TabKey, string> = { ftth_ap: "ftth_aprovadas.csv", ftth_rej: "ftth_rejeitadas.csv", predios: "ftta_predios.csv", condominios: "ftta_condominios.csv", ftta_rej: "ftta_rejeitados.csv", utp: "utps.csv", estruturados: "predios_estruturados.csv", sem_viab: "predios_sem_viabilidade.csv" };
-  const currentRows = allRows[activeTab].filter((r) => matchSearch(r, searches[activeTab]));
+  const filteredRows = allRows[activeTab].filter((r) => matchSearch(r, searches[activeTab]));
+  const currentRows = sort
+    ? [...filteredRows].sort((a, b) => {
+        const av = String(a[sort.col] ?? "").toLowerCase();
+        const bv = String(b[sort.col] ?? "").toLowerCase();
+        return sort.dir === "asc" ? av.localeCompare(bv, "pt") : bv.localeCompare(av, "pt");
+      })
+    : filteredRows;
 
   return (
     <div className="space-y-6">
@@ -566,7 +579,7 @@ export default function RelatoriosPage() {
         {/* Tabs */}
         <div className="flex overflow-x-auto border-b">
           {tabs.map((t) => (
-            <button key={t.key} onClick={() => setActiveTab(t.key)}
+            <button key={t.key} onClick={() => { setActiveTab(t.key); setSort(null); }}
               className={`flex-shrink-0 px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                 activeTab === t.key ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50" : "text-gray-500 hover:bg-gray-50"
               }`}>
@@ -599,7 +612,15 @@ export default function RelatoriosPage() {
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
                 <tr>
                   {Object.keys(currentRows[0]).filter((h) => !h.startsWith("_")).map((h) => (
-                    <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
+                    <th key={h} onClick={() => toggleSort(h)}
+                      className="px-4 py-3 text-left whitespace-nowrap cursor-pointer select-none hover:bg-gray-100">
+                      <span className="inline-flex items-center gap-1">
+                        {h}
+                        <span className="text-gray-400 text-[10px]">
+                          {sort?.col === h ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}
+                        </span>
+                      </span>
+                    </th>
                   ))}
                   {"_id" in currentRows[0] && (
                     <th className="px-4 py-3 text-left whitespace-nowrap">Ações</th>
