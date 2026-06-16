@@ -128,10 +128,10 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_estruturacao ?? v.data_auditoria) });
     });
 
-    // FTTA rejeitados (incluindo arquivados)
+    // FTTA rejeitados (incluindo arquivados, excluindo UTP)
     viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
       v.status === "rejeitado" ||
-      (v.status === "finalizado" && (v.status_predio === "rejeitado" || !!v.motivo_rejeicao))
+      (v.status === "finalizado" && (v.status_predio === "rejeitado" || (!!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")))
     )).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftta_rej_${v.id}`, ...geo, category: "ftta_rej", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria), extra: v.motivo_rejeicao ?? undefined });
@@ -219,7 +219,7 @@ export default function RelatoriosPage() {
   );
   const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
     v.status === "rejeitado" ||
-    (v.status === "finalizado" && (v.status_predio === "rejeitado" || !!v.motivo_rejeicao))
+    (v.status === "finalizado" && (v.status_predio === "rejeitado" || (!!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")))
   ));
 
   // UTP
@@ -342,6 +342,7 @@ export default function RelatoriosPage() {
     _id:           v.id,
     _arquivado:    v.status === "finalizado" || !!v.data_finalizacao,
     Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    Status:        v.status === "finalizado" ? "Arquivado" : "Sem viabilidade",
     Tipo:          v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
     Motivo:        v.motivo_rejeicao ?? "-",
