@@ -60,7 +60,8 @@ export default function RelatoriosPage() {
   const [viabilizacoes, setViabilizacoes] = useState<Viabilizacao[]>([]);
   const [atendidos, setAtendidos] = useState<PredioAtendido[]>([]);
   const [semViab, setSemViab] = useState<PredioSemViabilidade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
@@ -149,12 +150,10 @@ export default function RelatoriosPage() {
   function load() {
     setLoading(true);
     Promise.all([getAllViabilizacoes(), getPrediosAtendidos(), getPrediosSemViabilidade()])
-      .then(([v, a, s]) => { setViabilizacoes(v); setAtendidos(a); setSemViab(s); })
+      .then(([v, a, s]) => { setViabilizacoes(v); setAtendidos(a); setSemViab(s); setLoaded(true); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }
-
-  useEffect(() => { if (user?.nivel === 1) load(); }, [user]);
 
   async function handleArquivar(id: string) {
     setActionPending(id);
@@ -188,7 +187,6 @@ export default function RelatoriosPage() {
   }, [dataInicio, dataFim, showMap, loading]);
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   // ── Date filter ──────────────────────────────────────────────
   function inRange(dateStr?: string): boolean {
@@ -418,12 +416,14 @@ export default function RelatoriosPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">📊 Relatórios e Análises</h1>
-        <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-        </button>
+        {loaded && (
+          <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+          </button>
+        )}
       </div>
 
-      {/* Filtro de data */}
+      {/* Filtro de data + busca */}
       <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-4 items-end">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Data Início</label>
@@ -444,7 +444,26 @@ export default function RelatoriosPage() {
             📊 {dataInicio ? new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "início"} até {dataFim ? new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR") : "hoje"}
           </p>
         )}
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          {loading
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
+            : <><Search className="w-4 h-4" /> {loaded ? "Atualizar" : "Buscar"}</>}
+        </button>
       </div>
+
+      {/* Estado inicial — aguardando busca */}
+      {!loaded && !loading && (
+        <div className="text-center py-16 text-gray-400">
+          <p className="text-4xl mb-3">📊</p>
+          <p className="text-sm">Selecione o período e clique em <strong className="text-gray-600">Buscar</strong> para carregar os dados.</p>
+        </div>
+      )}
+
+      {loaded && <>
 
       {/* KPIs — Tecnologias */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -661,6 +680,8 @@ export default function RelatoriosPage() {
           </div>
         )}
       </div>
+
+      </>}
     </div>
   );
 }
