@@ -57,6 +57,7 @@ export default function RotaMapaDownload({
   viabilizacaoId,
   nomeCliente,
 }: Props) {
+  const [open, setOpen] = useState(false);
   const [clientLL, setClientLL] = useState<L.LatLng | null>(null);
   const [ctoLL, setCtoLL] = useState<L.LatLng | null>(null);
   const [routeLL, setRouteLL] = useState<L.LatLng[]>([]);
@@ -178,26 +179,38 @@ export default function RotaMapaDownload({
 
   return (
     <div className="mt-2 space-y-2">
-      <div style={{ height: 260, borderRadius: 10, overflow: "hidden", border: "1px solid #e9d5ff" }}>
-        <MapContainer
-          center={clientLL ?? L.latLng(-28.6775, -49.3696)}
-          zoom={15}
-          style={{ height: "100%", width: "100%" }}
-          zoomControl={false}
-          scrollWheelZoom={false}
-        >
-          <MapReady onReady={onMapReady} />
-          <TilesLayer />
-          {allPoints.length > 0 && <FitRoute points={allPoints} />}
-        </MapContainer>
-      </div>
       <button
-        onClick={handleBaixar}
-        disabled={baixando || allPoints.length === 0}
-        className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+        onClick={() => setOpen((s) => !s)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-purple-200 rounded-lg text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors"
       >
-        {baixando ? "Capturando..." : "📸 Baixar imagem do mapa"}
+        <span>🗺️ Mapa da rota do cabo</span>
+        <span className="text-gray-400 text-xs">{open ? "▲ Minimizar" : "▼ Ver mapa"}</span>
       </button>
+
+      {open && (
+        <>
+          <div style={{ height: 260, borderRadius: 10, overflow: "hidden", border: "1px solid #e9d5ff" }}>
+            <MapContainer
+              center={clientLL ?? L.latLng(-28.6775, -49.3696)}
+              zoom={15}
+              style={{ height: "100%", width: "100%" }}
+              zoomControl={false}
+              scrollWheelZoom={false}
+            >
+              <MapReady onReady={onMapReady} />
+              <TilesLayer />
+              {allPoints.length > 0 && <FitRoute points={allPoints} />}
+            </MapContainer>
+          </div>
+          <button
+            onClick={handleBaixar}
+            disabled={baixando || allPoints.length === 0}
+            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            {baixando ? "Capturando..." : "📸 Baixar imagem do mapa"}
+          </button>
+        </>
+      )}
     </div>
   );
 }
