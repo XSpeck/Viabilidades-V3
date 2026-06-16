@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -71,10 +71,6 @@ export default function AnaliseRedePage() {
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
   const [mapStatusFiltro, setMapStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
 
-  if (!canAccess(user ?? null, "analise-rede")) return (
-    <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>
-  );
-
   const load = useCallback(async () => {
     setLoading(true);
     try { setDemandas(await getDemandas()); }
@@ -82,6 +78,10 @@ export default function AnaliseRedePage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (!canAccess(user ?? null, "analise-rede")) return (
+    <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>
+  );
 
   const filtradas = demandas
     .filter((d) => d.status !== "arquivada")
@@ -323,10 +323,11 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     if (novoStatus === "concluida") { setShowConcluir(true); return; }
     setSaving(true);
     try {
-      const extra = novoStatus === "aberta"
-        ? { data_agendamento: undefined, periodo_agendamento: undefined, data_conclusao: undefined, obs_conclusao: undefined }
-        : {};
-      await updateDemanda(d.id, { status: novoStatus as DemandaRede["status"], ...extra });
+      if (novoStatus === "aberta") {
+        await reabrirDemanda(d.id);
+      } else {
+        await updateDemanda(d.id, { status: novoStatus as DemandaRede["status"] });
+      }
       setShowStatusChange(false);
       onRefresh();
     } finally { setSaving(false); }
@@ -350,7 +351,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   async function handleReabrir() {
     setSaving(true);
     try {
-      await updateDemanda(d.id, { status: "aberta", data_agendamento: undefined, periodo_agendamento: undefined, data_conclusao: undefined, obs_conclusao: undefined });
+      await reabrirDemanda(d.id);
       onRefresh();
     } finally { setSaving(false); }
   }

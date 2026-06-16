@@ -1104,6 +1104,17 @@ export async function desarquivarDemanda(id: string): Promise<void> {
   await updateDemanda(id, { status: "concluida" });
 }
 
+export async function reabrirDemanda(id: string): Promise<void> {
+  await updateDoc(doc(db, "demandas_rede", id), {
+    status: "aberta",
+    data_agendamento: deleteField(),
+    periodo_agendamento: deleteField(),
+    data_conclusao: deleteField(),
+    obs_conclusao: deleteField(),
+  });
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
+}
+
 export async function editarInfoDemanda(
   id: string,
   data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnicos">,
