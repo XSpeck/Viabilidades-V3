@@ -125,7 +125,7 @@ export default function RelatoriosPage() {
     // FTTA aprovados (Prédio ou Condomínio estruturado)
     viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado").forEach((v) => {
       const geo = decode(v.plus_code_cliente);
-      if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+      if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_estruturacao ?? v.data_auditoria) });
     });
 
     // FTTA rejeitados (incluindo arquivados)
@@ -214,8 +214,8 @@ export default function RelatoriosPage() {
     : "0.0";
 
   // FTTA (Prédio + Condomínio estruturados/rejeitados)
-  const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) &&
-    (v.status_predio === "estruturado" || (v.status === "finalizado" && !v.motivo_rejeicao && v.status_predio !== "rejeitado"))
+  const fttaAprovados  = filtrado.filter((v) =>
+    ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado"
   );
   const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
     v.status === "rejeitado" ||
@@ -225,14 +225,12 @@ export default function RelatoriosPage() {
   // UTP
   const utpTotal = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
 
-  // Prédios e Condomínios estruturados (separados) — inclui finalizados não-rejeitados
+  // Prédios e Condomínios estruturados (separados)
   const prediosEstruturados = filtrado.filter((v) =>
-    v.tipo_instalacao === "Prédio" && v.status_predio !== "rejeitado" && !v.motivo_rejeicao &&
-    (v.status_predio === "estruturado" || v.status === "finalizado")
+    v.tipo_instalacao === "Prédio" && v.status_predio === "estruturado"
   );
   const condominiosEstruturados = filtrado.filter((v) =>
-    v.tipo_instalacao === "Condomínio" && v.status_predio !== "rejeitado" && !v.motivo_rejeicao &&
-    (v.status_predio === "estruturado" || v.status === "finalizado")
+    v.tipo_instalacao === "Condomínio" && v.status_predio === "estruturado"
   );
 
   // Tabs de detalhe FTTA: aprovados = estruturados; rejeitados = tab separado
@@ -303,7 +301,7 @@ export default function RelatoriosPage() {
   const mapPredioRow = (v: Viabilizacao) => ({
     _id:         v.id,
     _arquivado:  v.status === "finalizado" || !!v.data_finalizacao,
-    Data:        formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    Data:        formatDateTime(v.data_estruturacao ?? v.data_auditoria ?? v.data_solicitacao),
     Tipo:        (v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP") ? "UTP" : v.tipo_instalacao,
     "Prédio/Cond.": v.predio_ftta ?? "-",
     "Casa/Apto": v.andar_predio ?? "-",
@@ -324,18 +322,18 @@ export default function RelatoriosPage() {
   const rowsCondominios = condominiosViab.map((v) => ({
     _id:           v.id,
     _arquivado:    v.status === "finalizado" || !!v.data_finalizacao,
-    Data:          formatDateTime(v.data_auditoria ?? v.data_solicitacao),
+    Data:          formatDateTime(v.data_estruturacao ?? v.data_auditoria ?? v.data_solicitacao),
     Condomínio:    v.predio_ftta ?? "-",
     "Casa/Lote":   v.andar_predio ?? "-",
+    Bloco:         v.bloco_predio ?? "-",
     Status:        labelForStatus(v),
     "Plus Code":   locationToPlusCode(v.plus_code_cliente),
     Solicitante:   v.usuario,
     Cliente:       v.nome_cliente ?? "-",
-    CTO:           v.cto_numero ?? "-",
+    CDOI:          v.cdoi ?? "-",
     OLT:           v.olt ?? "-",
     Portas:        v.portas_disponiveis ?? "-",
-    "Menor RX":    v.menor_rx ? `${v.menor_rx} dBm` : "-",
-    Distância:     v.distancia_cliente ?? "-",
+    "Média RX":    v.media_rx ? `${v.media_rx} dBm` : "-",
     Auditor:       v.auditado_por ?? "-",
   }));
 

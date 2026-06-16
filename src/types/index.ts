@@ -129,6 +129,7 @@ export interface Viabilizacao {
   // Timestamps
   data_solicitacao?: string;
   data_auditoria?: string;
+  data_estruturacao?: string;
   data_finalizacao?: string;
   data_solicitacao_predio?: string;
   status_atualizado_em?: string;

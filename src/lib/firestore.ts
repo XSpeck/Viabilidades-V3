@@ -518,6 +518,7 @@ export async function finalizarEstruturado(
     status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
     status_agendamento: "concluido",
+    data_estruturacao: new Date().toISOString(),
   });
   void enqueueNotificacao(id, "aprovado");
 }
