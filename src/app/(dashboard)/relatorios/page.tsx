@@ -631,7 +631,7 @@ export default function RelatoriosPage() {
                 {currentRows.map((row, i) => (
                   <tr key={i} className="hover:bg-gray-50">
                     {Object.entries(row).filter(([k]) => !k.startsWith("_")).map(([k, val]) => (
-                      <td key={k} className="px-4 py-3 text-gray-700 whitespace-nowrap text-xs max-w-[200px] truncate">
+                      <td key={k} title={String(val ?? "")} className="px-4 py-3 text-gray-700 whitespace-nowrap text-xs">
                         {String(val ?? "-")}
                       </td>
                     ))}
