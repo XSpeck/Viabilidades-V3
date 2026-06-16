@@ -254,6 +254,7 @@ export default function RelatoriosPage() {
   };
   const labelForStatus = (v: Viabilizacao): string => {
     if (v.status === "aprovado") {
+      if (v.status_instalacao === "instalado") return "Instalado";
       const sub: Record<string, string> = {
         aguardando_proposta:    "Aprovado — Ag. proposta",
         proposta_enviada:       "Aprovado — Proposta enviada",
