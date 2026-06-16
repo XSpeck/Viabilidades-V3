@@ -292,6 +292,7 @@ export default function RelatoriosPage() {
     _id:          v.id,
     _arquivado:   v.status === "finalizado" || !!v.data_finalizacao,
     Data:         formatDateTime(v.data_auditoria),
+    Status:       v.status === "finalizado" ? "Arquivado" : "Sem viabilidade",
     "Plus Code":  locationToPlusCode(v.plus_code_cliente),
     Cliente:      v.nome_cliente ?? "-",
     Motivo:       v.motivo_rejeicao ?? "-",
