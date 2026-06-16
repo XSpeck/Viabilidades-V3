@@ -140,7 +140,7 @@ export default function RelatoriosPage() {
     // Prédios sem viabilidade (cadastro)
     svs.forEach((s) => {
       const geo = decode(s.localizacao);
-      if (geo) points.push({ id: `sem_viab_${s.id}`, ...geo, category: "sem_viab", cliente: s.condominio, plusCode: locationToPlusCode(s.localizacao), extra: s.observacao });
+      if (geo) points.push({ id: `sem_viab_${s.id}`, ...geo, category: "sem_viab", cliente: s.condominio, plusCode: locationToPlusCode(s.localizacao), data: formatDateTime(s.data_registro), extra: s.observacao });
     });
 
     setMapPoints(points);
