@@ -37,6 +37,8 @@ export default function ResultadosPage() {
   const [histTipo, setHistTipo] = useState<TipoFilter>("todos");
   const [histStatus, setHistStatus] = useState("todos");
   const [histSort, setHistSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
+  const [histDataInicio, setHistDataInicio] = useState("");
+  const [histDataFim, setHistDataFim] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -107,6 +109,12 @@ export default function ResultadosPage() {
           (v.status_instalacao != null && v.status_instalacao !== "instalado")
         );
       return v.status === histStatus;
+    })
+    .filter((v) => {
+      const dt = (v.data_solicitacao ?? "").slice(0, 10);
+      if (histDataInicio && dt < histDataInicio) return false;
+      if (histDataFim   && dt > histDataFim)     return false;
+      return true;
     })
     .filter((v) => {
       if (!histSearch.trim()) return true;
@@ -337,10 +345,24 @@ export default function ResultadosPage() {
                     className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     {statusOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                   </select>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-400">De</span>
+                    <input type="date" value={histDataInicio} onChange={(e) => setHistDataInicio(e.target.value)}
+                      className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <span className="text-xs text-gray-400">até</span>
+                    <input type="date" value={histDataFim} onChange={(e) => setHistDataFim(e.target.value)}
+                      className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  </div>
                   <button onClick={downloadHistoricoCSV}
                     className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium">
                     <Download className="w-3.5 h-3.5" /> CSV
                   </button>
+                  {(histSearch || histTipo !== "todos" || histStatus !== "todos" || histDataInicio || histDataFim) && (
+                    <button onClick={() => { setHistSearch(""); setHistTipo("todos"); setHistStatus("todos"); setHistDataInicio(""); setHistDataFim(""); }}
+                      className="text-xs text-gray-400 hover:text-gray-600 underline">
+                      Limpar filtros
+                    </button>
+                  )}
                 </div>
 
                 <p className="text-xs text-gray-400">{historicoFiltrado.length} de {historico.length} registro(s)</p>
