@@ -962,8 +962,8 @@ export async function getPrediosAtendidosRelatorio(
   if (cached) return cached;
   const q = query(
     collection(db, "predios_atendidos"),
-    where("data_estruturacao", ">=", dataInicio),
-    where("data_estruturacao", "<=", dataFim + "T23:59:59"),
+    where("data_estruturacao", ">=", Timestamp.fromDate(new Date(dataInicio))),
+    where("data_estruturacao", "<=", Timestamp.fromDate(new Date(dataFim + "T23:59:59"))),
     orderBy("data_estruturacao", "desc")
   );
   const snap = await getDocs(q);
@@ -981,8 +981,8 @@ export async function getPrediosSemViabilidadeRelatorio(
   if (cached) return cached;
   const q = query(
     collection(db, "predios_sem_viabilidade"),
-    where("data_registro", ">=", dataInicio),
-    where("data_registro", "<=", dataFim + "T23:59:59"),
+    where("data_registro", ">=", Timestamp.fromDate(new Date(dataInicio))),
+    where("data_registro", "<=", Timestamp.fromDate(new Date(dataFim + "T23:59:59"))),
     orderBy("data_registro", "desc")
   );
   const snap = await getDocs(q);
