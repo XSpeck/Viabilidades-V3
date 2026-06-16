@@ -59,17 +59,17 @@ export default function ResultadosPage() {
 
   function downloadHistoricoCSV() {
     const rows = historicoFiltrado.map((v) => ({
-      Data:        formatDateTime(v.data_solicitacao),
-      Tipo:        v.tipo_instalacao,
-      Cliente:     v.nome_cliente ?? "-",
-      "Plus Code": locationToPlusCode(v.plus_code_cliente),
-      Prédio:      v.predio_ftta ?? "-",
-      Status:      v.status,
-      "CTO/CDOI":  v.cdoi ?? v.cto_numero ?? "-",
-      OLT:         v.olt ?? "-",
-      Distância:   v.distancia_cliente ?? "-",
-      Auditor:     v.auditado_por ?? "-",
-      "Dt. Audit.":formatDateTime(v.data_auditoria),
+      Data:          formatDateTime(v.data_solicitacao),
+      Tipo:          v.tipo_instalacao,
+      Cliente:       v.nome_cliente ?? "-",
+      "Plus Code":   locationToPlusCode(v.plus_code_cliente),
+      "Prédio/Cond": v.predio_ftta ?? "-",
+      "CTO/CDOI":    v.cdoi ?? v.cto_numero ?? "-",
+      OLT:           v.olt ?? "-",
+      Distância:     v.distancia_cliente ?? "-",
+      Status:        v.status,
+      Auditor:       v.auditado_por ?? "-",
+      "Dt. Audit.":  formatDateTime(v.data_auditoria),
     }));
     if (!rows.length) return;
     const headers = Object.keys(rows[0]);
@@ -339,8 +339,11 @@ export default function ResultadosPage() {
                           <th className="px-3 py-3 text-left whitespace-nowrap">Plus Code</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Prédio/Cond.</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">CTO / CDOI</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">OLT</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Distância</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Status</th>
                           <th className="px-3 py-3 text-left whitespace-nowrap">Auditor</th>
+                          <th className="px-3 py-3 text-left whitespace-nowrap">Dt. Audit.</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -386,16 +389,19 @@ export default function ResultadosPage() {
                                   return <span className="text-xs">{isUTP ? "📡 UTP" : v.tipo_instalacao === "FTTH" ? "🏠 FTTH" : v.tipo_instalacao === "Prédio" ? "🏢 Prédio" : "🏘️ Condomínio"}</span>;
                                 })()}
                               </td>
-                              <td className="px-3 py-2.5 max-w-[140px] truncate">{v.nome_cliente ?? "-"}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap" title={v.nome_cliente ?? undefined}>{v.nome_cliente ?? "-"}</td>
                               <td className="px-3 py-2.5 font-mono text-xs text-gray-500 whitespace-nowrap"><a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(v.plus_code_cliente)}</a></td>
-                              <td className="px-3 py-2.5 max-w-[140px] truncate text-gray-600">{v.predio_ftta ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap" title={v.predio_ftta ?? undefined}>{v.predio_ftta ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.cdoi ?? v.cto_numero ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.olt ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{v.distancia_cliente ?? "-"}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 <span title={v.motivo_desistencia ?? v.motivo_rejeicao ?? undefined} className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] ?? "bg-gray-100 text-gray-600"}`}>
                                   {statusLabel[v.status] ?? v.status}
                                 </span>
                               </td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{v.auditado_por ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(v.data_auditoria)}</td>
                             </tr>
                           );
                         })}
