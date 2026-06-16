@@ -119,7 +119,7 @@ export default function RelatoriosPage() {
     // UTP (todos os tipos)
     viabs.filter(isUTP).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
-      if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria) });
+      if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria ?? v.data_solicitacao) });
     });
 
     // FTTA aprovados (Prédio ou Condomínio estruturado)
