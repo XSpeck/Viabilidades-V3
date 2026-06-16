@@ -76,7 +76,6 @@ export default function RelatoriosPage() {
 
   async function buildMapPoints(
     viabs: Viabilizacao[],
-    atnd: PredioAtendido[],
     svs: PredioSemViabilidade[]
   ) {
     setLoadingMap(true);
@@ -189,10 +188,10 @@ export default function RelatoriosPage() {
 
   useEffect(() => {
     if (showMap && !loading && loaded) {
-      buildMapPoints(filtrado, atendidos, semViab);
+      buildMapPoints(filtrado, semViab);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showMap, loading]);
+  }, [showMap, loading, viabilizacoes]);
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
@@ -221,9 +220,6 @@ export default function RelatoriosPage() {
     v.status === "rejeitado" ||
     (v.status === "finalizado" && (v.status_predio === "rejeitado" || (!!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")))
   ));
-
-  // UTP
-  const utpTotal = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP").length;
 
   // Prédios e Condomínios estruturados (separados)
   const prediosEstruturados = filtrado.filter((v) =>
@@ -384,15 +380,15 @@ export default function RelatoriosPage() {
   }));
 
   // Tab config
-  const tabs: { key: TabKey; label: string; count: number }[] = [
-    { key: "ftth_ap",      label: "✅ FTTH Aprovadas",      count: ftthAprovadas.length },
-    { key: "ftth_rej",     label: "❌ FTTH Rejeitadas",     count: ftthRejeitadas.length },
-    { key: "predios",      label: "🏢 FTTA Prédios",        count: prediosViab.length },
-    { key: "condominios",  label: "🏘️ FTTA Condomínios",   count: condominiosViab.length },
-    { key: "ftta_rej",     label: "❌ FTTA Rejeitados",     count: fttaRejeitados.length },
-    { key: "utp",          label: "🔌 UTPs",                count: utpFiltrado.length },
-    { key: "estruturados", label: "🏗️ Estruturados",        count: atendidosFiltrados.length },
-    { key: "sem_viab",     label: "🚫 Sem Viabilidade",     count: semViabFiltrados.length },
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "ftth_ap",      label: "✅ FTTH Aprovadas" },
+    { key: "ftth_rej",     label: "❌ FTTH Rejeitadas" },
+    { key: "predios",      label: "🏢 FTTA Prédios" },
+    { key: "condominios",  label: "🏘️ FTTA Condomínios" },
+    { key: "ftta_rej",     label: "❌ FTTA Rejeitados" },
+    { key: "utp",          label: "🔌 UTPs" },
+    { key: "estruturados", label: "🏗️ Estruturados" },
+    { key: "sem_viab",     label: "🚫 Sem Viabilidade" },
   ];
 
   const barTecnologias = [
@@ -512,7 +508,7 @@ export default function RelatoriosPage() {
 
         {/* UTP */}
         <div className="bg-white rounded-xl border p-5 flex flex-col items-center justify-center gap-1">
-          <p className="text-5xl font-bold text-gray-900">{utpTotal}</p>
+          <p className="text-5xl font-bold text-gray-900">{utpFiltrado.length}</p>
           <p className="text-sm font-semibold text-gray-500 mt-1">🔌 UTPs</p>
         </div>
 
