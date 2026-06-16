@@ -919,6 +919,62 @@ export async function getAllViabilizacoes(): Promise<Viabilizacao[]> {
   return data;
 }
 
+export async function getViabilizacoesRelatorio(
+  dataInicio: string,
+  dataFim: string
+): Promise<Viabilizacao[]> {
+  const cacheKey = `viab_relatorio_${dataInicio}_${dataFim}_v1`;
+  const cached = getCached<Viabilizacao[]>(cacheKey);
+  if (cached) return cached;
+  const q = query(
+    collection(db, "viabilizacoes"),
+    where("data_auditoria", ">=", dataInicio),
+    where("data_auditoria", "<=", dataFim + "T23:59:59")
+  );
+  const snap = await getDocs(q);
+  const data = snap.docs.map((d) => fromFirestore<Viabilizacao>(d));
+  setCache(cacheKey, data);
+  return data;
+}
+
+export async function getPrediosAtendidosRelatorio(
+  dataInicio: string,
+  dataFim: string
+): Promise<PredioAtendido[]> {
+  const cacheKey = `viab_atendidos_relatorio_${dataInicio}_${dataFim}_v1`;
+  const cached = getCached<PredioAtendido[]>(cacheKey);
+  if (cached) return cached;
+  const q = query(
+    collection(db, "predios_atendidos"),
+    where("data_estruturacao", ">=", dataInicio),
+    where("data_estruturacao", "<=", dataFim + "T23:59:59"),
+    orderBy("data_estruturacao", "desc")
+  );
+  const snap = await getDocs(q);
+  const data = snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
+  setCache(cacheKey, data);
+  return data;
+}
+
+export async function getPrediosSemViabilidadeRelatorio(
+  dataInicio: string,
+  dataFim: string
+): Promise<PredioSemViabilidade[]> {
+  const cacheKey = `viab_sem_viab_relatorio_${dataInicio}_${dataFim}_v1`;
+  const cached = getCached<PredioSemViabilidade[]>(cacheKey);
+  if (cached) return cached;
+  const q = query(
+    collection(db, "predios_sem_viabilidade"),
+    where("data_registro", ">=", dataInicio),
+    where("data_registro", "<=", dataFim + "T23:59:59"),
+    orderBy("data_registro", "desc")
+  );
+  const snap = await getDocs(q);
+  const data = snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
+  setCache(cacheKey, data);
+  return data;
+}
+
 export async function arquivarViabilizacao(id: string): Promise<void> {
   await updateViabilizacao(id, {
     status: "finalizado",

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { OpenLocationCode } from "open-location-code";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllViabilizacoes, getPrediosAtendidos, getPrediosSemViabilidade, arquivarViabilizacao, excluirViabilizacao } from "@/lib/firestore";
+import { getViabilizacoesRelatorio, getPrediosAtendidosRelatorio, getPrediosSemViabilidadeRelatorio, arquivarViabilizacao, excluirViabilizacao } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -147,9 +147,24 @@ export default function RelatoriosPage() {
     setLoadingMap(false);
   }
 
+  const MAX_DIAS = 90;
+
+  function validarPeriodo(): string | null {
+    if (!dataInicio || !dataFim) return "Selecione as datas de início e fim.";
+    if (dataFim < dataInicio) return "A data fim não pode ser anterior à data início.";
+    const dias = (new Date(dataFim).getTime() - new Date(dataInicio).getTime()) / 86400000;
+    if (dias > MAX_DIAS) return `O período máximo é de 3 meses (${MAX_DIAS} dias).`;
+    return null;
+  }
+
   function load() {
+    if (validarPeriodo()) return;
     setLoading(true);
-    Promise.all([getAllViabilizacoes(), getPrediosAtendidos(), getPrediosSemViabilidade()])
+    Promise.all([
+      getViabilizacoesRelatorio(dataInicio, dataFim),
+      getPrediosAtendidosRelatorio(dataInicio, dataFim),
+      getPrediosSemViabilidadeRelatorio(dataInicio, dataFim),
+    ])
       .then(([v, a, s]) => { setViabilizacoes(v); setAtendidos(a); setSemViab(s); setLoaded(true); })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -172,31 +187,16 @@ export default function RelatoriosPage() {
     } finally { setActionPending(null); }
   }
 
-  // Rebuilds map whenever date filter or data changes while map is open
   useEffect(() => {
-    if (showMap && !loading) {
-      const semViabF = semViab.filter((s) => {
-        const d = (s.data_registro ?? "").slice(0, 10);
-        if (dataInicio && d < dataInicio) return false;
-        if (dataFim    && d > dataFim)    return false;
-        return true;
-      });
-      buildMapPoints(filtrado, atendidos, semViabF);
+    if (showMap && !loading && loaded) {
+      buildMapPoints(filtrado, atendidos, semViab);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicio, dataFim, showMap, loading]);
+  }, [showMap, loading]);
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
-  // ── Date filter ──────────────────────────────────────────────
-  function inRange(dateStr?: string): boolean {
-    const d = dateStr ?? "";
-    if (dataInicio && d < dataInicio) return false;
-    if (dataFim && d > dataFim + "T23:59:59") return false;
-    return true;
-  }
-
-  const filtrado = viabilizacoes.filter((v) => inRange(v.data_auditoria ?? v.data_solicitacao));
+  const filtrado = viabilizacoes;
 
   // ── Derived data ─────────────────────────────────────────────
   // FTTH
@@ -240,21 +240,8 @@ export default function RelatoriosPage() {
   const condominiosViab = condominiosEstruturados;
   const utpFiltrado     = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP");
 
-  // Atendidos filtrados por data de estruturação (para contar igual ao KPI)
-  const atendidosFiltrados = atendidos.filter((a) => {
-    const d = typeof a.data_estruturacao === "string" ? a.data_estruturacao.slice(0, 10) : "";
-    if (dataInicio && d < dataInicio) return false;
-    if (dataFim    && d > dataFim)    return false;
-    return true;
-  });
-
-  // Sem viabilidade filtrados por data de registro
-  const semViabFiltrados = semViab.filter((s) => {
-    const d = (s.data_registro ?? "").slice(0, 10);
-    if (dataInicio && d < dataInicio) return false;
-    if (dataFim    && d > dataFim)    return false;
-    return true;
-  });
+  const atendidosFiltrados = atendidos;
+  const semViabFiltrados = semViab;
 
   const statusLabelRel: Record<string, string> = {
     pendente:     "Pendente",
@@ -424,35 +411,39 @@ export default function RelatoriosPage() {
       </div>
 
       {/* Filtro de data + busca */}
-      <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-4 items-end">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Data Início</label>
-          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)}
-            className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <div className="bg-white rounded-xl border p-4 space-y-3">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Data Início <span className="text-red-400">*</span></label>
+            <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Data Fim <span className="text-red-400">*</span></label>
+            <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          {(dataInicio || dataFim) && (
+            <button onClick={() => { setDataInicio(""); setDataFim(""); setLoaded(false); setViabilizacoes([]); setAtendidos([]); setSemViab([]); }}
+              className="text-sm text-gray-400 hover:text-gray-600 underline self-center">Limpar</button>
+          )}
+          <button
+            onClick={load}
+            disabled={loading || !!validarPeriodo()}
+            className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {loading
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
+              : <><Search className="w-4 h-4" /> {loaded ? "Atualizar" : "Buscar"}</>}
+          </button>
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Data Fim</label>
-          <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)}
-            className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        </div>
-        {(dataInicio || dataFim) && (
-          <button onClick={() => { setDataInicio(""); setDataFim(""); }}
-            className="text-sm text-gray-500 hover:text-gray-700 underline">Limpar</button>
-        )}
-        {(dataInicio || dataFim) && (
-          <p className="text-xs text-indigo-600 self-center">
-            📊 {dataInicio ? new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "início"} até {dataFim ? new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR") : "hoje"}
-          </p>
-        )}
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          {loading
-            ? <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
-            : <><Search className="w-4 h-4" /> {loaded ? "Atualizar" : "Buscar"}</>}
-        </button>
+        {/* Erro de validação ou dica */}
+        {(() => {
+          const erro = validarPeriodo();
+          if (erro && (dataInicio || dataFim)) return <p className="text-xs text-red-500">{erro}</p>;
+          if (!dataInicio && !dataFim) return <p className="text-xs text-gray-400">Período obrigatório · máximo 3 meses por consulta.</p>;
+          return null;
+        })()}
       </div>
 
       {/* Estado inicial — aguardando busca */}
