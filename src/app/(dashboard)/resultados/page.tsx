@@ -36,6 +36,7 @@ export default function ResultadosPage() {
   const [histSearch, setHistSearch] = useState("");
   const [histTipo, setHistTipo] = useState<TipoFilter>("todos");
   const [histStatus, setHistStatus] = useState("todos");
+  const [histSort, setHistSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -55,6 +56,10 @@ export default function ResultadosPage() {
       setHistorico(await getViabilizacoesHistorico([user.nome, user.login, user.uid, `${user.nome}@viabilidade.com`]));
       setHistoricoReady(true);
     } finally { setLoadingHistorico(false); }
+  }
+
+  function toggleSort(col: string) {
+    setHistSort((s) => s.col === col ? { col, dir: s.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
   }
 
   function downloadHistoricoCSV() {
@@ -110,8 +115,22 @@ export default function ResultadosPage() {
         v.nome_cliente?.toLowerCase().includes(q) ||
         v.plus_code_cliente.toLowerCase().includes(q) ||
         v.predio_ftta?.toLowerCase().includes(q) ||
-        v.cto_numero?.toLowerCase().includes(q)
+        v.cto_numero?.toLowerCase().includes(q) ||
+        v.cdoi?.toLowerCase().includes(q) ||
+        v.auditado_por?.toLowerCase().includes(q)
       );
+    })
+    .sort((a, b) => {
+      const dir = histSort.dir === "asc" ? 1 : -1;
+      switch (histSort.col) {
+        case "data":     return ((a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? 1 : -1) * dir;
+        case "cliente":  return ((a.nome_cliente ?? "") > (b.nome_cliente ?? "") ? 1 : -1) * dir;
+        case "tipo":     return (a.tipo_instalacao > b.tipo_instalacao ? 1 : -1) * dir;
+        case "status":   return (a.status > b.status ? 1 : -1) * dir;
+        case "auditor":  return ((a.auditado_por ?? "") > (b.auditado_por ?? "") ? 1 : -1) * dir;
+        case "dt_audit": return ((a.data_auditoria ?? "") > (b.data_auditoria ?? "") ? 1 : -1) * dir;
+        default:         return 0;
+      }
     });
 
   async function handleFinalizar(id: string) {
@@ -333,17 +352,33 @@ export default function ResultadosPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
                         <tr>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Data</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Tipo</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Cliente</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Plus Code</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Prédio/Cond.</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">CTO / CDOI</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">OLT</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Distância</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Status</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Auditor</th>
-                          <th className="px-3 py-3 text-left whitespace-nowrap">Dt. Audit.</th>
+                          {([
+                            { col: "data",     label: "Data"         },
+                            { col: "tipo",     label: "Tipo"         },
+                            { col: "cliente",  label: "Cliente"      },
+                            { col: null,       label: "Plus Code"    },
+                            { col: null,       label: "Prédio/Cond." },
+                            { col: null,       label: "CTO / CDOI"   },
+                            { col: null,       label: "OLT"          },
+                            { col: null,       label: "Distância"    },
+                            { col: "status",   label: "Status"       },
+                            { col: "auditor",  label: "Auditor"      },
+                            { col: "dt_audit", label: "Dt. Audit."   },
+                          ] as { col: string | null; label: string }[]).map(({ col, label }) =>
+                            col ? (
+                              <th key={col} onClick={() => toggleSort(col)}
+                                className="px-3 py-3 text-left whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none">
+                                <span className="flex items-center gap-1">
+                                  {label}
+                                  <span className="text-gray-300 text-xs">
+                                    {histSort.col === col ? (histSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                                  </span>
+                                </span>
+                              </th>
+                            ) : (
+                              <th key={label} className="px-3 py-3 text-left whitespace-nowrap text-gray-400">{label}</th>
+                            )
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y">
