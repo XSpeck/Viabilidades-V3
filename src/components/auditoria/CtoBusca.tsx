@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
-  getCtos, findNearestCtos, calculateRoutes, formatDistance,
+  getCtos, getCtosGmarx, findNearestCtos, calculateRoutes, formatDistance,
   type CtoWithRoute,
 } from "@/lib/ctos";
 import { plusCodeToCoords } from "@/lib/pluscode";
@@ -28,6 +28,7 @@ interface Props {
   plusCode: string;
   nomeCliente?: string;
   initialCto?: string;
+  isGmarx?: boolean;
   onConfirm: (data: SelectedCto) => void;
   onClose: () => void;
   onExpandChange?: (expanded: boolean) => void;
@@ -36,7 +37,7 @@ interface Props {
   onTrajetoSalvo?: (link: string) => void;
 }
 
-export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm, onClose, onExpandChange, viabilizacaoId, trajetoExistente, onTrajetoSalvo }: Props) {
+export default function CtoBusca({ plusCode, nomeCliente, initialCto, isGmarx, onConfirm, onClose, onExpandChange, viabilizacaoId, trajetoExistente, onTrajetoSalvo }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -52,11 +53,11 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
   const [step, setStep] = useState<"selecionar" | "desenhar">("selecionar");
   const [confirmedData, setConfirmedData] = useState<SelectedCto | null>(null);
 
-  const loadCtos = useCallback(async (lat: number, lon: number, r: number) => {
+  const loadCtos = useCallback(async (lat: number, lon: number, r: number, gmarx?: boolean) => {
     setLoading(true);
     setError(null);
     try {
-      const allCtos = await getCtos();
+      const allCtos = gmarx ? await getCtosGmarx() : await getCtos();
       const ctosOnly = allCtos.filter((c) => !c.name.toUpperCase().startsWith("CDOI"));
       const nearby = findNearestCtos(lat, lon, ctosOnly, r);
 
@@ -81,7 +82,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
         const { lat, lon } = await plusCodeToCoords(plusCode);
         setClientLat(lat);
         setClientLon(lon);
-        await loadCtos(lat, lon, radius);
+        await loadCtos(lat, lon, radius, isGmarx);
       } catch (e) {
         setError(`Erro ao converter Plus Code: ${e instanceof Error ? e.message : String(e)}`);
         setLoading(false);
@@ -93,7 +94,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, onConfirm,
     setRadius(newRadius);
     if (!clientLat || !clientLon) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => loadCtos(clientLat, clientLon, newRadius), 500);
+    debounceRef.current = setTimeout(() => loadCtos(clientLat, clientLon, newRadius, isGmarx), 500);
   }
 
   async function confirmCto(name: string) {

@@ -114,6 +114,7 @@ export default function HomePage() {
         plus_code_cliente: plusCodeFinal,
         tipo_instalacao: tipoSelecionado,
         urgente,
+        equipe: user.equipe,
         status: "pendente",
         predio_ftta: tipoSelecionado !== "FTTH" ? nomePredio.trim() : undefined,
         andar_predio: tipoSelecionado !== "FTTH" ? andar.trim() : undefined,

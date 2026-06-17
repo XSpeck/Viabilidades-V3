@@ -73,6 +73,7 @@ export function parseCtoKml(kmlText: string): Cto[] {
 // =====================
 
 const CTOS_DOC = "ctos_data/all";
+const CTOS_GMARX_DOC = "ctos_gmarx/all";
 
 export async function importCtosToFirestore(
   ctos: Cto[],
@@ -133,6 +134,63 @@ export async function getCtos(): Promise<Cto[]> {
   if (ctos.length === 0) throw new Error("Nenhuma CTO encontrada. Importe o arquivo KML na página de Administração.");
 
   try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ctos)); } catch {}
+  return ctos;
+}
+
+// =====================
+// Gmarx — coleção separada
+// =====================
+const SESSION_KEY_GMARX = "viab_ctos_gmarx_v1";
+
+export async function importCtosGmarxToFirestore(
+  ctos: Cto[],
+  onProgress?: (done: number, total: number) => void
+): Promise<void> {
+  const { db } = await import("./firebase");
+  const { doc, setDoc } = await import("firebase/firestore");
+
+  onProgress?.(0, ctos.length);
+  await setDoc(doc(db, CTOS_GMARX_DOC), {
+    ctos,
+    total: ctos.length,
+    atualizado_em: new Date().toISOString(),
+  });
+  onProgress?.(ctos.length, ctos.length);
+  try { sessionStorage.removeItem(SESSION_KEY_GMARX); } catch {}
+}
+
+export async function countCtosGmarxInFirestore(): Promise<number> {
+  try {
+    const cached = sessionStorage.getItem(SESSION_KEY_GMARX);
+    if (cached) {
+      const parsed: Cto[] = JSON.parse(cached);
+      if (parsed.length > 0) return parsed.length;
+    }
+  } catch {}
+  const { db } = await import("./firebase");
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, CTOS_GMARX_DOC));
+  if (!snap.exists()) return 0;
+  return (snap.data().total as number) ?? 0;
+}
+
+export async function getCtosGmarx(): Promise<Cto[]> {
+  try {
+    const cached = sessionStorage.getItem(SESSION_KEY_GMARX);
+    if (cached) {
+      const parsed: Cto[] = JSON.parse(cached);
+      if (parsed.length > 0) return parsed;
+    }
+  } catch {}
+
+  const { db } = await import("./firebase");
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, CTOS_GMARX_DOC));
+  if (!snap.exists()) throw new Error("Nenhuma CTO Gmarx encontrada. Importe o KML na página de Administração.");
+  const ctos = (snap.data().ctos as Cto[]) ?? [];
+  if (ctos.length === 0) throw new Error("Nenhuma CTO Gmarx encontrada. Importe o KML na página de Administração.");
+
+  try { sessionStorage.setItem(SESSION_KEY_GMARX, JSON.stringify(ctos)); } catch {}
   return ctos;
 }
 

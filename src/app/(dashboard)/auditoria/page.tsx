@@ -336,6 +336,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
         <div className="flex items-center justify-between gap-3">
           <p className="font-semibold text-gray-900">{titulo}</p>
           <div className="flex items-center gap-2 shrink-0">
+            {v.equipe === "comercial_gmarx" && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Gmarx</span>}
             {isContestacao       && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
             {isRevisandoContest  && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔁 Reanalisando</span>}
             <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
@@ -531,6 +532,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
+                    isGmarx={v.equipe === "comercial_gmarx"}
                     onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}
@@ -599,7 +601,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${showFttaMap ? "border-blue-400 text-blue-700 bg-blue-50" : "border-blue-300 text-blue-600 hover:bg-blue-50"}`}>
                   🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
                 </button>
-                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
+                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} isGmarx={v.equipe === "comercial_gmarx"} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="OLT *" value={oltFtta} onChange={(e) => setOltFtta(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
@@ -632,6 +634,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
+                    isGmarx={v.equipe === "comercial_gmarx"}
                     onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}

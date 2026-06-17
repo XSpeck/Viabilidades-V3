@@ -51,6 +51,7 @@ export interface Viabilizacao {
   plus_code_cliente: string;
   tipo_instalacao: TipoInstalacao;
   urgente: boolean;
+  equipe?: EquipeUsuario;
   status: StatusViabilizacao;
   auditor_responsavel?: string;
   auditado_por?: string;

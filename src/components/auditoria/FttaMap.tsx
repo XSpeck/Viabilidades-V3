@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { getCtos, findNearestCtos, type CtoWithRoute } from "@/lib/ctos";
+import { getCtos, getCtosGmarx, findNearestCtos, type CtoWithRoute } from "@/lib/ctos";
 import { plusCodeToCoords } from "@/lib/pluscode";
 import { Loader2, MapPin, AlertTriangle } from "lucide-react";
 
@@ -20,12 +20,13 @@ const RADIUS_M = 600;
 interface Props {
   plusCode: string;
   nomeCliente?: string;
+  isGmarx?: boolean;
   onSelectCdoi?: (name: string) => void;
   onConfirm?: () => void;
   onExpandChange?: (expanded: boolean) => void;
 }
 
-export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onConfirm, onExpandChange }: Props) {
+export default function FttaMap({ plusCode, nomeCliente, isGmarx, onSelectCdoi, onConfirm, onExpandChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -39,7 +40,7 @@ export default function FttaMap({ plusCode, nomeCliente, onSelectCdoi, onConfirm
         const { lat, lon } = await plusCodeToCoords(plusCode);
         setClientLat(lat);
         setClientLon(lon);
-        const allCtos = await getCtos();
+        const allCtos = isGmarx ? await getCtosGmarx() : await getCtos();
         const cdois = allCtos.filter((c) => c.name.toUpperCase().startsWith("CDOI"));
         const nearby = findNearestCtos(lat, lon, cdois, RADIUS_M);
         setCtos(nearby);
