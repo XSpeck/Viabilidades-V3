@@ -995,7 +995,7 @@ export async function excluirViabilizacao(id: string): Promise<void> {
 
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
-  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1", "viab_agendamentos_v1");
 }
 
 // =====================
@@ -1040,7 +1040,7 @@ export async function continuarDemanda(
     periodo_agendamento: periodo,
     notas_atividade: arrayUnion(nota),
   });
-  bustCache("viab_demandas_rede_v1");
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1");
 }
 
 function formatDateBR(iso: string): string {
@@ -1120,18 +1120,19 @@ export async function editarInfoDemanda(
   data: Pick<DemandaRede, "tipo" | "prioridade" | "descricao" | "local" | "tecnicos">,
 ): Promise<void> {
   await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_demandas_rede_v1");
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1");
 }
 
 export async function addNotaDemanda(id: string, texto: string, por: string): Promise<void> {
   const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
   await updateDoc(doc(db, "demandas_rede", id), { notas_atividade: arrayUnion(nota) });
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1");
 }
 
 export async function addNotaVisita(id: string, texto: string, por: string): Promise<void> {
   const nota: NotaAtividade = { texto, por, data: new Date().toISOString() };
   await updateDoc(doc(db, "viabilizacoes", id), { notas_visita: arrayUnion(nota) });
-  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1", "viab_agendamentos_v1");
 }
 
 export async function deletarTrajeto(id: string): Promise<void> {
