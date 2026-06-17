@@ -41,6 +41,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // CTOs Gmarx (coleção separada)
+    match /ctos_gmarx/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // Redes distribuidoras
     match /redes_distribuidoras/{id} {
       allow read: if isAuth();

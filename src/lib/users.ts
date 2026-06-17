@@ -99,3 +99,15 @@ export async function deleteUser(uid: string): Promise<void> {
   await deleteDoc(doc(db, "users", uid));
   bustUsersCache();
 }
+
+export async function changeUserPassword(uid: string, newPassword: string, callerUid: string): Promise<void> {
+  const res = await fetch("/api/admin/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid, newPassword, callerUid }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error ?? "Erro ao alterar senha.");
+  }
+}

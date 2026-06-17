@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { parseCtoKml, importCtosToFirestore, countCtosInFirestore, importCtosGmarxToFirestore, countCtosGmarxInFirestore } from "@/lib/ctos";
 import { importRedeToFirestore, listRedesImportadas, EMPRESAS } from "@/lib/redes";
-import { listUsers, createUser, updateUser, deleteUser } from "@/lib/users";
+import { listUsers, createUser, updateUser, deleteUser, changeUserPassword } from "@/lib/users";
 import {
   getPrediosAtendidos, createPredioAtendido, updatePredioAtendido, deletePredioAtendido,
   deleteAllPrediosAtendidos, batchCreatePrediosAtendidos,
@@ -12,7 +12,7 @@ import {
   batchImportViabilizacoes,
 } from "@/lib/firestore";
 import type { AppUser, UserCargo, EquipeUsuario, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio } from "@/types";
-import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database } from "lucide-react";
+import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 export default function AdminPage() {
@@ -591,6 +591,7 @@ const EQUIPE_COLOR: Record<EquipeUsuario, string> = {
 type ModalState = { mode: "create" } | { mode: "edit"; user: AppUser };
 
 function GestaoUsuarios() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -598,6 +599,10 @@ function GestaoUsuarios() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
+  const [senhaModal, setSenhaModal] = useState<AppUser | null>(null);
+  const [novaSenha, setNovaSenha] = useState("");
+  const [senhaError, setSenhaError] = useState<string | null>(null);
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -657,6 +662,22 @@ function GestaoUsuarios() {
       alert(e instanceof Error ? e.message : "Erro ao excluir.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangeSenha() {
+    if (!senhaModal || !currentUser) return;
+    if (novaSenha.length < 6) { setSenhaError("Mínimo 6 caracteres."); return; }
+    setSalvandoSenha(true);
+    setSenhaError(null);
+    try {
+      await changeUserPassword(senhaModal.uid, novaSenha, currentUser.uid);
+      setSenhaModal(null);
+      setNovaSenha("");
+    } catch (e) {
+      setSenhaError(e instanceof Error ? e.message : "Erro ao alterar senha.");
+    } finally {
+      setSalvandoSenha(false);
     }
   }
 
@@ -721,10 +742,13 @@ function GestaoUsuarios() {
                         </td>
                         <td className="py-2.5">
                           <div className="flex items-center gap-1 justify-end">
-                            <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded">
+                            <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded" title="Editar">
                               <Pencil className="w-4 h-4" />
                             </button>
-                            <button onClick={() => setConfirmDelete(u)} className="p-1.5 text-gray-400 hover:text-red-600 rounded">
+                            <button onClick={() => { setSenhaModal(u); setNovaSenha(""); setSenhaError(null); }} className="p-1.5 text-gray-400 hover:text-amber-600 rounded" title="Alterar senha">
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setConfirmDelete(u)} className="p-1.5 text-gray-400 hover:text-red-600 rounded" title="Excluir">
                               <TrashIcon className="w-4 h-4" />
                             </button>
                           </div>
@@ -856,6 +880,54 @@ function GestaoUsuarios() {
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {senhaModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-amber-600" />
+              <h3 className="font-semibold text-gray-800">Alterar senha</h3>
+            </div>
+            <p className="text-sm text-gray-500">
+              Definir nova senha para <strong>{senhaModal.nome}</strong>
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nova senha</label>
+              <input
+                type="password"
+                value={novaSenha}
+                onChange={(e) => setNovaSenha(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleChangeSenha()}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                placeholder="Mínimo 6 caracteres"
+                autoFocus
+              />
+            </div>
+            {senhaError && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                {senhaError}
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { setSenhaModal(null); setNovaSenha(""); setSenhaError(null); }}
+                className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleChangeSenha}
+                disabled={salvandoSenha || novaSenha.length < 6}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {salvandoSenha && <Loader2 className="w-4 h-4 animate-spin" />}
+                {salvandoSenha ? "Salvando..." : "✅ Alterar senha"}
               </button>
             </div>
           </div>
