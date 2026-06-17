@@ -52,7 +52,7 @@ export async function getPrediosEstruturados(): Promise<PredioEstruturado[]> {
 
 // ─── Prédios sem viabilidade ───────────────────────────────────────
 
-const CACHE_KEY_SEM = "viab_predios_sem_viab_v1";
+const CACHE_KEY_SEM = "viab_predios_sem_viab_viabilizacoes_v1";
 
 export interface PredioSemViab {
   id: string;
