@@ -520,7 +520,7 @@ export async function finalizarEstruturado(
     giga: dados.giga,
     data_estruturacao: serverTimestamp(),
   });
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
   await updateViabilizacao(id, {
     status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
@@ -545,7 +545,7 @@ export async function rejeitarPredio(
     registrado_por: registradoPor,
     data_registro: serverTimestamp(),
   });
-  bustCache("viab_predios_sem_viab_v1");
+  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
   // 2. Atualizar viabilização
   await updateViabilizacao(id, {
     status: "rejeitado",
@@ -805,7 +805,7 @@ export async function createPredioAtendido(
     ...stripUndefined(data as Record<string, unknown>),
     data_estruturacao: serverTimestamp(),
   });
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
 export async function updatePredioAtendido(
@@ -813,12 +813,12 @@ export async function updatePredioAtendido(
   data: Partial<Omit<PredioAtendido, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_atendidos", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
 export async function deletePredioAtendido(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_atendidos", id));
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
 export async function batchImportViabilizacoes(
@@ -847,7 +847,7 @@ export async function deleteAllPrediosAtendidos(): Promise<void> {
     snap.docs.slice(i, i + CHUNK).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
 export async function batchCreatePrediosAtendidos(
@@ -864,7 +864,7 @@ export async function batchCreatePrediosAtendidos(
     await batch.commit();
     onProgress?.(Math.min(i + CHUNK, items.length), items.length);
   }
-  bustCache("viab_predios_atendidos_v1");
+  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
 export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]> {
@@ -887,7 +887,7 @@ export async function createPredioSemViabilidade(
     ...stripUndefined(data as Record<string, unknown>),
     data_registro: serverTimestamp(),
   });
-  bustCache("viab_predios_sem_viab_v1");
+  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
 }
 
 export async function updatePredioSemViabilidade(
@@ -895,12 +895,12 @@ export async function updatePredioSemViabilidade(
   data: Partial<Omit<PredioSemViabilidade, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_sem_viabilidade", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_predios_sem_viab_v1");
+  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
 }
 
 export async function deletePredioSemViabilidade(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_sem_viabilidade", id));
-  bustCache("viab_predios_sem_viab_v1");
+  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
 }
 
 // =====================
