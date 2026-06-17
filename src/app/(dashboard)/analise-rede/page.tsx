@@ -69,7 +69,6 @@ export default function AnaliseRedePage() {
   const [showMap, setShowMap]       = useState(false);
   const [tecnicoTab, setTecnicoTab] = useState<"todos" | TecnicoRede>("todos");
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
-  const [mapStatusFiltro, setMapStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,41 +136,17 @@ export default function AnaliseRedePage() {
       </div>
 
       {/* Mapa de demandas */}
-      {showMap && (() => {
-        const demandasMapa = demandas
-          .filter((d) => d.status !== "arquivada")
-          .filter((d) => tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))
-          .filter((d) => mapStatusFiltro === "todas" || d.status === mapStatusFiltro);
-        return (
-          <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <h2 className="font-semibold text-gray-800">🗺️ Mapa de Demandas</h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {demandasMapa.filter((d) => d.local).length} de {demandasMapa.length} demanda(s) com localização · pin maior = maior prioridade
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {([
-                  { key: "todas",       label: "Todas"          },
-                  { key: "aberta",      label: "🔴 Aberta"      },
-                  { key: "agendada",    label: "📅 Agendada"    },
-                  { key: "em_andamento",label: "🟡 Em andamento"},
-                  { key: "concluida",   label: "✅ Concluída"   },
-                ] as { key: typeof mapStatusFiltro; label: string }[]).map((f) => (
-                  <button key={f.key} onClick={() => setMapStatusFiltro(f.key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      mapStatusFiltro === f.key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <DemandasMap demandas={demandasMapa} />
+      {showMap && (
+        <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold text-gray-800">🗺️ Mapa de Demandas</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {filtradas.filter((d) => d.local).length} de {filtradas.length} demanda(s) com localização · pin maior = maior prioridade
+            </p>
           </div>
-        );
-      })()}
+          <DemandasMap demandas={filtradas} />
+        </div>
+      )}
 
       {/* Tabs técnico */}
       <div className="bg-white rounded-xl border overflow-hidden">
