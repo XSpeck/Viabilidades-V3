@@ -124,10 +124,10 @@ export default function AnaliseRedePage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Abertas",       value: demandas.filter((d) => d.status === "aberta").length,       color: "red"    },
-          { label: "Agendadas",     value: demandas.filter((d) => d.status === "agendada").length,     color: "indigo" },
-          { label: "Em andamento",  value: demandas.filter((d) => d.status === "em_andamento").length, color: "yellow" },
-          { label: "Concluídas",    value: demandas.filter((d) => d.status === "concluida").length,    color: "green"  },
+          { label: "Abertas",       value: counts.aberta,       color: "red"    },
+          { label: "Agendadas",     value: counts.agendada,     color: "indigo" },
+          { label: "Em andamento",  value: counts.em_andamento, color: "yellow" },
+          { label: "Concluídas",    value: counts.concluida,    color: "green"  },
         ].map((k) => (
           <div key={k.label} className="bg-white border rounded-xl p-4 text-center">
             <p className={`text-3xl font-bold text-${k.color}-600`}>{k.value}</p>
@@ -199,7 +199,7 @@ export default function AnaliseRedePage() {
         {/* Filtro status */}
         <div className="px-4 py-3 border-b bg-gray-50 flex flex-wrap gap-2">
           {([
-            { key: "todas",       label: `Todas (${filtradas.length + (statusFiltro !== "todas" ? 0 : 0)})` },
+            { key: "todas",       label: "" },
             { key: "aberta",       label: `🔴 Abertas (${counts.aberta})` },
             { key: "agendada",     label: `📅 Agendadas (${counts.agendada})` },
             { key: "em_andamento", label: `🟡 Em andamento (${counts.em_andamento})` },
