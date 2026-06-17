@@ -876,7 +876,16 @@ export default function CtoMap({
             position={[cto.lat, cto.lon]}
             icon={icon}
             zIndexOffset={isSelected ? 1000 : i * -10}
-            eventHandlers={{ click: () => onSelect(cto.name) }}
+            eventHandlers={{
+              click: (e) => {
+                if (drawing) {
+                  L.DomEvent.stopPropagation(e);
+                  addDrawPoint([cto.lat, cto.lon]);
+                } else {
+                  onSelect(cto.name);
+                }
+              },
+            }}
           >
             <Popup minWidth={200}>
               <div style={{ fontFamily: "system-ui, sans-serif", fontSize: 13 }}>
@@ -921,6 +930,14 @@ export default function CtoMap({
         position={[clientLat, clientLon]}
         icon={clientIcon}
         zIndexOffset={2000}
+        eventHandlers={{
+          click: (e) => {
+            if (drawing) {
+              L.DomEvent.stopPropagation(e);
+              addDrawPoint([clientLat, clientLon]);
+            }
+          },
+        }}
       >
         <Popup>
           <div style={{ fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 600 }}>
