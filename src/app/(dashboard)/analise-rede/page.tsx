@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, bustCacheAnaliseRede } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -71,6 +71,7 @@ export default function AnaliseRedePage() {
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
 
   const load = useCallback(async () => {
+    bustCacheAnaliseRede();
     setLoading(true);
     try { setDemandas(await getDemandas()); }
     finally { setLoading(false); }

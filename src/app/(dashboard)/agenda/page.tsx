@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
   getDemandasAgendadas, agendarDemanda, concluirDemanda, continuarDemanda,
-  addNotaDemanda, addNotaVisita, editarInfoDemanda,
+  addNotaDemanda, addNotaVisita, editarInfoDemanda, bustCacheAgenda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade } from "@/types";
@@ -88,6 +88,7 @@ export default function AgendaPage() {
   const [viewMonth, setViewMonth] = useState<string>(todayISO().slice(0, 7));
 
   const load = useCallback(async () => {
+    bustCacheAgenda();
     setLoading(true);
     try {
       const [viabs, dems] = await Promise.all([getAgendamentos(), getDemandasAgendadas()]);

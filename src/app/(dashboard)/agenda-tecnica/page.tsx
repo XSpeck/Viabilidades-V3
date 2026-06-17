@@ -11,6 +11,7 @@ import {
   arquivarPorDesistencia,
   reagendarInstalacao,
   atribuirTecnicoInstalacao,
+  bustCacheAgendaTecnica,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
@@ -63,6 +64,7 @@ export default function AgendaTecnicaPage() {
   const [arquTecnico, setArquTecnico] = useState("todos");
 
   const load = useCallback(async () => {
+    bustCacheAgendaTecnica();
     setLoading(true);
     try { setItems(await getInstalacoesPendentes()); }
     finally { setLoading(false); }

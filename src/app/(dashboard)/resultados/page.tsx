@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, arquivarPorDesistencia, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, arquivarPorDesistencia, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita, bustCacheResultados } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
@@ -42,6 +42,7 @@ export default function ResultadosPage() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    bustCacheResultados();
     setLoading(true);
     try { setResults(await getViabilizacoesUsuario([user.nome, user.login, user.uid, `${user.nome}@viabilidade.com`])); }
     finally { setLoading(false); }

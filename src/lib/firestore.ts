@@ -53,6 +53,12 @@ function bustCache(...keys: string[]): void {
   try { keys.forEach((k) => sessionStorage.removeItem(k)); } catch {}
 }
 
+export function bustCacheAuditoria()    { bustCache("viab_audit_v1"); }
+export function bustCacheResultados()   { bustCache("viab_user_v1"); }
+export function bustCacheAgenda()       { bustCache("viab_agendamentos_v1", "viab_demandas_agendadas_v1"); }
+export function bustCacheAgendaTecnica(){ bustCache("viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1"); }
+export function bustCacheAnaliseRede()  { bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1"); }
+
 // =====================
 // Helpers
 // =====================

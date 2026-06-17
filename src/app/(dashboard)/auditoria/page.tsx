@@ -8,6 +8,7 @@ import {
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
   iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
   manterDecisaoContestacao, revisarContestacao, proporDataVisita, deletarTrajeto,
+  bustCacheAuditoria,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
@@ -28,6 +29,7 @@ export default function AuditoriaPage() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    bustCacheAuditoria();
     setLoading(true);
     try { setItems(await getViabilizacoesAuditor(user.nome)); }
     finally { setLoading(false); }
