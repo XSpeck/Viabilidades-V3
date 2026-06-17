@@ -1,4 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { haversineDistance } from "./ctos";
 import { plusCodeToCoords } from "./pluscode";
@@ -34,19 +34,25 @@ export function bustPrediosCache(): void {
   } catch {}
 }
 
+function tsToIso(v: unknown): string | undefined {
+  if (v instanceof Timestamp) return v.toDate().toISOString();
+  if (typeof v === "string") return v;
+  return undefined;
+}
+
 export async function getPrediosEstruturados(): Promise<PredioEstruturado[]> {
   const cached = getCacheEst();
   if (cached) return cached;
   const snap = await getDocs(collection(db, "predios_atendidos"));
   const data: PredioEstruturado[] = snap.docs.flatMap((d) => {
-    const raw = d.data() as { condominio?: string; localizacao?: string; tecnologia?: string; data_estruturacao?: string };
+    const raw = d.data() as { condominio?: string; localizacao?: string; tecnologia?: string; data_estruturacao?: unknown };
     if (!raw.condominio || !raw.localizacao) return [];
     return [{
       id: d.id,
       predio_ftta: raw.condominio,
       plus_code_cliente: raw.localizacao,
       tipo_instalacao: raw.tecnologia ?? "Prédio",
-      data_auditoria: raw.data_estruturacao,
+      data_auditoria: tsToIso(raw.data_estruturacao),
     }];
   });
   try { sessionStorage.setItem(CACHE_KEY_EST, JSON.stringify({ data, ts: Date.now() })); } catch {}
@@ -81,7 +87,7 @@ export async function getPrediosSemViab(): Promise<PredioSemViab[]> {
   if (cached) return cached;
   const snap = await getDocs(collection(db, "predios_sem_viabilidade"));
   const data: PredioSemViab[] = snap.docs.flatMap((d) => {
-    const raw = d.data() as { condominio?: string; localizacao?: string; observacao?: string; data_registro?: string };
+    const raw = d.data() as { condominio?: string; localizacao?: string; observacao?: string; data_registro?: unknown };
     if (!raw.condominio || !raw.localizacao) return [];
     return [{
       id: d.id,
@@ -89,7 +95,7 @@ export async function getPrediosSemViab(): Promise<PredioSemViab[]> {
       plus_code_cliente: raw.localizacao,
       tipo_instalacao: "Prédio",
       motivo_rejeicao: raw.observacao,
-      data_auditoria: raw.data_registro,
+      data_auditoria: tsToIso(raw.data_registro),
     }];
   });
   try { sessionStorage.setItem(CACHE_KEY_SEM, JSON.stringify({ data, ts: Date.now() })); } catch {}
@@ -130,10 +136,10 @@ async function findBestMatch<T extends { plus_code_cliente: string; predio_ftta:
   plusCode: string,
   nomePredio?: string,
 ): Promise<{ registro: T; distancia: number; porNome: boolean; porProximidade: boolean } | null> {
-  if (registros.length === 0) { console.log("[predios] lista vazia"); return null; }
+  if (registros.length === 0) return null;
 
   const clienteCoords = await resolverCoords(plusCode);
-  if (!clienteCoords) { console.log("[predios] falhou ao resolver coords do cliente:", plusCode); return null; }
+  if (!clienteCoords) return null;
 
   const comCoords = await Promise.all(
     registros.map(async (r) => ({ ...r, coords: await resolverCoords(r.plus_code_cliente) }))
@@ -147,7 +153,6 @@ async function findBestMatch<T extends { plus_code_cliente: string; predio_ftta:
       : Infinity;
     const porProximidade = distancia <= DIST_THRESHOLD;
     const porNome = nomePredio ? nomeSimilar(nomePredio, r.predio_ftta) : false;
-    console.log(`[predios] "${r.predio_ftta}" | dist=${Math.round(distancia)}m | porProx=${porProximidade} | porNome=${porNome} | coordsOk=${!!r.coords}`);
     if (!porProximidade || !porNome) continue;
     if (!best || distancia < best.distancia) {
       best = { registro: r, distancia, porNome, porProximidade };
