@@ -11,10 +11,11 @@ import {
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
-import { RefreshCw, Loader2, Trash2, RotateCcw, Search } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
+import { findPredioEstruturado, type MatchPredio } from "@/lib/predios";
 
 type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "contestado";
 
@@ -152,6 +153,16 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     setSuccessMsg(msg);
     setTimeout(onRefresh, 2000);
   }
+
+  // ── Prédio já estruturado ──────────────────────────────
+  const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
+  const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
+  useEffect(() => {
+    if (!isFtta || !open || v.status_predio) return;
+    findPredioEstruturado(v.plus_code_cliente, v.predio_ftta ?? undefined)
+      .then(setMatchPredio)
+      .catch(() => {});
+  }, [open]);
 
   // ── Edição inline ──────────────────────────────────────
   const [tipoLocal, setTipoLocal] = useState<TipoInstalacao>(v.tipo_instalacao);
@@ -427,6 +438,25 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                 <button onClick={() => setEditandoInfo(true)} className="text-xs text-indigo-600 hover:underline">✏️ Editar</button>
               )}
             </div>
+
+            {/* Banner: prédio já estruturado */}
+            {matchPredio && !v.status_predio && (
+              <div className="flex items-start gap-2.5 px-3 py-3 bg-emerald-50 border border-emerald-300 rounded-lg">
+                <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-emerald-800 space-y-0.5">
+                  <p className="font-semibold text-sm">🏗️ Prédio já estruturado no sistema</p>
+                  <p><strong>{matchPredio.predio.predio_ftta}</strong></p>
+                  <p className="text-emerald-700">
+                    {matchPredio.porProximidade && matchPredio.porNome
+                      ? `📍 ${Math.round(matchPredio.distancia)}m · nome similar`
+                      : matchPredio.porProximidade
+                      ? `📍 ${Math.round(matchPredio.distancia)}m de distância`
+                      : "📝 Nome similar ao cadastrado"}
+                    {matchPredio.predio.data_auditoria && ` · estruturado em ${new Date(matchPredio.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {editandoInfo ? (
               <div className="space-y-2">

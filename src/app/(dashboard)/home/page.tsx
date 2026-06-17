@@ -6,7 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createViabilizacao, getPrediosAtendidos, getPrediosSemViabilidade } from "@/lib/firestore";
 import { validatePlusCode, locationToPlusCode } from "@/lib/pluscode";
 import type { TipoInstalacao, PredioAtendido, PredioSemViabilidade } from "@/types";
-import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft } from "lucide-react";
+import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft, AlertTriangle } from "lucide-react";
+import { findPredioEstruturado, type MatchPredio } from "@/lib/predios";
 import { canAccess, getCargo } from "@/lib/access";
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
@@ -40,11 +41,26 @@ export default function HomePage() {
   const [andar, setAndar] = useState("");
   const [bloco, setBloco] = useState("");
   const [urgente, setUrgente] = useState(false);
+  const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
+  const [buscandoPredio, setBuscandoPredio] = useState(false);
 
   useEffect(() => {
     getPrediosAtendidos().then(setPrediosAtendidos);
     getPrediosSemViabilidade().then(setPrediosSemViab);
   }, []);
+
+  // Re-busca quando o nome do prédio muda
+  useEffect(() => {
+    if (!tipoSelecionado || tipoSelecionado === "FTTH" || !validatedPlusCode) return;
+    const timer = setTimeout(() => {
+      setBuscandoPredio(true);
+      findPredioEstruturado(validatedPlusCode, nomePredio.trim() || undefined)
+        .then(setMatchPredio)
+        .catch(() => {})
+        .finally(() => setBuscandoPredio(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nomePredio, tipoSelecionado, validatedPlusCode]);
 
   // Validação em tempo real
   useEffect(() => {
@@ -86,6 +102,14 @@ export default function HomePage() {
   function selecionarTipo(tipo: TipoInstalacao) {
     setTipoSelecionado(tipo);
     setModalStep("form");
+    setMatchPredio(null);
+    if (tipo !== "FTTH" && validatedPlusCode) {
+      setBuscandoPredio(true);
+      findPredioEstruturado(validatedPlusCode, nomePredio.trim() || undefined)
+        .then(setMatchPredio)
+        .catch(() => {})
+        .finally(() => setBuscandoPredio(false));
+    }
   }
 
   async function handleConfirm() {
@@ -300,6 +324,32 @@ export default function HomePage() {
                   <input type="checkbox" checked={urgente} onChange={(e) => setUrgente(e.target.checked)} className="w-4 h-4" />
                   🔥 Cliente Presencial (Urgente)
                 </label>
+
+                {/* Banner: prédio já estruturado */}
+                {buscandoPredio && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    Verificando se o prédio já existe no sistema…
+                  </div>
+                )}
+                {!buscandoPredio && matchPredio && (
+                  <div className="flex items-start gap-2.5 px-3 py-3 bg-emerald-50 border border-emerald-300 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-emerald-800 space-y-0.5">
+                      <p className="font-semibold text-sm">🏗️ Prédio já estruturado no sistema!</p>
+                      <p><strong>{matchPredio.predio.predio_ftta}</strong></p>
+                      <p className="text-emerald-700">
+                        {matchPredio.porProximidade && matchPredio.porNome
+                          ? `📍 ${Math.round(matchPredio.distancia)}m de distância · nome similar`
+                          : matchPredio.porProximidade
+                          ? `📍 ${Math.round(matchPredio.distancia)}m de distância`
+                          : "📝 Nome similar ao cadastrado"}
+                        {matchPredio.predio.data_auditoria && ` · estruturado em ${new Date(matchPredio.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
+                      </p>
+                      <p className="text-emerald-600 pt-0.5">A estrutura já está pronta — você pode continuar com a solicitação normalmente.</p>
+                    </div>
+                  </div>
+                )}
 
                 <button onClick={handleConfirm} disabled={loading}
                   className={`w-full ${cfg.bg} disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2`}>
