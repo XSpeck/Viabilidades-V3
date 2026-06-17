@@ -7,7 +7,7 @@ import { createViabilizacao, getPrediosAtendidos, getPrediosSemViabilidade } fro
 import { validatePlusCode, locationToPlusCode } from "@/lib/pluscode";
 import type { TipoInstalacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { MapPin, Search, CheckCircle, XCircle, Loader2, Building2, Home, Users, ArrowLeft, AlertTriangle } from "lucide-react";
-import { findPredioEstruturado, type MatchPredio } from "@/lib/predios";
+import { findPredioEstruturado, findPredioSemViab, type MatchPredio, type MatchPredioSemViab } from "@/lib/predios";
 import { canAccess, getCargo } from "@/lib/access";
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
@@ -42,6 +42,7 @@ export default function HomePage() {
   const [bloco, setBloco] = useState("");
   const [urgente, setUrgente] = useState(false);
   const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
+  const [matchSemViab, setMatchSemViab] = useState<MatchPredioSemViab | null>(null);
   const [buscandoPredio, setBuscandoPredio] = useState(false);
 
   useEffect(() => {
@@ -54,8 +55,11 @@ export default function HomePage() {
     if (!tipoSelecionado || tipoSelecionado === "FTTH" || !validatedPlusCode) return;
     const timer = setTimeout(() => {
       setBuscandoPredio(true);
-      findPredioEstruturado(validatedPlusCode, nomePredio.trim() || undefined)
-        .then(setMatchPredio)
+      const nome = nomePredio.trim() || undefined;
+      Promise.all([
+        findPredioEstruturado(validatedPlusCode, nome),
+        findPredioSemViab(validatedPlusCode, nome),
+      ]).then(([est, sem]) => { setMatchPredio(est); setMatchSemViab(sem); })
         .catch(() => {})
         .finally(() => setBuscandoPredio(false));
     }, 500);
@@ -103,10 +107,14 @@ export default function HomePage() {
     setTipoSelecionado(tipo);
     setModalStep("form");
     setMatchPredio(null);
+    setMatchSemViab(null);
     if (tipo !== "FTTH" && validatedPlusCode) {
       setBuscandoPredio(true);
-      findPredioEstruturado(validatedPlusCode, nomePredio.trim() || undefined)
-        .then(setMatchPredio)
+      const nome = nomePredio.trim() || undefined;
+      Promise.all([
+        findPredioEstruturado(validatedPlusCode, nome),
+        findPredioSemViab(validatedPlusCode, nome),
+      ]).then(([est, sem]) => { setMatchPredio(est); setMatchSemViab(sem); })
         .catch(() => {})
         .finally(() => setBuscandoPredio(false));
     }
@@ -347,6 +355,27 @@ export default function HomePage() {
                         {matchPredio.predio.data_auditoria && ` · estruturado em ${new Date(matchPredio.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
                       </p>
                       <p className="text-emerald-600 pt-0.5">A estrutura já está pronta — você pode continuar com a solicitação normalmente.</p>
+                    </div>
+                  </div>
+                )}
+                {!buscandoPredio && matchSemViab && (
+                  <div className="flex items-start gap-2.5 px-3 py-3 bg-red-50 border border-red-300 rounded-lg">
+                    <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-red-800 space-y-0.5">
+                      <p className="font-semibold text-sm">❌ Este prédio já foi avaliado como sem viabilidade</p>
+                      <p><strong>{matchSemViab.predio.predio_ftta}</strong></p>
+                      {matchSemViab.predio.motivo_rejeicao && (
+                        <p className="text-red-700">Motivo: {matchSemViab.predio.motivo_rejeicao}</p>
+                      )}
+                      <p className="text-red-700">
+                        {matchSemViab.porProximidade && matchSemViab.porNome
+                          ? `📍 ${Math.round(matchSemViab.distancia)}m de distância · nome similar`
+                          : matchSemViab.porProximidade
+                          ? `📍 ${Math.round(matchSemViab.distancia)}m de distância`
+                          : "📝 Nome similar ao cadastrado"}
+                        {matchSemViab.predio.data_auditoria && ` · avaliado em ${new Date(matchSemViab.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
+                      </p>
+                      <p className="text-red-600 pt-0.5">Você pode enviar mesmo assim se acreditar que houve mudança na situação.</p>
                     </div>
                   </div>
                 )}

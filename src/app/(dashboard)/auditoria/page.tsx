@@ -11,11 +11,11 @@ import {
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
-import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle, AlertTriangle } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
-import { findPredioEstruturado, type MatchPredio } from "@/lib/predios";
+import { findPredioEstruturado, findPredioSemViab, type MatchPredio, type MatchPredioSemViab } from "@/lib/predios";
 
 type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "contestado";
 
@@ -154,13 +154,17 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     setTimeout(onRefresh, 2000);
   }
 
-  // ── Prédio já estruturado ──────────────────────────────
+  // ── Prédio estruturado / sem viabilidade ──────────────
   const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
+  const [matchSemViab, setMatchSemViab] = useState<MatchPredioSemViab | null>(null);
   const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
   useEffect(() => {
     if (!isFtta || !open || v.status_predio) return;
-    findPredioEstruturado(v.plus_code_cliente, v.predio_ftta ?? undefined)
-      .then(setMatchPredio)
+    const nome = v.predio_ftta ?? undefined;
+    Promise.all([
+      findPredioEstruturado(v.plus_code_cliente, nome),
+      findPredioSemViab(v.plus_code_cliente, nome),
+    ]).then(([est, sem]) => { setMatchPredio(est); setMatchSemViab(sem); })
       .catch(() => {});
   }, [open]);
 
@@ -453,6 +457,28 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                       ? `📍 ${Math.round(matchPredio.distancia)}m de distância`
                       : "📝 Nome similar ao cadastrado"}
                     {matchPredio.predio.data_auditoria && ` · estruturado em ${new Date(matchPredio.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Banner: prédio sem viabilidade */}
+            {matchSemViab && !v.status_predio && (
+              <div className="flex items-start gap-2.5 px-3 py-3 bg-red-50 border border-red-300 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-red-800 space-y-0.5">
+                  <p className="font-semibold text-sm">❌ Prédio já avaliado como sem viabilidade</p>
+                  <p><strong>{matchSemViab.predio.predio_ftta}</strong></p>
+                  {matchSemViab.predio.motivo_rejeicao && (
+                    <p className="text-red-700">Motivo: {matchSemViab.predio.motivo_rejeicao}</p>
+                  )}
+                  <p className="text-red-700">
+                    {matchSemViab.porProximidade && matchSemViab.porNome
+                      ? `📍 ${Math.round(matchSemViab.distancia)}m · nome similar`
+                      : matchSemViab.porProximidade
+                      ? `📍 ${Math.round(matchSemViab.distancia)}m de distância`
+                      : "📝 Nome similar ao cadastrado"}
+                    {matchSemViab.predio.data_auditoria && ` · avaliado em ${new Date(matchSemViab.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
                   </p>
                 </div>
               </div>
