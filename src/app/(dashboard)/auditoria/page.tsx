@@ -635,12 +635,10 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
                     isGmarx={v.equipe === "comercial_gmarx"}
+                    semRota
                     onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}
-                    viabilizacaoId={v.id}
-                    trajetoExistente={v.trajeto_cabo}
-                    onTrajetoSalvo={setTrajetoLinkLocal}
                   />
                 ) : (
                   <>

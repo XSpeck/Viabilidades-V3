@@ -29,6 +29,7 @@ interface Props {
   nomeCliente?: string;
   initialCto?: string;
   isGmarx?: boolean;
+  semRota?: boolean;
   onConfirm: (data: SelectedCto) => void;
   onClose: () => void;
   onExpandChange?: (expanded: boolean) => void;
@@ -37,7 +38,7 @@ interface Props {
   onTrajetoSalvo?: (link: string) => void;
 }
 
-export default function CtoBusca({ plusCode, nomeCliente, initialCto, isGmarx, onConfirm, onClose, onExpandChange, viabilizacaoId, trajetoExistente, onTrajetoSalvo }: Props) {
+export default function CtoBusca({ plusCode, nomeCliente, initialCto, isGmarx, semRota, onConfirm, onClose, onExpandChange, viabilizacaoId, trajetoExistente, onTrajetoSalvo }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clientLat, setClientLat] = useState(0);
@@ -112,7 +113,18 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, isGmarx, o
       setConfirmedData({ cto_numero: cto.name, distancia_cliente: formatDistance(distance), localizacao_caixa: `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}` });
     } finally {
       setConfirming(false);
-      setStep("desenhar");
+      if (semRota) {
+        const data = { cto_numero: cto.name, distancia_cliente: formatDistance(distance), localizacao_caixa: "" };
+        try {
+          const { OpenLocationCode } = await import("open-location-code");
+          data.localizacao_caixa = new OpenLocationCode().encode(cto.lat, cto.lon);
+        } catch {
+          data.localizacao_caixa = `${cto.lat.toFixed(6)},${cto.lon.toFixed(6)}`;
+        }
+        onConfirm(data);
+      } else {
+        setStep("desenhar");
+      }
     }
   }
 
@@ -129,12 +141,16 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, isGmarx, o
             <p className="font-medium text-gray-800 text-sm">{nomeCliente ?? plusCode}</p>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${step === "selecionar" ? "bg-indigo-600 text-white" : "bg-green-100 text-green-700"}`}>
-                {step === "selecionar" ? "1. Selecionar CTO" : "✓ CTO selecionada"}
+                {step === "selecionar" ? "Selecionar CTO" : "✓ CTO selecionada"}
               </span>
-              <span className="text-gray-300 text-xs">→</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${step === "desenhar" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-400"}`}>
-                2. Traçar rota
-              </span>
+              {!semRota && (
+                <>
+                  <span className="text-gray-300 text-xs">→</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${step === "desenhar" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-400"}`}>
+                    Traçar rota
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
