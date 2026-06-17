@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { MapContainer, useMap } from "react-leaflet";
+import { MapContainer, Polyline, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
 import { plusCodeToCoords } from "@/lib/pluscode";
 
@@ -71,30 +71,7 @@ export default function RotaMapaDownload({
     setRouteLL(trajetoCabo.map(p => L.latLng(p.lat, p.lon)));
   }, [plusCodeCliente, localizacaoCaixa, trajetoCabo]);
 
-  // Desenha rota no mapa
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || routeLL.length < 2) return;
-    const poly = L.polyline(routeLL, { color: "#7c3aed", weight: 5, opacity: 0.9 }).addTo(map);
-    return () => { map.removeLayer(poly); };
-  }, [routeLL]);
-
-  // Pinos
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !clientLL) return;
-    const mk = L.circleMarker(clientLL, { radius: 10, color: "white", weight: 3, fillColor: "#4f46e5", fillOpacity: 1 })
-      .addTo(map).bindTooltip("Cliente", { permanent: false });
-    return () => { map.removeLayer(mk); };
-  }, [clientLL]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ctoLL) return;
-    const mk = L.circleMarker(ctoLL, { radius: 10, color: "white", weight: 3, fillColor: "#16a34a", fillOpacity: 1 })
-      .addTo(map).bindTooltip("CTO", { permanent: false });
-    return () => { map.removeLayer(mk); };
-  }, [ctoLL]);
+  const routePositions = routeLL.map(ll => [ll.lat, ll.lng] as [number, number]);
 
   const allPoints = [
     ...(clientLL ? [clientLL] : []),
@@ -200,6 +177,36 @@ export default function RotaMapaDownload({
               <MapReady onReady={onMapReady} />
               <TilesLayer />
               {allPoints.length > 0 && <FitRoute points={allPoints} />}
+
+              {/* Rota desenhada — renderização declarativa garante exibição correta */}
+              {routePositions.length >= 2 && (
+                <>
+                  <Polyline
+                    positions={routePositions}
+                    pathOptions={{ color: "white", weight: 8, opacity: 0.5 }}
+                  />
+                  <Polyline
+                    positions={routePositions}
+                    pathOptions={{ color: "#7c3aed", weight: 5, opacity: 0.9 }}
+                  />
+                </>
+              )}
+
+              {/* Marcadores */}
+              {clientLL && (
+                <CircleMarker
+                  center={clientLL}
+                  radius={10}
+                  pathOptions={{ color: "white", weight: 3, fillColor: "#4f46e5", fillOpacity: 1 }}
+                />
+              )}
+              {ctoLL && (
+                <CircleMarker
+                  center={ctoLL}
+                  radius={10}
+                  pathOptions={{ color: "white", weight: 3, fillColor: "#16a34a", fillOpacity: 1 }}
+                />
+              )}
             </MapContainer>
           </div>
           <button
