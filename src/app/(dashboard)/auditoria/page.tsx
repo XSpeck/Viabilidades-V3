@@ -252,7 +252,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
       !!v.trajeto_expira_em &&
       new Date(v.trajeto_expira_em) > new Date()
     );
-    if (!temRota) { alert("É necessário traçar a rota do cabo antes de viabilizar."); return; }
+    if (!temRota && tipoLocal !== "Condomínio") { alert("É necessário traçar a rota do cabo antes de viabilizar."); return; }
     setLoading(true);
     try {
       await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
