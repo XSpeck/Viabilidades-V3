@@ -275,6 +275,36 @@ function FitBounds({ clientLat, clientLon, ctos }: {
 }
 
 // =====================
+// Botão de copiar
+// =====================
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copiar número da caixa"
+      style={{
+        background: copied ? "#dcfce7" : "#f3f4f6",
+        color: copied ? "#16a34a" : "#6b7280",
+        border: "1px solid " + (copied ? "#bbf7d0" : "#e5e7eb"),
+        borderRadius: 5, padding: "2px 7px",
+        fontSize: 11, fontWeight: 600, cursor: "pointer",
+        fontFamily: "system-ui,sans-serif", lineHeight: 1.4,
+        transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0,
+      }}
+    >
+      {copied ? "✓ Copiado" : "📋 Copiar"}
+    </button>
+  );
+}
+
+// =====================
 // Mapa principal
 // =====================
 export default function CtoMap({
@@ -850,7 +880,10 @@ export default function CtoMap({
           >
             <Popup minWidth={200}>
               <div style={{ fontFamily: "system-ui, sans-serif", fontSize: 13 }}>
-                <p style={{ fontWeight: 700, marginBottom: 4 }}>{cto.name}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <p style={{ fontWeight: 700, margin: 0, flex: 1 }}>{cto.name}</p>
+                  <CopyButton text={cto.name} />
+                </div>
                 {cto.route && (
                   <>
                     <p style={{ color: "#555", marginBottom: 2 }}>
