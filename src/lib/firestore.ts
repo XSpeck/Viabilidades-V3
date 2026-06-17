@@ -250,6 +250,7 @@ export async function devolverViabilizacao(id: string): Promise<void> {
 
 export async function deleteViabilizacao(id: string): Promise<void> {
   await deleteDoc(doc(db, "viabilizacoes", id));
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
 export async function aprovarFTTH(
@@ -994,10 +995,7 @@ export async function arquivarViabilizacao(id: string): Promise<void> {
   bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
-export async function excluirViabilizacao(id: string): Promise<void> {
-  await deleteDoc(doc(db, "viabilizacoes", id));
-  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
-}
+export { deleteViabilizacao as excluirViabilizacao };
 
 export async function atualizarObsAgendamento(id: string, obs: string): Promise<void> {
   await updateDoc(doc(db, "viabilizacoes", id), { obs_agendamento: obs });
