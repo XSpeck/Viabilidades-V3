@@ -130,10 +130,10 @@ async function findBestMatch<T extends { plus_code_cliente: string; predio_ftta:
   plusCode: string,
   nomePredio?: string,
 ): Promise<{ registro: T; distancia: number; porNome: boolean; porProximidade: boolean } | null> {
-  if (registros.length === 0) return null;
+  if (registros.length === 0) { console.log("[predios] lista vazia"); return null; }
 
   const clienteCoords = await resolverCoords(plusCode);
-  if (!clienteCoords) return null;
+  if (!clienteCoords) { console.log("[predios] falhou ao resolver coords do cliente:", plusCode); return null; }
 
   const comCoords = await Promise.all(
     registros.map(async (r) => ({ ...r, coords: await resolverCoords(r.plus_code_cliente) }))
@@ -147,7 +147,7 @@ async function findBestMatch<T extends { plus_code_cliente: string; predio_ftta:
       : Infinity;
     const porProximidade = distancia <= DIST_THRESHOLD;
     const porNome = nomePredio ? nomeSimilar(nomePredio, r.predio_ftta) : false;
-    // Exige os dois: localização próxima E nome similar
+    console.log(`[predios] "${r.predio_ftta}" | dist=${Math.round(distancia)}m | porProx=${porProximidade} | porNome=${porNome} | coordsOk=${!!r.coords}`);
     if (!porProximidade || !porNome) continue;
     if (!best || distancia < best.distancia) {
       best = { registro: r, distancia, porNome, porProximidade };
