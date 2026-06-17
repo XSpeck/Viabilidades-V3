@@ -44,6 +44,8 @@ export default function HomePage() {
   const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
   const [matchSemViab, setMatchSemViab] = useState<MatchPredioSemViab | null>(null);
   const [buscandoPredio, setBuscandoPredio] = useState(false);
+  const [confirmSemViab, setConfirmSemViab] = useState(false);
+  const [motivoMudanca, setMotivoMudanca] = useState("");
 
   useEffect(() => {
     getPrediosAtendidos().then(setPrediosAtendidos);
@@ -101,6 +103,10 @@ export default function HomePage() {
     setShowModal(false);
     setModalStep("tipo");
     setTipoSelecionado(null);
+    setMatchPredio(null);
+    setMatchSemViab(null);
+    setConfirmSemViab(false);
+    setMotivoMudanca("");
   }
 
   function selecionarTipo(tipo: TipoInstalacao) {
@@ -125,6 +131,12 @@ export default function HomePage() {
     if (!nomeCliente.trim()) { alert("Informe o nome do cliente!"); return; }
     if (tipoSelecionado !== "FTTH" && !nomePredio.trim()) { alert("Informe o nome do prédio/condomínio!"); return; }
     if (tipoSelecionado !== "FTTH" && !andar.trim()) { alert("Informe o apartamento/casa!"); return; }
+
+    // Se há sem viabilidade e ainda não foi confirmado, abre etapa de confirmação
+    if (matchSemViab && !confirmSemViab) {
+      setConfirmSemViab(true);
+      return;
+    }
 
     // Garantir que a localização seja salva sempre como Plus Code
     let plusCodeFinal = validatedPlusCode!;
@@ -151,6 +163,7 @@ export default function HomePage() {
         predio_ftta: tipoSelecionado !== "FTTH" ? nomePredio.trim() : undefined,
         andar_predio: tipoSelecionado !== "FTTH" ? andar.trim() : undefined,
         bloco_predio: bloco.trim() || undefined,
+        obs_usuario: motivoMudanca.trim() || undefined,
       });
       fecharModal();
       setSuccessMsg(tipoSelecionado);
@@ -358,7 +371,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 )}
-                {!buscandoPredio && matchSemViab && (
+                {!buscandoPredio && matchSemViab && !confirmSemViab && (
                   <div className="flex items-start gap-2.5 px-3 py-3 bg-red-50 border border-red-300 rounded-lg">
                     <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
                     <div className="text-xs text-red-800 space-y-0.5">
@@ -369,21 +382,56 @@ export default function HomePage() {
                       )}
                       <p className="text-red-700">
                         {matchSemViab.porProximidade && matchSemViab.porNome
-                          ? `📍 ${Math.round(matchSemViab.distancia)}m de distância · nome similar`
+                          ? `📍 ${Math.round(matchSemViab.distancia)}m · nome similar`
                           : matchSemViab.porProximidade
                           ? `📍 ${Math.round(matchSemViab.distancia)}m de distância`
                           : "📝 Nome similar ao cadastrado"}
                         {matchSemViab.predio.data_auditoria && ` · avaliado em ${new Date(matchSemViab.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
                       </p>
-                      <p className="text-red-600 pt-0.5">Você pode enviar mesmo assim se acreditar que houve mudança na situação.</p>
                     </div>
                   </div>
                 )}
 
-                <button onClick={handleConfirm} disabled={loading}
-                  className={`w-full ${cfg.bg} disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2`}>
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : `Confirmar ${tipoSelecionado}`}
-                </button>
+                {/* Etapa de confirmação quando sem viabilidade */}
+                {confirmSemViab && matchSemViab && (
+                  <div className="space-y-2 bg-orange-50 border border-orange-300 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-orange-800">⚠️ Tem certeza que deseja continuar?</p>
+                    <p className="text-xs text-orange-700">
+                      <strong>{matchSemViab.predio.predio_ftta}</strong> já foi avaliado como sem viabilidade
+                      {matchSemViab.predio.motivo_rejeicao ? ` — "${matchSemViab.predio.motivo_rejeicao}"` : ""}.
+                    </p>
+                    <p className="text-xs text-orange-700">Se algo mudou, descreva abaixo para o auditor:</p>
+                    <textarea
+                      placeholder="Ex: Fizemos uma nova passagem de cabo pela rua X..."
+                      value={motivoMudanca}
+                      onChange={(e) => setMotivoMudanca(e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border border-orange-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setConfirmSemViab(false); setMotivoMudanca(""); }}
+                        className="flex-1 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleConfirm}
+                        disabled={loading}
+                        className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sim, enviar mesmo assim"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!confirmSemViab && (
+                  <button onClick={handleConfirm} disabled={loading}
+                    className={`w-full ${cfg.bg} disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2`}>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : `Confirmar ${tipoSelecionado}`}
+                  </button>
+                )}
 
                 <button onClick={fecharModal} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
                   Cancelar

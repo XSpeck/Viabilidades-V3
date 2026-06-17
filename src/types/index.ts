@@ -60,6 +60,7 @@ export interface Viabilizacao {
   predio_ftta?: string;
   andar_predio?: string;
   bloco_predio?: string;
+  obs_usuario?: string;
   // FTTH
   cto_numero?: string;
   portas_disponiveis?: number;
