@@ -76,17 +76,18 @@ function getCacheSem(): PredioSemViab[] | null {
 export async function getPrediosSemViab(): Promise<PredioSemViab[]> {
   const cached = getCacheSem();
   if (cached) return cached;
-  const snap = await getDocs(
-    query(
-      collection(db, "viabilizacoes"),
-      where("status", "==", "rejeitado"),
-    )
-  );
+  const snap = await getDocs(collection(db, "predios_sem_viabilidade"));
   const data: PredioSemViab[] = snap.docs.flatMap((d) => {
-    const v = d.data() as Viabilizacao;
-    if (!v.predio_ftta || !v.plus_code_cliente) return [];
-    if (!["Prédio", "Condomínio"].includes(v.tipo_instalacao)) return [];
-    return [{ id: d.id, predio_ftta: v.predio_ftta, plus_code_cliente: v.plus_code_cliente, tipo_instalacao: v.tipo_instalacao, motivo_rejeicao: v.motivo_rejeicao, data_auditoria: v.data_auditoria }];
+    const raw = d.data() as { condominio?: string; localizacao?: string; observacao?: string; data_registro?: string };
+    if (!raw.condominio || !raw.localizacao) return [];
+    return [{
+      id: d.id,
+      predio_ftta: raw.condominio,
+      plus_code_cliente: raw.localizacao,
+      tipo_instalacao: "Prédio",
+      motivo_rejeicao: raw.observacao,
+      data_auditoria: raw.data_registro,
+    }];
   });
   try { sessionStorage.setItem(CACHE_KEY_SEM, JSON.stringify({ data, ts: Date.now() })); } catch {}
   return data;
