@@ -115,8 +115,7 @@ function nomeSimilar(a: string, b: string): boolean {
   return [...wordsA].filter((w) => wordsB.has(w)).length >= 2;
 }
 
-const DIST_THRESHOLD = 120;      // metros — proximidade estrita
-const DIST_NOME_MAX  = 500;      // metros — limite para aceitar match só por nome
+const DIST_THRESHOLD = 50; // metros — exige proximidade + nome similar
 
 async function resolverCoords(plusCode: string): Promise<{ lat: number; lon: number } | null> {
   try { return await plusCodeToCoords(plusCode); } catch { return null; }
@@ -144,9 +143,9 @@ async function findBestMatch<T extends { plus_code_cliente: string; predio_ftta:
       ? haversineDistance(clienteCoords.lat, clienteCoords.lon, r.coords.lat, r.coords.lon)
       : Infinity;
     const porProximidade = distancia <= DIST_THRESHOLD;
-    // Nome similar só conta se a localização também for próxima (até 500m)
-    const porNome = nomePredio ? (nomeSimilar(nomePredio, r.predio_ftta) && distancia <= DIST_NOME_MAX) : false;
-    if (!porNome && !porProximidade) continue;
+    const porNome = nomePredio ? nomeSimilar(nomePredio, r.predio_ftta) : false;
+    // Exige os dois: localização próxima E nome similar
+    if (!porProximidade || !porNome) continue;
     if (!best || distancia < best.distancia) {
       best = { registro: r, distancia, porNome, porProximidade };
     }
