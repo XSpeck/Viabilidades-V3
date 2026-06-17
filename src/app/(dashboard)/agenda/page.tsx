@@ -413,6 +413,9 @@ function VisitaChip({ v, userName, onRefresh }: { v: Viabilizacao; userName: str
             tecnologia === "UTP"  ? "bg-green-100 text-green-700" :
                                     "bg-orange-100 text-orange-700"
           }`}>{tecnologia}</span>
+          {v.equipe === "comercial_gmarx" && (
+            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700 shrink-0">Gmarx</span>
+          )}
         </div>
       </button>
       {open && (
@@ -560,6 +563,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
             <h2 className="font-bold text-white text-lg leading-tight">{v.predio_ftta ?? "Prédio"}</h2>
             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${corBadge}`}>{tecnologia}</span>
             {(v.giga || isAlwaysGiga) && <span className="text-yellow-300 text-sm font-bold">⚡</span>}
+            {v.equipe === "comercial_gmarx" && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">Gmarx</span>}
           </div>
           {v.nome_cliente_predio && (
             <p className="text-white/70 text-sm">{v.nome_cliente_predio}</p>
