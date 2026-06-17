@@ -1,8 +1,7 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import { haversineDistance } from "./ctos";
 import { plusCodeToCoords } from "./pluscode";
-import type { Viabilizacao } from "@/types";
 
 const CACHE_TTL = 5 * 60 * 1000;
 
@@ -38,13 +37,17 @@ export function bustPrediosCache(): void {
 export async function getPrediosEstruturados(): Promise<PredioEstruturado[]> {
   const cached = getCacheEst();
   if (cached) return cached;
-  const snap = await getDocs(
-    query(collection(db, "viabilizacoes"), where("status_predio", "==", "estruturado"))
-  );
+  const snap = await getDocs(collection(db, "predios_atendidos"));
   const data: PredioEstruturado[] = snap.docs.flatMap((d) => {
-    const v = d.data() as Viabilizacao;
-    if (!v.predio_ftta || !v.plus_code_cliente) return [];
-    return [{ id: d.id, predio_ftta: v.predio_ftta, plus_code_cliente: v.plus_code_cliente, tipo_instalacao: v.tipo_instalacao, data_auditoria: v.data_auditoria }];
+    const raw = d.data() as { condominio?: string; localizacao?: string; tecnologia?: string; data_estruturacao?: string };
+    if (!raw.condominio || !raw.localizacao) return [];
+    return [{
+      id: d.id,
+      predio_ftta: raw.condominio,
+      plus_code_cliente: raw.localizacao,
+      tipo_instalacao: raw.tecnologia ?? "Prédio",
+      data_auditoria: raw.data_estruturacao,
+    }];
   });
   try { sessionStorage.setItem(CACHE_KEY_EST, JSON.stringify({ data, ts: Date.now() })); } catch {}
   return data;
