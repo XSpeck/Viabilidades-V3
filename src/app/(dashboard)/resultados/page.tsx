@@ -466,7 +466,7 @@ export default function ResultadosPage() {
                                   {statusLabel[v.status] ?? v.status}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap max-w-[180px] truncate" title={v.motivo_rejeicao ?? v.motivo_desistencia ?? undefined}>{v.motivo_rejeicao ?? v.motivo_desistencia ?? "-"}</td>
+                              <td className="px-3 py-2.5 text-gray-600 text-xs">{v.motivo_rejeicao ?? v.motivo_desistencia ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{v.auditado_por ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(v.data_auditoria)}</td>
                             </tr>
