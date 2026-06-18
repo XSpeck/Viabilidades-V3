@@ -39,6 +39,8 @@ export default function ResultadosPage() {
   const [histSort, setHistSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
   const [histDataInicio, setHistDataInicio] = useState("");
   const [histDataFim, setHistDataFim] = useState("");
+  const [histPage, setHistPage] = useState(1);
+  const HIST_PER_PAGE = 20;
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -49,6 +51,7 @@ export default function ResultadosPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setHistPage(1); }, [histSearch, histTipo, histStatus, histDataInicio, histDataFim, histSort]);
 
   if (!canAccess(user ?? null, "resultados")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
@@ -142,6 +145,9 @@ export default function ResultadosPage() {
         default:         return 0;
       }
     });
+
+  const histTotalPages = Math.max(1, Math.ceil(historicoFiltrado.length / HIST_PER_PAGE));
+  const historicoPageItems = historicoFiltrado.slice((histPage - 1) * HIST_PER_PAGE, histPage * HIST_PER_PAGE);
 
   async function handleFinalizar(id: string) {
     try { await finalizarViabilizacao(id); }
@@ -372,7 +378,7 @@ export default function ResultadosPage() {
                 {historicoFiltrado.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">Nenhum registro encontrado.</div>
                 ) : (
-                  <div className="overflow-auto rounded-lg border max-h-[420px]">
+                  <div className="overflow-auto rounded-lg border">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
                         <tr>
@@ -407,7 +413,7 @@ export default function ResultadosPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {historicoFiltrado.map((v) => {
+                        {historicoPageItems.map((v) => {
                           const finalizadoColor =
                             v.status_instalacao === "instalado"   ? "bg-green-100 text-green-700" :
                             v.status_predio === "estruturado"     ? "bg-green-100 text-green-700" :
@@ -468,6 +474,54 @@ export default function ResultadosPage() {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {histTotalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-xs text-gray-400">
+                      Página {histPage} de {histTotalPages}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setHistPage(1)}
+                        disabled={histPage === 1}
+                        className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                      >«</button>
+                      <button
+                        onClick={() => setHistPage((p) => Math.max(1, p - 1))}
+                        disabled={histPage === 1}
+                        className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                      >‹</button>
+                      {Array.from({ length: histTotalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === histTotalPages || Math.abs(p - histPage) <= 1)
+                        .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                          if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push("...");
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((p, i) =>
+                          p === "..." ? (
+                            <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                          ) : (
+                            <button
+                              key={p}
+                              onClick={() => setHistPage(p as number)}
+                              className={`px-2.5 py-1 text-xs border rounded-lg ${histPage === p ? "bg-indigo-600 text-white border-indigo-600" : "hover:bg-gray-50"}`}
+                            >{p}</button>
+                          )
+                        )}
+                      <button
+                        onClick={() => setHistPage((p) => Math.min(histTotalPages, p + 1))}
+                        disabled={histPage === histTotalPages}
+                        className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                      >›</button>
+                      <button
+                        onClick={() => setHistPage(histTotalPages)}
+                        disabled={histPage === histTotalPages}
+                        className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                      >»</button>
+                    </div>
                   </div>
                 )}
               </div>
