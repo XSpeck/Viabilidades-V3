@@ -62,6 +62,8 @@ export default function AgendaTecnicaPage() {
   const [arquDateFrom, setArquDateFrom] = useState("");
   const [arquDateTo, setArquDateTo] = useState("");
   const [arquTecnico, setArquTecnico] = useState("todos");
+  const [arquPage, setArquPage] = useState(1);
+  const ARQ_PER_PAGE = 20;
 
   const load = useCallback(async () => {
     bustCacheAgendaTecnica();
@@ -71,6 +73,7 @@ export default function AgendaTecnicaPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setArquPage(1); }, [arquSearch, arquDateFrom, arquDateTo, arquTecnico, view]);
 
   async function loadArquivados() {
     if (arquivadosReady) return;
@@ -152,6 +155,9 @@ export default function AgendaTecnicaPage() {
         v.cto_numero?.toLowerCase().includes(q)
       );
     });
+
+  const arquTotalPages = Math.max(1, Math.ceil(arquivadosFiltrados.length / ARQ_PER_PAGE));
+  const arquPageItems = arquivadosFiltrados.slice((arquPage - 1) * ARQ_PER_PAGE, arquPage * ARQ_PER_PAGE);
 
   function downloadArquivados() {
     downloadCSV(
@@ -344,11 +350,48 @@ export default function AgendaTecnicaPage() {
                 {arquivadosFiltrados.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">Nenhum registro arquivado encontrado.</div>
                 ) : (
-                  <div className="space-y-2">
-                    {arquivadosFiltrados.map((v) => (
-                      <ArquivadoCard key={v.id} v={v} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      {arquPageItems.map((v) => (
+                        <ArquivadoCard key={v.id} v={v} />
+                      ))}
+                    </div>
+
+                    {arquTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs text-gray-400">
+                          Página {arquPage} de {arquTotalPages}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setArquPage(1)} disabled={arquPage === 1}
+                            className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">«</button>
+                          <button onClick={() => setArquPage((p) => Math.max(1, p - 1))} disabled={arquPage === 1}
+                            className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">‹</button>
+                          {Array.from({ length: arquTotalPages }, (_, i) => i + 1)
+                            .filter((p) => p === 1 || p === arquTotalPages || Math.abs(p - arquPage) <= 1)
+                            .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                              if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push("...");
+                              acc.push(p);
+                              return acc;
+                            }, [])
+                            .map((p, i) =>
+                              p === "..." ? (
+                                <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                              ) : (
+                                <button key={p} onClick={() => setArquPage(p as number)}
+                                  className={`px-2.5 py-1 text-xs border rounded-lg ${arquPage === p ? "bg-indigo-600 text-white border-indigo-600" : "hover:bg-gray-50"}`}>
+                                  {p}
+                                </button>
+                              )
+                            )}
+                          <button onClick={() => setArquPage((p) => Math.min(arquTotalPages, p + 1))} disabled={arquPage === arquTotalPages}
+                            className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">›</button>
+                          <button onClick={() => setArquPage(arquTotalPages)} disabled={arquPage === arquTotalPages}
+                            className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">»</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
