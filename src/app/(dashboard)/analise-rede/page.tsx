@@ -890,6 +890,8 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
   const [filtroTec, setFiltroTec]     = useState<"todos" | TecnicoRede>("todos");
   const [dataInicio, setDataInicio]   = useState("");
   const [dataFim, setDataFim]         = useState("");
+  const [page, setPage]               = useState(1);
+  const PER_PAGE = 20;
 
   async function load() {
     setLoading(true);
@@ -938,6 +940,11 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
     setSelected(null);
     setDemandas((prev) => prev.filter((d) => d.id !== id));
   }
+
+  useEffect(() => { setPage(1); }, [busca, filtroTec, dataInicio, dataFim]);
+
+  const totalPages = Math.max(1, Math.ceil(filtradas.length / PER_PAGE));
+  const pageItems  = filtradas.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const hasFilters = busca || filtroTec !== "todos" || dataInicio || dataFim;
 
@@ -1017,11 +1024,46 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
               {demandas.length === 0 ? "Nenhuma demanda arquivada." : "Nenhum resultado para os filtros aplicados."}
             </p>
           ) : (
-            <div className="divide-y">
-              {filtradas.map((d) => (
-                <ArquivoRow key={d.id} demanda={d} onClick={() => setSelected(d)} />
-              ))}
-            </div>
+            <>
+              <div className="divide-y">
+                {pageItems.map((d) => (
+                  <ArquivoRow key={d.id} demanda={d} onClick={() => setSelected(d)} />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <p className="text-xs text-gray-400">Página {page} de {totalPages}</p>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPage(1)} disabled={page === 1}
+                      className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">«</button>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                      className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">‹</button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                      .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push("...");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) =>
+                        p === "..." ? (
+                          <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                        ) : (
+                          <button key={p} onClick={() => setPage(p as number)}
+                            className={`px-2.5 py-1 text-xs border rounded-lg ${page === p ? "bg-indigo-600 text-white border-indigo-600" : "hover:bg-gray-50"}`}>
+                            {p}
+                          </button>
+                        )
+                      )}
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                      className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">›</button>
+                    <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                      className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30 hover:bg-gray-50">»</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
