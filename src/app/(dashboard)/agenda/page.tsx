@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
   getDemandasAgendadas, agendarDemanda, concluirDemanda, continuarDemanda,
-  addNotaDemanda, addNotaVisita, editarInfoDemanda, bustCacheAgenda,
+  addNotaDemanda, addNotaVisita, editarInfoDemanda, reabrirDemanda, bustCacheAgenda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade } from "@/types";
@@ -811,6 +811,15 @@ function DemandaModal({ d, onRefresh, onClose }: {
     finally { setSaving(false); }
   }
 
+  async function handleCancelarAgendamento() {
+    setSaving(true);
+    try {
+      await reabrirDemanda(d.id);
+      done("↩️ Agendamento cancelado — demanda devolvida para a fila em Análise de Rede.");
+    } catch { alert("Erro ao cancelar agendamento."); }
+    finally { setSaving(false); }
+  }
+
   async function handleContinuar() {
     if (!novaData) { alert("Informe a data!"); return; }
     setSaving(true);
@@ -997,18 +1006,27 @@ function DemandaModal({ d, onRefresh, onClose }: {
 
       {/* Footer */}
       {!successMsg && !action && (
-        <div className="shrink-0 px-6 py-4 border-t bg-gray-50 flex gap-2">
-          <button onClick={() => setAction("concluir")}
-            className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-colors">
-            ✅ Concluído
-          </button>
-          <button onClick={() => { setNovaData(""); setAction("continuar"); }}
-            className="flex-1 py-2.5 border-2 border-blue-300 hover:border-blue-400 text-blue-600 rounded-xl text-sm font-semibold transition-colors hover:bg-blue-50">
-            ➡️ Continuar
-          </button>
-          <button onClick={() => { setNovaData(""); setAction("reagendar"); }}
-            className="flex-1 py-2.5 border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-xl text-sm font-semibold transition-colors hover:bg-white">
-            🔄 Reagendar
+        <div className="shrink-0 px-6 py-4 border-t bg-gray-50 space-y-2">
+          <div className="flex gap-2">
+            <button onClick={() => setAction("concluir")}
+              className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-colors">
+              ✅ Concluído
+            </button>
+            <button onClick={() => { setNovaData(""); setAction("continuar"); }}
+              className="flex-1 py-2.5 border-2 border-blue-300 hover:border-blue-400 text-blue-600 rounded-xl text-sm font-semibold transition-colors hover:bg-blue-50">
+              ➡️ Continuar
+            </button>
+            <button onClick={() => { setNovaData(""); setAction("reagendar"); }}
+              className="flex-1 py-2.5 border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-xl text-sm font-semibold transition-colors hover:bg-white">
+              🔄 Reagendar
+            </button>
+          </div>
+          <button
+            onClick={handleCancelarAgendamento}
+            disabled={saving}
+            className="w-full text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50 text-center py-1"
+          >
+            ↩ Cancelar agendamento — devolver para Análise de Rede
           </button>
         </div>
       )}

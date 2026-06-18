@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, bustCacheAnaliseRede } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
@@ -219,8 +219,25 @@ export default function AnaliseRedePage() {
 
 // ── Card de demanda ───────────────────────────────────────
 function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefresh: () => void }) {
+  const { user } = useAuth();
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Notas de andamento
+  const [showNotas, setShowNotas]   = useState((d.notas_atividade?.length ?? 0) > 0);
+  const [notaTexto, setNotaTexto]   = useState("");
+  const [savingNota, setSavingNota] = useState(false);
+
+  async function handleAddNota() {
+    if (!notaTexto.trim()) return;
+    setSavingNota(true);
+    try {
+      await addNotaDemanda(d.id, notaTexto.trim(), user?.nome ?? "—");
+      setNotaTexto("");
+      onRefresh();
+    } catch { alert("Erro ao salvar nota."); }
+    finally { setSavingNota(false); }
+  }
 
   // Editar
   const [showEditar, setShowEditar]         = useState(false);
@@ -684,6 +701,60 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
           </div>
         </div>
       )}
+
+      {/* Andamento / notas */}
+      <div className="mt-3 border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          onClick={() => setShowNotas((s) => !s)}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+        >
+          <span className="text-xs font-semibold text-gray-600">
+            📋 Andamento
+            {(d.notas_atividade?.length ?? 0) > 0 && (
+              <span className="ml-1.5 text-gray-400 font-normal">{d.notas_atividade!.length} nota(s)</span>
+            )}
+          </span>
+          <span className="text-gray-400 text-xs">{showNotas ? "▲" : "▼"}</span>
+        </button>
+
+        {showNotas && (
+          <div className="p-3 space-y-3">
+            {(d.notas_atividade?.length ?? 0) > 0 && (
+              <div className="divide-y">
+                {[...(d.notas_atividade ?? [])].sort((a, b) => b.data.localeCompare(a.data)).map((n, i) => (
+                  <div key={i} className="flex gap-3 py-2.5 first:pt-0">
+                    <div className="flex flex-col items-center shrink-0 pt-1">
+                      <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.texto}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {n.por} · {new Date(n.data).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <textarea
+                value={notaTexto}
+                onChange={(e) => setNotaTexto(e.target.value)}
+                placeholder="Adicionar nota de andamento..."
+                rows={2}
+                className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              />
+              <button
+                onClick={handleAddNota}
+                disabled={savingNota || !notaTexto.trim()}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium self-end"
+              >
+                {savingNota ? <Loader2 className="w-4 h-4 animate-spin" /> : "✓"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
     </div>
   );
