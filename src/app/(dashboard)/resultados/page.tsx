@@ -76,6 +76,7 @@ export default function ResultadosPage() {
       OLT:           v.olt ?? "-",
       Distância:     v.distancia_cliente ?? "-",
       Status:        v.status,
+      Motivo:        v.motivo_rejeicao ?? v.motivo_desistencia ?? "-",
       Auditor:       v.auditado_por ?? "-",
       "Dt. Audit.":  formatDateTime(v.data_auditoria),
     }));
@@ -385,6 +386,7 @@ export default function ResultadosPage() {
                             { col: null,       label: "OLT"          },
                             { col: null,       label: "Distância"    },
                             { col: "status",   label: "Status"       },
+                            { col: null,       label: "Motivo"       },
                             { col: "auditor",  label: "Auditor"      },
                             { col: "dt_audit", label: "Dt. Audit."   },
                           ] as { col: string | null; label: string }[]).map(({ col, label }) =>
@@ -458,6 +460,7 @@ export default function ResultadosPage() {
                                   {statusLabel[v.status] ?? v.status}
                                 </span>
                               </td>
+                              <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap max-w-[180px] truncate" title={v.motivo_rejeicao ?? v.motivo_desistencia ?? undefined}>{v.motivo_rejeicao ?? v.motivo_desistencia ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{v.auditado_por ?? "-"}</td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(v.data_auditoria)}</td>
                             </tr>
