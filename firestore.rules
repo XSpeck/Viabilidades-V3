@@ -59,6 +59,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Bairros de rede
+    match /bairros_rede/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // Fila de notificações do bot — escrita pelo app, leitura só via Admin SDK
     match /bot_notificacoes/{id} {
       allow create: if isAuth();
