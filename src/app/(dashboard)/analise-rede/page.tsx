@@ -327,7 +327,6 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
     const tipoFinal = editTipo === "Outro" ? editTipoCustom.trim() : editTipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
     if (!editDescricao.trim()) { alert("Informe a descrição."); return; }
-    if (editTecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
     if (!editBairro) { alert("Selecione o bairro."); return; }
     setSaving(true);
     try {
