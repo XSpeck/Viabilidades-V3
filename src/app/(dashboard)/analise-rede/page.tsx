@@ -204,25 +204,27 @@ export default function AnaliseRedePage() {
 
         {/* Filtro bairro */}
         {bairros.length > 0 && (
-          <div className="px-4 py-3 border-b bg-gray-50 flex flex-wrap gap-2">
-            <button onClick={() => setBairroFiltro("todos")}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${bairroFiltro === "todos" ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
-              📍 Todos os bairros
-            </button>
-            {bairros.map((b) => {
-              const count = demandas.filter((d) => d.bairro === b.nome && d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length;
-              return (
-                <button key={b.id} onClick={() => setBairroFiltro(b.nome)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${bairroFiltro === b.nome ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
-                  {b.nome}
-                  {count > 0 && (
-                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${bairroFiltro === b.nome ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          <div className="px-4 py-2.5 border-b bg-gray-50 flex items-center gap-2">
+            <span className="text-xs text-gray-500 shrink-0">📍 Bairro</span>
+            <select
+              value={bairroFiltro}
+              onChange={(e) => setBairroFiltro(e.target.value)}
+              className="flex-1 px-2.5 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+            >
+              <option value="todos">
+                Todos ({demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length})
+              </option>
+              {bairros.map((b) => {
+                const count = demandas.filter((d) => d.bairro === b.nome && d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length;
+                return <option key={b.id} value={b.nome}>{b.nome} ({count})</option>;
+              })}
+            </select>
+            {bairroFiltro !== "todos" && (
+              <button onClick={() => setBairroFiltro("todos")}
+                className="text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                ✕
+              </button>
+            )}
           </div>
         )}
 
