@@ -177,10 +177,16 @@ export type TecnicoRede = typeof TECNICOS_REDE[number];
 export type StatusDemanda    = "aberta" | "agendada" | "em_andamento" | "concluida" | "arquivada";
 export type PrioridadeDemanda = "baixa" | "media" | "alta" | "urgente";
 
+export interface BairroRede {
+  id: string;
+  nome: string;
+}
+
 export interface DemandaRede {
   id: string;
   tecnicos: TecnicoRede[];
   tipo: string;
+  bairro: string;
   local?: string;
   prioridade: PrioridadeDemanda;
   descricao: string;

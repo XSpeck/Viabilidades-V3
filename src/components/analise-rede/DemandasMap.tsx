@@ -192,6 +192,11 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                         }} />
                         <strong style={{ fontSize: 13 }}>{p.demanda.tecnicos.join(", ")}</strong>
                       </div>
+                      {p.demanda.bairro && (
+                        <p style={{ fontSize: 12, marginBottom: 2 }}>
+                          📍 <strong>{p.demanda.bairro}</strong>
+                        </p>
+                      )}
                       <p style={{ fontSize: 12, marginBottom: 2 }}>
                         Prioridade: <strong>{PRIORIDADE_LABEL[p.demanda.prioridade]}</strong>
                       </p>

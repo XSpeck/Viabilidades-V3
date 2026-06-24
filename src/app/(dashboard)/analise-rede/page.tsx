@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede } from "@/lib/firestore";
+import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
-import type { DemandaRede, TecnicoRede, PrioridadeDemanda } from "@/types";
+import type { DemandaRede, BairroRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
 import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search, Pencil } from "lucide-react";
 
@@ -64,16 +64,22 @@ const TECNICO_DOT: Record<string, string> = {
 export default function AnaliseRedePage() {
   const { user } = useAuth();
   const [demandas, setDemandas]     = useState<DemandaRede[]>([]);
+  const [bairros, setBairros]       = useState<BairroRede[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showModal, setShowModal]   = useState(false);
   const [showMap, setShowMap]       = useState(false);
   const [tecnicoTab, setTecnicoTab] = useState<"todos" | TecnicoRede>("todos");
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
+  const [bairroFiltro, setBairroFiltro] = useState<"todos" | string>("todos");
 
   const load = useCallback(async () => {
     bustCacheAnaliseRede();
     setLoading(true);
-    try { setDemandas(await getDemandas()); }
+    try {
+      const [dem, bai] = await Promise.all([getDemandas(), getBairros()]);
+      setDemandas(dem);
+      setBairros(bai);
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -86,17 +92,23 @@ export default function AnaliseRedePage() {
   const filtradas = demandas
     .filter((d) => d.status !== "arquivada")
     .filter((d) => tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))
-    .filter((d) => statusFiltro === "todas" || d.status === statusFiltro);
+    .filter((d) => statusFiltro === "todas" || d.status === statusFiltro)
+    .filter((d) => bairroFiltro === "todos" || d.bairro === bairroFiltro);
+
+  const baseAtivos = (d: DemandaRede) =>
+    d.status !== "arquivada" &&
+    (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) &&
+    (bairroFiltro === "todos" || d.bairro === bairroFiltro);
 
   const counts = {
-    aberta:       demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "aberta").length,
-    agendada:     demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "agendada").length,
-    em_andamento: demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "em_andamento").length,
-    concluida:    demandas.filter((d) => (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && d.status === "concluida").length,
+    aberta:       demandas.filter((d) => baseAtivos(d) && d.status === "aberta").length,
+    agendada:     demandas.filter((d) => baseAtivos(d) && d.status === "agendada").length,
+    em_andamento: demandas.filter((d) => baseAtivos(d) && d.status === "em_andamento").length,
+    concluida:    demandas.filter((d) => baseAtivos(d) && d.status === "concluida").length,
   };
 
   const countTecnico = (t: TecnicoRede) =>
-    demandas.filter((d) => d.tecnicos.includes(t) && d.status !== "concluida" && d.status !== "arquivada").length;
+    demandas.filter((d) => d.tecnicos.includes(t) && d.status !== "concluida" && d.status !== "arquivada" && (bairroFiltro === "todos" || d.bairro === bairroFiltro)).length;
 
   return (
     <div className="space-y-6">
@@ -184,11 +196,35 @@ export default function AnaliseRedePage() {
             <button key={f.key} onClick={() => setStatusFiltro(f.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFiltro === f.key ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
               {f.key === "todas"
-                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length})`
+                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede)) && (bairroFiltro === "todos" || d.bairro === bairroFiltro)).length})`
                 : f.label}
             </button>
           ))}
         </div>
+
+        {/* Filtro bairro */}
+        {bairros.length > 0 && (
+          <div className="px-4 py-3 border-b bg-gray-50 flex flex-wrap gap-2">
+            <button onClick={() => setBairroFiltro("todos")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${bairroFiltro === "todos" ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
+              📍 Todos os bairros
+            </button>
+            {bairros.map((b) => {
+              const count = demandas.filter((d) => d.bairro === b.nome && d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length;
+              return (
+                <button key={b.id} onClick={() => setBairroFiltro(b.nome)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${bairroFiltro === b.nome ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
+                  {b.nome}
+                  {count > 0 && (
+                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${bairroFiltro === b.nome ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Lista */}
         {loading ? (
@@ -198,7 +234,7 @@ export default function AnaliseRedePage() {
         ) : (
           <div className="divide-y">
             {filtradas.map((d) => (
-              <DemandaCard key={d.id} demanda={d} onRefresh={load} />
+              <DemandaCard key={d.id} demanda={d} bairros={bairros} onRefresh={load} />
             ))}
           </div>
         )}
@@ -209,6 +245,7 @@ export default function AnaliseRedePage() {
       {showModal && (
         <NovaDemandaModal
           auditorNome={user?.nome ?? ""}
+          bairros={bairros}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
         />
@@ -218,7 +255,7 @@ export default function AnaliseRedePage() {
 }
 
 // ── Card de demanda ───────────────────────────────────────
-function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefresh: () => void }) {
+function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede; bairros: BairroRede[]; onRefresh: () => void }) {
   const { user } = useAuth();
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -242,6 +279,7 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
   // Editar
   const [showEditar, setShowEditar]         = useState(false);
   const [editTecnicos, setEditTecnicos]     = useState<TecnicoRede[]>(d.tecnicos);
+  const [editBairro, setEditBairro]         = useState(d.bairro ?? "");
   const [editTipo, setEditTipo]             = useState(TIPOS_SERVICO.includes(d.tipo) ? d.tipo : "Outro");
   const [editTipoCustom, setEditTipoCustom] = useState(TIPOS_SERVICO.includes(d.tipo) ? "" : d.tipo);
   const [editPrioridade, setEditPrioridade] = useState<PrioridadeDemanda>(d.prioridade);
@@ -290,9 +328,10 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
     if (!editDescricao.trim()) { alert("Informe a descrição."); return; }
     if (editTecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
+    if (!editBairro) { alert("Selecione o bairro."); return; }
     setSaving(true);
     try {
-      await updateDemanda(d.id, { tecnicos: editTecnicos, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
+      await updateDemanda(d.id, { tecnicos: editTecnicos, bairro: editBairro, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
       setShowEditar(false);
       onRefresh();
     } finally { setSaving(false); }
@@ -390,6 +429,11 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[d.status]}`}>
               {STATUS_LABEL[d.status]}
             </span>
+            {d.bairro && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                📍 {d.bairro}
+              </span>
+            )}
           </div>
 
           {/* Técnico + descrição */}
@@ -591,6 +635,11 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
             })}
           </div>
           <div className="grid grid-cols-2 gap-2">
+            <select value={editBairro} onChange={(e) => setEditBairro(e.target.value)}
+              className="col-span-2 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="">Selecione o bairro *</option>
+              {bairros.map((b) => <option key={b.id} value={b.nome}>{b.nome}</option>)}
+            </select>
             <select value={editPrioridade} onChange={(e) => setEditPrioridade(e.target.value as PrioridadeDemanda)}
               className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
               {(["baixa", "media", "alta", "urgente"] as PrioridadeDemanda[]).map((p) => (
@@ -763,10 +812,11 @@ function DemandaCard({ demanda: d, onRefresh }: { demanda: DemandaRede; onRefres
 // ── Modal nova demanda ────────────────────────────────────
 type InputMethod = "pluscode" | "coords";
 
-function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
-  auditorNome: string; onClose: () => void; onSaved: () => void;
+function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
+  auditorNome: string; bairros: BairroRede[]; onClose: () => void; onSaved: () => void;
 }) {
   const [tecnicos, setTecnicos]     = useState<TecnicoRede[]>([]);
+  const [bairro, setBairro]         = useState("");
   const [tipo, setTipo]             = useState(TIPOS_SERVICO[0]);
   const [tipoCustom, setTipoCustom] = useState("");
   const [prioridade, setPrioridade] = useState<PrioridadeDemanda>("media");
@@ -802,11 +852,13 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
   async function handleSave() {
     const tipoFinal = tipo === "Outro" ? tipoCustom.trim() : tipo;
     if (!tipoFinal) { alert("Informe o tipo de serviço."); return; }
+    if (!bairro) { alert("Selecione o bairro."); return; }
     if (!descricao.trim()) { alert("Informe a descrição."); return; }
     setSaving(true);
     try {
       await createDemanda({
         tecnicos,
+        bairro,
         tipo: tipoFinal,
         prioridade,
         local: validatedPlusCode ?? undefined,
@@ -845,6 +897,15 @@ function NovaDemandaModal({ auditorNome, onClose, onSaved }: {
                 })}
               </div>
             </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Bairro *</label>
+              <select value={bairro} onChange={(e) => setBairro(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="">Selecione o bairro...</option>
+                {bairros.map((b) => <option key={b.id} value={b.nome}>{b.nome}</option>)}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Prioridade *</label>
@@ -959,6 +1020,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
   // Filtros próprios do arquivo
   const [busca, setBusca]             = useState("");
   const [filtroTec, setFiltroTec]     = useState<"todos" | TecnicoRede>("todos");
+  const [filtroBairro, setFiltroBairro] = useState<string>("todos");
   const [dataInicio, setDataInicio]   = useState("");
   const [dataFim, setDataFim]         = useState("");
   const [page, setPage]               = useState(1);
@@ -977,8 +1039,11 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
     setOpen((v) => !v);
   }
 
+  const bairrosArquivados = Array.from(new Set(demandas.map((d) => d.bairro).filter(Boolean))).sort();
+
   const filtradas = demandas
     .filter((d) => filtroTec === "todos" || d.tecnicos.includes(filtroTec as TecnicoRede))
+    .filter((d) => filtroBairro === "todos" || d.bairro === filtroBairro)
     .filter((d) => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
@@ -986,6 +1051,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
         d.descricao.toLowerCase().includes(q) ||
         d.tipo.toLowerCase().includes(q) ||
         d.tecnicos.some((t) => t.toLowerCase().includes(q)) ||
+        (d.bairro ?? "").toLowerCase().includes(q) ||
         (d.obs_conclusao ?? "").toLowerCase().includes(q)
       );
     })
@@ -1012,12 +1078,12 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
     setDemandas((prev) => prev.filter((d) => d.id !== id));
   }
 
-  useEffect(() => { setPage(1); }, [busca, filtroTec, dataInicio, dataFim]);
+  useEffect(() => { setPage(1); }, [busca, filtroTec, filtroBairro, dataInicio, dataFim]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / PER_PAGE));
   const pageItems  = filtradas.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  const hasFilters = busca || filtroTec !== "todos" || dataInicio || dataFim;
+  const hasFilters = busca || filtroTec !== "todos" || filtroBairro !== "todos" || dataInicio || dataFim;
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden">
@@ -1063,7 +1129,14 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
                   {t === "todos" ? "Todos" : t}
                 </button>
               ))}
-              <div className="flex items-center gap-1.5 ml-auto">
+              <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                {bairrosArquivados.length > 0 && (
+                  <select value={filtroBairro} onChange={(e) => setFiltroBairro(e.target.value)}
+                    className="text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white">
+                    <option value="todos">Todos os bairros</option>
+                    {bairrosArquivados.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                )}
                 <span className="text-xs text-gray-400">De</span>
                 <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)}
                   className="text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
@@ -1071,7 +1144,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
                 <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)}
                   className="text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
                 {hasFilters && (
-                  <button onClick={() => { setBusca(""); setFiltroTec("todos"); setDataInicio(""); setDataFim(""); }}
+                  <button onClick={() => { setBusca(""); setFiltroTec("todos"); setFiltroBairro("todos"); setDataInicio(""); setDataFim(""); }}
                     className="text-xs text-gray-400 hover:text-gray-600 underline ml-1">
                     Limpar
                   </button>

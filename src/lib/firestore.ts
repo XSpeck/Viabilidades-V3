@@ -25,6 +25,7 @@ import type {
   TipoInstalacao,
   MensagemViabilizacao,
   DemandaRede,
+  BairroRede,
   StatusDemanda,
   NotaAtividade,
 } from "@/types";
@@ -1155,4 +1156,33 @@ export async function salvarTrajeto(id: string, pontos: [number, number][]): Pro
     trajeto_expira_em: expira.toISOString(),
   });
   bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
+}
+
+// =====================
+// Bairros de Rede
+// =====================
+
+export async function getBairros(): Promise<BairroRede[]> {
+  const cached = getCached<BairroRede[]>("viab_bairros_rede_v1");
+  if (cached) return cached;
+  const q = query(collection(db, "bairros_rede"), orderBy("nome", "asc"));
+  const snap = await getDocs(q);
+  const data = snap.docs.map((d) => ({ id: d.id, nome: d.data().nome as string }));
+  setCache("viab_bairros_rede_v1", data);
+  return data;
+}
+
+export async function createBairro(nome: string): Promise<void> {
+  await addDoc(collection(db, "bairros_rede"), { nome: nome.trim() });
+  bustCache("viab_bairros_rede_v1");
+}
+
+export async function renameBairro(id: string, nome: string): Promise<void> {
+  await updateDoc(doc(db, "bairros_rede", id), { nome: nome.trim() });
+  bustCache("viab_bairros_rede_v1");
+}
+
+export async function deleteBairro(id: string): Promise<void> {
+  await deleteDoc(doc(db, "bairros_rede", id));
+  bustCache("viab_bairros_rede_v1");
 }
