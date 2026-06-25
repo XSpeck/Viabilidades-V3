@@ -8,11 +8,11 @@ import {
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
   iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
   manterDecisaoContestacao, revisarContestacao, proporDataVisita, deletarTrajeto,
-  bustCacheAuditoria,
+  bustCacheAuditoria, getViabilizacoesRelatorio,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, TipoInstalacao } from "@/types";
-import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle, AlertTriangle } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle, AlertTriangle, History, ChevronDown, ChevronUp } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
 import FttaMap from "@/components/auditoria/FttaMap";
@@ -20,12 +20,28 @@ import { findPredioEstruturado, findPredioSemViab, type MatchPredio, type MatchP
 
 type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "contestado";
 
+function defaultDataInicio() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AuditoriaPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<Viabilizacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<AuditoriaFilter>("todos");
   const [search, setSearch] = useState("");
+
+  // ── Histórico ──────────────────────────────────────────
+  const [showHistorico, setShowHistorico] = useState(false);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [historico, setHistorico] = useState<Viabilizacao[]>([]);
+  const [histDataInicio, setHistDataInicio] = useState(defaultDataInicio);
+  const [histDataFim, setHistDataFim] = useState(new Date().toISOString().slice(0, 10));
+  const [histSearch, setHistSearch] = useState("");
+  const [histTipo, setHistTipo] = useState("todos");
+  const [histStatus, setHistStatus] = useState("todos");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -36,6 +52,15 @@ export default function AuditoriaPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function loadHistorico() {
+    if (!user || !histDataInicio || !histDataFim) return;
+    setLoadingHistorico(true);
+    try {
+      const todos = await getViabilizacoesRelatorio(histDataInicio, histDataFim);
+      setHistorico(todos.filter((v) => v.auditado_por === user.nome));
+    } finally { setLoadingHistorico(false); }
+  }
 
   if (!canAccess(user ?? null, "auditoria")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
@@ -137,6 +162,238 @@ export default function AuditoriaPage() {
           {filtered.map((v) => (
             <AuditoriaCard key={v.id} v={v} userName={user!.nome} onRefresh={load} />
           ))}
+        </div>
+      )}
+
+      {/* ── Histórico do auditor ─────────────────────────── */}
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowHistorico((s) => !s)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
+            <span className="font-semibold text-gray-800">📋 Meu Histórico de Auditorias</span>
+          </div>
+          {showHistorico ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+
+        {showHistorico && (
+          <div className="border-t p-4 space-y-3">
+            {/* Filtros */}
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por cliente, plus code, prédio ou CTO..."
+                  value={histSearch}
+                  onChange={(e) => setHistSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+              </div>
+              <select value={histTipo} onChange={(e) => setHistTipo(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="todos">Todos os tipos</option>
+                <option value="FTTH">🏠 FTTH</option>
+                <option value="Prédio">🏢 Prédio</option>
+                <option value="Condomínio">🏘️ Condomínio</option>
+              </select>
+              <select value={histStatus} onChange={(e) => setHistStatus(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="todos">Todos os status</option>
+                <option value="aprovado">✅ Aprovado</option>
+                <option value="rejeitado">❌ Sem viabilidade</option>
+                <option value="utp">📡 UTP</option>
+              </select>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">De</span>
+                <input type="date" value={histDataInicio} onChange={(e) => setHistDataInicio(e.target.value)}
+                  className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <span className="text-xs text-gray-400">até</span>
+                <input type="date" value={histDataFim} onChange={(e) => setHistDataFim(e.target.value)}
+                  className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+              <button
+                onClick={loadHistorico}
+                disabled={loadingHistorico || !histDataInicio || !histDataFim}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium"
+              >
+                {loadingHistorico ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                Buscar
+              </button>
+            </div>
+
+            {(() => {
+              const filtrado = historico
+                .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
+                .filter((v) => histStatus === "todos" || v.status === histStatus)
+                .filter((v) => {
+                  if (!histSearch.trim()) return true;
+                  const q = histSearch.toLowerCase();
+                  return (
+                    v.nome_cliente?.toLowerCase().includes(q) ||
+                    v.plus_code_cliente.toLowerCase().includes(q) ||
+                    v.predio_ftta?.toLowerCase().includes(q) ||
+                    v.cto_numero?.toLowerCase().includes(q) ||
+                    v.cdoi?.toLowerCase().includes(q)
+                  );
+                })
+                .sort((a, b) => ((b.data_auditoria ?? "") > (a.data_auditoria ?? "") ? 1 : -1));
+
+              if (historico.length === 0 && !loadingHistorico) {
+                return <p className="text-sm text-gray-400 text-center py-6">Selecione o período e clique em Buscar.</p>;
+              }
+              if (loadingHistorico) {
+                return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-indigo-600" /></div>;
+              }
+              if (filtrado.length === 0) {
+                return <p className="text-sm text-gray-400 text-center py-6">Nenhum resultado para os filtros aplicados.</p>;
+              }
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-400">{filtrado.length} de {historico.length} registro(s)</p>
+                  {filtrado.map((v) => (
+                    <HistoricoCard key={v.id} v={v} />
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoricoCard({ v }: { v: Viabilizacao }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const isFtta = v.tipo_instalacao === "Prédio";
+  const isCond = v.tipo_instalacao === "Condomínio";
+  const tipoIcon = v.status === "utp" ? "📡" : isFtta ? "🏢" : isCond ? "🏘️" : "🏠";
+
+  const statusLabel: Record<string, string> = {
+    aprovado:  "✅ Aprovado",
+    rejeitado: "❌ Sem viabilidade",
+    utp:       "📡 UTP",
+  };
+  const statusColor: Record<string, string> = {
+    aprovado:  "bg-green-100 text-green-700",
+    rejeitado: "bg-red-100 text-red-700",
+    utp:       "bg-purple-100 text-purple-700",
+  };
+
+  function buildCopyText() {
+    if (isFtta) {
+      return [
+        `CDOI: ${v.cdoi ?? "-"}`,
+        v.olt ? `OLT: ${v.olt}` : "",
+        `Prédio: ${v.predio_ftta ?? "-"}`,
+        `Portas: ${v.portas_disponiveis ?? "-"}`,
+        `Média RX: ${v.media_rx ? v.media_rx + " dBm" : "-"}`,
+        v.observacoes ? `Obs: ${v.observacoes}` : "",
+      ].filter(Boolean).join("\n");
+    }
+    return [
+      `CTO: ${v.cto_numero ?? "-"}`,
+      v.olt ? `OLT: ${v.olt}` : "",
+      `Portas: ${v.portas_disponiveis ?? "-"}`,
+      `Menor RX: ${v.menor_rx ? v.menor_rx + " dBm" : "-"}`,
+      `Distância: ${v.distancia_cliente ?? "-"}`,
+      `Localização CTO: ${v.localizacao_caixa ?? "-"}`,
+      v.observacoes ? `Obs: ${v.observacoes}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(buildCopyText());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button onClick={() => setOpen((s) => !s)} className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium text-gray-900 text-sm">
+              {tipoIcon} {v.nome_cliente ?? locationToPlusCode(v.plus_code_cliente)}
+              {v.predio_ftta && <span className="text-gray-500 font-normal"> · {v.predio_ftta}</span>}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              📍 <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline">{locationToPlusCode(v.plus_code_cliente)}</a>
+              {" · "}Auditado em {formatDateTime(v.data_auditoria)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[v.status] ?? "bg-gray-100 text-gray-600"}`}>
+              {statusLabel[v.status] ?? v.status}
+            </span>
+            <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t px-4 pb-4 pt-3 space-y-2 text-sm text-gray-700">
+          {/* FTTH */}
+          {(v.tipo_instalacao === "FTTH" || isCond) && v.status === "aprovado" && (
+            <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button onClick={handleCopy}
+                  className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors ${copied ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
+              <p><strong>CTO:</strong> {v.cto_numero ?? "-"}</p>
+              {v.olt && <p><strong>OLT:</strong> {v.olt}</p>}
+              <p><strong>Portas:</strong> {v.portas_disponiveis ?? "-"}</p>
+              <p><strong>Menor RX:</strong> {v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p>
+              <p><strong>Distância:</strong> {v.distancia_cliente ?? "-"}</p>
+              <p><strong>Localização CTO:</strong> {v.localizacao_caixa ?? "-"}</p>
+              {v.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {v.observacoes}</p>}
+            </div>
+          )}
+
+          {/* FTTA (Prédio) */}
+          {isFtta && v.status === "aprovado" && (
+            <div className="bg-green-50 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
+                <button onClick={handleCopy}
+                  className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors ${copied ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
+                  {copied ? "✓ Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
+              <p><strong>CDOI:</strong> {v.cdoi ?? "-"}</p>
+              {v.olt && <p><strong>OLT:</strong> {v.olt}</p>}
+              <p><strong>Prédio:</strong> {v.predio_ftta ?? "-"}</p>
+              <p><strong>Portas:</strong> {v.portas_disponiveis ?? "-"}</p>
+              <p><strong>Média RX:</strong> {v.media_rx ? `${v.media_rx} dBm` : "-"}</p>
+              {v.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {v.observacoes}</p>}
+            </div>
+          )}
+
+          {/* Rejeitado */}
+          {v.status === "rejeitado" && (
+            <div className="bg-red-50 rounded-lg p-3">
+              <p><strong>Motivo:</strong> {v.motivo_rejeicao ?? "Sem viabilidade."}</p>
+            </div>
+          )}
+
+          {/* UTP */}
+          {v.status === "utp" && (
+            <div className="bg-purple-50 rounded-lg p-3">
+              <p>Atendemos esta área via UTP (cabo de rede).</p>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400 pt-1">
+            👤 Solicitante: <strong>{v.usuario}</strong> · Solicitado em {formatDateTime(v.data_solicitacao)}
+          </p>
         </div>
       )}
     </div>
