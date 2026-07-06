@@ -15,7 +15,7 @@ import {
   arrayUnion,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import { enqueueNotificacao } from "./notificacoes";
 import type {
   Viabilizacao,
@@ -27,6 +27,7 @@ import type {
   DemandaRede,
   BairroRede,
   StatusDemanda,
+  PrioridadeDemanda,
   NotaAtividade,
 } from "@/types";
 
@@ -386,6 +387,66 @@ export async function enviarDadosPredio(
   });
 }
 
+// ─── Espelho em Análise de Rede das visitas de estruturação ────────
+// Mantém uma demanda em "demandas_rede" sincronizada com o ciclo de vida
+// da visita de estruturação de prédio/condomínio, só para visibilidade
+// unificada — a origem e a agenda continuam sendo a própria Viabilizacao.
+async function findDemandaByViabilizacaoId(viabilizacaoId: string): Promise<string | null> {
+  const snap = await getDocs(query(collection(db, "demandas_rede"), where("viabilizacao_id", "==", viabilizacaoId)));
+  return snap.empty ? null : snap.docs[0].id;
+}
+
+async function sincronizarDemandaEstrutura(
+  viabilizacaoId: string,
+  info: {
+    tecnico?: string;
+    dataAgendamento: string;
+    periodoAgendamento: string;
+    predio?: string;
+    localizacao?: string;
+    obs?: string;
+    criadoPor?: string;
+    urgente?: boolean;
+  }
+): Promise<void> {
+  const existingId = await findDemandaByViabilizacaoId(viabilizacaoId);
+  const tecnicos = info.tecnico ? [info.tecnico] : [];
+  if (existingId) {
+    await updateDoc(doc(db, "demandas_rede", existingId), stripUndefined({
+      tecnicos,
+      data_agendamento: info.dataAgendamento,
+      periodo_agendamento: info.periodoAgendamento,
+      status: "agendada" as StatusDemanda,
+    }));
+  } else {
+    await addDoc(collection(db, "demandas_rede"), stripUndefined({
+      tecnicos,
+      tipo: "Estruturação de Rede",
+      local: info.localizacao,
+      prioridade: (info.urgente ? "alta" : "media") as PrioridadeDemanda,
+      descricao: `Estruturação de rede — ${info.predio ?? "Prédio"}${info.obs ? `\n${info.obs}` : ""}`,
+      status: "agendada" as StatusDemanda,
+      criado_por: info.criadoPor ?? "Sistema",
+      data_criacao: new Date().toISOString(),
+      data_agendamento: info.dataAgendamento,
+      periodo_agendamento: info.periodoAgendamento,
+      viabilizacao_id: viabilizacaoId,
+    }));
+  }
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
+}
+
+async function concluirDemandaEstrutura(viabilizacaoId: string, obs?: string): Promise<void> {
+  const existingId = await findDemandaByViabilizacaoId(viabilizacaoId);
+  if (!existingId) return;
+  await updateDoc(doc(db, "demandas_rede", existingId), stripUndefined({
+    status: "concluida" as StatusDemanda,
+    data_conclusao: new Date().toISOString(),
+    obs_conclusao: obs,
+  }));
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
+}
+
 export async function agendarVisita(
   id: string,
   dados: {
@@ -396,7 +457,8 @@ export async function agendarVisita(
     giga: boolean;
     obs_agendamento?: string;
   },
-  historicoAnterior?: string
+  historicoAnterior?: string,
+  contexto?: { predio?: string; localizacao?: string; criadoPor?: string; urgente?: boolean }
 ): Promise<void> {
   const entrada = `Auditor agendou ${dados.data_visita} ${dados.periodo_visita} — ${dados.tecnico_responsavel}`;
   const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
@@ -406,6 +468,16 @@ export async function agendarVisita(
     data_agendamento: new Date().toISOString(),
     historico_visita,
     ...dados,
+  });
+  await sincronizarDemandaEstrutura(id, {
+    tecnico: dados.tecnico_responsavel,
+    dataAgendamento: dados.data_visita,
+    periodoAgendamento: dados.periodo_visita,
+    predio: contexto?.predio,
+    localizacao: contexto?.localizacao,
+    obs: dados.obs_agendamento,
+    criadoPor: contexto?.criadoPor,
+    urgente: contexto?.urgente,
   });
 }
 
@@ -433,13 +505,15 @@ export async function proporDataVisita(
 }
 
 // Usuário confirma a proposta do auditor → agendado
+// Nota: chamado pelo cliente (role "usuario", sem permissão de escrita direta em demandas_rede) —
+// o espelho em Análise de Rede é sincronizado via rota de API com Admin SDK (bypassa a regra do Firestore).
 export async function confirmarPropostaVisita(id: string, dados: {
   proposta_visita_data: string;
   proposta_visita_periodo: string;
   proposta_visita_tecnico?: string;
   tecnologia_predio?: string;
   giga?: boolean;
-}, historicoAnterior?: string): Promise<void> {
+}, historicoAnterior?: string, contexto?: { predio?: string; localizacao?: string; urgente?: boolean }): Promise<void> {
   const entrada = `Usuário confirmou ${dados.proposta_visita_data} ${dados.proposta_visita_periodo}`;
   const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
@@ -451,6 +525,31 @@ export async function confirmarPropostaVisita(id: string, dados: {
     data_agendamento: new Date().toISOString(),
     historico_visita,
   });
+  void sincronizarDemandaEstruturaViaApi(id, {
+    tecnico: dados.proposta_visita_tecnico,
+    dataAgendamento: dados.proposta_visita_data,
+    periodoAgendamento: dados.proposta_visita_periodo,
+    predio: contexto?.predio,
+    localizacao: contexto?.localizacao,
+    urgente: contexto?.urgente,
+  });
+}
+
+async function sincronizarDemandaEstruturaViaApi(
+  viabilizacaoId: string,
+  info: { tecnico?: string; dataAgendamento: string; periodoAgendamento: string; predio?: string; localizacao?: string; urgente?: boolean }
+): Promise<void> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return;
+    await fetch("/api/demandas-rede/sincronizar-estrutura", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, viabilizacaoId, ...info }),
+    });
+  } catch {
+    // Falha na sincronização não deve travar a confirmação do agendamento pelo cliente.
+  }
 }
 
 // Usuário recusa e contra-propõe nova data → volta para pronto_auditoria
@@ -498,6 +597,11 @@ export async function reagendarVisita(
     data_agendamento: new Date().toISOString(),
     historico_reagendamento: historico,
   });
+  await sincronizarDemandaEstrutura(id, {
+    tecnico: novoTecnico,
+    dataAgendamento: novaData,
+    periodoAgendamento: novoPeriodo,
+  });
 }
 
 export async function finalizarEstruturado(
@@ -528,6 +632,7 @@ export async function finalizarEstruturado(
     status_agendamento: "concluido",
     data_estruturacao: new Date().toISOString(),
   });
+  await concluirDemandaEstrutura(id, dados.observacao);
   void enqueueNotificacao(id, "aprovado");
 }
 
@@ -555,6 +660,7 @@ export async function rejeitarPredio(
     data_auditoria: new Date().toISOString(),
     auditado_por: registradoPor,
   });
+  await concluirDemandaEstrutura(id, `Sem viabilidade: ${observacao}`);
   void enqueueNotificacao(id, "rejeitado");
 }
 
@@ -1067,6 +1173,8 @@ export async function getDemandasAgendadas(): Promise<DemandaRede[]> {
   const snap = await getDocs(q);
   const data = snap.docs
     .map((d) => fromFirestoreDemanda(d))
+    // Espelhos de visita de estruturação já aparecem na Agenda como item de Viabilização — evita duplicidade
+    .filter((d) => !d.viabilizacao_id)
     .sort((a, b) => {
       if ((a.data_agendamento ?? "") !== (b.data_agendamento ?? ""))
         return (a.data_agendamento ?? "") < (b.data_agendamento ?? "") ? -1 : 1;

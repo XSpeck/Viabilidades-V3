@@ -578,7 +578,9 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
     if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
-      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
+      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita, {
+        predio: v.predio_ftta, localizacao: v.plus_code_cliente, criadoPor: userName, urgente: v.urgente,
+      });
       finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
     } finally { setLoading(false); }
   }

@@ -186,7 +186,7 @@ export interface DemandaRede {
   id: string;
   tecnicos: TecnicoRede[];
   tipo: string;
-  bairro: string;
+  bairro?: string;
   local?: string;
   prioridade: PrioridadeDemanda;
   descricao: string;
@@ -198,4 +198,6 @@ export interface DemandaRede {
   data_conclusao?: string;
   obs_conclusao?: string;
   notas_atividade?: NotaAtividade[];
+  /** Preenchido quando a demanda é um espelho automático de uma visita de estruturação de prédio/condomínio (ver src/lib/firestore.ts). */
+  viabilizacao_id?: string;
 }
