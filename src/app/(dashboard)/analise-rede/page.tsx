@@ -415,6 +415,8 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
     } finally { setSaving(false); }
   }
 
+  const isMirror = !!d.viabilizacao_id;
+
   return (
     <div className={`p-4 ${d.status === "concluida" ? "opacity-70" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -435,6 +437,12 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
                 📍 {d.bairro}
               </span>
             )}
+            {isMirror && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700"
+                title="Espelho automático de uma visita de estruturação — data, técnico e status são gerenciados na Agenda/Auditoria.">
+                🔗 Estruturação
+              </span>
+            )}
           </div>
 
           {/* Técnico + descrição */}
@@ -449,12 +457,14 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
                 </span>
               ))
             )}
-            <button
-              onClick={() => { setTecnicosAtribuir(d.tecnicos); setShowAtribuirTecnico((s) => !s); setShowEditar(false); setShowAgendar(false); setShowStatusChange(false); }}
-              title={d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}
-              className="text-gray-300 hover:text-indigo-500 transition-colors">
-              <Pencil className="w-3 h-3" />
-            </button>
+            {!isMirror && (
+              <button
+                onClick={() => { setTecnicosAtribuir(d.tecnicos); setShowAtribuirTecnico((s) => !s); setShowEditar(false); setShowAgendar(false); setShowStatusChange(false); }}
+                title={d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}
+                className="text-gray-300 hover:text-indigo-500 transition-colors">
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
           </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.descricao}</p>
 
@@ -486,13 +496,13 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
 
         {/* Ações */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          {d.status === "aberta" && (
+          {d.status === "aberta" && !isMirror && (
             <button onClick={() => setShowAgendar(!showAgendar)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50">
               <ChevronRight className="w-3 h-3" /> 📅 Agendar
             </button>
           )}
-          {(d.status === "agendada" || d.status === "em_andamento") && (
+          {(d.status === "agendada" || d.status === "em_andamento") && !isMirror && (
             <button onClick={handleReabrir} disabled={saving}
               className="text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50">
               ↩ Cancelar agendamento
@@ -504,23 +514,27 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
                 className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 font-medium border border-amber-200 px-2 py-1 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-50">
                 📦 Arquivar
               </button>
-              <button onClick={handleReabrir} disabled={saving}
-                className="text-xs text-gray-400 hover:text-gray-600 underline">
-                ↩ Reabrir
-              </button>
+              {!isMirror && (
+                <button onClick={handleReabrir} disabled={saving}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline">
+                  ↩ Reabrir
+                </button>
+              )}
             </div>
           )}
-          <button
-            onClick={() => { setShowStatusChange((s) => !s); setShowConcluir(false); setShowEditar(false); setShowAgendar(false); }}
-            title="Mudar status"
-            className={`transition-colors text-sm font-medium px-2 py-1 rounded-lg border ${showStatusChange ? "bg-indigo-50 border-indigo-300 text-indigo-600" : "border-gray-200 text-gray-400 hover:text-indigo-500 hover:border-indigo-300"}`}>
-            🔄
-          </button>
+          {!isMirror && (
+            <button
+              onClick={() => { setShowStatusChange((s) => !s); setShowConcluir(false); setShowEditar(false); setShowAgendar(false); }}
+              title="Mudar status"
+              className={`transition-colors text-sm font-medium px-2 py-1 rounded-lg border ${showStatusChange ? "bg-indigo-50 border-indigo-300 text-indigo-600" : "border-gray-200 text-gray-400 hover:text-indigo-500 hover:border-indigo-300"}`}>
+              🔄
+            </button>
+          )}
           <button onClick={() => { setShowEditar((s) => !s); setShowAgendar(false); setShowStatusChange(false); setShowAtribuirTecnico(false); }}
             className={`transition-colors ${showEditar ? "text-indigo-500" : "text-gray-300 hover:text-indigo-500"}`}>
             <Pencil className="w-4 h-4" />
           </button>
-          {!confirmDelete ? (
+          {!isMirror && (!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
               className="text-gray-300 hover:text-red-500 transition-colors">
               <Trash2 className="w-4 h-4" />
@@ -536,7 +550,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
                 Não
               </button>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
@@ -623,18 +637,24 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
       {showEditar && (
         <div className="mt-3 space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
           <p className="text-xs font-semibold text-gray-700">✏️ Editar demanda</p>
-          <div className="flex flex-wrap gap-1.5 col-span-2">
-            {TECNICOS_REDE.map((t) => {
-              const sel = editTecnicos.includes(t);
-              return (
-                <button key={t} type="button"
-                  onClick={() => setEditTecnicos(sel ? editTecnicos.filter((x) => x !== t) : [...editTecnicos, t])}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                  <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
-                </button>
-              );
-            })}
-          </div>
+          {isMirror ? (
+            <p className="text-xs text-gray-400 italic">
+              👷 Técnico definido na Agenda/Auditoria — não editável aqui.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 col-span-2">
+              {TECNICOS_REDE.map((t) => {
+                const sel = editTecnicos.includes(t);
+                return (
+                  <button key={t} type="button"
+                    onClick={() => setEditTecnicos(sel ? editTecnicos.filter((x) => x !== t) : [...editTecnicos, t])}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                    <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <select value={editBairro} onChange={(e) => setEditBairro(e.target.value)}
               className="col-span-2 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
