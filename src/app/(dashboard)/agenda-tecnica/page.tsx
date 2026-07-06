@@ -481,6 +481,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   }
 
   async function handleArquivar() {
+    if (!v.tecnico_instalacao?.trim()) { alert("Defina um técnico antes de arquivar!"); return; }
     setLoading(true);
     try { await finalizarViabilizacao(v.id); onRefresh(); }
     finally { setLoading(false); }
@@ -752,16 +753,42 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
 
           {/* INSTALADO — conclusão + arquivar */}
           {status === "instalado" && (
-            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="text-sm space-y-0.5">
-                <p className="font-medium text-blue-800">{isFttaUtp ? "✅ Visita concluída" : "✅ Instalação concluída"}</p>
-                <p className="text-blue-700">{fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao}</p>
-                <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="text-sm space-y-0.5">
+                  <p className="font-medium text-blue-800">{isFttaUtp ? "✅ Visita concluída" : "✅ Instalação concluída"}</p>
+                  <p className="text-blue-700">
+                    {fmtData(v.data_instalacao)} · {v.periodo_instalacao} · 👷 {v.tecnico_instalacao ?? <span className="text-orange-500 italic">não atribuído</span>}
+                  </p>
+                  <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
+                </div>
+                <button onClick={handleArquivar} disabled={loading || !v.tecnico_instalacao?.trim()}
+                  title={!v.tecnico_instalacao?.trim() ? "Defina um técnico antes de arquivar" : undefined}
+                  className="shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  📁 Arquivar
+                </button>
               </div>
-              <button onClick={handleArquivar} disabled={loading}
-                className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                📁 Arquivar
-              </button>
+
+              {!v.tecnico_instalacao?.trim() && (
+                <div className="border border-orange-200 bg-orange-50 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-orange-800">👷 Atribuir técnico</p>
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="Nome do técnico *"
+                      value={tecnicoAtribuir}
+                      onChange={(e) => setTecnicoAtribuir(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                    <button
+                      onClick={handleAtribuirTecnico}
+                      disabled={salvandoTecnico || !tecnicoAtribuir.trim()}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-lg text-sm font-medium"
+                    >
+                      {salvandoTecnico ? "..." : "Salvar"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
