@@ -14,6 +14,7 @@ import {
   deleteField,
   arrayUnion,
   writeBatch,
+  runTransaction,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { enqueueNotificacao } from "./notificacoes";
@@ -252,6 +253,7 @@ export async function devolverViabilizacao(id: string): Promise<void> {
 
 export async function deleteViabilizacao(id: string): Promise<void> {
   await deleteDoc(doc(db, "viabilizacoes", id));
+  await excluirDemandaEstrutura(id);
   bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
 }
 
@@ -391,9 +393,22 @@ export async function enviarDadosPredio(
 // Mantém uma demanda em "demandas_rede" sincronizada com o ciclo de vida
 // da visita de estruturação de prédio/condomínio, só para visibilidade
 // unificada — a origem e a agenda continuam sendo a própria Viabilizacao.
-async function findDemandaByViabilizacaoId(viabilizacaoId: string): Promise<string | null> {
-  const snap = await getDocs(query(collection(db, "demandas_rede"), where("viabilizacao_id", "==", viabilizacaoId)));
-  return snap.empty ? null : snap.docs[0].id;
+//
+// Usa um ID determinístico (derivado do id da viabilização) em vez de
+// addDoc: evita duplicar a demanda-espelho em chamadas concorrentes, já
+// que o create-or-update roda dentro de uma transação sobre essa mesma
+// referência. O fallback por query cobre espelhos legados criados com
+// addDoc (ID aleatório) antes dessa mudança.
+function mirrorDemandaId(viabilizacaoId: string): string {
+  return `estrutura_${viabilizacaoId}`;
+}
+
+async function resolveDemandaEstruturaRef(viabilizacaoId: string) {
+  const detRef = doc(db, "demandas_rede", mirrorDemandaId(viabilizacaoId));
+  const detSnap = await getDoc(detRef);
+  if (detSnap.exists()) return detRef;
+  const legacySnap = await getDocs(query(collection(db, "demandas_rede"), where("viabilizacao_id", "==", viabilizacaoId)));
+  return legacySnap.empty ? detRef : legacySnap.docs[0].ref;
 }
 
 async function sincronizarDemandaEstrutura(
@@ -409,41 +424,55 @@ async function sincronizarDemandaEstrutura(
     urgente?: boolean;
   }
 ): Promise<void> {
-  const existingId = await findDemandaByViabilizacaoId(viabilizacaoId);
+  const ref = await resolveDemandaEstruturaRef(viabilizacaoId);
   const tecnicos = info.tecnico ? [info.tecnico] : [];
-  if (existingId) {
-    await updateDoc(doc(db, "demandas_rede", existingId), stripUndefined({
-      tecnicos,
-      data_agendamento: info.dataAgendamento,
-      periodo_agendamento: info.periodoAgendamento,
-      status: "agendada" as StatusDemanda,
-    }));
-  } else {
-    await addDoc(collection(db, "demandas_rede"), stripUndefined({
-      tecnicos,
-      tipo: "Estruturação de Rede",
-      local: info.localizacao,
-      prioridade: (info.urgente ? "alta" : "media") as PrioridadeDemanda,
-      descricao: `Estruturação de rede — ${info.predio ?? "Prédio"}${info.obs ? `\n${info.obs}` : ""}`,
-      status: "agendada" as StatusDemanda,
-      criado_por: info.criadoPor ?? "Sistema",
-      data_criacao: new Date().toISOString(),
-      data_agendamento: info.dataAgendamento,
-      periodo_agendamento: info.periodoAgendamento,
-      viabilizacao_id: viabilizacaoId,
-    }));
-  }
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) {
+      tx.update(ref, stripUndefined({
+        tecnicos,
+        data_agendamento: info.dataAgendamento,
+        periodo_agendamento: info.periodoAgendamento,
+        status: "agendada" as StatusDemanda,
+      }));
+    } else {
+      tx.set(ref, stripUndefined({
+        tecnicos,
+        tipo: "Estruturação de Rede",
+        local: info.localizacao,
+        prioridade: (info.urgente ? "alta" : "media") as PrioridadeDemanda,
+        descricao: `Estruturação de rede — ${info.predio ?? "Prédio"}${info.obs ? `\n${info.obs}` : ""}`,
+        status: "agendada" as StatusDemanda,
+        criado_por: info.criadoPor ?? "Sistema",
+        data_criacao: new Date().toISOString(),
+        data_agendamento: info.dataAgendamento,
+        periodo_agendamento: info.periodoAgendamento,
+        viabilizacao_id: viabilizacaoId,
+      }));
+    }
+  });
   bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
 async function concluirDemandaEstrutura(viabilizacaoId: string, obs?: string): Promise<void> {
-  const existingId = await findDemandaByViabilizacaoId(viabilizacaoId);
-  if (!existingId) return;
-  await updateDoc(doc(db, "demandas_rede", existingId), stripUndefined({
+  const ref = await resolveDemandaEstruturaRef(viabilizacaoId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  await updateDoc(ref, stripUndefined({
     status: "concluida" as StatusDemanda,
     data_conclusao: new Date().toISOString(),
     obs_conclusao: obs,
   }));
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
+}
+
+// Cascade ao excluir a viabilização — evita órfão preso em Análise de Rede
+// (sem "Excluir"/"Cancelar" disponíveis para demandas-espelho na UI).
+async function excluirDemandaEstrutura(viabilizacaoId: string): Promise<void> {
+  const ref = await resolveDemandaEstruturaRef(viabilizacaoId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  await deleteDoc(ref);
   bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
@@ -513,7 +542,7 @@ export async function confirmarPropostaVisita(id: string, dados: {
   proposta_visita_tecnico?: string;
   tecnologia_predio?: string;
   giga?: boolean;
-}, historicoAnterior?: string, contexto?: { predio?: string; localizacao?: string; urgente?: boolean }): Promise<void> {
+}, historicoAnterior?: string): Promise<void> {
   const entrada = `Usuário confirmou ${dados.proposta_visita_data} ${dados.proposta_visita_periodo}`;
   const historico_visita = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
   await updateViabilizacao(id, {
@@ -525,27 +554,20 @@ export async function confirmarPropostaVisita(id: string, dados: {
     data_agendamento: new Date().toISOString(),
     historico_visita,
   });
-  void sincronizarDemandaEstruturaViaApi(id, {
-    tecnico: dados.proposta_visita_tecnico,
-    dataAgendamento: dados.proposta_visita_data,
-    periodoAgendamento: dados.proposta_visita_periodo,
-    predio: contexto?.predio,
-    localizacao: contexto?.localizacao,
-    urgente: contexto?.urgente,
-  });
+  void sincronizarDemandaEstruturaViaApi(id);
 }
 
-async function sincronizarDemandaEstruturaViaApi(
-  viabilizacaoId: string,
-  info: { tecnico?: string; dataAgendamento: string; periodoAgendamento: string; predio?: string; localizacao?: string; urgente?: boolean }
-): Promise<void> {
+// O servidor lê o resto direto do documento (data/período/técnico já confirmados
+// pelo updateViabilizacao acima) — o corpo da requisição não carrega esses campos
+// para não depender de dados vindos do client em uma rota que roda com Admin SDK.
+async function sincronizarDemandaEstruturaViaApi(viabilizacaoId: string): Promise<void> {
   try {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) return;
     await fetch("/api/demandas-rede/sincronizar-estrutura", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, viabilizacaoId, ...info }),
+      body: JSON.stringify({ idToken, viabilizacaoId }),
     });
   } catch {
     // Falha na sincronização não deve travar a confirmação do agendamento pelo cliente.

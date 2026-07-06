@@ -623,9 +623,7 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
     if (!r.proposta_visita_data) return;
     setEnviandoConfirmacaoVisita(true);
     try {
-      await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico }, r.historico_visita, {
-        predio: r.predio_ftta, localizacao: r.plus_code_cliente, urgente: r.urgente,
-      });
+      await confirmarPropostaVisita(r.id, { proposta_visita_data: r.proposta_visita_data, proposta_visita_periodo: r.proposta_visita_periodo ?? "Manhã", proposta_visita_tecnico: r.proposta_visita_tecnico }, r.historico_visita);
       onRefresh();
     } finally { setEnviandoConfirmacaoVisita(false); }
   }
