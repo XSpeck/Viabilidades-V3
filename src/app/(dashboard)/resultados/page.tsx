@@ -539,8 +539,7 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
   const { user } = useAuth();
   const isDevolvida = r.status === "em_revisao" && r.revisao_tipo === "devolvido";
   const isContestacaoPendente = r.status === "em_revisao" && r.revisao_tipo === "contestado";
-  const needsDateAction = r.status_instalacao === "aguardando_proposta" || r.status_instalacao === "aguardando_confirmacao" || r.status_predio === "proposta_visita";
-  const [open, setOpen] = useState(isDevolvida || needsDateAction || r.status_predio === "aguardando_dados");
+  const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Proposta de instalação FTTH ────────────────────────
