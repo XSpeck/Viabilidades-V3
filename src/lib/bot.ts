@@ -8,6 +8,7 @@ export type TipoNotificacao =
   | "rejeitado"
   | "utp"
   | "contestacao"
+  | "reaberto"
   | "proposta_enviada"
   | "aguardando_confirmacao"
   | "agendado"
@@ -125,6 +126,21 @@ export async function processarNotificacao(tipo: TipoNotificacao, v: V): Promise
         `📋 ID: <code>${id}</code>`,
       ].join("\n"));
       break;
+
+    case "reaberto": {
+      const equipe = await getEquipe(usuario);
+      if (!equipe) break;
+      const mensagens = Array.isArray(v.mensagens) ? v.mensagens as { texto?: string }[] : [];
+      const motivo = mensagens[mensagens.length - 1]?.texto;
+      await sendTelegram(GRUPOS[equipe], [
+        `🔄 <b>Viabilização Reaberta para Correção</b>`,
+        cabecalho(v),
+        motivo ? `💬 ${esc(String(motivo))}` : "",
+        `<i>O auditor identificou um erro na aprovação e está corrigindo a análise.</i>`,
+        `📋 ID: <code>${id}</code>`,
+      ].filter(Boolean).join("\n"));
+      break;
+    }
 
     case "proposta_enviada":
       await sendTelegram(GRUPOS.agendamento, [

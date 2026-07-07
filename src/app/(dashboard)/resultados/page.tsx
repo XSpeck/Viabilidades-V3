@@ -662,11 +662,12 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
   const isFttaUtp = isFtta || r.status === "utp" || r.motivo_rejeicao === "Atendemos UTP";
   const aguardandoDados = r.status_predio === "aguardando_dados";
   const isAprovado = r.status === "aprovado";
-  const canExpand = ["aprovado", "rejeitado", "utp", "em_revisao"].includes(r.status) || isFtta;
+  const isReaberto = r.status === "em_auditoria" && r.revisao_tipo === "reaberto";
+  const canExpand = ["aprovado", "rejeitado", "utp", "em_revisao"].includes(r.status) || isFtta || !!(r.mensagens && r.mensagens.length > 0);
 
   const statusLabel: Record<string, string> = {
     pendente:     "⏳ Na fila",
-    em_auditoria: "🔍 Em análise",
+    em_auditoria: isReaberto ? "🔄 Em correção" : "🔍 Em análise",
     em_revisao:   isDevolvida ? "↩️ Devolvida" : "💬 Contestação enviada",
     aprovado:     "✅ Aprovado",
     rejeitado:    "❌ Sem viabilidade",
@@ -736,6 +737,7 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${
               isDevolvida ? "bg-orange-100 text-orange-700" :
               isContestacaoPendente ? "bg-blue-100 text-blue-700" :
+              isReaberto ? "bg-amber-100 text-amber-700" :
               r.status_predio ? (predioStatusColor[r.status_predio] ?? "bg-gray-100 text-gray-500") :
               r.status_instalacao ? (instColor[r.status_instalacao] ?? "bg-gray-100 text-gray-500") :
               "bg-gray-100 text-gray-500"
@@ -773,6 +775,9 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
         )}
         {isDevolvida && !open && (
           <p className="text-xs text-orange-500 mt-1.5 font-medium">↩️ Ação necessária — o auditor solicitou uma correção</p>
+        )}
+        {isReaberto && !open && (
+          <p className="text-xs text-amber-600 mt-1.5 font-medium">🔄 O auditor encontrou um erro na aprovação e está corrigindo — toque para ver detalhes</p>
         )}
       </button>
 

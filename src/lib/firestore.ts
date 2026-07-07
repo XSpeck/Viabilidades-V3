@@ -906,6 +906,41 @@ export async function revisarContestacao(id: string): Promise<void> {
   await updateViabilizacao(id, { status: "em_auditoria" as StatusViabilizacao });
 }
 
+// Auditor reabre uma viabilidade já aprovada por engano, para corrigir os dados.
+// Desfaz também o agendamento de instalação que já tenha sido iniciado a partir dela.
+export async function reabrirAprovacao(
+  id: string,
+  motivo: string,
+  auditorNome: string,
+  mensagensAnteriores?: MensagemViabilizacao[]
+): Promise<void> {
+  const nova: MensagemViabilizacao = { de: auditorNome, tipo: "auditoria", texto: motivo, data: new Date().toISOString() };
+  await updateDoc(doc(db, "viabilizacoes", id), {
+    status: "em_auditoria",
+    revisao_tipo: "reaberto",
+    status_anterior: "aprovado",
+    mensagens: [...(mensagensAnteriores ?? []), nova],
+    status_instalacao: deleteField(),
+    proposta_data: deleteField(),
+    proposta_periodo: deleteField(),
+    proposta_obs: deleteField(),
+    agendamento_data: deleteField(),
+    agendamento_periodo: deleteField(),
+    agendamento_tecnico: deleteField(),
+    agendamento_obs: deleteField(),
+    data_instalacao: deleteField(),
+    periodo_instalacao: deleteField(),
+    tecnico_instalacao: deleteField(),
+    historico_agendamento: deleteField(),
+    status_atualizado_em: new Date().toISOString(),
+  });
+  bustCache(
+    "viab_all_viabilizacoes_v1", "viab_user_v1", "viab_instalacoes_pendentes_v1",
+    "viab_instalacoes_arquivadas_v1", "viab_audit_v1", "viab_agendamentos_v1",
+  );
+  void enqueueNotificacao(id, "reaberto");
+}
+
 export async function corrigirDadosViabilizacao(
   id: string,
   dados: { nome_cliente?: string; tipo_instalacao?: TipoInstalacao; plus_code_cliente?: string }

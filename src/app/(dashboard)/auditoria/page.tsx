@@ -7,7 +7,7 @@ import {
   marcarUTP, deleteViabilizacao, devolverViabilizacao,
   solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
   iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
-  manterDecisaoContestacao, revisarContestacao, proporDataVisita, deletarTrajeto,
+  manterDecisaoContestacao, revisarContestacao, reabrirAprovacao, proporDataVisita, deletarTrajeto,
   bustCacheAuditoria, getViabilizacoesRelatorio,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
@@ -261,7 +261,7 @@ export default function AuditoriaPage() {
                 <div className="space-y-2">
                   <p className="text-xs text-gray-400">{filtrado.length} de {historico.length} registro(s)</p>
                   {filtrado.map((v) => (
-                    <HistoricoCard key={v.id} v={v} />
+                    <HistoricoCard key={v.id} v={v} userName={user!.nome} onReaberto={() => { load(); loadHistorico(); }} />
                   ))}
                 </div>
               );
@@ -273,9 +273,23 @@ export default function AuditoriaPage() {
   );
 }
 
-function HistoricoCard({ v }: { v: Viabilizacao }) {
+function HistoricoCard({ v, userName, onReaberto }: { v: Viabilizacao; userName: string; onReaberto: () => void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showReabrir, setShowReabrir] = useState(false);
+  const [motivoReabrir, setMotivoReabrir] = useState("");
+  const [reabrindo, setReabrindo] = useState(false);
+  const [reabertoMsg, setReabertoMsg] = useState<string | null>(null);
+
+  async function handleReabrir() {
+    if (!motivoReabrir.trim()) { alert("Explique o que precisa ser corrigido!"); return; }
+    setReabrindo(true);
+    try {
+      await reabrirAprovacao(v.id, motivoReabrir, userName, v.mensagens);
+      setReabertoMsg("🔄 Reaberta! O item voltou para sua fila de auditoria.");
+      setTimeout(onReaberto, 2000);
+    } finally { setReabrindo(false); }
+  }
 
   const isFtta = v.tipo_instalacao === "Prédio";
   const isCond = v.tipo_instalacao === "Condomínio";
@@ -401,6 +415,39 @@ function HistoricoCard({ v }: { v: Viabilizacao }) {
           <p className="text-xs text-gray-400 pt-1">
             👤 Solicitante: <strong>{v.usuario}</strong> · Solicitado em {formatDateTime(v.data_solicitacao)}
           </p>
+
+          {/* Reabrir aprovação com engano */}
+          {v.status === "aprovado" && (
+            reabertoMsg ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{reabertoMsg}</p>
+            ) : !showReabrir ? (
+              <button onClick={() => setShowReabrir(true)}
+                className="text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg">
+                🔄 Reabrir para correção
+              </button>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                <p className="text-xs font-medium text-amber-800">O que precisa ser corrigido?</p>
+                <textarea
+                  placeholder="Ex: CTO errada, número de portas incorreto..."
+                  value={motivoReabrir}
+                  onChange={(e) => setMotivoReabrir(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <p className="text-xs text-amber-700">
+                  Isso volta o item para sua fila de auditoria e cancela o agendamento de instalação já iniciado a partir dele, se houver.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={handleReabrir} disabled={reabrindo || !motivoReabrir.trim()}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-1.5 rounded-lg text-sm font-medium">
+                    {reabrindo ? "Reabrindo..." : "Confirmar reabertura"}
+                  </button>
+                  <button onClick={() => setShowReabrir(false)} className="px-3 border rounded-lg text-sm">✕</button>
+                </div>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
@@ -610,11 +657,12 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
 
   const isContestacao       = v.status === "em_revisao"    && v.revisao_tipo === "contestado";
   const isRevisandoContest  = v.status === "em_auditoria" && v.revisao_tipo === "contestado";
+  const isReaberto          = v.status === "em_auditoria" && v.revisao_tipo === "reaberto";
   const tipoIcon = tipoLocal === "FTTH" ? "🏠" : tipoLocal === "Prédio" ? "🏢" : "🏘️";
   const titulo = `${tipoIcon} ${nomeClienteLocal || "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : (isContestacao || isRevisandoContest) ? "border-orange-400" : "border-indigo-400"}`}>
+    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : (isContestacao || isRevisandoContest) ? "border-orange-400" : isReaberto ? "border-amber-400" : "border-indigo-400"}`}>
       <button onClick={() => setOpen(!open)} className="w-full text-left px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="font-semibold text-gray-900">{titulo}</p>
@@ -622,6 +670,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
             {v.equipe === "comercial_gmarx" && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Gmarx</span>}
             {isContestacao       && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
             {isRevisandoContest  && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔁 Reanalisando</span>}
+            {isReaberto          && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">🔄 Reaberto</span>}
             <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
           </div>
         </div>
@@ -644,6 +693,16 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
               <p className="text-orange-700 text-xs mt-0.5">
                 O usuário contestou a decisão anterior
                 {v.status_anterior ? ` (${v.status_anterior})` : ""}. Analise as mensagens abaixo e tome uma nova decisão.
+              </p>
+            </div>
+          )}
+
+          {/* ── Banner de reabertura por correção ── */}
+          {isReaberto && !successMsg && (
+            <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
+              <p className="font-semibold text-amber-800">🔄 Reaberto para correção</p>
+              <p className="text-amber-700 text-xs mt-0.5">
+                Você reabriu esta viabilidade (estava aprovada). Corrija os dados abaixo e envie a decisão novamente.
               </p>
             </div>
           )}

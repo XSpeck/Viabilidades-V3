@@ -123,7 +123,7 @@ export interface Viabilizacao {
   observacoes?: string;
   // Revisão / Contestação
   mensagens?: MensagemViabilizacao[];
-  revisao_tipo?: "devolvido" | "contestado";
+  revisao_tipo?: "devolvido" | "contestado" | "reaberto";
   status_anterior?: StatusViabilizacao;
   // Rota do cabo (traçada pelo auditor)
   trajeto_cabo?: { lat: number; lon: number }[];

@@ -7,6 +7,7 @@ export type TipoNotificacao =
   | "rejeitado"
   | "utp"
   | "contestacao"
+  | "reaberto"
   | "proposta_enviada"
   | "aguardando_confirmacao"
   | "agendado"
