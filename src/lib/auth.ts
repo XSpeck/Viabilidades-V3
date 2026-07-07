@@ -21,6 +21,7 @@ export async function getUserData(uid: string): Promise<AppUser | null> {
     login: data.login,
     nivel: data.nivel,
     cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
+    equipe: data.equipe,
   };
   _userCache.set(uid, user);
   return user;
