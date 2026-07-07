@@ -404,7 +404,7 @@ export default function AgendaTecnicaPage() {
 
 // ─── Card de instalação ────────────────────────────────────────────
 function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizacao; isFttaUtp?: boolean; onRefresh: () => void }) {
-  const [open, setOpen] = useState(v.status_instalacao === "proposta_enviada");
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showConfirmar, setShowConfirmar] = useState(false);
