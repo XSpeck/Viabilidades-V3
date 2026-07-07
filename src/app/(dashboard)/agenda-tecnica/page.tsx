@@ -1086,6 +1086,9 @@ function GradeTecnica({ items, gradeData, setGradeData, isFttaUtp, onRefresh }: 
                                     <span className="text-xs font-medium text-gray-800 truncate">
                                       {v.nome_cliente ?? "Cliente"}
                                     </span>
+                                    {v.equipe === "comercial_gmarx" && (
+                                      <span className="shrink-0 text-[10px] font-semibold text-rose-700 bg-rose-100 px-1 py-0.5 rounded">Gmarx</span>
+                                    )}
                                   </div>
                                 </button>
                               ))}
