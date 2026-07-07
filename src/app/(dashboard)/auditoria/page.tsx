@@ -42,6 +42,7 @@ export default function AuditoriaPage() {
   const [histSearch, setHistSearch] = useState("");
   const [histTipo, setHistTipo] = useState("todos");
   const [histStatus, setHistStatus] = useState("todos");
+  const [histEquipe, setHistEquipe] = useState("todos");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -206,6 +207,11 @@ export default function AuditoriaPage() {
                 <option value="rejeitado">❌ Sem viabilidade</option>
                 <option value="utp">📡 UTP</option>
               </select>
+              <select value={histEquipe} onChange={(e) => setHistEquipe(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="todos">Todas as equipes</option>
+                <option value="comercial_gmarx">Somente Gmarx</option>
+              </select>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">De</span>
                 <input type="date" value={histDataInicio} onChange={(e) => setHistDataInicio(e.target.value)}
@@ -228,6 +234,7 @@ export default function AuditoriaPage() {
               const filtrado = historico
                 .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
                 .filter((v) => histStatus === "todos" || v.status === histStatus)
+                .filter((v) => histEquipe === "todos" || v.equipe === histEquipe)
                 .filter((v) => {
                   if (!histSearch.trim()) return true;
                   const q = histSearch.toLowerCase();

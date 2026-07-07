@@ -66,6 +66,7 @@ export default function RelatoriosPage() {
   const [loaded, setLoaded] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [filtroEquipe, setFiltroEquipe] = useState("todos");
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
   const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", ftta_rej: "", utp: "", estruturados: "", sem_viab: "" });
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
@@ -201,7 +202,7 @@ export default function RelatoriosPage() {
 
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
-  const filtrado = viabilizacoes;
+  const filtrado = filtroEquipe === "todos" ? viabilizacoes : viabilizacoes.filter((v) => v.equipe === filtroEquipe);
 
   // ── Derived data ─────────────────────────────────────────────
   // FTTH
@@ -444,6 +445,14 @@ export default function RelatoriosPage() {
             <label className="block text-xs text-gray-500 mb-1">Data Fim <span className="text-red-400">*</span></label>
             <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)}
               className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Equipe</label>
+            <select value={filtroEquipe} onChange={(e) => setFiltroEquipe(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="todos">Todas as equipes</option>
+              <option value="comercial_gmarx">Somente Gmarx</option>
+            </select>
           </div>
           {(dataInicio || dataFim) && (
             <button onClick={() => { setDataInicio(""); setDataFim(""); setLoaded(false); setViabilizacoes([]); setAtendidos([]); setSemViab([]); }}
