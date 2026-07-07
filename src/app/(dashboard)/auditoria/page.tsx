@@ -296,14 +296,16 @@ function HistoricoCard({ v, userName, onReaberto }: { v: Viabilizacao; userName:
   const tipoIcon = v.status === "utp" ? "📡" : isFtta ? "🏢" : isCond ? "🏘️" : "🏠";
 
   const statusLabel: Record<string, string> = {
-    aprovado:  "✅ Aprovado",
-    rejeitado: "❌ Sem viabilidade",
-    utp:       "📡 UTP",
+    aprovado:     "✅ Aprovado",
+    rejeitado:    "❌ Sem viabilidade",
+    utp:          "📡 UTP",
+    em_auditoria: v.revisao_tipo === "reaberto" ? "🔄 Reaberto p/ correção" : "🔍 Em auditoria",
   };
   const statusColor: Record<string, string> = {
-    aprovado:  "bg-green-100 text-green-700",
-    rejeitado: "bg-red-100 text-red-700",
-    utp:       "bg-purple-100 text-purple-700",
+    aprovado:     "bg-green-100 text-green-700",
+    rejeitado:    "bg-red-100 text-red-700",
+    utp:          "bg-purple-100 text-purple-700",
+    em_auditoria: "bg-amber-100 text-amber-700",
   };
 
   function buildCopyText() {

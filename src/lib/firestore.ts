@@ -56,6 +56,17 @@ function bustCache(...keys: string[]): void {
   try { keys.forEach((k) => sessionStorage.removeItem(k)); } catch {}
 }
 
+// getViabilizacoesRelatorio cacheia por intervalo de datas (chave dinâmica) — não dá
+// pra invalidar por nome exato, então limpamos qualquer entrada de relatório em cache.
+function bustCacheRelatorios(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith("viab_relatorio_")) sessionStorage.removeItem(key);
+    }
+  } catch {}
+}
+
 export function bustCacheAuditoria()    { bustCache("viab_audit_v1"); }
 export function bustCacheResultados()   { bustCache("viab_user_v1"); }
 export function bustCacheAgenda()       { bustCache("viab_agendamentos_v1", "viab_demandas_agendadas_v1"); }
@@ -233,6 +244,7 @@ export async function updateViabilizacao(
     "viab_audit_v1",
     "viab_agendamentos_v1",
   );
+  bustCacheRelatorios();
 }
 
 export async function pegarViabilizacao(id: string, auditor: string): Promise<void> {
@@ -938,6 +950,7 @@ export async function reabrirAprovacao(
     "viab_all_viabilizacoes_v1", "viab_user_v1", "viab_instalacoes_pendentes_v1",
     "viab_instalacoes_arquivadas_v1", "viab_audit_v1", "viab_agendamentos_v1",
   );
+  bustCacheRelatorios();
   void enqueueNotificacao(id, "reaberto");
 }
 
