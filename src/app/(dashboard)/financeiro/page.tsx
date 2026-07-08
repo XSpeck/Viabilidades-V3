@@ -15,6 +15,7 @@ import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFi
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
   Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle, X,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 function formatBRL(v: number): string {
@@ -148,6 +149,18 @@ function TecnicoView() {
   });
 
   const temFiltroServico = !!(buscaServico.trim() || servicoDataInicio || servicoDataFim);
+
+  const SERVICOS_POR_PAGINA = 10;
+  const [paginaServicos, setPaginaServicos] = useState(1);
+  const [servicoSelecionado, setServicoSelecionado] = useState<ServicoFinanceiro | null>(null);
+  const totalPaginasServicos = Math.max(1, Math.ceil(servicosFiltrados.length / SERVICOS_POR_PAGINA));
+  const paginaServicosAtual = Math.min(paginaServicos, totalPaginasServicos);
+  const servicosPagina = servicosFiltrados.slice(
+    (paginaServicosAtual - 1) * SERVICOS_POR_PAGINA,
+    paginaServicosAtual * SERVICOS_POR_PAGINA
+  );
+
+  useEffect(() => { setPaginaServicos(1); }, [buscaServico, servicoDataInicio, servicoDataFim]);
 
   // ── Filtros: Parte Financeira (histórico de pagamentos) ──
   const [fechamentoDataInicio, setFechamentoDataInicio] = useState("");
@@ -419,8 +432,12 @@ function TecnicoView() {
               <>
                 {/* Cards — mobile */}
                 <div className="space-y-2 md:hidden">
-                  {servicosFiltrados.map((s) => (
-                    <div key={s.id} className="border rounded-lg p-3 space-y-1">
+                  {servicosPagina.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setServicoSelecionado(s)}
+                      className="w-full text-left border rounded-lg p-3 space-y-1 hover:bg-gray-50 active:bg-gray-100"
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-gray-800 text-sm">{s.tipo_servico_nome}</p>
                         <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
@@ -432,7 +449,7 @@ function TecnicoView() {
                         <span>{s.data_servico}</span>
                         <span className="font-medium text-gray-700">{formatBRL(valorDe(s))}</span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -449,8 +466,12 @@ function TecnicoView() {
                       </tr>
                     </thead>
                     <tbody>
-                      {servicosFiltrados.map((s) => (
-                        <tr key={s.id} className="border-b last:border-0">
+                      {servicosPagina.map((s) => (
+                        <tr
+                          key={s.id}
+                          onClick={() => setServicoSelecionado(s)}
+                          className="border-b last:border-0 cursor-pointer hover:bg-gray-50"
+                        >
                           <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
@@ -465,8 +486,119 @@ function TecnicoView() {
                     </tbody>
                   </table>
                 </div>
+
+                {totalPaginasServicos > 1 && (
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      onClick={() => setPaginaServicos((p) => Math.max(1, p - 1))}
+                      disabled={paginaServicosAtual === 1}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Anterior
+                    </button>
+                    <span className="text-xs text-gray-500">
+                      Página {paginaServicosAtual} de {totalPaginasServicos}
+                    </span>
+                    <button
+                      onClick={() => setPaginaServicos((p) => Math.min(totalPaginasServicos, p + 1))}
+                      disabled={paginaServicosAtual === totalPaginasServicos}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Próxima <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalhes do serviço */}
+      {servicoSelecionado && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setServicoSelecionado(null)}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="font-semibold text-gray-800">{servicoSelecionado.tipo_servico_nome}</h3>
+              <button
+                onClick={() => setServicoSelecionado(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[servicoSelecionado.status]}`}>
+                {STATUS_LABEL[servicoSelecionado.status]}
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-400 text-xs">Cliente</p>
+                  <p className="font-medium text-gray-800">{servicoSelecionado.cliente}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Data do serviço</p>
+                  <p className="font-medium text-gray-800">{servicoSelecionado.data_servico}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Endereço</p>
+                  <p className="font-medium text-gray-800">{servicoSelecionado.endereco}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Valor</p>
+                  <p className="font-medium text-gray-800">{formatBRL(valorDe(servicoSelecionado))}</p>
+                </div>
+                {servicoSelecionado.pago_em && (
+                  <div>
+                    <p className="text-gray-400 text-xs">Pago em</p>
+                    <p className="font-medium text-gray-800">{new Date(servicoSelecionado.pago_em).toLocaleDateString("pt-BR")}</p>
+                  </div>
+                )}
+              </div>
+
+              {servicoSelecionado.observacoes && (
+                <div className="text-sm">
+                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-700">{servicoSelecionado.observacoes}</p>
+                </div>
+              )}
+
+              {servicoSelecionado.motivo_rejeicao && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-700 text-xs font-medium mb-0.5">Motivo da rejeição</p>
+                  <p className="text-red-600 text-sm">{servicoSelecionado.motivo_rejeicao}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-gray-400 text-xs mb-1.5">Fotos</p>
+                {servicoSelecionado.foto_urls && servicoSelecionado.foto_urls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {servicoSelecionado.foto_urls.map((url, i) => (
+                      <a key={url} href={url} target="_blank" rel="noreferrer">
+                        <img
+                          src={url}
+                          alt={`Foto ${i + 1}`}
+                          className="w-full aspect-square object-cover rounded-lg border"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <ImageIcon className="w-3.5 h-3.5" /> Sem foto
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
