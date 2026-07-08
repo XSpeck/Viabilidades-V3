@@ -70,5 +70,21 @@ service cloud.firestore {
       allow create: if isAuth();
       allow read, update, delete: if false;
     }
+
+    // Financeiro — tipos de serviço (tabela de preços)
+    match /tipos_servico_financeiro/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Financeiro — serviços prestados pelos técnicos
+    match /servicos_financeiro/{id} {
+      allow read, create, update: if isAuth();
+    }
+
+    // Financeiro — fechamentos de pagamento mensal
+    match /fechamentos_pagamento/{id} {
+      allow read, create: if isAuth();
+    }
   }
 }
