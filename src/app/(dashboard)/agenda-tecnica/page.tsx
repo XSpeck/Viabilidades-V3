@@ -50,6 +50,7 @@ export default function AgendaTecnicaPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [somenteGmarx, setSomenteGmarx] = useState(false);
 
   // Arquivados
   const [arquivados, setArquivados] = useState<Viabilizacao[]>([]);
@@ -62,6 +63,7 @@ export default function AgendaTecnicaPage() {
   const [arquDateFrom, setArquDateFrom] = useState("");
   const [arquDateTo, setArquDateTo] = useState("");
   const [arquTecnico, setArquTecnico] = useState("todos");
+  const [arquSomenteGmarx, setArquSomenteGmarx] = useState(false);
   const [arquPage, setArquPage] = useState(1);
   const ARQ_PER_PAGE = 20;
 
@@ -73,7 +75,7 @@ export default function AgendaTecnicaPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setArquPage(1); }, [arquSearch, arquDateFrom, arquDateTo, arquTecnico, view]);
+  useEffect(() => { setArquPage(1); }, [arquSearch, arquDateFrom, arquDateTo, arquTecnico, arquSomenteGmarx, view]);
 
   async function loadArquivados() {
     if (arquivadosReady) return;
@@ -112,6 +114,7 @@ export default function AgendaTecnicaPage() {
 
   const filtered = activeItems
     .filter((v) => filter === "todos" || v.status_instalacao === filter)
+    .filter((v) => !somenteGmarx || v.equipe === "comercial_gmarx")
     .filter((v) => {
       const d = itemDate(v);
       if (dateFrom && d < dateFrom) return false;
@@ -138,6 +141,7 @@ export default function AgendaTecnicaPage() {
 
   const arquivadosFiltrados = activeArquivados
     .filter((v) => arquTecnico === "todos" || v.tecnico_instalacao === arquTecnico)
+    .filter((v) => !arquSomenteGmarx || v.equipe === "comercial_gmarx")
     .filter((v) => {
       const d = v.data_instalacao ?? v.data_finalizacao ?? "";
       if (arquDateFrom && d < arquDateFrom) return false;
@@ -240,6 +244,14 @@ export default function AgendaTecnicaPage() {
                   <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
+                <button
+                  onClick={() => setSomenteGmarx((s) => !s)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    somenteGmarx ? "bg-rose-600 text-white border-rose-600" : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                  }`}
+                >
+                  Gmarx
+                </button>
                 {(dateFrom || dateTo) && (
                   <button onClick={() => { setDateFrom(""); setDateTo(""); }}
                     className="text-xs text-gray-500 hover:text-gray-700 underline self-end pb-2">Limpar</button>
@@ -335,6 +347,14 @@ export default function AgendaTecnicaPage() {
                       <option key={t} value={t}>{t === "todos" ? "Todos os técnicos" : `👷 ${t}`}</option>
                     ))}
                   </select>
+                  <button
+                    onClick={() => setArquSomenteGmarx((s) => !s)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors self-end ${
+                      arquSomenteGmarx ? "bg-rose-600 text-white border-rose-600" : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                    }`}
+                  >
+                    Gmarx
+                  </button>
                   {(arquDateFrom || arquDateTo) && (
                     <button onClick={() => { setArquDateFrom(""); setArquDateTo(""); }}
                       className="text-xs text-gray-500 hover:text-gray-700 underline self-end pb-2">Limpar datas</button>
