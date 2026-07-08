@@ -66,8 +66,10 @@ export default function FinanceiroPage() {
 // =====================
 function TecnicoView() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<"registro" | "financeiro" | "meus-servicos">("registro");
   const [tipos, setTipos] = useState<TipoServicoFinanceiro[]>([]);
   const [servicos, setServicos] = useState<ServicoFinanceiro[]>([]);
+  const [fechamentos, setFechamentos] = useState<FechamentoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     tipo_servico_id: "", cliente: "", endereco: "",
@@ -82,9 +84,10 @@ function TecnicoView() {
     if (!user) return;
     setLoading(true);
     try {
-      const [t, s] = await Promise.all([listTiposServico(), listServicosPorTecnico(user.uid)]);
+      const [t, s, f] = await Promise.all([listTiposServico(), listServicosPorTecnico(user.uid), listFechamentos(user.uid)]);
       setTipos(t.filter((x) => x.ativo));
       setServicos(s);
+      setFechamentos(f);
     } finally {
       setLoading(false);
     }
@@ -131,6 +134,7 @@ function TecnicoView() {
       setForm({ tipo_servico_id: "", cliente: "", endereco: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
       setFoto(null);
       await load();
+      setTab("meus-servicos");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao enviar serviço.");
     } finally {
@@ -139,150 +143,203 @@ function TecnicoView() {
     }
   }
 
+  const chips: { key: typeof tab; label: string }[] = [
+    { key: "registro", label: "Registro de Serviços" },
+    { key: "financeiro", label: "Parte Financeira" },
+    { key: "meus-servicos", label: "Meus Serviços" },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border shadow-sm p-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">A receber</p>
-          <p className="text-2xl font-bold text-blue-600 mt-1">{formatBRL(aReceber)}</p>
-        </div>
-        <div className="bg-white rounded-xl border shadow-sm p-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Recebido este mês</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">{formatBRL(recebidoMes)}</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border shadow-sm p-5 space-y-3">
-        <h3 className="font-semibold text-gray-800">Registrar serviço prestado</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <select
-            value={form.tipo_servico_id}
-            onChange={(e) => setForm((f) => ({ ...f, tipo_servico_id: e.target.value }))}
-            className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+    <div className="space-y-4">
+      <div className="flex gap-2 overflow-x-auto">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setTab(c.key)}
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium ${tab === c.key ? "bg-emerald-600 text-white" : "bg-white border text-gray-600"}`}
           >
-            <option value="">Tipo de serviço</option>
-            {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-          </select>
-          <input
-            type="date"
-            value={form.data_servico}
-            onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
-            className="w-full min-w-0 h-11 px-3 text-base border rounded-lg leading-[2.75rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-          <input
-            placeholder="Cliente"
-            value={form.cliente}
-            onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-            className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-          <input
-            placeholder="Endereço"
-            value={form.endereco}
-            onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
-            className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-        </div>
-        <textarea
-          placeholder="Observações (opcional)"
-          value={form.observacoes}
-          onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
-          className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          rows={2}
-        />
-        <div>
-          <label className="flex items-center gap-2 text-sm text-gray-600 mb-1.5">
-            <Camera className="w-4 h-4" /> Foto do serviço (opcional)
-          </label>
-          <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
-            <Camera className="w-4 h-4" />
-            {foto ? foto.name : "Tirar foto ou escolher da galeria"}
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "registro" && (
+        <div className="bg-white rounded-xl border shadow-sm p-5 space-y-3">
+          <h3 className="font-semibold text-gray-800">Registrar serviço prestado</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select
+              value={form.tipo_servico_id}
+              onChange={(e) => setForm((f) => ({ ...f, tipo_servico_id: e.target.value }))}
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="">Tipo de serviço</option>
+              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
             <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
-              className="hidden"
+              type="date"
+              value={form.data_servico}
+              onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg leading-[2.75rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-          </label>
-        </div>
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
-        )}
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-base font-medium px-4 py-3 rounded-lg"
-        >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          {uploading ? "Enviando foto..." : saving ? "Enviando..." : "Enviar serviço"}
-        </button>
-      </div>
-
-      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b bg-gray-50">
-          <h3 className="font-semibold text-gray-800">Meus serviços</h3>
-        </div>
-        <div className="p-5">
-          {loading ? (
-            <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
-              <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
-            </div>
-          ) : servicos.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço registrado ainda.</div>
-          ) : (
-            <>
-              {/* Cards — mobile */}
-              <div className="space-y-2 md:hidden">
-                {servicos.map((s) => (
-                  <div key={s.id} className="border rounded-lg p-3 space-y-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-gray-800 text-sm">{s.tipo_servico_nome}</p>
-                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
-                        {STATUS_LABEL[s.status]}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">{s.cliente}</p>
-                    <div className="flex items-center justify-between text-sm text-gray-500">
-                      <span>{s.data_servico}</span>
-                      <span className="font-medium text-gray-700">{formatBRL(valorDe(s))}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Tabela — desktop */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
-                      <th className="text-left py-2 pr-4 font-medium">Tipo</th>
-                      <th className="text-left py-2 pr-4 font-medium">Cliente</th>
-                      <th className="text-left py-2 pr-4 font-medium">Data</th>
-                      <th className="text-left py-2 pr-4 font-medium">Valor</th>
-                      <th className="text-left py-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {servicos.map((s) => (
-                      <tr key={s.id} className="border-b last:border-0">
-                        <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
-                        <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
-                        <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
-                        <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
-                        <td className="py-2.5">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
-                            {STATUS_LABEL[s.status]}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <input
+              placeholder="Cliente"
+              value={form.cliente}
+              onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+            <input
+              placeholder="Endereço"
+              value={form.endereco}
+              onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+          <textarea
+            placeholder="Observações (opcional)"
+            value={form.observacoes}
+            onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
+            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            rows={2}
+          />
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-600 mb-1.5">
+              <Camera className="w-4 h-4" /> Foto do serviço (opcional)
+            </label>
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
+              <Camera className="w-4 h-4" />
+              {foto ? foto.name : "Tirar foto ou escolher da galeria"}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
+          </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
           )}
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-base font-medium px-4 py-3 rounded-lg"
+          >
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {uploading ? "Enviando foto..." : saving ? "Enviando..." : "Enviar serviço"}
+          </button>
         </div>
-      </div>
+      )}
+
+      {tab === "financeiro" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border shadow-sm p-5">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">A receber</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{formatBRL(aReceber)}</p>
+            </div>
+            <div className="bg-white rounded-xl border shadow-sm p-5">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Recebido este mês</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">{formatBRL(recebidoMes)}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b bg-gray-50">
+              <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
+            </div>
+            <div className="p-5">
+              {loading ? (
+                <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+                </div>
+              ) : fechamentos.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">Nenhum pagamento fechado ainda.</div>
+              ) : (
+                <div className="space-y-2">
+                  {fechamentos.map((f) => (
+                    <div key={f.id} className="flex items-center justify-between gap-2 border rounded-lg p-3 text-sm">
+                      <div>
+                        <p className="font-medium text-gray-800">{f.mes_referencia}</p>
+                        <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
+                      </div>
+                      <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "meus-servicos" && (
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b bg-gray-50">
+            <h3 className="font-semibold text-gray-800">Meus serviços</h3>
+          </div>
+          <div className="p-5">
+            {loading ? (
+              <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+                <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+              </div>
+            ) : servicos.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço registrado ainda.</div>
+            ) : (
+              <>
+                {/* Cards — mobile */}
+                <div className="space-y-2 md:hidden">
+                  {servicos.map((s) => (
+                    <div key={s.id} className="border rounded-lg p-3 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-gray-800 text-sm">{s.tipo_servico_nome}</p>
+                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
+                          {STATUS_LABEL[s.status]}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">{s.cliente}</p>
+                      <div className="flex items-center justify-between text-sm text-gray-500">
+                        <span>{s.data_servico}</span>
+                        <span className="font-medium text-gray-700">{formatBRL(valorDe(s))}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tabela — desktop */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                        <th className="text-left py-2 pr-4 font-medium">Tipo</th>
+                        <th className="text-left py-2 pr-4 font-medium">Cliente</th>
+                        <th className="text-left py-2 pr-4 font-medium">Data</th>
+                        <th className="text-left py-2 pr-4 font-medium">Valor</th>
+                        <th className="text-left py-2 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {servicos.map((s) => (
+                        <tr key={s.id} className="border-b last:border-0">
+                          <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
+                          <td className="py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
+                              {STATUS_LABEL[s.status]}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
