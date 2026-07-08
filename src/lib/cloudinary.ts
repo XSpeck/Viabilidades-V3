@@ -20,3 +20,17 @@ export async function uploadFoto(file: File): Promise<string> {
   const { secure_url } = await res.json();
   return secure_url as string;
 }
+
+/** Best-effort — não lança erro se a limpeza falhar, pra não travar quem excluiu o registro. */
+export async function deleteFotos(urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  try {
+    await fetch("/api/cloudinary/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+  } catch {
+    // silencioso — limpeza de foto orfã não deve bloquear o fluxo do usuário
+  }
+}

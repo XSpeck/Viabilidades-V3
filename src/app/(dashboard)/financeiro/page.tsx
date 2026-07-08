@@ -186,7 +186,7 @@ function TecnicoView() {
   async function handleExcluirServico(s: ServicoFinanceiro) {
     setSaving(true);
     try {
-      await deleteServicoFinanceiro(s.id);
+      await deleteServicoFinanceiro(s.id, s.foto_urls);
       setConfirmExcluirServico(null);
       setServicoSelecionado(null);
       await load();

@@ -12,6 +12,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { deleteFotos } from "./cloudinary";
 import type {
   TipoServicoFinanceiro,
   ServicoFinanceiro,
@@ -128,7 +129,8 @@ export async function updateServicoFinanceiro(
   });
 }
 
-export async function deleteServicoFinanceiro(id: string): Promise<void> {
+export async function deleteServicoFinanceiro(id: string, fotoUrls?: string[]): Promise<void> {
+  if (fotoUrls && fotoUrls.length > 0) await deleteFotos(fotoUrls);
   await deleteDoc(doc(db, "servicos_financeiro", id));
 }
 
