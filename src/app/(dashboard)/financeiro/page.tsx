@@ -331,7 +331,7 @@ function TecnicoView() {
               <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
             </div>
             <div className="p-5 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">De</label>
                   <input
@@ -390,7 +390,7 @@ function TecnicoView() {
               onChange={(e) => setBuscaServico(e.target.value)}
               className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">De</label>
                 <input
