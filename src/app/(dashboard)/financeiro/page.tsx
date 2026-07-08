@@ -239,7 +239,7 @@ function TecnicoView() {
               type="date"
               value={form.data_servico}
               onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
-              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-full min-w-0 h-11 appearance-none px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
             <input
               placeholder="Cliente"
@@ -338,14 +338,14 @@ function TecnicoView() {
                     type="date"
                     value={fechamentoDataInicio}
                     onChange={(e) => setFechamentoDataInicio(e.target.value)}
-                    className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                   <span className="text-xs text-gray-400 shrink-0">até</span>
                   <input
                     type="date"
                     value={fechamentoDataFim}
                     onChange={(e) => setFechamentoDataFim(e.target.value)}
-                    className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                 </div>
               </div>
@@ -395,14 +395,14 @@ function TecnicoView() {
                   type="date"
                   value={servicoDataInicio}
                   onChange={(e) => setServicoDataInicio(e.target.value)}
-                  className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
                 <span className="text-xs text-gray-400 shrink-0">até</span>
                 <input
                   type="date"
                   value={servicoDataFim}
                   onChange={(e) => setServicoDataFim(e.target.value)}
-                  className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
               </div>
             </div>
