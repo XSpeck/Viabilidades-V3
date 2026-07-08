@@ -1378,6 +1378,8 @@ function FechamentoPagamentoView() {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [fechando, setFechando] = useState<string | null>(null);
+  const [servicoDetalhe, setServicoDetalhe] = useState<ServicoFinanceiro | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1457,7 +1459,12 @@ function FechamentoPagamentoView() {
                       checked={selecionados[i.id] ?? false}
                       onChange={(e) => setSelecionados((f) => ({ ...f, [i.id]: e.target.checked }))}
                     />
-                    <span className="flex-1 text-gray-700">{i.tipo_servico_nome} — {i.cliente} ({i.data_servico})</span>
+                    <button
+                      onClick={() => setServicoDetalhe(i)}
+                      className="flex-1 text-left text-gray-700 hover:text-emerald-700 hover:underline truncate"
+                    >
+                      {i.tipo_servico_nome} — {i.cliente} ({i.data_servico})
+                    </button>
                     <input
                       value={valores[i.id] ?? ""}
                       onChange={(e) => setValores((f) => ({ ...f, [i.id]: e.target.value }))}
@@ -1478,6 +1485,84 @@ function FechamentoPagamentoView() {
           );
         })
       )}
+
+      {/* Modal de detalhes do serviço */}
+      {servicoDetalhe && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setServicoDetalhe(null)}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="font-semibold text-gray-800">{servicoDetalhe.tipo_servico_nome}</h3>
+              <button
+                onClick={() => setServicoDetalhe(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[servicoDetalhe.status]}`}>
+                {STATUS_LABEL[servicoDetalhe.status]}
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Técnico</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.tecnico_nome}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Cliente</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.cliente}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Data do serviço</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.data_servico}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Endereço</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Valor</p>
+                  <p className="font-medium text-gray-800">{formatBRL(servicoDetalhe.valor_ajustado ?? servicoDetalhe.valor)}</p>
+                </div>
+              </div>
+
+              {servicoDetalhe.observacoes && (
+                <div className="text-sm">
+                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-700">{servicoDetalhe.observacoes}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-gray-400 text-xs mb-1.5">Fotos</p>
+                {servicoDetalhe.foto_urls && servicoDetalhe.foto_urls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {servicoDetalhe.foto_urls.map((url, i) => (
+                      <button key={url} onClick={() => setFotoAmpliada(url)}>
+                        <img src={url} alt={`Evidência ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <ImageIcon className="w-3.5 h-3.5" /> Sem foto
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fotoAmpliada && <FotoLightbox url={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />}
     </div>
   );
 }
