@@ -158,7 +158,7 @@ function TecnicoView() {
           <select
             value={form.tipo_servico_id}
             onChange={(e) => setForm((f) => ({ ...f, tipo_servico_id: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           >
             <option value="">Tipo de serviço</option>
             {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
@@ -167,38 +167,43 @@ function TecnicoView() {
             type="date"
             value={form.data_servico}
             onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
           <input
             placeholder="Cliente"
             value={form.cliente}
             onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
           <input
             placeholder="Endereço"
             value={form.endereco}
             onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
-            className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
         </div>
         <textarea
           placeholder="Observações (opcional)"
           value={form.observacoes}
           onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
-          className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           rows={2}
         />
         <div>
-          <label className="flex items-center gap-2 text-sm text-gray-600 mb-1 cursor-pointer w-fit">
+          <label className="flex items-center gap-2 text-sm text-gray-600 mb-1.5">
             <Camera className="w-4 h-4" /> Foto do serviço (opcional)
           </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
-            className="text-sm"
-          />
+          <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
+            <Camera className="w-4 h-4" />
+            {foto ? foto.name : "Tirar foto ou escolher da galeria"}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+          </label>
         </div>
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
@@ -206,7 +211,7 @@ function TecnicoView() {
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-base font-medium px-4 py-3 rounded-lg"
         >
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
           {uploading ? "Enviando foto..." : saving ? "Enviando..." : "Enviar serviço"}
@@ -225,34 +230,56 @@ function TecnicoView() {
           ) : servicos.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço registrado ainda.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
-                    <th className="text-left py-2 pr-4 font-medium">Tipo</th>
-                    <th className="text-left py-2 pr-4 font-medium">Cliente</th>
-                    <th className="text-left py-2 pr-4 font-medium">Data</th>
-                    <th className="text-left py-2 pr-4 font-medium">Valor</th>
-                    <th className="text-left py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {servicos.map((s) => (
-                    <tr key={s.id} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
-                      <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
-                      <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
-                      <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
-                      <td className="py-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
-                          {STATUS_LABEL[s.status]}
-                        </span>
-                      </td>
+            <>
+              {/* Cards — mobile */}
+              <div className="space-y-2 md:hidden">
+                {servicos.map((s) => (
+                  <div key={s.id} className="border rounded-lg p-3 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-gray-800 text-sm">{s.tipo_servico_nome}</p>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
+                        {STATUS_LABEL[s.status]}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">{s.cliente}</p>
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <span>{s.data_servico}</span>
+                      <span className="font-medium text-gray-700">{formatBRL(valorDe(s))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabela — desktop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                      <th className="text-left py-2 pr-4 font-medium">Tipo</th>
+                      <th className="text-left py-2 pr-4 font-medium">Cliente</th>
+                      <th className="text-left py-2 pr-4 font-medium">Data</th>
+                      <th className="text-left py-2 pr-4 font-medium">Valor</th>
+                      <th className="text-left py-2 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {servicos.map((s) => (
+                      <tr key={s.id} className="border-b last:border-0">
+                        <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
+                        <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
+                        <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
+                        <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
+                        <td className="py-2.5">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
+                            {STATUS_LABEL[s.status]}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
