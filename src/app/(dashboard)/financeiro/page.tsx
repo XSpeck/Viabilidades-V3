@@ -239,7 +239,7 @@ function TecnicoView() {
               type="date"
               value={form.data_servico}
               onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
-              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg leading-[2.75rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
             <input
               placeholder="Cliente"
@@ -338,7 +338,7 @@ function TecnicoView() {
                     type="date"
                     value={fechamentoDataInicio}
                     onChange={(e) => setFechamentoDataInicio(e.target.value)}
-                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                 </div>
                 <div>
@@ -347,7 +347,7 @@ function TecnicoView() {
                     type="date"
                     value={fechamentoDataFim}
                     onChange={(e) => setFechamentoDataFim(e.target.value)}
-                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                 </div>
               </div>
@@ -397,7 +397,7 @@ function TecnicoView() {
                   type="date"
                   value={servicoDataInicio}
                   onChange={(e) => setServicoDataInicio(e.target.value)}
-                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
               </div>
               <div>
@@ -406,7 +406,7 @@ function TecnicoView() {
                   type="date"
                   value={servicoDataFim}
                   onChange={(e) => setServicoDataFim(e.target.value)}
-                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
               </div>
             </div>
