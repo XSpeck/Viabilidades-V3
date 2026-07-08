@@ -22,6 +22,29 @@ function formatBRL(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Fechar"
+        className="absolute top-4 right-4 text-white/80 hover:text-white p-2"
+      >
+        <X className="w-6 h-6" />
+      </button>
+      <img
+        src={url}
+        alt="Foto ampliada"
+        className="max-w-full max-h-full object-contain rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 const STATUS_LABEL: Record<StatusServicoFinanceiro, string> = {
   pendente_auditoria: "Em análise",
   aprovado: "Aprovado",
@@ -153,6 +176,7 @@ function TecnicoView() {
   const SERVICOS_POR_PAGINA = 10;
   const [paginaServicos, setPaginaServicos] = useState(1);
   const [servicoSelecionado, setServicoSelecionado] = useState<ServicoFinanceiro | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const totalPaginasServicos = Math.max(1, Math.ceil(servicosFiltrados.length / SERVICOS_POR_PAGINA));
   const paginaServicosAtual = Math.min(paginaServicos, totalPaginasServicos);
   const servicosPagina = servicosFiltrados.slice(
@@ -583,13 +607,13 @@ function TecnicoView() {
                 {servicoSelecionado.foto_urls && servicoSelecionado.foto_urls.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
                     {servicoSelecionado.foto_urls.map((url, i) => (
-                      <a key={url} href={url} target="_blank" rel="noreferrer">
+                      <button key={url} onClick={() => setFotoAmpliada(url)}>
                         <img
                           src={url}
                           alt={`Foto ${i + 1}`}
                           className="w-full aspect-square object-cover rounded-lg border"
                         />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -602,6 +626,8 @@ function TecnicoView() {
           </div>
         </div>
       )}
+
+      {fotoAmpliada && <FotoLightbox url={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />}
     </div>
   );
 }
@@ -618,6 +644,7 @@ function AuditorServicoView() {
   const [rejeitando, setRejeitando] = useState<ServicoFinanceiro | null>(null);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -705,9 +732,9 @@ function AuditorServicoView() {
               {s.foto_urls && s.foto_urls.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {s.foto_urls.map((url, i) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer">
+                    <button key={url} onClick={() => setFotoAmpliada(url)}>
                       <img src={url} alt={`Evidência ${i + 1}`} className="w-16 h-16 rounded-lg border object-cover" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -765,6 +792,8 @@ function AuditorServicoView() {
           </div>
         </div>
       )}
+
+      {fotoAmpliada && <FotoLightbox url={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />}
     </div>
   );
 }

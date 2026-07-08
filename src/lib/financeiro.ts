@@ -88,11 +88,15 @@ export async function criarServicoFinanceiro(data: {
   foto_urls?: string[];
   observacoes?: string;
 }): Promise<void> {
-  await addDoc(collection(db, "servicos_financeiro"), {
-    ...data,
+  const { foto_urls, observacoes, ...resto } = data;
+  const payload: Record<string, unknown> = {
+    ...resto,
     status: "pendente_auditoria",
     criado_em: new Date().toISOString(),
-  });
+  };
+  if (foto_urls) payload.foto_urls = foto_urls;
+  if (observacoes) payload.observacoes = observacoes;
+  await addDoc(collection(db, "servicos_financeiro"), payload);
 }
 
 export async function listServicosPorTecnico(uid: string): Promise<ServicoFinanceiro[]> {
