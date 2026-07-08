@@ -158,7 +158,7 @@ function TecnicoView() {
           <select
             value={form.tipo_servico_id}
             onChange={(e) => setForm((f) => ({ ...f, tipo_servico_id: e.target.value }))}
-            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           >
             <option value="">Tipo de serviço</option>
             {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
@@ -167,19 +167,19 @@ function TecnicoView() {
             type="date"
             value={form.data_servico}
             onChange={(e) => setForm((f) => ({ ...f, data_servico: e.target.value }))}
-            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full h-11 px-3 text-base border rounded-lg leading-[2.75rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
           <input
             placeholder="Cliente"
             value={form.cliente}
             onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
           <input
             placeholder="Endereço"
             value={form.endereco}
             onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
-            className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
           />
         </div>
         <textarea
