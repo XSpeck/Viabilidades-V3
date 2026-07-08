@@ -42,6 +42,7 @@ export default function FinanceiroPage() {
   }
 
   const cargo = getCargo(user!);
+  const papel = user!.papel_financeiro;
 
   return (
     <div className="space-y-6">
@@ -54,8 +55,8 @@ export default function FinanceiroPage() {
       </div>
 
       {cargo === "tecnico" && <TecnicoView />}
-      {cargo === "auditor_servico" && <AuditorServicoView />}
-      {(cargo === "financeiro" || cargo === "adm") && <FinanceiroAdminView />}
+      {papel === "auditor_servico" && <AuditorServicoView />}
+      {(papel === "financeiro" || cargo === "adm") && <FinanceiroAdminView />}
     </div>
   );
 }

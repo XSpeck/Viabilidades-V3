@@ -9,35 +9,37 @@ export const PAGE_CARGOS: Record<string, UserCargo[]> = {
   "agenda-tecnica": ["adm", "agendamento"],
   relatorios:       ["adm", "auditor"],
   "analise-rede":   ["adm", "auditor"],
-  financeiro:       ["adm", "tecnico", "auditor_servico", "financeiro"],
   adm:              ["adm"],
 };
 
 export const CARGO_DEFAULT_ROUTE: Record<UserCargo, string> = {
-  adm:             "/viabilidades",
-  auditor:         "/viabilidades",
-  agendamento:     "/home",
-  usuario:         "/home",
-  tecnico:         "/financeiro",
-  auditor_servico: "/financeiro",
-  financeiro:      "/financeiro",
+  adm:         "/viabilidades",
+  auditor:     "/viabilidades",
+  agendamento: "/home",
+  usuario:     "/home",
+  tecnico:     "/financeiro",
 };
 
 export const CARGO_LABEL: Record<UserCargo, string> = {
-  adm:             "ADM",
-  auditor:         "Auditor",
-  agendamento:     "Agendamento",
-  usuario:         "Usuário",
-  tecnico:         "Técnico",
-  auditor_servico: "Auditor de Serviço",
-  financeiro:      "Financeiro",
+  adm:         "ADM",
+  auditor:     "Auditor",
+  agendamento: "Agendamento",
+  usuario:     "Usuário",
+  tecnico:     "Técnico",
 };
 
 export function getCargo(user: AppUser): UserCargo {
   return user.cargo ?? (user.nivel === 1 ? "auditor" : "usuario");
 }
 
+/** "financeiro" não depende só do cargo: adm e técnico entram sempre; os demais precisam do papel_financeiro (auditor_servico ou financeiro), que coexiste com o cargo principal do usuário. */
+function canAccessFinanceiro(user: AppUser): boolean {
+  const cargo = getCargo(user);
+  return cargo === "adm" || cargo === "tecnico" || !!user.papel_financeiro;
+}
+
 export function canAccess(user: AppUser | null, page: string): boolean {
   if (!user) return false;
+  if (page === "financeiro") return canAccessFinanceiro(user);
   return PAGE_CARGOS[page]?.includes(getCargo(user)) ?? true;
 }

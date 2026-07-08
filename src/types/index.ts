@@ -1,6 +1,8 @@
 export type UserNivel = 1 | 2;
-export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario" | "tecnico" | "auditor_servico" | "financeiro";
+export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario" | "tecnico";
 export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento" | "comercial_gmarx";
+/** Papel adicional do módulo financeiro — não substitui o cargo principal, coexiste com ele (ex: um "auditor" também pode ser "financeiro"). */
+export type PapelFinanceiro = "auditor_servico" | "financeiro";
 
 export interface AppUser {
   uid: string;
@@ -11,6 +13,7 @@ export interface AppUser {
   equipe?: EquipeUsuario;
   /** Só usado quando cargo === "tecnico" (ex: "Técnico de Redes", "Técnico de Manutenção"). */
   funcao_tecnico?: string;
+  papel_financeiro?: PapelFinanceiro;
 }
 
 export type TipoInstalacao = "FTTH" | "Prédio" | "Condomínio";

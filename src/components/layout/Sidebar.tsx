@@ -18,7 +18,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { canAccess, getCargo, CARGO_LABEL } from "@/lib/access";
-import type { UserCargo } from "@/types";
+import type { UserCargo, PapelFinanceiro } from "@/types";
 
 interface NavItem {
   href: string;
@@ -41,13 +41,16 @@ const navItems: NavItem[] = [
 ];
 
 const CARGO_BADGE_COLOR: Record<UserCargo, string> = {
-  adm:             "text-purple-400",
-  auditor:         "text-yellow-400",
-  agendamento:     "text-green-400",
-  usuario:         "text-gray-400",
-  tecnico:         "text-blue-400",
-  auditor_servico: "text-orange-400",
-  financeiro:      "text-emerald-400",
+  adm:         "text-purple-400",
+  auditor:     "text-yellow-400",
+  agendamento: "text-green-400",
+  usuario:     "text-gray-400",
+  tecnico:     "text-blue-400",
+};
+
+const PAPEL_FINANCEIRO_LABEL: Record<PapelFinanceiro, string> = {
+  auditor_servico: "Auditor de Serviço",
+  financeiro:      "Financeiro",
 };
 
 export default function Sidebar() {
@@ -79,9 +82,16 @@ export default function Sidebar() {
           <div className="min-w-0">
             <p className="text-sm font-medium text-white truncate">{user?.nome}</p>
             {user && (
-              <span className={`text-xs font-medium ${CARGO_BADGE_COLOR[getCargo(user)]}`}>
-                {CARGO_LABEL[getCargo(user)]}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-xs font-medium ${CARGO_BADGE_COLOR[getCargo(user)]}`}>
+                  {CARGO_LABEL[getCargo(user)]}
+                </span>
+                {user.papel_financeiro && (
+                  <span className="text-xs font-medium text-emerald-400">
+                    · {PAPEL_FINANCEIRO_LABEL[user.papel_financeiro]}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

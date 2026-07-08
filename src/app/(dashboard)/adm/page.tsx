@@ -12,7 +12,7 @@ import {
   batchImportViabilizacoes,
   getBairros, createBairro, renameBairro, deleteBairro,
 } from "@/lib/firestore";
-import type { AppUser, UserCargo, EquipeUsuario, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
+import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
@@ -572,8 +572,6 @@ const CARGO_LABEL: Record<UserCargo, string> = {
   agendamento: "Agendamento",
   usuario: "Usuário",
   tecnico: "Técnico",
-  auditor_servico: "Auditor de Serviço",
-  financeiro: "Financeiro",
 };
 const CARGO_COLOR: Record<UserCargo, string> = {
   adm: "bg-purple-100 text-purple-700",
@@ -581,6 +579,13 @@ const CARGO_COLOR: Record<UserCargo, string> = {
   agendamento: "bg-green-100 text-green-700",
   usuario: "bg-gray-100 text-gray-700",
   tecnico: "bg-cyan-100 text-cyan-700",
+};
+
+const PAPEL_FINANCEIRO_LABEL: Record<PapelFinanceiro, string> = {
+  auditor_servico: "Auditor de Serviço",
+  financeiro: "Financeiro",
+};
+const PAPEL_FINANCEIRO_COLOR: Record<PapelFinanceiro, string> = {
   auditor_servico: "bg-orange-100 text-orange-700",
   financeiro: "bg-emerald-100 text-emerald-700",
 };
@@ -605,7 +610,7 @@ function GestaoUsuarios() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcaoTecnico: "" });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcaoTecnico: "", papelFinanceiro: "" as PapelFinanceiro | "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
@@ -624,13 +629,21 @@ function GestaoUsuarios() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcaoTecnico: "" });
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcaoTecnico: "", papelFinanceiro: "" });
     setFormError(null);
     setModal({ mode: "create" });
   }
 
   function openEdit(u: AppUser) {
-    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"), equipe: u.equipe ?? "", funcaoTecnico: u.funcao_tecnico ?? "" });
+    setForm({
+      nome: u.nome,
+      email: u.login,
+      senha: "",
+      cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
+      equipe: u.equipe ?? "",
+      funcaoTecnico: u.funcao_tecnico ?? "",
+      papelFinanceiro: u.papel_financeiro ?? "",
+    });
     setFormError(null);
     setModal({ mode: "edit", user: u });
   }
@@ -645,14 +658,16 @@ function GestaoUsuarios() {
     setFormError(null);
     try {
       const funcaoTecnico = form.cargo === "tecnico" ? form.funcaoTecnico.trim() || undefined : undefined;
+      const papelFinanceiro = form.cargo !== "tecnico" ? form.papelFinanceiro || undefined : undefined;
       if (modal?.mode === "create") {
-        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcaoTecnico);
+        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcaoTecnico, papelFinanceiro);
       } else if (modal?.mode === "edit") {
         await updateUser(modal.user.uid, {
           nome: form.nome,
           cargo: form.cargo,
           equipe: form.equipe || null,
           funcao_tecnico: form.cargo === "tecnico" ? (funcaoTecnico ?? null) : null,
+          papel_financeiro: papelFinanceiro ?? null,
         });
       }
       setModal(null);
@@ -739,9 +754,16 @@ function GestaoUsuarios() {
                         <td className="py-2.5 pr-4 font-medium text-gray-800">{u.nome}</td>
                         <td className="py-2.5 pr-4 text-gray-500">{u.login}</td>
                         <td className="py-2.5 pr-4">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CARGO_COLOR[cargo]}`}>
-                            {CARGO_LABEL[cargo]}
-                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CARGO_COLOR[cargo]}`}>
+                              {CARGO_LABEL[cargo]}
+                            </span>
+                            {u.papel_financeiro && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAPEL_FINANCEIRO_COLOR[u.papel_financeiro]}`}>
+                                {PAPEL_FINANCEIRO_LABEL[u.papel_financeiro]}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2.5 pr-4 hidden sm:table-cell">
                           {u.equipe ? (
@@ -831,12 +853,10 @@ function GestaoUsuarios() {
                   <option value="auditor">Auditor</option>
                   <option value="agendamento">Agendamento</option>
                   <option value="tecnico">Técnico</option>
-                  <option value="auditor_servico">Auditor de Serviço</option>
-                  <option value="financeiro">Financeiro</option>
                   <option value="adm">ADM</option>
                 </select>
               </div>
-              {form.cargo === "tecnico" && (
+              {form.cargo === "tecnico" ? (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Função do técnico</label>
                   <input
@@ -845,6 +865,21 @@ function GestaoUsuarios() {
                     className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     placeholder="Ex: Técnico de Redes, Técnico de Manutenção"
                   />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Papel financeiro <span className="font-normal">(opcional, além do cargo acima)</span>
+                  </label>
+                  <select
+                    value={form.papelFinanceiro}
+                    onChange={(e) => setForm((f) => ({ ...f, papelFinanceiro: e.target.value as PapelFinanceiro | "" }))}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  >
+                    <option value="">Nenhum</option>
+                    <option value="auditor_servico">Auditor de Serviço</option>
+                    <option value="financeiro">Financeiro</option>
+                  </select>
                 </div>
               )}
               <div>
