@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess, getCargo } from "@/lib/access";
 import {
-  listTiposServico, createTipoServico, updateTipoServico,
+  listTiposServico, createTipoServico, updateTipoServico, deleteTipoServico,
   criarServicoFinanceiro, listServicosPorTecnico, listServicosPendentesAuditoria,
   listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico,
   fecharPagamentoMensal, listFechamentos,
@@ -14,7 +14,7 @@ import { listUsers, updateUser } from "@/lib/users";
 import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFinanceiro, FechamentoPagamento } from "@/types";
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
-  Users as UsersIcon, Settings, ClipboardList, ImageIcon,
+  Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2,
 } from "lucide-react";
 
 function formatBRL(v: number): string {
@@ -488,14 +488,18 @@ function CadastrosFinanceiro() {
   const [novoNome, setNovoNome] = useState("");
   const [novoValor, setNovoValor] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editNome, setEditNome] = useState<Record<string, string>>({});
   const [editValor, setEditValor] = useState<Record<string, string>>({});
   const [editFuncao, setEditFuncao] = useState<Record<string, string>>({});
+  const [confirmDelete, setConfirmDelete] = useState<TipoServicoFinanceiro | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [t, u] = await Promise.all([listTiposServico(), listUsers()]);
       setTipos(t);
+      setEditNome(Object.fromEntries(t.map((x) => [x.id, x.nome])));
       setEditValor(Object.fromEntries(t.map((x) => [x.id, String(x.valor)])));
       const tecs = u.filter((x) => x.cargo === "tecnico");
       setTecnicos(tecs);
@@ -526,6 +530,13 @@ function CadastrosFinanceiro() {
     await load();
   }
 
+  async function salvarNome(t: TipoServicoFinanceiro) {
+    const nome = (editNome[t.id] ?? "").trim();
+    if (!nome || nome === t.nome) return;
+    await updateTipoServico(t.id, { nome });
+    await load();
+  }
+
   async function salvarValor(t: TipoServicoFinanceiro) {
     const valor = parseFloat((editValor[t.id] ?? "").replace(",", "."));
     if (Number.isNaN(valor) || valor <= 0) return;
@@ -538,6 +549,17 @@ function CadastrosFinanceiro() {
     await load();
   }
 
+  async function handleDelete(t: TipoServicoFinanceiro) {
+    setDeleting(true);
+    try {
+      await deleteTipoServico(t.id);
+      setConfirmDelete(null);
+      await load();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-gray-400 py-10 justify-center text-sm">
@@ -547,6 +569,7 @@ function CadastrosFinanceiro() {
   }
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b bg-gray-50 flex items-center gap-2">
@@ -581,7 +604,12 @@ function CadastrosFinanceiro() {
             <div className="space-y-2">
               {tipos.map((t) => (
                 <div key={t.id} className={`flex items-center gap-2 p-2 rounded-lg border ${t.ativo ? "" : "opacity-50"}`}>
-                  <span className="flex-1 text-sm font-medium text-gray-700">{t.nome}</span>
+                  <input
+                    value={editNome[t.id] ?? ""}
+                    onChange={(e) => setEditNome((f) => ({ ...f, [t.id]: e.target.value }))}
+                    onBlur={() => salvarNome(t)}
+                    className="flex-1 min-w-0 px-2 py-1 text-sm border rounded-lg font-medium text-gray-700"
+                  />
                   <input
                     value={editValor[t.id] ?? ""}
                     onChange={(e) => setEditValor((f) => ({ ...f, [t.id]: e.target.value }))}
@@ -590,9 +618,16 @@ function CadastrosFinanceiro() {
                   />
                   <button
                     onClick={() => toggleAtivo(t)}
-                    className={`text-xs px-2 py-1 rounded-full font-medium ${t.ativo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                    className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${t.ativo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
                   >
                     {t.ativo ? "Ativo" : "Inativo"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(t)}
+                    title="Excluir"
+                    className="shrink-0 p-1.5 text-gray-400 hover:text-red-600 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
@@ -628,6 +663,34 @@ function CadastrosFinanceiro() {
         </div>
       </div>
     </div>
+
+    {confirmDelete && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <h3 className="font-semibold text-gray-800">Excluir tipo de serviço?</h3>
+          <p className="text-sm text-gray-600">
+            <strong>{confirmDelete.nome}</strong> será removido da tabela de preços. Serviços já lançados com esse tipo não são afetados.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => handleDelete(confirmDelete)}
+              disabled={deleting}
+              className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+            >
+              {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Excluir
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

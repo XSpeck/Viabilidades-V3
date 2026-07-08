@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   getDocs,
   query,
   where,
@@ -64,6 +65,11 @@ export async function updateTipoServico(
   data: { nome?: string; valor?: number; ativo?: boolean }
 ): Promise<void> {
   await updateDoc(doc(db, "tipos_servico_financeiro", id), data);
+  bustCache(TIPOS_SERVICO_CACHE_KEY);
+}
+
+export async function deleteTipoServico(id: string): Promise<void> {
+  await deleteDoc(doc(db, "tipos_servico_financeiro", id));
   bustCache(TIPOS_SERVICO_CACHE_KEY);
 }
 
