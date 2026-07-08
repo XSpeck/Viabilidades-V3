@@ -423,10 +423,11 @@ function AuditorServicoView() {
 // Visão do Financeiro (e ADM)
 // =====================
 function FinanceiroAdminView() {
-  const [tab, setTab] = useState<"fechamento" | "cadastros" | "historico">("fechamento");
+  const [tab, setTab] = useState<"fechamento" | "auditoria" | "cadastros" | "historico">("fechamento");
 
   const chips: { key: typeof tab; label: string; icon: React.ReactNode }[] = [
     { key: "fechamento", label: "Fechamento", icon: <Wallet className="w-4 h-4" /> },
+    { key: "auditoria", label: "Auditoria", icon: <CheckCircle className="w-4 h-4" /> },
     { key: "cadastros", label: "Cadastros", icon: <Settings className="w-4 h-4" /> },
     { key: "historico", label: "Histórico", icon: <History className="w-4 h-4" /> },
   ];
@@ -446,6 +447,7 @@ function FinanceiroAdminView() {
       </div>
 
       {tab === "fechamento" && <FechamentoPagamentoView />}
+      {tab === "auditoria" && <AuditorServicoView />}
       {tab === "cadastros" && <CadastrosFinanceiro />}
       {tab === "historico" && <HistoricoFechamentos />}
     </div>
