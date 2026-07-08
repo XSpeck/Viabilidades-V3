@@ -128,6 +128,40 @@ function TecnicoView() {
     .filter((s) => s.status === "pago" && s.pago_em?.startsWith(mesAtual))
     .reduce((sum, s) => sum + valorDe(s), 0);
 
+  // ── Filtros: Meus Serviços ──────────────────────────────
+  const [buscaServico, setBuscaServico] = useState("");
+  const [servicoDataInicio, setServicoDataInicio] = useState("");
+  const [servicoDataFim, setServicoDataFim] = useState("");
+
+  const servicosFiltrados = servicos.filter((s) => {
+    if (servicoDataInicio && s.data_servico < servicoDataInicio) return false;
+    if (servicoDataFim && s.data_servico > servicoDataFim) return false;
+    if (buscaServico.trim()) {
+      const q = buscaServico.trim().toLowerCase();
+      if (
+        !s.cliente.toLowerCase().includes(q) &&
+        !s.endereco.toLowerCase().includes(q) &&
+        !s.tipo_servico_nome.toLowerCase().includes(q)
+      ) return false;
+    }
+    return true;
+  });
+
+  const temFiltroServico = !!(buscaServico.trim() || servicoDataInicio || servicoDataFim);
+
+  // ── Filtros: Parte Financeira (histórico de pagamentos) ──
+  const [fechamentoDataInicio, setFechamentoDataInicio] = useState("");
+  const [fechamentoDataFim, setFechamentoDataFim] = useState("");
+
+  const fechamentosFiltrados = fechamentos.filter((f) => {
+    const data = f.data_fechamento.slice(0, 10);
+    if (fechamentoDataInicio && data < fechamentoDataInicio) return false;
+    if (fechamentoDataFim && data > fechamentoDataFim) return false;
+    return true;
+  });
+
+  const temFiltroFechamento = !!(fechamentoDataInicio || fechamentoDataFim);
+
   async function handleSubmit() {
     if (!user) return;
     const tipo = tipos.find((t) => t.id === form.tipo_servico_id);
@@ -296,16 +330,39 @@ function TecnicoView() {
             <div className="px-5 py-4 border-b bg-gray-50">
               <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
             </div>
-            <div className="p-5">
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">De</label>
+                  <input
+                    type="date"
+                    value={fechamentoDataInicio}
+                    onChange={(e) => setFechamentoDataInicio(e.target.value)}
+                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Até</label>
+                  <input
+                    type="date"
+                    value={fechamentoDataFim}
+                    onChange={(e) => setFechamentoDataFim(e.target.value)}
+                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  />
+                </div>
+              </div>
+
               {loading ? (
                 <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
                   <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
                 </div>
-              ) : fechamentos.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">Nenhum pagamento fechado ainda.</div>
+              ) : fechamentosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  {temFiltroFechamento ? "Nenhum pagamento encontrado para o período." : "Nenhum pagamento fechado ainda."}
+                </div>
               ) : (
                 <div className="space-y-2">
-                  {fechamentos.map((f) => (
+                  {fechamentosFiltrados.map((f) => (
                     <div key={f.id} className="flex items-center justify-between gap-2 border rounded-lg p-3 text-sm">
                       <div>
                         <p className="font-medium text-gray-800">{f.mes_referencia}</p>
@@ -326,18 +383,47 @@ function TecnicoView() {
           <div className="px-5 py-4 border-b bg-gray-50">
             <h3 className="font-semibold text-gray-800">Meus serviços</h3>
           </div>
-          <div className="p-5">
+          <div className="p-5 space-y-3">
+            <input
+              placeholder="Buscar por cliente, endereço ou tipo de serviço"
+              value={buscaServico}
+              onChange={(e) => setBuscaServico(e.target.value)}
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">De</label>
+                <input
+                  type="date"
+                  value={servicoDataInicio}
+                  onChange={(e) => setServicoDataInicio(e.target.value)}
+                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Até</label>
+                <input
+                  type="date"
+                  value={servicoDataFim}
+                  onChange={(e) => setServicoDataFim(e.target.value)}
+                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg leading-[2.5rem] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+            </div>
+
             {loading ? (
               <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
                 <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
               </div>
-            ) : servicos.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço registrado ainda.</div>
+            ) : servicosFiltrados.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                {temFiltroServico ? "Nenhum serviço encontrado para esse filtro." : "Nenhum serviço registrado ainda."}
+              </div>
             ) : (
               <>
                 {/* Cards — mobile */}
                 <div className="space-y-2 md:hidden">
-                  {servicos.map((s) => (
+                  {servicosFiltrados.map((s) => (
                     <div key={s.id} className="border rounded-lg p-3 space-y-1">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-gray-800 text-sm">{s.tipo_servico_nome}</p>
@@ -367,7 +453,7 @@ function TecnicoView() {
                       </tr>
                     </thead>
                     <tbody>
-                      {servicos.map((s) => (
+                      {servicosFiltrados.map((s) => (
                         <tr key={s.id} className="border-b last:border-0">
                           <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
