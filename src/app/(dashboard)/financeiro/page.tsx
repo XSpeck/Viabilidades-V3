@@ -1468,7 +1468,7 @@ function FechamentoPagamentoView() {
                     <input
                       value={valores[i.id] ?? ""}
                       onChange={(e) => setValores((f) => ({ ...f, [i.id]: e.target.value }))}
-                      className="w-24 px-2 py-1 text-sm border rounded-lg text-right"
+                      className="w-24 h-9 px-2 text-sm border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     />
                   </div>
                 ))}
