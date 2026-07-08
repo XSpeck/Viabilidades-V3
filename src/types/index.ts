@@ -1,5 +1,5 @@
 export type UserNivel = 1 | 2;
-export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario";
+export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario" | "tecnico" | "auditor_servico" | "financeiro";
 export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento" | "comercial_gmarx";
 
 export interface AppUser {
@@ -9,6 +9,8 @@ export interface AppUser {
   nivel: UserNivel;
   cargo?: UserCargo;
   equipe?: EquipeUsuario;
+  /** Só usado quando cargo === "tecnico" (ex: "Técnico de Redes", "Técnico de Manutenção"). */
+  funcao_tecnico?: string;
 }
 
 export type TipoInstalacao = "FTTH" | "Prédio" | "Condomínio";
@@ -200,4 +202,50 @@ export interface DemandaRede {
   notas_atividade?: NotaAtividade[];
   /** Preenchido quando a demanda é um espelho automático de uma visita de estruturação de prédio/condomínio (ver src/lib/firestore.ts). */
   viabilizacao_id?: string;
+}
+
+// =====================
+// Financeiro (pagamento de técnicos)
+// =====================
+
+export interface TipoServicoFinanceiro {
+  id: string;
+  nome: string;
+  valor: number;
+  ativo: boolean;
+}
+
+export type StatusServicoFinanceiro = "pendente_auditoria" | "aprovado" | "rejeitado" | "pago";
+
+export interface ServicoFinanceiro {
+  id: string;
+  tecnico_uid: string;
+  tecnico_nome: string;
+  tipo_servico_id: string;
+  tipo_servico_nome: string;
+  valor: number;
+  valor_ajustado?: number;
+  cliente: string;
+  endereco: string;
+  data_servico: string;
+  foto_url?: string;
+  observacoes?: string;
+  status: StatusServicoFinanceiro;
+  criado_em: string;
+  auditado_por?: string;
+  data_auditoria?: string;
+  motivo_rejeicao?: string;
+  fechamento_id?: string;
+  pago_em?: string;
+}
+
+export interface FechamentoPagamento {
+  id: string;
+  tecnico_uid: string;
+  tecnico_nome: string;
+  mes_referencia: string;
+  total: number;
+  servicos_ids: string[];
+  fechado_por: string;
+  data_fechamento: string;
 }

@@ -9,21 +9,28 @@ export const PAGE_CARGOS: Record<string, UserCargo[]> = {
   "agenda-tecnica": ["adm", "agendamento"],
   relatorios:       ["adm", "auditor"],
   "analise-rede":   ["adm", "auditor"],
+  financeiro:       ["adm", "tecnico", "auditor_servico", "financeiro"],
   adm:              ["adm"],
 };
 
 export const CARGO_DEFAULT_ROUTE: Record<UserCargo, string> = {
-  adm:         "/viabilidades",
-  auditor:     "/viabilidades",
-  agendamento: "/home",
-  usuario:     "/home",
+  adm:             "/viabilidades",
+  auditor:         "/viabilidades",
+  agendamento:     "/home",
+  usuario:         "/home",
+  tecnico:         "/financeiro",
+  auditor_servico: "/financeiro",
+  financeiro:      "/financeiro",
 };
 
 export const CARGO_LABEL: Record<UserCargo, string> = {
-  adm:         "ADM",
-  auditor:     "Auditor",
-  agendamento: "Agendamento",
-  usuario:     "Usuário",
+  adm:             "ADM",
+  auditor:         "Auditor",
+  agendamento:     "Agendamento",
+  usuario:         "Usuário",
+  tecnico:         "Técnico",
+  auditor_servico: "Auditor de Serviço",
+  financeiro:      "Financeiro",
 };
 
 export function getCargo(user: AppUser): UserCargo {

@@ -571,12 +571,18 @@ const CARGO_LABEL: Record<UserCargo, string> = {
   auditor: "Auditor",
   agendamento: "Agendamento",
   usuario: "Usuário",
+  tecnico: "Técnico",
+  auditor_servico: "Auditor de Serviço",
+  financeiro: "Financeiro",
 };
 const CARGO_COLOR: Record<UserCargo, string> = {
   adm: "bg-purple-100 text-purple-700",
   auditor: "bg-blue-100 text-blue-700",
   agendamento: "bg-green-100 text-green-700",
   usuario: "bg-gray-100 text-gray-700",
+  tecnico: "bg-cyan-100 text-cyan-700",
+  auditor_servico: "bg-orange-100 text-orange-700",
+  financeiro: "bg-emerald-100 text-emerald-700",
 };
 
 const EQUIPE_LABEL: Record<EquipeUsuario, string> = {
@@ -599,7 +605,7 @@ function GestaoUsuarios() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "" });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcaoTecnico: "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
@@ -618,13 +624,13 @@ function GestaoUsuarios() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "" });
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcaoTecnico: "" });
     setFormError(null);
     setModal({ mode: "create" });
   }
 
   function openEdit(u: AppUser) {
-    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"), equipe: u.equipe ?? "" });
+    setForm({ nome: u.nome, email: u.login, senha: "", cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"), equipe: u.equipe ?? "", funcaoTecnico: u.funcao_tecnico ?? "" });
     setFormError(null);
     setModal({ mode: "edit", user: u });
   }
@@ -638,13 +644,15 @@ function GestaoUsuarios() {
     setSaving(true);
     setFormError(null);
     try {
+      const funcaoTecnico = form.cargo === "tecnico" ? form.funcaoTecnico.trim() || undefined : undefined;
       if (modal?.mode === "create") {
-        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined);
+        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcaoTecnico);
       } else if (modal?.mode === "edit") {
         await updateUser(modal.user.uid, {
           nome: form.nome,
           cargo: form.cargo,
           equipe: form.equipe || null,
+          funcao_tecnico: form.cargo === "tecnico" ? (funcaoTecnico ?? null) : null,
         });
       }
       setModal(null);
@@ -740,6 +748,10 @@ function GestaoUsuarios() {
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${EQUIPE_COLOR[u.equipe]}`}>
                               {EQUIPE_LABEL[u.equipe]}
                             </span>
+                          ) : u.funcao_tecnico ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700">
+                              {u.funcao_tecnico}
+                            </span>
                           ) : (
                             <span className="text-gray-300 text-xs">—</span>
                           )}
@@ -818,9 +830,23 @@ function GestaoUsuarios() {
                   <option value="usuario">Usuário</option>
                   <option value="auditor">Auditor</option>
                   <option value="agendamento">Agendamento</option>
+                  <option value="tecnico">Técnico</option>
+                  <option value="auditor_servico">Auditor de Serviço</option>
+                  <option value="financeiro">Financeiro</option>
                   <option value="adm">ADM</option>
                 </select>
               </div>
+              {form.cargo === "tecnico" && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Função do técnico</label>
+                  <input
+                    value={form.funcaoTecnico}
+                    onChange={(e) => setForm((f) => ({ ...f, funcaoTecnico: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    placeholder="Ex: Técnico de Redes, Técnico de Manutenção"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Equipe <span className="font-normal">(opcional)</span></label>
                 <select

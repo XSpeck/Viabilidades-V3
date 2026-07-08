@@ -36,6 +36,7 @@ export async function listUsers(): Promise<AppUser[]> {
       nivel: u.nivel,
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
       equipe: u.equipe,
+      funcao_tecnico: u.funcao_tecnico,
     };
   });
   setUsersCache(data);
@@ -55,7 +56,8 @@ export async function createUser(
   password: string,
   nome: string,
   cargo: UserCargo,
-  equipe?: EquipeUsuario
+  equipe?: EquipeUsuario,
+  funcaoTecnico?: string
 ): Promise<void> {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!;
   const res = await fetch(
@@ -74,13 +76,14 @@ export async function createUser(
   const nivel = cargo === "usuario" ? 2 : 1;
   const docData: Record<string, unknown> = { nome, login: email, nivel, cargo };
   if (equipe) docData.equipe = equipe;
+  if (funcaoTecnico) docData.funcao_tecnico = funcaoTecnico;
   await setDoc(doc(db, "users", localId), docData);
   bustUsersCache();
 }
 
 export async function updateUser(
   uid: string,
-  data: { nome?: string; cargo?: UserCargo; equipe?: EquipeUsuario | null }
+  data: { nome?: string; cargo?: UserCargo; equipe?: EquipeUsuario | null; funcao_tecnico?: string | null }
 ): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (data.nome !== undefined) updates.nome = data.nome;
@@ -90,6 +93,9 @@ export async function updateUser(
   }
   if (data.equipe !== undefined) {
     updates.equipe = data.equipe === null ? deleteField() : data.equipe;
+  }
+  if (data.funcao_tecnico !== undefined) {
+    updates.funcao_tecnico = data.funcao_tecnico === null ? deleteField() : data.funcao_tecnico;
   }
   await updateDoc(doc(db, "users", uid), updates);
   bustUsersCache();

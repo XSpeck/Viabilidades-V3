@@ -15,6 +15,7 @@ import {
   LogOut,
   Settings,
   Wrench,
+  DollarSign,
 } from "lucide-react";
 import { canAccess, getCargo, CARGO_LABEL } from "@/lib/access";
 import type { UserCargo } from "@/types";
@@ -35,14 +36,18 @@ const navItems: NavItem[] = [
   { href: "/agenda",         label: "Agenda FTTA/UTP",        icon: <CalendarDays className="w-4 h-4" />, page: "agenda" },
   { href: "/agenda-tecnica", label: "Agenda Técnica",         icon: <Wrench className="w-4 h-4" />,       page: "agenda-tecnica" },
   { href: "/relatorios",     label: "Relatórios",             icon: <FileText className="w-4 h-4" />,     page: "relatorios" },
+  { href: "/financeiro",     label: "Financeiro",             icon: <DollarSign className="w-4 h-4" />,   page: "financeiro" },
   { href: "/adm",            label: "Administração",          icon: <Settings className="w-4 h-4" />,     page: "adm" },
 ];
 
 const CARGO_BADGE_COLOR: Record<UserCargo, string> = {
-  adm:         "text-purple-400",
-  auditor:     "text-yellow-400",
-  agendamento: "text-green-400",
-  usuario:     "text-gray-400",
+  adm:             "text-purple-400",
+  auditor:         "text-yellow-400",
+  agendamento:     "text-green-400",
+  usuario:         "text-gray-400",
+  tecnico:         "text-blue-400",
+  auditor_servico: "text-orange-400",
+  financeiro:      "text-emerald-400",
 };
 
 export default function Sidebar() {
