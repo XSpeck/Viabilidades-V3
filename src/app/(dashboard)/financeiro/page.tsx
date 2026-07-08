@@ -810,6 +810,10 @@ function AuditorServicoView() {
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+  const [servicoDetalhe, setServicoDetalhe] = useState<ServicoFinanceiro | null>(null);
+  const [filtroTecnico, setFiltroTecnico] = useState("");
+  const [auditDataInicio, setAuditDataInicio] = useState("");
+  const [auditDataFim, setAuditDataFim] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -828,7 +832,7 @@ function AuditorServicoView() {
   async function aprovar(s: ServicoFinanceiro) {
     if (!user) return;
     setSaving(true);
-    try { await auditarServico(s.id, "aprovado", user.uid); await load(); }
+    try { await auditarServico(s.id, "aprovado", user.uid); setServicoDetalhe(null); await load(); }
     finally { setSaving(false); }
   }
 
@@ -839,6 +843,7 @@ function AuditorServicoView() {
       await auditarServico(rejeitando.id, "rejeitado", user.uid, motivo.trim() || undefined);
       setRejeitando(null);
       setMotivo("");
+      setServicoDetalhe(null);
       await load();
     } finally {
       setSaving(false);
@@ -846,92 +851,198 @@ function AuditorServicoView() {
   }
 
   const lista = tab === "fila" ? fila : historico;
+  const tecnicos = Array.from(new Set(lista.map((s) => s.tecnico_nome))).sort();
+  const listaFiltrada = lista.filter((s) => {
+    if (filtroTecnico && s.tecnico_nome !== filtroTecnico) return false;
+    if (auditDataInicio && s.data_servico < auditDataInicio) return false;
+    if (auditDataFim && s.data_servico > auditDataFim) return false;
+    return true;
+  });
+  const temFiltroAuditoria = !!(filtroTecnico || auditDataInicio || auditDataFim);
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
         <button
-          onClick={() => setTab("fila")}
+          onClick={() => { setTab("fila"); setFiltroTecnico(""); }}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium ${tab === "fila" ? "bg-orange-600 text-white" : "bg-white border text-gray-600"}`}
         >
           Fila ({fila.length})
         </button>
         <button
-          onClick={() => setTab("historico")}
+          onClick={() => { setTab("historico"); setFiltroTecnico(""); }}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${tab === "historico" ? "bg-orange-600 text-white" : "bg-white border text-gray-600"}`}
         >
           <History className="w-4 h-4" /> Histórico
         </button>
       </div>
 
+      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+        <select
+          value={filtroTecnico}
+          onChange={(e) => setFiltroTecnico(e.target.value)}
+          className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+        >
+          <option value="">Todos os técnicos</option>
+          {tecnicos.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Período</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={auditDataInicio}
+              onChange={(e) => setAuditDataInicio(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+            <span className="text-xs text-gray-400 shrink-0">até</span>
+            <input
+              type="date"
+              value={auditDataFim}
+              onChange={(e) => setAuditDataFim(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-10 justify-center text-sm">
           <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
         </div>
-      ) : lista.length === 0 ? (
+      ) : listaFiltrada.length === 0 ? (
         <div className="bg-white rounded-xl border shadow-sm text-center py-10 text-gray-400 text-sm">
-          {tab === "fila" ? "Nenhum serviço pendente de auditoria." : "Nenhum serviço auditado ainda."}
+          {temFiltroAuditoria
+            ? "Nenhum serviço encontrado para esse filtro."
+            : tab === "fila" ? "Nenhum serviço pendente de auditoria." : "Nenhum serviço auditado ainda."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {lista.map((s) => (
-            <div key={s.id} className="bg-white rounded-xl border shadow-sm p-4 space-y-2">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-gray-800">{s.tipo_servico_nome}</p>
-                  <p className="text-xs text-gray-500">Técnico: {s.tecnico_nome}</p>
-                </div>
+        <div className="bg-white rounded-xl border shadow-sm divide-y">
+          {listaFiltrada.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setServicoDetalhe(s)}
+              className="w-full text-left flex items-center justify-between gap-3 p-4 hover:bg-gray-50"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-gray-800 text-sm truncate">{s.tipo_servico_nome}</p>
+                <p className="text-xs text-gray-500 truncate">{s.tecnico_nome} · {s.cliente}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-gray-400">{s.data_servico}</span>
                 {tab === "historico" && (
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
                     {STATUS_LABEL[s.status]}
                   </span>
                 )}
               </div>
-              <div className="text-sm text-gray-600 space-y-0.5">
-                <p><span className="text-gray-400">Cliente:</span> {s.cliente}</p>
-                <p><span className="text-gray-400">Endereço:</span> {s.endereco}</p>
-                <p><span className="text-gray-400">Data:</span> {s.data_servico}</p>
-                {s.observacoes && <p><span className="text-gray-400">Obs:</span> {s.observacoes}</p>}
-                {s.motivo_rejeicao && <p className="text-red-600"><span className="text-gray-400">Motivo:</span> {s.motivo_rejeicao}</p>}
-              </div>
-              {s.foto_urls && s.foto_urls.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {s.foto_urls.map((url, i) => (
-                    <button key={url} onClick={() => setFotoAmpliada(url)}>
-                      <img src={url} alt={`Evidência ${i + 1}`} className="w-16 h-16 rounded-lg border object-cover" />
-                    </button>
-                  ))}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Modal de detalhes do serviço */}
+      {servicoDetalhe && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setServicoDetalhe(null)}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="font-semibold text-gray-800">{servicoDetalhe.tipo_servico_nome}</h3>
+              <button
+                onClick={() => setServicoDetalhe(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {tab === "historico" && (
+                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[servicoDetalhe.status]}`}>
+                  {STATUS_LABEL[servicoDetalhe.status]}
+                </span>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Técnico</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.tecnico_nome}</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                  <ImageIcon className="w-3.5 h-3.5" /> Sem foto
+                <div>
+                  <p className="text-gray-400 text-xs">Cliente</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.cliente}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Data do serviço</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.data_servico}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Endereço</p>
+                  <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
+                </div>
+              </div>
+
+              {servicoDetalhe.observacoes && (
+                <div className="text-sm">
+                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-700">{servicoDetalhe.observacoes}</p>
                 </div>
               )}
+
+              {servicoDetalhe.motivo_rejeicao && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-700 text-xs font-medium mb-0.5">Motivo da rejeição</p>
+                  <p className="text-red-600 text-sm">{servicoDetalhe.motivo_rejeicao}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-gray-400 text-xs mb-1.5">Fotos</p>
+                {servicoDetalhe.foto_urls && servicoDetalhe.foto_urls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {servicoDetalhe.foto_urls.map((url, i) => (
+                      <button key={url} onClick={() => setFotoAmpliada(url)}>
+                        <img src={url} alt={`Evidência ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <ImageIcon className="w-3.5 h-3.5" /> Sem foto
+                  </div>
+                )}
+              </div>
+
               {tab === "fila" && (
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => aprovar(s)}
+                    onClick={() => aprovar(servicoDetalhe)}
                     disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-1.5 rounded-lg"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-lg"
                   >
                     <CheckCircle className="w-4 h-4" /> Aprovar
                   </button>
                   <button
-                    onClick={() => { setRejeitando(s); setMotivo(""); }}
+                    onClick={() => { setRejeitando(servicoDetalhe); setMotivo(""); }}
                     disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-medium py-1.5 rounded-lg"
+                    className="flex-1 flex items-center justify-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-medium py-2 rounded-lg"
                   >
                     <XCircle className="w-4 h-4" /> Rejeitar
                   </button>
                 </div>
               )}
             </div>
-          ))}
+          </div>
         </div>
       )}
 
       {rejeitando && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[55] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
             <h3 className="font-semibold text-gray-800">Rejeitar serviço</h3>
             <p className="text-sm text-gray-600">{rejeitando.tipo_servico_nome} — {rejeitando.tecnico_nome}</p>
