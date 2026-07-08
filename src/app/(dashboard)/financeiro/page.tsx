@@ -14,7 +14,7 @@ import { listUsers } from "@/lib/users";
 import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFinanceiro, FechamentoPagamento } from "@/types";
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
-  Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle,
+  Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle, X,
 } from "lucide-react";
 
 function formatBRL(v: number): string {
@@ -75,10 +75,36 @@ function TecnicoView() {
     tipo_servico_id: "", cliente: "", endereco: "",
     data_servico: new Date().toISOString().slice(0, 10), observacoes: "",
   });
-  const [foto, setFoto] = useState<File | null>(null);
+  const [fotos, setFotos] = useState<File[]>([]);
+  const [fotoPreviews, setFotoPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const MAX_FOTOS = 5;
+
+  useEffect(() => {
+    const urls = fotos.map((f) => URL.createObjectURL(f));
+    setFotoPreviews(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [fotos]);
+
+  function handleFotosChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (selected.length === 0) return;
+    setFotos((prev) => {
+      const combined = [...prev, ...selected];
+      if (combined.length > MAX_FOTOS) {
+        setError(`Máximo de ${MAX_FOTOS} fotos por serviço.`);
+        return combined.slice(0, MAX_FOTOS);
+      }
+      return combined;
+    });
+    e.target.value = "";
+  }
+
+  function removeFoto(index: number) {
+    setFotos((prev) => prev.filter((_, i) => i !== index));
+  }
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -113,10 +139,10 @@ function TecnicoView() {
     setSaving(true);
     setError(null);
     try {
-      let foto_url: string | undefined;
-      if (foto) {
+      let foto_urls: string[] | undefined;
+      if (fotos.length > 0) {
         setUploading(true);
-        foto_url = await uploadFoto(foto);
+        foto_urls = await Promise.all(fotos.map((f) => uploadFoto(f)));
         setUploading(false);
       }
       await criarServicoFinanceiro({
@@ -128,11 +154,11 @@ function TecnicoView() {
         cliente: form.cliente.trim(),
         endereco: form.endereco.trim(),
         data_servico: form.data_servico,
-        foto_url,
+        foto_urls,
         observacoes: form.observacoes.trim() || undefined,
       });
       setForm({ tipo_servico_id: "", cliente: "", endereco: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
-      setFoto(null);
+      setFotos([]);
       await load();
       setTab("meus-servicos");
     } catch (e) {
@@ -203,19 +229,41 @@ function TecnicoView() {
           />
           <div>
             <label className="flex items-center gap-2 text-sm text-gray-600 mb-1.5">
-              <Camera className="w-4 h-4" /> Foto do serviço (opcional)
+              <Camera className="w-4 h-4" /> Fotos do serviço (opcional, até {MAX_FOTOS})
             </label>
-            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
-              <Camera className="w-4 h-4" />
-              {foto ? foto.name : "Tirar foto ou escolher da galeria"}
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
-                className="hidden"
-              />
-            </label>
+
+            {fotoPreviews.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-2">
+                {fotoPreviews.map((url, i) => (
+                  <div key={url} className="relative aspect-square">
+                    <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={() => removeFoto(i)}
+                      aria-label="Remover foto"
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {fotos.length < MAX_FOTOS && (
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
+                <Camera className="w-4 h-4" />
+                {fotos.length > 0 ? `Adicionar mais (${fotos.length}/${MAX_FOTOS})` : "Tirar foto ou escolher da galeria"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  onChange={handleFotosChange}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
@@ -440,10 +488,14 @@ function AuditorServicoView() {
                 {s.observacoes && <p><span className="text-gray-400">Obs:</span> {s.observacoes}</p>}
                 {s.motivo_rejeicao && <p className="text-red-600"><span className="text-gray-400">Motivo:</span> {s.motivo_rejeicao}</p>}
               </div>
-              {s.foto_url ? (
-                <a href={s.foto_url} target="_blank" rel="noreferrer" className="block">
-                  <img src={s.foto_url} alt="Evidência do serviço" className="rounded-lg border max-h-40 object-cover" />
-                </a>
+              {s.foto_urls && s.foto_urls.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {s.foto_urls.map((url, i) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer">
+                      <img src={url} alt={`Evidência ${i + 1}`} className="w-16 h-16 rounded-lg border object-cover" />
+                    </a>
+                  ))}
+                </div>
               ) : (
                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
                   <ImageIcon className="w-3.5 h-3.5" /> Sem foto

@@ -85,7 +85,7 @@ export async function criarServicoFinanceiro(data: {
   cliente: string;
   endereco: string;
   data_servico: string;
-  foto_url?: string;
+  foto_urls?: string[];
   observacoes?: string;
 }): Promise<void> {
   await addDoc(collection(db, "servicos_financeiro"), {
