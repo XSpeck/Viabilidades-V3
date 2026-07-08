@@ -79,7 +79,7 @@ service cloud.firestore {
 
     // Financeiro — serviços prestados pelos técnicos
     match /servicos_financeiro/{id} {
-      allow read, create, update: if isAuth();
+      allow read, create, update, delete: if isAuth();
     }
 
     // Financeiro — fechamentos de pagamento mensal

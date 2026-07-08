@@ -240,6 +240,8 @@ export interface ServicoFinanceiro {
   motivo_rejeicao?: string;
   fechamento_id?: string;
   pago_em?: string;
+  /** id do servico rejeitado que este e um reenvio de (opcional). */
+  reenviado_de?: string;
 }
 
 export interface FechamentoPagamento {

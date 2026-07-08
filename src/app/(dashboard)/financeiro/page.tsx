@@ -5,7 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canAccess, getCargo } from "@/lib/access";
 import {
   listTiposServico, createTipoServico, updateTipoServico, deleteTipoServico,
-  criarServicoFinanceiro, listServicosPorTecnico, listServicosPendentesAuditoria,
+  criarServicoFinanceiro, updateServicoFinanceiro, deleteServicoFinanceiro,
+  listServicosPorTecnico, listServicosPendentesAuditoria,
   listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico,
   fecharPagamentoMensal, listFechamentos,
 } from "@/lib/financeiro";
@@ -15,7 +16,7 @@ import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFi
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
   Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle, X,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Copy,
 } from "lucide-react";
 
 function formatBRL(v: number): string {
@@ -101,9 +102,13 @@ function TecnicoView() {
   });
   const [fotos, setFotos] = useState<File[]>([]);
   const [fotoPreviews, setFotoPreviews] = useState<string[]>([]);
+  const [fotosExistentes, setFotosExistentes] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [reenviarDeId, setReenviarDeId] = useState<string | null>(null);
+  const [confirmExcluirServico, setConfirmExcluirServico] = useState<ServicoFinanceiro | null>(null);
   const MAX_FOTOS = 5;
 
   useEffect(() => {
@@ -117,9 +122,10 @@ function TecnicoView() {
     if (selected.length === 0) return;
     setFotos((prev) => {
       const combined = [...prev, ...selected];
-      if (combined.length > MAX_FOTOS) {
+      const limite = MAX_FOTOS - fotosExistentes.length;
+      if (combined.length > limite) {
         setError(`Máximo de ${MAX_FOTOS} fotos por serviço.`);
-        return combined.slice(0, MAX_FOTOS);
+        return combined.slice(0, limite);
       }
       return combined;
     });
@@ -128,6 +134,65 @@ function TecnicoView() {
 
   function removeFoto(index: number) {
     setFotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function removeFotoExistente(index: number) {
+    setFotosExistentes((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function resetForm() {
+    setForm({ tipo_servico_id: "", cliente: "", endereco: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
+    setFotos([]);
+    setFotosExistentes([]);
+    setEditandoId(null);
+    setReenviarDeId(null);
+    setError(null);
+  }
+
+  function iniciarEdicao(s: ServicoFinanceiro) {
+    setForm({
+      tipo_servico_id: s.tipo_servico_id,
+      cliente: s.cliente,
+      endereco: s.endereco,
+      data_servico: s.data_servico,
+      observacoes: s.observacoes ?? "",
+    });
+    setFotos([]);
+    setFotosExistentes(s.foto_urls ?? []);
+    setEditandoId(s.id);
+    setReenviarDeId(null);
+    setError(null);
+    setServicoSelecionado(null);
+    setTab("registro");
+  }
+
+  function iniciarReenvio(s: ServicoFinanceiro) {
+    setForm({
+      tipo_servico_id: s.tipo_servico_id,
+      cliente: s.cliente,
+      endereco: s.endereco,
+      data_servico: new Date().toISOString().slice(0, 10),
+      observacoes: s.motivo_rejeicao ? `Reenvio — motivo da rejeição anterior: ${s.motivo_rejeicao}` : "",
+    });
+    setFotos([]);
+    setFotosExistentes([]);
+    setEditandoId(null);
+    setReenviarDeId(s.id);
+    setError(null);
+    setServicoSelecionado(null);
+    setTab("registro");
+  }
+
+  async function handleExcluirServico(s: ServicoFinanceiro) {
+    setSaving(true);
+    try {
+      await deleteServicoFinanceiro(s.id);
+      setConfirmExcluirServico(null);
+      setServicoSelecionado(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   }
 
   const load = useCallback(async () => {
@@ -210,26 +275,41 @@ function TecnicoView() {
     setSaving(true);
     setError(null);
     try {
-      let foto_urls: string[] | undefined;
+      let novasUrls: string[] = [];
       if (fotos.length > 0) {
         setUploading(true);
-        foto_urls = await Promise.all(fotos.map((f) => uploadFoto(f)));
+        novasUrls = await Promise.all(fotos.map((f) => uploadFoto(f)));
         setUploading(false);
       }
-      await criarServicoFinanceiro({
-        tecnico_uid: user.uid,
-        tecnico_nome: user.nome,
-        tipo_servico_id: tipo.id,
-        tipo_servico_nome: tipo.nome,
-        valor: tipo.valor,
-        cliente: form.cliente.trim(),
-        endereco: form.endereco.trim(),
-        data_servico: form.data_servico,
-        foto_urls,
-        observacoes: form.observacoes.trim() || undefined,
-      });
-      setForm({ tipo_servico_id: "", cliente: "", endereco: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
-      setFotos([]);
+      const foto_urls = [...fotosExistentes, ...novasUrls];
+
+      if (editandoId) {
+        await updateServicoFinanceiro(editandoId, {
+          tipo_servico_id: tipo.id,
+          tipo_servico_nome: tipo.nome,
+          valor: tipo.valor,
+          cliente: form.cliente.trim(),
+          endereco: form.endereco.trim(),
+          data_servico: form.data_servico,
+          foto_urls,
+          observacoes: form.observacoes.trim(),
+        });
+      } else {
+        await criarServicoFinanceiro({
+          tecnico_uid: user.uid,
+          tecnico_nome: user.nome,
+          tipo_servico_id: tipo.id,
+          tipo_servico_nome: tipo.nome,
+          valor: tipo.valor,
+          cliente: form.cliente.trim(),
+          endereco: form.endereco.trim(),
+          data_servico: form.data_servico,
+          foto_urls: foto_urls.length > 0 ? foto_urls : undefined,
+          observacoes: form.observacoes.trim() || undefined,
+          reenviado_de: reenviarDeId ?? undefined,
+        });
+      }
+      resetForm();
       await load();
       setTab("meus-servicos");
     } catch (e) {
@@ -262,7 +342,16 @@ function TecnicoView() {
 
       {tab === "registro" && (
         <div className="bg-white rounded-xl border shadow-sm p-5 space-y-3">
-          <h3 className="font-semibold text-gray-800">Registrar serviço prestado</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-800">
+              {editandoId ? "Editar serviço" : reenviarDeId ? "Reenviar serviço rejeitado" : "Registrar serviço prestado"}
+            </h3>
+            {(editandoId || reenviarDeId) && (
+              <button onClick={resetForm} className="text-xs text-gray-500 hover:text-gray-700 underline">
+                Cancelar
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <select
               value={form.tipo_servico_id}
@@ -303,8 +392,21 @@ function TecnicoView() {
               <Camera className="w-4 h-4" /> Fotos do serviço (opcional, até {MAX_FOTOS})
             </label>
 
-            {fotoPreviews.length > 0 && (
+            {(fotosExistentes.length > 0 || fotoPreviews.length > 0) && (
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-2">
+                {fotosExistentes.map((url, i) => (
+                  <div key={url} className="relative aspect-square">
+                    <img src={url} alt={`Foto existente ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={() => removeFotoExistente(i)}
+                      aria-label="Remover foto"
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
                 {fotoPreviews.map((url, i) => (
                   <div key={url} className="relative aspect-square">
                     <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
@@ -321,10 +423,12 @@ function TecnicoView() {
               </div>
             )}
 
-            {fotos.length < MAX_FOTOS && (
+            {fotosExistentes.length + fotos.length < MAX_FOTOS && (
               <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
                 <Camera className="w-4 h-4" />
-                {fotos.length > 0 ? `Adicionar mais (${fotos.length}/${MAX_FOTOS})` : "Tirar foto ou escolher da galeria"}
+                {fotosExistentes.length + fotos.length > 0
+                  ? `Adicionar mais (${fotosExistentes.length + fotos.length}/${MAX_FOTOS})`
+                  : "Tirar foto ou escolher da galeria"}
                 <input
                   type="file"
                   accept="image/*"
@@ -345,7 +449,15 @@ function TecnicoView() {
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-base font-medium px-4 py-3 rounded-lg"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {uploading ? "Enviando foto..." : saving ? "Enviando..." : "Enviar serviço"}
+            {uploading
+              ? "Enviando foto..."
+              : saving
+              ? "Enviando..."
+              : editandoId
+              ? "Salvar alterações"
+              : reenviarDeId
+              ? "Reenviar serviço"
+              : "Enviar serviço"}
           </button>
         </div>
       )}
@@ -622,6 +734,59 @@ function TecnicoView() {
                   </div>
                 )}
               </div>
+
+              {servicoSelecionado.status === "pendente_auditoria" && (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => iniciarEdicao(servicoSelecionado)}
+                    className="flex-1 flex items-center justify-center gap-1.5 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 text-sm font-medium py-2 rounded-lg"
+                  >
+                    <Pencil className="w-4 h-4" /> Editar
+                  </button>
+                  <button
+                    onClick={() => setConfirmExcluirServico(servicoSelecionado)}
+                    className="flex-1 flex items-center justify-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-medium py-2 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" /> Excluir
+                  </button>
+                </div>
+              )}
+
+              {servicoSelecionado.status === "rejeitado" && (
+                <button
+                  onClick={() => iniciarReenvio(servicoSelecionado)}
+                  className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2 rounded-lg"
+                >
+                  <Copy className="w-4 h-4" /> Duplicar e reenviar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmExcluirServico && (
+        <div className="fixed inset-0 bg-black/40 z-[55] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">Excluir serviço?</h3>
+            <p className="text-sm text-gray-600">
+              <strong>{confirmExcluirServico.tipo_servico_nome}</strong> — {confirmExcluirServico.cliente} será removido. Essa ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmExcluirServico(null)}
+                className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleExcluirServico(confirmExcluirServico)}
+                disabled={saving}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Excluir
+              </button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   getDocs,
   query,
   where,
@@ -87,8 +88,9 @@ export async function criarServicoFinanceiro(data: {
   data_servico: string;
   foto_urls?: string[];
   observacoes?: string;
+  reenviado_de?: string;
 }): Promise<void> {
-  const { foto_urls, observacoes, ...resto } = data;
+  const { foto_urls, observacoes, reenviado_de, ...resto } = data;
   const payload: Record<string, unknown> = {
     ...resto,
     status: "pendente_auditoria",
@@ -96,7 +98,38 @@ export async function criarServicoFinanceiro(data: {
   };
   if (foto_urls) payload.foto_urls = foto_urls;
   if (observacoes) payload.observacoes = observacoes;
+  if (reenviado_de) payload.reenviado_de = reenviado_de;
   await addDoc(collection(db, "servicos_financeiro"), payload);
+}
+
+/** Só deve ser chamado enquanto o servico ainda estiver "pendente_auditoria" (garantido pela UI). */
+export async function updateServicoFinanceiro(
+  id: string,
+  data: {
+    tipo_servico_id: string;
+    tipo_servico_nome: string;
+    valor: number;
+    cliente: string;
+    endereco: string;
+    data_servico: string;
+    foto_urls: string[];
+    observacoes: string;
+  }
+): Promise<void> {
+  await updateDoc(doc(db, "servicos_financeiro", id), {
+    tipo_servico_id: data.tipo_servico_id,
+    tipo_servico_nome: data.tipo_servico_nome,
+    valor: data.valor,
+    cliente: data.cliente,
+    endereco: data.endereco,
+    data_servico: data.data_servico,
+    foto_urls: data.foto_urls.length > 0 ? data.foto_urls : deleteField(),
+    observacoes: data.observacoes.trim() ? data.observacoes.trim() : deleteField(),
+  });
+}
+
+export async function deleteServicoFinanceiro(id: string): Promise<void> {
+  await deleteDoc(doc(db, "servicos_financeiro", id));
 }
 
 export async function listServicosPorTecnico(uid: string): Promise<ServicoFinanceiro[]> {
