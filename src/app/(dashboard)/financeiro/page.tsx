@@ -331,23 +331,21 @@ function TecnicoView() {
               <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
             </div>
             <div className="p-5 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">De</label>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Período</label>
+                <div className="flex items-center gap-2">
                   <input
                     type="date"
                     value={fechamentoDataInicio}
                     onChange={(e) => setFechamentoDataInicio(e.target.value)}
-                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Até</label>
+                  <span className="text-xs text-gray-400 shrink-0">até</span>
                   <input
                     type="date"
                     value={fechamentoDataFim}
                     onChange={(e) => setFechamentoDataFim(e.target.value)}
-                    className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                 </div>
               </div>
@@ -390,23 +388,21 @@ function TecnicoView() {
               onChange={(e) => setBuscaServico(e.target.value)}
               className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">De</label>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Período</label>
+              <div className="flex items-center gap-2">
                 <input
                   type="date"
                   value={servicoDataInicio}
                   onChange={(e) => setServicoDataInicio(e.target.value)}
-                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Até</label>
+                <span className="text-xs text-gray-400 shrink-0">até</span>
                 <input
                   type="date"
                   value={servicoDataFim}
                   onChange={(e) => setServicoDataFim(e.target.value)}
-                  className="w-full min-w-0 h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  className="flex-1 min-w-0 h-9 px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 />
               </div>
             </div>
