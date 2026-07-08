@@ -10,11 +10,11 @@ import {
   fecharPagamentoMensal, listFechamentos,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
-import { listUsers, updateUser } from "@/lib/users";
+import { listUsers } from "@/lib/users";
 import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFinanceiro, FechamentoPagamento } from "@/types";
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
-  Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2,
+  Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle,
 } from "lucide-react";
 
 function formatBRL(v: number): string {
@@ -481,29 +481,24 @@ function FinanceiroAdminView() {
   );
 }
 
+type ModalStateTipo = { mode: "create" } | { mode: "edit"; tipo: TipoServicoFinanceiro };
+
 function CadastrosFinanceiro() {
   const [tipos, setTipos] = useState<TipoServicoFinanceiro[]>([]);
   const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [novoNome, setNovoNome] = useState("");
-  const [novoValor, setNovoValor] = useState("");
+  const [modal, setModal] = useState<ModalStateTipo | null>(null);
+  const [form, setForm] = useState({ nome: "", valor: "", ativo: true });
   const [saving, setSaving] = useState(false);
-  const [editNome, setEditNome] = useState<Record<string, string>>({});
-  const [editValor, setEditValor] = useState<Record<string, string>>({});
-  const [editFuncao, setEditFuncao] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TipoServicoFinanceiro | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [t, u] = await Promise.all([listTiposServico(), listUsers()]);
       setTipos(t);
-      setEditNome(Object.fromEntries(t.map((x) => [x.id, x.nome])));
-      setEditValor(Object.fromEntries(t.map((x) => [x.id, String(x.valor)])));
-      const tecs = u.filter((x) => x.cargo === "tecnico");
-      setTecnicos(tecs);
-      setEditFuncao(Object.fromEntries(tecs.map((x) => [x.uid, x.funcao_tecnico ?? ""])));
+      setTecnicos(u.filter((x) => x.cargo === "tecnico"));
     } finally {
       setLoading(false);
     }
@@ -511,52 +506,49 @@ function CadastrosFinanceiro() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function addTipo() {
-    const valor = parseFloat(novoValor.replace(",", "."));
-    if (!novoNome.trim() || Number.isNaN(valor) || valor <= 0) return;
+  function openCreate() {
+    setForm({ nome: "", valor: "", ativo: true });
+    setFormError(null);
+    setModal({ mode: "create" });
+  }
+
+  function openEdit(t: TipoServicoFinanceiro) {
+    setForm({ nome: t.nome, valor: String(t.valor), ativo: t.ativo });
+    setFormError(null);
+    setModal({ mode: "edit", tipo: t });
+  }
+
+  async function handleSave() {
+    if (!form.nome.trim()) { setFormError("Informe o nome."); return; }
+    const valor = parseFloat(form.valor.replace(",", "."));
+    if (Number.isNaN(valor) || valor <= 0) { setFormError("Informe um valor válido."); return; }
     setSaving(true);
+    setFormError(null);
     try {
-      await createTipoServico(novoNome.trim(), valor);
-      setNovoNome("");
-      setNovoValor("");
+      if (modal?.mode === "create") {
+        await createTipoServico(form.nome.trim(), valor);
+      } else if (modal?.mode === "edit") {
+        await updateTipoServico(modal.tipo.id, { nome: form.nome.trim(), valor, ativo: form.ativo });
+      }
+      setModal(null);
       await load();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function toggleAtivo(t: TipoServicoFinanceiro) {
-    await updateTipoServico(t.id, { ativo: !t.ativo });
-    await load();
-  }
-
-  async function salvarNome(t: TipoServicoFinanceiro) {
-    const nome = (editNome[t.id] ?? "").trim();
-    if (!nome || nome === t.nome) return;
-    await updateTipoServico(t.id, { nome });
-    await load();
-  }
-
-  async function salvarValor(t: TipoServicoFinanceiro) {
-    const valor = parseFloat((editValor[t.id] ?? "").replace(",", "."));
-    if (Number.isNaN(valor) || valor <= 0) return;
-    await updateTipoServico(t.id, { valor });
-    await load();
-  }
-
-  async function salvarFuncao(uid: string) {
-    await updateUser(uid, { funcao_tecnico: editFuncao[uid]?.trim() || null });
-    await load();
-  }
-
   async function handleDelete(t: TipoServicoFinanceiro) {
-    setDeleting(true);
+    setSaving(true);
     try {
       await deleteTipoServico(t.id);
       setConfirmDelete(null);
       await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao excluir.");
     } finally {
-      setDeleting(false);
+      setSaving(false);
     }
   }
 
@@ -572,65 +564,56 @@ function CadastrosFinanceiro() {
     <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b bg-gray-50 flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-emerald-600" />
-          <h3 className="font-semibold text-gray-800">Tipos de serviço e valores</h3>
-        </div>
-        <div className="p-5 space-y-3">
-          <div className="flex gap-2">
-            <input
-              placeholder="Nome do serviço"
-              value={novoNome}
-              onChange={(e) => setNovoNome(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-            <input
-              placeholder="Valor"
-              value={novoValor}
-              onChange={(e) => setNovoValor(e.target.value)}
-              className="w-28 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-            <button
-              onClick={addTipo}
-              disabled={saving}
-              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-3 py-2 rounded-lg text-sm"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-emerald-600" />
+            <h3 className="font-semibold text-gray-800">Tipos de serviço e valores</h3>
           </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg"
+          >
+            <Plus className="w-4 h-4" /> Novo tipo
+          </button>
+        </div>
+        <div className="p-5">
           {tipos.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">Nenhum tipo de serviço cadastrado.</p>
+            <div className="text-center py-8 text-gray-400 text-sm">Nenhum tipo de serviço cadastrado.</div>
           ) : (
-            <div className="space-y-2">
-              {tipos.map((t) => (
-                <div key={t.id} className={`flex items-center gap-2 p-2 rounded-lg border ${t.ativo ? "" : "opacity-50"}`}>
-                  <input
-                    value={editNome[t.id] ?? ""}
-                    onChange={(e) => setEditNome((f) => ({ ...f, [t.id]: e.target.value }))}
-                    onBlur={() => salvarNome(t)}
-                    className="flex-1 min-w-0 px-2 py-1 text-sm border rounded-lg font-medium text-gray-700"
-                  />
-                  <input
-                    value={editValor[t.id] ?? ""}
-                    onChange={(e) => setEditValor((f) => ({ ...f, [t.id]: e.target.value }))}
-                    onBlur={() => salvarValor(t)}
-                    className="w-24 px-2 py-1 text-sm border rounded-lg text-right"
-                  />
-                  <button
-                    onClick={() => toggleAtivo(t)}
-                    className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${t.ativo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
-                  >
-                    {t.ativo ? "Ativo" : "Inativo"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(t)}
-                    title="Excluir"
-                    className="shrink-0 p-1.5 text-gray-400 hover:text-red-600 rounded"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                    <th className="text-left py-2 pr-4 font-medium">Nome</th>
+                    <th className="text-left py-2 pr-4 font-medium">Valor</th>
+                    <th className="text-left py-2 pr-4 font-medium">Status</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {tipos.map((t) => (
+                    <tr key={t.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-2.5 pr-4 font-medium text-gray-800">{t.nome}</td>
+                      <td className="py-2.5 pr-4 text-gray-600">{formatBRL(t.valor)}</td>
+                      <td className="py-2.5 pr-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.ativo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                          {t.ativo ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded" title="Editar">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setConfirmDelete(t)} className="p-1.5 text-gray-400 hover:text-red-600 rounded" title="Excluir">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -647,23 +630,88 @@ function CadastrosFinanceiro() {
               Nenhum técnico cadastrado. Crie usuários com o cargo &quot;Técnico&quot; na página de Administração.
             </p>
           ) : (
-            tecnicos.map((t) => (
-              <div key={t.uid} className="flex items-center gap-2 p-2 rounded-lg border">
-                <span className="flex-1 text-sm font-medium text-gray-700">{t.nome}</span>
-                <input
-                  placeholder="Função"
-                  value={editFuncao[t.uid] ?? ""}
-                  onChange={(e) => setEditFuncao((f) => ({ ...f, [t.uid]: e.target.value }))}
-                  onBlur={() => salvarFuncao(t.uid)}
-                  className="w-48 px-2 py-1 text-sm border rounded-lg"
-                />
-              </div>
-            ))
+            <div className="space-y-2">
+              {tecnicos.map((t) => (
+                <div key={t.uid} className="flex items-center justify-between gap-2 p-2 rounded-lg border">
+                  <span className="text-sm font-medium text-gray-700">{t.nome}</span>
+                  {t.funcao_tecnico ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-100 text-cyan-700">{t.funcao_tecnico}</span>
+                  ) : (
+                    <span className="text-xs text-gray-300">Sem função definida</span>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
+          <p className="text-xs text-gray-400 mt-3">A função é definida em Administração → Gestão de Usuários.</p>
         </div>
       </div>
     </div>
 
+    {/* Modal criar / editar */}
+    {modal && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <h3 className="font-semibold text-gray-800">
+            {modal.mode === "create" ? "Novo tipo de serviço" : "Editar tipo de serviço"}
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nome</label>
+              <input
+                value={form.nome}
+                onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="Ex: Instalação FTTH"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Valor</label>
+              <input
+                value={form.valor}
+                onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="0,00"
+              />
+            </div>
+            {modal.mode === "edit" && (
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={form.ativo}
+                  onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
+                />
+                Ativo
+              </label>
+            )}
+          </div>
+          {formError && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              {formError}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setModal(null)}
+              className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {modal.mode === "create" ? "Criar" : "Salvar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Confirmação de exclusão */}
     {confirmDelete && (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
@@ -680,10 +728,10 @@ function CadastrosFinanceiro() {
             </button>
             <button
               onClick={() => handleDelete(confirmDelete)}
-              disabled={deleting}
+              disabled={saving}
               className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
             >
-              {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Excluir
             </button>
           </div>
