@@ -374,8 +374,8 @@ function TecnicoView() {
 
   const chips: { key: typeof tab; label: string }[] = [
     { key: "registro", label: "Registro de Serviços" },
-    { key: "financeiro", label: "Financeiro" },
     { key: "meus-servicos", label: "Meus Serviços" },
+    { key: "financeiro", label: "Financeiro" },
   ];
 
   return (
