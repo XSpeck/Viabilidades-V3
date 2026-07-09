@@ -13,7 +13,7 @@ import {
   getBairros, createBairro, renameBairro, deleteBairro,
 } from "@/lib/firestore";
 import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
-import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound } from "lucide-react";
+import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
 export default function AdminPage() {
@@ -618,6 +618,8 @@ function GestaoUsuarios() {
   const [novaSenha, setNovaSenha] = useState("");
   const [senhaError, setSenhaError] = useState<string | null>(null);
   const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [pagina, setPagina] = useState(1);
 
   async function load() {
     setLoading(true);
@@ -708,6 +710,19 @@ function GestaoUsuarios() {
     }
   }
 
+  const usersFiltrados = users.filter((u) => {
+    if (!busca.trim()) return true;
+    const q = busca.trim().toLowerCase();
+    return u.nome.toLowerCase().includes(q) || u.login.toLowerCase().includes(q);
+  });
+
+  const POR_PAGINA = 10;
+  const totalPaginas = Math.max(1, Math.ceil(usersFiltrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const usersPagina = usersFiltrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+
+  useEffect(() => { setPagina(1); }, [busca]);
+
   return (
     <>
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden lg:col-span-2">
@@ -727,14 +742,27 @@ function GestaoUsuarios() {
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome ou email"
+              className="w-full h-10 pl-9 pr-3 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
           {loading ? (
             <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
               <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
             </div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">Nenhum usuário cadastrado.</div>
+          ) : usersFiltrados.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">Nenhum usuário encontrado para essa busca.</div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -747,7 +775,7 @@ function GestaoUsuarios() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => {
+                  {usersPagina.map((u) => {
                     const cargo: UserCargo = u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario");
                     return (
                       <tr key={u.uid} className="border-b last:border-0 hover:bg-gray-50">
@@ -797,6 +825,29 @@ function GestaoUsuarios() {
                 </tbody>
               </table>
             </div>
+
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  disabled={paginaAtual === 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Anterior
+                </button>
+                <span className="text-xs text-gray-500">
+                  Página {paginaAtual} de {totalPaginas}
+                </span>
+                <button
+                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                  disabled={paginaAtual === totalPaginas}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Próxima <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
       </div>
