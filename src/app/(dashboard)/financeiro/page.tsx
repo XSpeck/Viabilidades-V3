@@ -221,22 +221,30 @@ function TecnicoView() {
   const valorDe = (s: ServicoFinanceiro) => s.valor_ajustado ?? s.valor;
 
   // ── Filtros: A receber (serviços aprovados aguardando pagamento) ──
-  const [pendFiltroTipo, setPendFiltroTipo] = useState("");
   const [pendDataInicio, setPendDataInicio] = useState("");
   const [pendDataFim, setPendDataFim] = useState("");
+  const [paginaAguardando, setPaginaAguardando] = useState(1);
 
   const aprovados = servicos.filter((s) => s.status === "aprovado");
-  const tiposAprovados = Array.from(new Set(aprovados.map((s) => s.tipo_servico_nome))).sort();
 
   const aprovadosFiltrados = aprovados.filter((s) => {
-    if (pendFiltroTipo && s.tipo_servico_nome !== pendFiltroTipo) return false;
     if (pendDataInicio && s.data_servico < pendDataInicio) return false;
     if (pendDataFim && s.data_servico > pendDataFim) return false;
     return true;
   });
 
   const totalAprovadosFiltrados = aprovadosFiltrados.reduce((sum, s) => sum + valorDe(s), 0);
-  const temFiltroPendente = !!(pendFiltroTipo || pendDataInicio || pendDataFim);
+  const temFiltroPendente = !!(pendDataInicio || pendDataFim);
+
+  const POR_PAGINA = 20;
+  const totalPaginasAguardando = Math.max(1, Math.ceil(aprovadosFiltrados.length / POR_PAGINA));
+  const paginaAguardandoAtual = Math.min(paginaAguardando, totalPaginasAguardando);
+  const aguardandoPagina = aprovadosFiltrados.slice(
+    (paginaAguardandoAtual - 1) * POR_PAGINA,
+    paginaAguardandoAtual * POR_PAGINA
+  );
+
+  useEffect(() => { setPaginaAguardando(1); }, [pendDataInicio, pendDataFim]);
 
   // ── Filtros: Meus Serviços ──────────────────────────────
   const [buscaServico, setBuscaServico] = useState("");
@@ -275,6 +283,7 @@ function TecnicoView() {
   // ── Filtros: Parte Financeira (histórico de pagamentos) ──
   const [fechamentoDataInicio, setFechamentoDataInicio] = useState("");
   const [fechamentoDataFim, setFechamentoDataFim] = useState("");
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
 
   const fechamentosFiltrados = fechamentos.filter((f) => {
     const data = f.data_fechamento.slice(0, 10);
@@ -285,6 +294,15 @@ function TecnicoView() {
 
   const temFiltroFechamento = !!(fechamentoDataInicio || fechamentoDataFim);
   const totalFechamentosFiltrados = fechamentosFiltrados.reduce((sum, f) => sum + f.total, 0);
+
+  const totalPaginasHistorico = Math.max(1, Math.ceil(fechamentosFiltrados.length / POR_PAGINA));
+  const paginaHistoricoAtual = Math.min(paginaHistorico, totalPaginasHistorico);
+  const historicoPagina = fechamentosFiltrados.slice(
+    (paginaHistoricoAtual - 1) * POR_PAGINA,
+    paginaHistoricoAtual * POR_PAGINA
+  );
+
+  useEffect(() => { setPaginaHistorico(1); }, [fechamentoDataInicio, fechamentoDataFim]);
 
   async function handleSubmit() {
     if (!user) return;
@@ -516,32 +534,22 @@ function TecnicoView() {
                   <p className="text-xs text-gray-500">Já aprovados, aguardando o próximo fechamento</p>
                 </div>
                 <div className="p-5 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select
-                      value={pendFiltroTipo}
-                      onChange={(e) => setPendFiltroTipo(e.target.value)}
-                      className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                    >
-                      <option value="">Todos os tipos de serviço</option>
-                      {tiposAprovados.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="date"
-                          value={pendDataInicio}
-                          onChange={(e) => setPendDataInicio(e.target.value)}
-                          className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                        />
-                        <span className="text-xs text-gray-400 shrink-0">até</span>
-                        <input
-                          type="date"
-                          value={pendDataFim}
-                          onChange={(e) => setPendDataFim(e.target.value)}
-                          className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                        />
-                      </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={pendDataInicio}
+                        onChange={(e) => setPendDataInicio(e.target.value)}
+                        className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <span className="text-xs text-gray-400 shrink-0">até</span>
+                      <input
+                        type="date"
+                        value={pendDataFim}
+                        onChange={(e) => setPendDataFim(e.target.value)}
+                        className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
                     </div>
                   </div>
 
@@ -556,21 +564,45 @@ function TecnicoView() {
                       {temFiltroPendente ? "Nenhum serviço encontrado para esse filtro." : "Nenhum serviço aprovado aguardando pagamento."}
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {aprovadosFiltrados.map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => setServicoSelecionado(s)}
-                          className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
-                        >
-                          <div>
-                            <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
-                            <p className="text-xs text-gray-500">{s.cliente} · {formatDataBR(s.data_servico)}</p>
-                          </div>
-                          <span className="font-semibold text-blue-700">{formatBRL(valorDe(s))}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        {aguardandoPagina.map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => setServicoSelecionado(s)}
+                            className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
+                              <p className="text-xs text-gray-500">{s.cliente} · {formatDataBR(s.data_servico)}</p>
+                            </div>
+                            <span className="font-semibold text-blue-700">{formatBRL(valorDe(s))}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {totalPaginasAguardando > 1 && (
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            onClick={() => setPaginaAguardando((p) => Math.max(1, p - 1))}
+                            disabled={paginaAguardandoAtual === 1}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                          >
+                            <ChevronLeft className="w-4 h-4" /> Anterior
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            Página {paginaAguardandoAtual} de {totalPaginasAguardando}
+                          </span>
+                          <button
+                            onClick={() => setPaginaAguardando((p) => Math.min(totalPaginasAguardando, p + 1))}
+                            disabled={paginaAguardandoAtual === totalPaginasAguardando}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                          >
+                            Próxima <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -623,22 +655,46 @@ function TecnicoView() {
                       {temFiltroFechamento ? "Nenhum pagamento encontrado para o período." : "Nenhum pagamento fechado ainda."}
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {fechamentosFiltrados.map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => setFechamentoSelecionado(f)}
-                          className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
-                        >
-                          <div>
-                            <p className="font-medium text-gray-800">{formatMesReferenciaBR(f.mes_referencia)}</p>
-                            <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
-                            <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
-                          </div>
-                          <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        {historicoPagina.map((f) => (
+                          <button
+                            key={f.id}
+                            onClick={() => setFechamentoSelecionado(f)}
+                            className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-800">{formatMesReferenciaBR(f.mes_referencia)}</p>
+                              <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
+                              <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
+                            </div>
+                            <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {totalPaginasHistorico > 1 && (
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            onClick={() => setPaginaHistorico((p) => Math.max(1, p - 1))}
+                            disabled={paginaHistoricoAtual === 1}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                          >
+                            <ChevronLeft className="w-4 h-4" /> Anterior
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            Página {paginaHistoricoAtual} de {totalPaginasHistorico}
+                          </span>
+                          <button
+                            onClick={() => setPaginaHistorico((p) => Math.min(totalPaginasHistorico, p + 1))}
+                            disabled={paginaHistoricoAtual === totalPaginasHistorico}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                          >
+                            Próxima <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
