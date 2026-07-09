@@ -276,7 +276,7 @@ function TecnicoView() {
 
   const temFiltroServico = !!(buscaServico.trim() || servicoDataInicio || servicoDataFim);
 
-  const SERVICOS_POR_PAGINA = 10;
+  const SERVICOS_POR_PAGINA = 20;
   const [paginaServicos, setPaginaServicos] = useState(1);
   const [servicoSelecionado, setServicoSelecionado] = useState<ServicoFinanceiro | null>(null);
   const [fechamentoSelecionado, setFechamentoSelecionado] = useState<FechamentoPagamento | null>(null);
