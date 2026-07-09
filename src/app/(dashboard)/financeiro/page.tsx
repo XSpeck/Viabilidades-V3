@@ -32,6 +32,16 @@ function formatMesReferenciaBR(mes: string): string {
   return `${m}/${ano}`;
 }
 
+function dataHaDias(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <div
@@ -221,8 +231,8 @@ function TecnicoView() {
   const valorDe = (s: ServicoFinanceiro) => s.valor_ajustado ?? s.valor;
 
   // ── Filtros: A receber (serviços aprovados aguardando pagamento) ──
-  const [pendDataInicio, setPendDataInicio] = useState("");
-  const [pendDataFim, setPendDataFim] = useState("");
+  const [pendDataInicio, setPendDataInicio] = useState(() => dataHaDias(30));
+  const [pendDataFim, setPendDataFim] = useState(hojeISO);
   const [paginaAguardando, setPaginaAguardando] = useState(1);
 
   const aprovados = servicos.filter((s) => s.status === "aprovado");
@@ -281,8 +291,8 @@ function TecnicoView() {
   useEffect(() => { setPaginaServicos(1); }, [buscaServico, servicoDataInicio, servicoDataFim]);
 
   // ── Filtros: Parte Financeira (histórico de pagamentos) ──
-  const [fechamentoDataInicio, setFechamentoDataInicio] = useState("");
-  const [fechamentoDataFim, setFechamentoDataFim] = useState("");
+  const [fechamentoDataInicio, setFechamentoDataInicio] = useState(() => dataHaDias(30));
+  const [fechamentoDataFim, setFechamentoDataFim] = useState(hojeISO);
   const [paginaHistorico, setPaginaHistorico] = useState(1);
 
   const fechamentosFiltrados = fechamentos.filter((f) => {
