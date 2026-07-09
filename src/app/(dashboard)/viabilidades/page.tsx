@@ -173,6 +173,7 @@ function CardViabilidade({ v, position, urgente, onPegar, pegando }: {
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tipoColor}`}>
             {tipoIcon} {v.tipo_instalacao}
           </span>
+          {v.equipe === "comercial_gmarx" && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700">Gmarx</span>}
           {urgente && <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-600">🔥 URGENTE</span>}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
