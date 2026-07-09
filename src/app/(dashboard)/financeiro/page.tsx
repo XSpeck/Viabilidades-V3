@@ -8,7 +8,7 @@ import {
   criarServicoFinanceiro, updateServicoFinanceiro, deleteServicoFinanceiro,
   listServicosPorTecnico, listServicosPendentesAuditoria,
   listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico,
-  fecharPagamentoMensal, listFechamentos,
+  fecharPagamentoMensal, listFechamentos, listServicosPagos,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
 import { listUsers } from "@/lib/users";
@@ -1701,12 +1701,53 @@ function FechamentoPagamentoView() {
 }
 
 function HistoricoFechamentos() {
+  const [servicos, setServicos] = useState<ServicoFinanceiro[]>([]);
   const [fechamentos, setFechamentos] = useState<FechamentoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [filtroTecnico, setFiltroTecnico] = useState("");
+  const [filtroTipoServico, setFiltroTipoServico] = useState("");
+  const [dataServicoInicio, setDataServicoInicio] = useState("");
+  const [dataServicoFim, setDataServicoFim] = useState("");
+  const [dataPagamentoInicio, setDataPagamentoInicio] = useState("");
+  const [dataPagamentoFim, setDataPagamentoFim] = useState("");
+  const [pagina, setPagina] = useState(1);
+
   useEffect(() => {
-    listFechamentos().then(setFechamentos).finally(() => setLoading(false));
+    Promise.all([listServicosPagos(), listFechamentos()])
+      .then(([s, f]) => { setServicos(s); setFechamentos(f); })
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [filtroTecnico, filtroTipoServico, dataServicoInicio, dataServicoFim, dataPagamentoInicio, dataPagamentoFim]);
+
+  const fechamentoPorId = new Map(fechamentos.map((f) => [f.id, f]));
+  const tecnicos = Array.from(new Set(servicos.map((s) => s.tecnico_nome))).sort();
+  const tiposServico = Array.from(new Set(servicos.map((s) => s.tipo_servico_nome))).sort();
+
+  const servicosFiltrados = servicos.filter((s) => {
+    if (filtroTecnico && s.tecnico_nome !== filtroTecnico) return false;
+    if (filtroTipoServico && s.tipo_servico_nome !== filtroTipoServico) return false;
+    if (dataServicoInicio && s.data_servico < dataServicoInicio) return false;
+    if (dataServicoFim && s.data_servico > dataServicoFim) return false;
+    const dataPagamento = (s.pago_em ?? "").slice(0, 10);
+    if (dataPagamentoInicio && dataPagamento < dataPagamentoInicio) return false;
+    if (dataPagamentoFim && dataPagamento > dataPagamentoFim) return false;
+    return true;
+  });
+
+  const temFiltro = !!(
+    filtroTecnico || filtroTipoServico || dataServicoInicio || dataServicoFim || dataPagamentoInicio || dataPagamentoFim
+  );
+
+  const totalValor = servicosFiltrados.reduce((sum, s) => sum + (s.valor_ajustado ?? s.valor), 0);
+
+  const POR_PAGINA = 15;
+  const totalPaginas = Math.max(1, Math.ceil(servicosFiltrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const servicosPagina = servicosFiltrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
   if (loading) {
     return (
@@ -1717,34 +1758,139 @@ function HistoricoFechamentos() {
   }
 
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-      <div className="p-5">
-        {fechamentos.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">Nenhum pagamento fechado ainda.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="text-left py-2 pr-4 font-medium">Técnico</th>
-                  <th className="text-left py-2 pr-4 font-medium">Mês</th>
-                  <th className="text-left py-2 pr-4 font-medium">Total</th>
-                  <th className="text-left py-2 pr-4 font-medium">Fechado em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fechamentos.map((f) => (
-                  <tr key={f.id} className="border-b last:border-0">
-                    <td className="py-2.5 pr-4 font-medium text-gray-800">{f.tecnico_nome}</td>
-                    <td className="py-2.5 pr-4 text-gray-600">{formatMesReferenciaBR(f.mes_referencia)}</td>
-                    <td className="py-2.5 pr-4 text-gray-600">{formatBRL(f.total)}</td>
-                    <td className="py-2.5 pr-4 text-gray-500">{new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <select
+            value={filtroTecnico}
+            onChange={(e) => setFiltroTecnico(e.target.value)}
+            className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            <option value="">Todos os técnicos</option>
+            {tecnicos.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
+            value={filtroTipoServico}
+            onChange={(e) => setFiltroTipoServico(e.target.value)}
+            className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            <option value="">Todos os tipos de serviço</option>
+            {tiposServico.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dataServicoInicio}
+              onChange={(e) => setDataServicoInicio(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+            <span className="text-xs text-gray-400 shrink-0">até</span>
+            <input
+              type="date"
+              value={dataServicoFim}
+              onChange={(e) => setDataServicoFim(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
           </div>
-        )}
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Data do pagamento</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dataPagamentoInicio}
+              onChange={(e) => setDataPagamentoInicio(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+            <span className="text-xs text-gray-400 shrink-0">até</span>
+            <input
+              type="date"
+              value={dataPagamentoFim}
+              onChange={(e) => setDataPagamentoFim(e.target.value)}
+              className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border shadow-sm p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Número de serviços</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">{servicosFiltrados.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border shadow-sm p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Total pago</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">{formatBRL(totalValor)}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="p-5">
+          {servicosFiltrados.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              {temFiltro ? "Nenhum serviço encontrado para esse filtro." : "Nenhum pagamento fechado ainda."}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                      <th className="text-left py-2 pr-4 font-medium">Tipo</th>
+                      <th className="text-left py-2 pr-4 font-medium">Técnico</th>
+                      <th className="text-left py-2 pr-4 font-medium">Cliente</th>
+                      <th className="text-left py-2 pr-4 font-medium">Data serviço</th>
+                      <th className="text-left py-2 pr-4 font-medium">Mês ref.</th>
+                      <th className="text-left py-2 pr-4 font-medium">Pago em</th>
+                      <th className="text-left py-2 font-medium">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {servicosPagina.map((s) => {
+                      const fechamento = s.fechamento_id ? fechamentoPorId.get(s.fechamento_id) : undefined;
+                      return (
+                        <tr key={s.id} className="border-b last:border-0">
+                          <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{s.tecnico_nome}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{formatDataBR(s.data_servico)}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{fechamento ? formatMesReferenciaBR(fechamento.mes_referencia) : "—"}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{s.pago_em ? new Date(s.pago_em).toLocaleDateString("pt-BR") : "—"}</td>
+                          <td className="py-2.5 font-medium text-gray-700">{formatBRL(s.valor_ajustado ?? s.valor)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-between pt-3">
+                  <button
+                    onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                    disabled={paginaAtual === 1}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Anterior
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    Página {paginaAtual} de {totalPaginas}
+                  </span>
+                  <button
+                    onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                    disabled={paginaAtual === totalPaginas}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Próxima <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -166,6 +166,14 @@ export async function listServicosAprovadosNaoPagos(): Promise<ServicoFinanceiro
     .sort((a, b) => a.criado_em.localeCompare(b.criado_em));
 }
 
+export async function listServicosPagos(): Promise<ServicoFinanceiro[]> {
+  const q = query(collection(db, "servicos_financeiro"), where("status", "==", "pago"));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ServicoFinanceiro))
+    .sort((a, b) => (b.pago_em ?? "").localeCompare(a.pago_em ?? ""));
+}
+
 export async function auditarServico(
   id: string,
   status: "aprovado" | "rejeitado",
