@@ -106,7 +106,7 @@ function TecnicoView() {
   const [fechamentos, setFechamentos] = useState<FechamentoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
-    tipo_servico_id: "", cliente: "", endereco: "",
+    tipo_servico_id: "", cliente: "",
     data_servico: new Date().toISOString().slice(0, 10), observacoes: "",
   });
   const [fotos, setFotos] = useState<File[]>([]);
@@ -150,7 +150,7 @@ function TecnicoView() {
   }
 
   function resetForm() {
-    setForm({ tipo_servico_id: "", cliente: "", endereco: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
+    setForm({ tipo_servico_id: "", cliente: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
     setFotos([]);
     setFotosExistentes([]);
     setEditandoId(null);
@@ -162,7 +162,6 @@ function TecnicoView() {
     setForm({
       tipo_servico_id: s.tipo_servico_id,
       cliente: s.cliente,
-      endereco: s.endereco,
       data_servico: s.data_servico,
       observacoes: s.observacoes ?? "",
     });
@@ -179,7 +178,6 @@ function TecnicoView() {
     setForm({
       tipo_servico_id: s.tipo_servico_id,
       cliente: s.cliente,
-      endereco: s.endereco,
       data_servico: new Date().toISOString().slice(0, 10),
       observacoes: s.motivo_rejeicao ? `Reenvio — motivo da rejeição anterior: ${s.motivo_rejeicao}` : "",
     });
@@ -238,7 +236,6 @@ function TecnicoView() {
       const q = buscaServico.trim().toLowerCase();
       if (
         !s.cliente.toLowerCase().includes(q) &&
-        !s.endereco.toLowerCase().includes(q) &&
         !s.tipo_servico_nome.toLowerCase().includes(q)
       ) return false;
     }
@@ -278,8 +275,12 @@ function TecnicoView() {
     if (!user) return;
     const tipo = tipos.find((t) => t.id === form.tipo_servico_id);
     if (!tipo) { setError("Selecione o tipo de serviço."); return; }
-    if (!form.cliente.trim() || !form.endereco.trim() || !form.data_servico) {
-      setError("Preencha cliente, endereço e data.");
+    if (!form.cliente.trim() || !form.data_servico) {
+      setError("Preencha cliente e data.");
+      return;
+    }
+    if (!form.observacoes.trim()) {
+      setError("Preencha a descrição do serviço.");
       return;
     }
     setSaving(true);
@@ -299,7 +300,6 @@ function TecnicoView() {
           tipo_servico_nome: tipo.nome,
           valor: tipo.valor,
           cliente: form.cliente.trim(),
-          endereco: form.endereco.trim(),
           data_servico: form.data_servico,
           foto_urls,
           observacoes: form.observacoes.trim(),
@@ -312,10 +312,9 @@ function TecnicoView() {
           tipo_servico_nome: tipo.nome,
           valor: tipo.valor,
           cliente: form.cliente.trim(),
-          endereco: form.endereco.trim(),
           data_servico: form.data_servico,
           foto_urls: foto_urls.length > 0 ? foto_urls : undefined,
-          observacoes: form.observacoes.trim() || undefined,
+          observacoes: form.observacoes.trim(),
           reenviado_de: reenviarDeId ?? undefined,
         });
       }
@@ -381,17 +380,11 @@ function TecnicoView() {
               placeholder="Cliente"
               value={form.cliente}
               onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-            <input
-              placeholder="Endereço"
-              value={form.endereco}
-              onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
-              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 sm:col-span-2"
             />
           </div>
           <textarea
-            placeholder="Observações (opcional)"
+            placeholder="Descrição do serviço"
             value={form.observacoes}
             onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
             className="w-full px-3 py-2.5 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
@@ -699,10 +692,12 @@ function TecnicoView() {
                   <p className="text-gray-400 text-xs">Data do serviço</p>
                   <p className="font-medium text-gray-800">{formatDataBR(servicoSelecionado.data_servico)}</p>
                 </div>
-                <div className="col-span-2">
-                  <p className="text-gray-400 text-xs">Endereço</p>
-                  <p className="font-medium text-gray-800">{servicoSelecionado.endereco}</p>
-                </div>
+                {servicoSelecionado.endereco && (
+                  <div className="col-span-2">
+                    <p className="text-gray-400 text-xs">Endereço</p>
+                    <p className="font-medium text-gray-800">{servicoSelecionado.endereco}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-400 text-xs">Valor</p>
                   <p className="font-medium text-gray-800">{formatBRL(valorDe(servicoSelecionado))}</p>
@@ -717,7 +712,7 @@ function TecnicoView() {
 
               {servicoSelecionado.observacoes && (
                 <div className="text-sm">
-                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-400 text-xs mb-0.5">Descrição do serviço</p>
                   <p className="text-gray-700 whitespace-pre-wrap">{servicoSelecionado.observacoes}</p>
                 </div>
               )}
@@ -1086,10 +1081,12 @@ function AuditorServicoView() {
                   <p className="text-gray-400 text-xs">Data do serviço</p>
                   <p className="font-medium text-gray-800">{formatDataBR(servicoDetalhe.data_servico)}</p>
                 </div>
-                <div className="col-span-2">
-                  <p className="text-gray-400 text-xs">Endereço</p>
-                  <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
-                </div>
+                {servicoDetalhe.endereco && (
+                  <div className="col-span-2">
+                    <p className="text-gray-400 text-xs">Endereço</p>
+                    <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1116,7 +1113,7 @@ function AuditorServicoView() {
 
               {servicoDetalhe.observacoes && (
                 <div className="text-sm">
-                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-400 text-xs mb-0.5">Descrição do serviço</p>
                   <p className="text-gray-700 whitespace-pre-wrap">{servicoDetalhe.observacoes}</p>
                 </div>
               )}
@@ -1686,10 +1683,12 @@ function FechamentoPagamentoView() {
                   <p className="text-gray-400 text-xs">Data do serviço</p>
                   <p className="font-medium text-gray-800">{formatDataBR(servicoDetalhe.data_servico)}</p>
                 </div>
-                <div className="col-span-2">
-                  <p className="text-gray-400 text-xs">Endereço</p>
-                  <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
-                </div>
+                {servicoDetalhe.endereco && (
+                  <div className="col-span-2">
+                    <p className="text-gray-400 text-xs">Endereço</p>
+                    <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-400 text-xs">Valor</p>
                   <p className="font-medium text-gray-800">{formatBRL(servicoDetalhe.valor_ajustado ?? servicoDetalhe.valor)}</p>
@@ -1704,7 +1703,7 @@ function FechamentoPagamentoView() {
 
               {servicoDetalhe.observacoes && (
                 <div className="text-sm">
-                  <p className="text-gray-400 text-xs mb-0.5">Observações</p>
+                  <p className="text-gray-400 text-xs mb-0.5">Descrição do serviço</p>
                   <p className="text-gray-700 whitespace-pre-wrap">{servicoDetalhe.observacoes}</p>
                 </div>
               )}

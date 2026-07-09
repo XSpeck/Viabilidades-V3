@@ -229,7 +229,7 @@ export interface ServicoFinanceiro {
   valor: number;
   valor_ajustado?: number;
   cliente: string;
-  endereco: string;
+  endereco?: string;
   data_servico: string;
   foto_urls?: string[];
   observacoes?: string;

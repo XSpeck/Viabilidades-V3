@@ -85,20 +85,18 @@ export async function criarServicoFinanceiro(data: {
   tipo_servico_nome: string;
   valor: number;
   cliente: string;
-  endereco: string;
   data_servico: string;
+  observacoes: string;
   foto_urls?: string[];
-  observacoes?: string;
   reenviado_de?: string;
 }): Promise<void> {
-  const { foto_urls, observacoes, reenviado_de, ...resto } = data;
+  const { foto_urls, reenviado_de, ...resto } = data;
   const payload: Record<string, unknown> = {
     ...resto,
     status: "pendente_auditoria",
     criado_em: new Date().toISOString(),
   };
   if (foto_urls) payload.foto_urls = foto_urls;
-  if (observacoes) payload.observacoes = observacoes;
   if (reenviado_de) payload.reenviado_de = reenviado_de;
   await addDoc(collection(db, "servicos_financeiro"), payload);
 }
@@ -111,7 +109,6 @@ export async function updateServicoFinanceiro(
     tipo_servico_nome: string;
     valor: number;
     cliente: string;
-    endereco: string;
     data_servico: string;
     foto_urls: string[];
     observacoes: string;
@@ -122,10 +119,9 @@ export async function updateServicoFinanceiro(
     tipo_servico_nome: data.tipo_servico_nome,
     valor: data.valor,
     cliente: data.cliente,
-    endereco: data.endereco,
     data_servico: data.data_servico,
     foto_urls: data.foto_urls.length > 0 ? data.foto_urls : deleteField(),
-    observacoes: data.observacoes.trim() ? data.observacoes.trim() : deleteField(),
+    observacoes: data.observacoes.trim(),
   });
 }
 
