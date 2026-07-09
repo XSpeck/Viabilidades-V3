@@ -224,6 +224,24 @@ function TecnicoView() {
     .filter((s) => s.status === "pago" && s.pago_em?.startsWith(mesAtual))
     .reduce((sum, s) => sum + valorDe(s), 0);
 
+  // ── Filtros: A receber (serviços aprovados aguardando pagamento) ──
+  const [pendFiltroTipo, setPendFiltroTipo] = useState("");
+  const [pendDataInicio, setPendDataInicio] = useState("");
+  const [pendDataFim, setPendDataFim] = useState("");
+
+  const aprovados = servicos.filter((s) => s.status === "aprovado");
+  const tiposAprovados = Array.from(new Set(aprovados.map((s) => s.tipo_servico_nome))).sort();
+
+  const aprovadosFiltrados = aprovados.filter((s) => {
+    if (pendFiltroTipo && s.tipo_servico_nome !== pendFiltroTipo) return false;
+    if (pendDataInicio && s.data_servico < pendDataInicio) return false;
+    if (pendDataFim && s.data_servico > pendDataFim) return false;
+    return true;
+  });
+
+  const totalAprovadosFiltrados = aprovadosFiltrados.reduce((sum, s) => sum + valorDe(s), 0);
+  const temFiltroPendente = !!(pendFiltroTipo || pendDataInicio || pendDataFim);
+
   // ── Filtros: Meus Serviços ──────────────────────────────
   const [buscaServico, setBuscaServico] = useState("");
   const [servicoDataInicio, setServicoDataInicio] = useState("");
@@ -475,6 +493,77 @@ function TecnicoView() {
             <div className="bg-white rounded-xl border shadow-sm p-5">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Recebido este mês</p>
               <p className="text-2xl font-bold text-green-600 mt-1">{formatBRL(recebidoMes)}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b bg-gray-50">
+              <h3 className="font-semibold text-gray-800">Aguardando pagamento</h3>
+              <p className="text-xs text-gray-500">Serviços já aprovados que ainda entrarão no próximo fechamento</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={pendFiltroTipo}
+                  onChange={(e) => setPendFiltroTipo(e.target.value)}
+                  className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                >
+                  <option value="">Todos os tipos de serviço</option>
+                  {tiposAprovados.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={pendDataInicio}
+                      onChange={(e) => setPendDataInicio(e.target.value)}
+                      className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <span className="text-xs text-gray-400 shrink-0">até</span>
+                    <input
+                      type="date"
+                      value={pendDataFim}
+                      onChange={(e) => setPendDataFim(e.target.value)}
+                      className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+                </div>
+              ) : aprovados.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço aprovado aguardando pagamento.</div>
+              ) : aprovadosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  {temFiltroPendente ? "Nenhum serviço encontrado para esse filtro." : "Nenhum serviço aprovado aguardando pagamento."}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                    <span>{aprovadosFiltrados.length} serviço{aprovadosFiltrados.length === 1 ? "" : "s"}</span>
+                    <span className="text-sm font-semibold text-blue-700">{formatBRL(totalAprovadosFiltrados)}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {aprovadosFiltrados.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setServicoSelecionado(s)}
+                        className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
+                          <p className="text-xs text-gray-500">{s.cliente} · {formatDataBR(s.data_servico)}</p>
+                        </div>
+                        <span className="font-semibold text-blue-700">{formatBRL(valorDe(s))}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
