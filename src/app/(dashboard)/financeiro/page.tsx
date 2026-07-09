@@ -709,14 +709,21 @@ function TecnicoView() {
               {servicoSelecionado.observacoes && (
                 <div className="text-sm">
                   <p className="text-gray-400 text-xs mb-0.5">Observações</p>
-                  <p className="text-gray-700">{servicoSelecionado.observacoes}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{servicoSelecionado.observacoes}</p>
                 </div>
               )}
 
               {servicoSelecionado.motivo_rejeicao && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-700 text-xs font-medium mb-0.5">Motivo da rejeição</p>
-                  <p className="text-red-600 text-sm">{servicoSelecionado.motivo_rejeicao}</p>
+                  <p className="text-red-600 text-sm whitespace-pre-wrap">{servicoSelecionado.motivo_rejeicao}</p>
+                </div>
+              )}
+
+              {servicoSelecionado.observacao_auditoria && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-green-700 text-xs font-medium mb-0.5">Observação da auditoria</p>
+                  <p className="text-green-700 text-sm whitespace-pre-wrap">{servicoSelecionado.observacao_auditoria}</p>
                 </div>
               )}
 
@@ -874,6 +881,8 @@ function AuditorServicoView() {
   const [loading, setLoading] = useState(true);
   const [rejeitando, setRejeitando] = useState<ServicoFinanceiro | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [aprovando, setAprovando] = useState<ServicoFinanceiro | null>(null);
+  const [observacaoAprovacao, setObservacaoAprovacao] = useState("");
   const [saving, setSaving] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [servicoDetalhe, setServicoDetalhe] = useState<ServicoFinanceiro | null>(null);
@@ -895,11 +904,18 @@ function AuditorServicoView() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function aprovar(s: ServicoFinanceiro) {
-    if (!user) return;
+  async function confirmarAprovacao() {
+    if (!user || !aprovando) return;
     setSaving(true);
-    try { await auditarServico(s.id, "aprovado", user.uid); setServicoDetalhe(null); await load(); }
-    finally { setSaving(false); }
+    try {
+      await auditarServico(aprovando.id, "aprovado", user.uid, observacaoAprovacao.trim() || undefined);
+      setAprovando(null);
+      setObservacaoAprovacao("");
+      setServicoDetalhe(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function confirmarRejeicao() {
@@ -1056,14 +1072,21 @@ function AuditorServicoView() {
               {servicoDetalhe.observacoes && (
                 <div className="text-sm">
                   <p className="text-gray-400 text-xs mb-0.5">Observações</p>
-                  <p className="text-gray-700">{servicoDetalhe.observacoes}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{servicoDetalhe.observacoes}</p>
                 </div>
               )}
 
               {servicoDetalhe.motivo_rejeicao && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-700 text-xs font-medium mb-0.5">Motivo da rejeição</p>
-                  <p className="text-red-600 text-sm">{servicoDetalhe.motivo_rejeicao}</p>
+                  <p className="text-red-600 text-sm whitespace-pre-wrap">{servicoDetalhe.motivo_rejeicao}</p>
+                </div>
+              )}
+
+              {servicoDetalhe.observacao_auditoria && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-green-700 text-xs font-medium mb-0.5">Observação da auditoria</p>
+                  <p className="text-green-700 text-sm whitespace-pre-wrap">{servicoDetalhe.observacao_auditoria}</p>
                 </div>
               )}
 
@@ -1087,7 +1110,7 @@ function AuditorServicoView() {
               {tab === "fila" && (
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => aprovar(servicoDetalhe)}
+                    onClick={() => { setAprovando(servicoDetalhe); setObservacaoAprovacao(""); }}
                     disabled={saving}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-lg"
                   >
@@ -1102,6 +1125,34 @@ function AuditorServicoView() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {aprovando && (
+        <div className="fixed inset-0 bg-black/40 z-[55] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">Aprovar serviço</h3>
+            <p className="text-sm text-gray-600">{aprovando.tipo_servico_nome} — {aprovando.tecnico_nome}</p>
+            <textarea
+              value={observacaoAprovacao}
+              onChange={(e) => setObservacaoAprovacao(e.target.value)}
+              placeholder="Observação (opcional)"
+              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
+              rows={3}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setAprovando(null)} className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarAprovacao}
+                disabled={saving}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium"
+              >
+                Confirmar
+              </button>
             </div>
           </div>
         </div>
@@ -1603,7 +1654,14 @@ function FechamentoPagamentoView() {
               {servicoDetalhe.observacoes && (
                 <div className="text-sm">
                   <p className="text-gray-400 text-xs mb-0.5">Observações</p>
-                  <p className="text-gray-700">{servicoDetalhe.observacoes}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{servicoDetalhe.observacoes}</p>
+                </div>
+              )}
+
+              {servicoDetalhe.observacao_auditoria && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-green-700 text-xs font-medium mb-0.5">Observação da auditoria</p>
+                  <p className="text-green-700 text-sm whitespace-pre-wrap">{servicoDetalhe.observacao_auditoria}</p>
                 </div>
               )}
 

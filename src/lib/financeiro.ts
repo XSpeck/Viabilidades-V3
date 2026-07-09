@@ -170,14 +170,15 @@ export async function auditarServico(
   id: string,
   status: "aprovado" | "rejeitado",
   auditorUid: string,
-  motivo?: string
+  nota?: string
 ): Promise<void> {
   const updates: Record<string, unknown> = {
     status,
     auditado_por: auditorUid,
     data_auditoria: new Date().toISOString(),
   };
-  if (status === "rejeitado" && motivo) updates.motivo_rejeicao = motivo;
+  if (status === "rejeitado" && nota) updates.motivo_rejeicao = nota;
+  if (status === "aprovado" && nota) updates.observacao_auditoria = nota;
   await updateDoc(doc(db, "servicos_financeiro", id), updates);
 }
 
