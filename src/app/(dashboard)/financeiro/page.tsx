@@ -241,6 +241,7 @@ function TecnicoView() {
   const SERVICOS_POR_PAGINA = 10;
   const [paginaServicos, setPaginaServicos] = useState(1);
   const [servicoSelecionado, setServicoSelecionado] = useState<ServicoFinanceiro | null>(null);
+  const [fechamentoSelecionado, setFechamentoSelecionado] = useState<FechamentoPagamento | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const totalPaginasServicos = Math.max(1, Math.ceil(servicosFiltrados.length / SERVICOS_POR_PAGINA));
   const paginaServicosAtual = Math.min(paginaServicos, totalPaginasServicos);
@@ -322,7 +323,7 @@ function TecnicoView() {
 
   const chips: { key: typeof tab; label: string }[] = [
     { key: "registro", label: "Registro de Serviços" },
-    { key: "financeiro", label: "Parte Financeira" },
+    { key: "financeiro", label: "Financeiro" },
     { key: "meus-servicos", label: "Meus Serviços" },
   ];
 
@@ -510,13 +511,18 @@ function TecnicoView() {
               ) : (
                 <div className="space-y-2">
                   {fechamentosFiltrados.map((f) => (
-                    <div key={f.id} className="flex items-center justify-between gap-2 border rounded-lg p-3 text-sm">
+                    <button
+                      key={f.id}
+                      onClick={() => setFechamentoSelecionado(f)}
+                      className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                    >
                       <div>
                         <p className="font-medium text-gray-800">{f.mes_referencia}</p>
                         <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
                       </div>
                       <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -760,6 +766,66 @@ function TecnicoView() {
                   <Copy className="w-4 h-4" /> Duplicar e reenviar
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalhes do fechamento */}
+      {fechamentoSelecionado && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setFechamentoSelecionado(null)}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="font-semibold text-gray-800">Pagamento — {fechamentoSelecionado.mes_referencia}</h3>
+              <button
+                onClick={() => setFechamentoSelecionado(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-400 text-xs">Pago em</p>
+                  <p className="font-medium text-gray-800">
+                    {new Date(fechamentoSelecionado.data_fechamento).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs">Total</p>
+                  <p className="font-medium text-green-700">{formatBRL(fechamentoSelecionado.total)}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs">Quantidade de serviços</p>
+                  <p className="font-medium text-gray-800">{fechamentoSelecionado.servicos_ids.length}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-gray-400 text-xs mb-1.5">Serviços incluídos</p>
+                <div className="space-y-2">
+                  {servicos
+                    .filter((s) => s.fechamento_id === fechamentoSelecionado.id)
+                    .map((s) => (
+                      <div key={s.id} className="border rounded-lg p-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
+                          <span className="font-medium text-gray-700 shrink-0">{formatBRL(valorDe(s))}</span>
+                        </div>
+                        <p className="text-gray-600">{s.cliente}</p>
+                        <p className="text-xs text-gray-500">{s.data_servico}</p>
+                      </div>
+                    ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
