@@ -23,6 +23,15 @@ function formatBRL(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function formatDataBR(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR");
+}
+
+function formatMesReferenciaBR(mes: string): string {
+  const [ano, m] = mes.split("-");
+  return `${m}/${ano}`;
+}
+
 function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <div
@@ -517,7 +526,7 @@ function TecnicoView() {
                       className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
                     >
                       <div>
-                        <p className="font-medium text-gray-800">{f.mes_referencia}</p>
+                        <p className="font-medium text-gray-800">{formatMesReferenciaBR(f.mes_referencia)}</p>
                         <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
                         <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
                       </div>
@@ -588,7 +597,7 @@ function TecnicoView() {
                       </div>
                       <p className="text-sm text-gray-600">{s.cliente}</p>
                       <div className="flex items-center justify-between text-sm text-gray-500">
-                        <span>{s.data_servico}</span>
+                        <span>{formatDataBR(s.data_servico)}</span>
                         <span className="font-medium text-gray-700">{formatBRL(valorDe(s))}</span>
                       </div>
                     </button>
@@ -616,7 +625,7 @@ function TecnicoView() {
                         >
                           <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
-                          <td className="py-2.5 pr-4 text-gray-500">{s.data_servico}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{formatDataBR(s.data_servico)}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
                           <td className="py-2.5">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
@@ -688,7 +697,7 @@ function TecnicoView() {
                 </div>
                 <div>
                   <p className="text-gray-400 text-xs">Data do serviço</p>
-                  <p className="font-medium text-gray-800">{servicoSelecionado.data_servico}</p>
+                  <p className="font-medium text-gray-800">{formatDataBR(servicoSelecionado.data_servico)}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-gray-400 text-xs">Endereço</p>
@@ -789,7 +798,7 @@ function TecnicoView() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
-              <h3 className="font-semibold text-gray-800">Pagamento — {fechamentoSelecionado.mes_referencia}</h3>
+              <h3 className="font-semibold text-gray-800">Pagamento — {formatMesReferenciaBR(fechamentoSelecionado.mes_referencia)}</h3>
               <button
                 onClick={() => setFechamentoSelecionado(null)}
                 className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
@@ -828,7 +837,7 @@ function TecnicoView() {
                           <span className="font-medium text-gray-700 shrink-0">{formatBRL(valorDe(s))}</span>
                         </div>
                         <p className="text-gray-600">{s.cliente}</p>
-                        <p className="text-xs text-gray-500">{s.data_servico}</p>
+                        <p className="text-xs text-gray-500">{formatDataBR(s.data_servico)}</p>
                       </div>
                     ))}
                 </div>
@@ -1011,7 +1020,7 @@ function AuditorServicoView() {
                 <p className="text-xs text-gray-500 truncate">{s.tecnico_nome} · {s.cliente}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-gray-400">{s.data_servico}</span>
+                <span className="text-xs text-gray-400">{formatDataBR(s.data_servico)}</span>
                 {tab === "historico" && (
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[s.status]}`}>
                     {STATUS_LABEL[s.status]}
@@ -1061,7 +1070,7 @@ function AuditorServicoView() {
                 </div>
                 <div>
                   <p className="text-gray-400 text-xs">Data do serviço</p>
-                  <p className="font-medium text-gray-800">{servicoDetalhe.data_servico}</p>
+                  <p className="font-medium text-gray-800">{formatDataBR(servicoDetalhe.data_servico)}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-gray-400 text-xs">Endereço</p>
@@ -1580,7 +1589,7 @@ function FechamentoPagamentoView() {
                       onClick={() => setServicoDetalhe(i)}
                       className="flex-1 text-left text-gray-700 hover:text-emerald-700 hover:underline truncate"
                     >
-                      {i.tipo_servico_nome} — {i.cliente} ({i.data_servico})
+                      {i.tipo_servico_nome} — {i.cliente} ({formatDataBR(i.data_servico)})
                     </button>
                     <input
                       value={valores[i.id] ?? ""}
@@ -1639,7 +1648,7 @@ function FechamentoPagamentoView() {
                 </div>
                 <div>
                   <p className="text-gray-400 text-xs">Data do serviço</p>
-                  <p className="font-medium text-gray-800">{servicoDetalhe.data_servico}</p>
+                  <p className="font-medium text-gray-800">{formatDataBR(servicoDetalhe.data_servico)}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-gray-400 text-xs">Endereço</p>
@@ -1727,7 +1736,7 @@ function HistoricoFechamentos() {
                 {fechamentos.map((f) => (
                   <tr key={f.id} className="border-b last:border-0">
                     <td className="py-2.5 pr-4 font-medium text-gray-800">{f.tecnico_nome}</td>
-                    <td className="py-2.5 pr-4 text-gray-600">{f.mes_referencia}</td>
+                    <td className="py-2.5 pr-4 text-gray-600">{formatMesReferenciaBR(f.mes_referencia)}</td>
                     <td className="py-2.5 pr-4 text-gray-600">{formatBRL(f.total)}</td>
                     <td className="py-2.5 pr-4 text-gray-500">{new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</td>
                   </tr>
