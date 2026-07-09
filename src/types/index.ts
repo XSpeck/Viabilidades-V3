@@ -239,6 +239,7 @@ export interface ServicoFinanceiro {
   data_auditoria?: string;
   motivo_rejeicao?: string;
   observacao_auditoria?: string;
+  numero_os?: string;
   fechamento_id?: string;
   pago_em?: string;
   /** id do servico rejeitado que este e um reenvio de (opcional). */

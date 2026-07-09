@@ -174,6 +174,11 @@ export async function listServicosPagos(): Promise<ServicoFinanceiro[]> {
     .sort((a, b) => (b.pago_em ?? "").localeCompare(a.pago_em ?? ""));
 }
 
+export async function atualizarNumeroOS(id: string, numeroOS: string): Promise<void> {
+  const valor = numeroOS.trim();
+  await updateDoc(doc(db, "servicos_financeiro", id), valor ? { numero_os: valor } : { numero_os: deleteField() });
+}
+
 export async function auditarServico(
   id: string,
   status: "aprovado" | "rejeitado",

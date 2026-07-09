@@ -7,7 +7,7 @@ import {
   listTiposServico, createTipoServico, updateTipoServico, deleteTipoServico,
   criarServicoFinanceiro, updateServicoFinanceiro, deleteServicoFinanceiro,
   listServicosPorTecnico, listServicosPendentesAuditoria,
-  listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico,
+  listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico, atualizarNumeroOS,
   fecharPagamentoMensal, listFechamentos, listServicosPagos,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
@@ -898,6 +898,8 @@ function AuditorServicoView() {
   const [filtroTecnico, setFiltroTecnico] = useState("");
   const [auditDataInicio, setAuditDataInicio] = useState("");
   const [auditDataFim, setAuditDataFim] = useState("");
+  const [numeroOS, setNumeroOS] = useState("");
+  const [savingOS, setSavingOS] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -938,6 +940,18 @@ function AuditorServicoView() {
       await load();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function salvarNumeroOS() {
+    if (!servicoDetalhe) return;
+    setSavingOS(true);
+    try {
+      await atualizarNumeroOS(servicoDetalhe.id, numeroOS);
+      setServicoDetalhe({ ...servicoDetalhe, numero_os: numeroOS.trim() || undefined });
+      await load();
+    } finally {
+      setSavingOS(false);
     }
   }
 
@@ -1012,7 +1026,7 @@ function AuditorServicoView() {
           {listaFiltrada.map((s) => (
             <button
               key={s.id}
-              onClick={() => setServicoDetalhe(s)}
+              onClick={() => { setServicoDetalhe(s); setNumeroOS(s.numero_os ?? ""); }}
               className="w-full text-left flex items-center justify-between gap-3 p-4 hover:bg-gray-50"
             >
               <div className="min-w-0">
@@ -1075,6 +1089,28 @@ function AuditorServicoView() {
                 <div className="col-span-2">
                   <p className="text-gray-400 text-xs">Endereço</p>
                   <p className="font-medium text-gray-800">{servicoDetalhe.endereco}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-xs mb-1">
+                  Nº da OS <span className="normal-case text-gray-400">(identificação no sistema do financeiro)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={numeroOS}
+                    onChange={(e) => setNumeroOS(e.target.value)}
+                    placeholder="Nº da OS"
+                    className="flex-1 min-w-0 h-9 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  <button
+                    onClick={salvarNumeroOS}
+                    disabled={savingOS || numeroOS.trim() === (servicoDetalhe.numero_os ?? "")}
+                    className="shrink-0 flex items-center gap-1.5 px-3 h-9 border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium rounded-lg"
+                  >
+                    {savingOS && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Salvar
+                  </button>
                 </div>
               </div>
 
@@ -1589,7 +1625,7 @@ function FechamentoPagamentoView() {
                       onClick={() => setServicoDetalhe(i)}
                       className="flex-1 text-left text-gray-700 hover:text-emerald-700 hover:underline truncate"
                     >
-                      {i.tipo_servico_nome} — {i.cliente} ({formatDataBR(i.data_servico)})
+                      {i.tipo_servico_nome} — {i.cliente} ({formatDataBR(i.data_servico)}){i.numero_os ? ` · OS ${i.numero_os}` : ""}
                     </button>
                     <input
                       value={valores[i.id] ?? ""}
@@ -1658,6 +1694,12 @@ function FechamentoPagamentoView() {
                   <p className="text-gray-400 text-xs">Valor</p>
                   <p className="font-medium text-gray-800">{formatBRL(servicoDetalhe.valor_ajustado ?? servicoDetalhe.valor)}</p>
                 </div>
+                {servicoDetalhe.numero_os && (
+                  <div>
+                    <p className="text-gray-400 text-xs">Nº da OS</p>
+                    <p className="font-medium text-gray-800">{servicoDetalhe.numero_os}</p>
+                  </div>
+                )}
               </div>
 
               {servicoDetalhe.observacoes && (
@@ -1842,6 +1884,7 @@ function HistoricoFechamentos() {
                       <th className="text-left py-2 pr-4 font-medium">Tipo</th>
                       <th className="text-left py-2 pr-4 font-medium">Técnico</th>
                       <th className="text-left py-2 pr-4 font-medium">Cliente</th>
+                      <th className="text-left py-2 pr-4 font-medium">Nº OS</th>
                       <th className="text-left py-2 pr-4 font-medium">Data serviço</th>
                       <th className="text-left py-2 pr-4 font-medium">Mês ref.</th>
                       <th className="text-left py-2 pr-4 font-medium">Pago em</th>
@@ -1856,6 +1899,7 @@ function HistoricoFechamentos() {
                           <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.tecnico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{s.numero_os ?? "—"}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{formatDataBR(s.data_servico)}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{fechamento ? formatMesReferenciaBR(fechamento.mes_referencia) : "—"}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{s.pago_em ? new Date(s.pago_em).toLocaleDateString("pt-BR") : "—"}</td>
