@@ -101,6 +101,7 @@ export default function FinanceiroPage() {
 function TecnicoView() {
   const { user } = useAuth();
   const [tab, setTab] = useState<"registro" | "financeiro" | "meus-servicos">("registro");
+  const [financeiroSubTab, setFinanceiroSubTab] = useState<"aguardando" | "historico">("aguardando");
   const [tipos, setTipos] = useState<TipoServicoFinanceiro[]>([]);
   const [servicos, setServicos] = useState<ServicoFinanceiro[]>([]);
   const [fechamentos, setFechamentos] = useState<FechamentoPagamento[]>([]);
@@ -218,11 +219,6 @@ function TecnicoView() {
   useEffect(() => { load(); }, [load]);
 
   const valorDe = (s: ServicoFinanceiro) => s.valor_ajustado ?? s.valor;
-  const aReceber = servicos.filter((s) => s.status === "aprovado").reduce((sum, s) => sum + valorDe(s), 0);
-  const mesAtual = new Date().toISOString().slice(0, 7);
-  const recebidoMes = servicos
-    .filter((s) => s.status === "pago" && s.pago_em?.startsWith(mesAtual))
-    .reduce((sum, s) => sum + valorDe(s), 0);
 
   // ── Filtros: A receber (serviços aprovados aguardando pagamento) ──
   const [pendFiltroTipo, setPendFiltroTipo] = useState("");
@@ -288,6 +284,7 @@ function TecnicoView() {
   });
 
   const temFiltroFechamento = !!(fechamentoDataInicio || fechamentoDataFim);
+  const totalFechamentosFiltrados = fechamentosFiltrados.reduce((sum, f) => sum + f.total, 0);
 
   async function handleSubmit() {
     if (!user) return;
@@ -485,140 +482,168 @@ function TecnicoView() {
 
       {tab === "financeiro" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border shadow-sm p-5">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">A receber</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatBRL(aReceber)}</p>
-            </div>
-            <div className="bg-white rounded-xl border shadow-sm p-5">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Recebido este mês</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">{formatBRL(recebidoMes)}</p>
-            </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFinanceiroSubTab("aguardando")}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-sm font-medium ${financeiroSubTab === "aguardando" ? "bg-emerald-600 text-white" : "bg-white border text-gray-600"}`}
+            >
+              Aguardando pagamento
+            </button>
+            <button
+              onClick={() => setFinanceiroSubTab("historico")}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-sm font-medium ${financeiroSubTab === "historico" ? "bg-emerald-600 text-white" : "bg-white border text-gray-600"}`}
+            >
+              Histórico de pagamentos
+            </button>
           </div>
 
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b bg-gray-50">
-              <h3 className="font-semibold text-gray-800">Aguardando pagamento</h3>
-              <p className="text-xs text-gray-500">Serviços já aprovados que ainda entrarão no próximo fechamento</p>
-            </div>
-            <div className="p-5 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <select
-                  value={pendFiltroTipo}
-                  onChange={(e) => setPendFiltroTipo(e.target.value)}
-                  className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                >
-                  <option value="">Todos os tipos de serviço</option>
-                  {tiposAprovados.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={pendDataInicio}
-                      onChange={(e) => setPendDataInicio(e.target.value)}
-                      className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                    />
-                    <span className="text-xs text-gray-400 shrink-0">até</span>
-                    <input
-                      type="date"
-                      value={pendDataFim}
-                      onChange={(e) => setPendDataFim(e.target.value)}
-                      className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                    />
-                  </div>
+          {financeiroSubTab === "aguardando" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-white rounded-xl border shadow-sm p-4 sm:p-5">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Serviços</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{aprovadosFiltrados.length}</p>
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-4 sm:p-5">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Total a receber</p>
+                  <p className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{formatBRL(totalAprovadosFiltrados)}</p>
                 </div>
               </div>
 
-              {loading ? (
-                <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b bg-gray-50">
+                  <h3 className="font-semibold text-gray-800">Serviços aprovados</h3>
+                  <p className="text-xs text-gray-500">Já aprovados, aguardando o próximo fechamento</p>
                 </div>
-              ) : aprovados.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço aprovado aguardando pagamento.</div>
-              ) : aprovadosFiltrados.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">
-                  {temFiltroPendente ? "Nenhum serviço encontrado para esse filtro." : "Nenhum serviço aprovado aguardando pagamento."}
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between px-1 text-xs text-gray-500">
-                    <span>{aprovadosFiltrados.length} serviço{aprovadosFiltrados.length === 1 ? "" : "s"}</span>
-                    <span className="text-sm font-semibold text-blue-700">{formatBRL(totalAprovadosFiltrados)}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {aprovadosFiltrados.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => setServicoSelecionado(s)}
-                        className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
-                      >
-                        <div>
-                          <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
-                          <p className="text-xs text-gray-500">{s.cliente} · {formatDataBR(s.data_servico)}</p>
-                        </div>
-                        <span className="font-semibold text-blue-700">{formatBRL(valorDe(s))}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b bg-gray-50">
-              <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
-            </div>
-            <div className="p-5 space-y-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Período</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={fechamentoDataInicio}
-                    onChange={(e) => setFechamentoDataInicio(e.target.value)}
-                    className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                  <span className="text-xs text-gray-400 shrink-0">até</span>
-                  <input
-                    type="date"
-                    value={fechamentoDataFim}
-                    onChange={(e) => setFechamentoDataFim(e.target.value)}
-                    className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
-                </div>
-              ) : fechamentosFiltrados.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">
-                  {temFiltroFechamento ? "Nenhum pagamento encontrado para o período." : "Nenhum pagamento fechado ainda."}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {fechamentosFiltrados.map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setFechamentoSelecionado(f)}
-                      className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                <div className="p-5 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <select
+                      value={pendFiltroTipo}
+                      onChange={(e) => setPendFiltroTipo(e.target.value)}
+                      className="w-full h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     >
-                      <div>
-                        <p className="font-medium text-gray-800">{formatMesReferenciaBR(f.mes_referencia)}</p>
-                        <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
-                        <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
+                      <option value="">Todos os tipos de serviço</option>
+                      {tiposAprovados.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Data do serviço</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={pendDataInicio}
+                          onChange={(e) => setPendDataInicio(e.target.value)}
+                          className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        />
+                        <span className="text-xs text-gray-400 shrink-0">até</span>
+                        <input
+                          type="date"
+                          value={pendDataFim}
+                          onChange={(e) => setPendDataFim(e.target.value)}
+                          className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        />
                       </div>
-                      <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
-                    </button>
-                  ))}
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+                      <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+                    </div>
+                  ) : aprovados.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">Nenhum serviço aprovado aguardando pagamento.</div>
+                  ) : aprovadosFiltrados.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      {temFiltroPendente ? "Nenhum serviço encontrado para esse filtro." : "Nenhum serviço aprovado aguardando pagamento."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {aprovadosFiltrados.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setServicoSelecionado(s)}
+                          className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                        >
+                          <div>
+                            <p className="font-medium text-gray-800">{s.tipo_servico_nome}</p>
+                            <p className="text-xs text-gray-500">{s.cliente} · {formatDataBR(s.data_servico)}</p>
+                          </div>
+                          <span className="font-semibold text-blue-700">{formatBRL(valorDe(s))}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {financeiroSubTab === "historico" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-white rounded-xl border shadow-sm p-4 sm:p-5">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Pagamentos</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">{fechamentosFiltrados.length}</p>
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-4 sm:p-5">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Total recebido</p>
+                  <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">{formatBRL(totalFechamentosFiltrados)}</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b bg-gray-50">
+                  <h3 className="font-semibold text-gray-800">Histórico de pagamentos</h3>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Período</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={fechamentoDataInicio}
+                        onChange={(e) => setFechamentoDataInicio(e.target.value)}
+                        className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <span className="text-xs text-gray-400 shrink-0">até</span>
+                      <input
+                        type="date"
+                        value={fechamentoDataFim}
+                        onChange={(e) => setFechamentoDataFim(e.target.value)}
+                        className="flex-1 min-w-0 h-9 appearance-none px-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex items-center gap-2 text-gray-400 py-6 justify-center text-sm">
+                      <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
+                    </div>
+                  ) : fechamentosFiltrados.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      {temFiltroFechamento ? "Nenhum pagamento encontrado para o período." : "Nenhum pagamento fechado ainda."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {fechamentosFiltrados.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setFechamentoSelecionado(f)}
+                          className="w-full flex items-center justify-between gap-2 border rounded-lg p-3 text-sm text-left hover:bg-gray-50 active:bg-gray-100"
+                        >
+                          <div>
+                            <p className="font-medium text-gray-800">{formatMesReferenciaBR(f.mes_referencia)}</p>
+                            <p className="text-xs text-gray-500">Pago em {new Date(f.data_fechamento).toLocaleDateString("pt-BR")}</p>
+                            <p className="text-xs text-gray-500">{f.servicos_ids.length} serviço{f.servicos_ids.length === 1 ? "" : "s"}</p>
+                          </div>
+                          <span className="font-semibold text-green-700">{formatBRL(f.total)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
