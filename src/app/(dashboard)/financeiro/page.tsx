@@ -1130,6 +1130,11 @@ function AuditorServicoView() {
       setObservacaoAprovacao("");
       setServicoDetalhe(null);
       await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao aprovar serviço.");
+      setAprovando(null);
+      setServicoDetalhe(null);
+      await load();
     } finally {
       setSaving(false);
     }
@@ -1142,6 +1147,11 @@ function AuditorServicoView() {
       await auditarServico(rejeitando.id, "rejeitado", user.uid, motivo.trim() || undefined);
       setRejeitando(null);
       setMotivo("");
+      setServicoDetalhe(null);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao rejeitar serviço.");
+      setRejeitando(null);
       setServicoDetalhe(null);
       await load();
     } finally {

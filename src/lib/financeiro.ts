@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   writeBatch,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { deleteFotos } from "./cloudinary";
@@ -175,20 +176,37 @@ export async function atualizarNumeroOS(id: string, numeroOS: string): Promise<v
   await updateDoc(doc(db, "servicos_financeiro", id), valor ? { numero_os: valor } : { numero_os: deleteField() });
 }
 
+const STATUS_LABEL_CURTO: Record<string, string> = {
+  pendente_auditoria: "pendente",
+  aprovado: "aprovado",
+  rejeitado: "rejeitado",
+  pago: "pago",
+};
+
+/** Usa transação para evitar que dois auditores sobrescrevam a decisão um do outro ao processar o mesmo serviço em paralelo. */
 export async function auditarServico(
   id: string,
   status: "aprovado" | "rejeitado",
   auditorUid: string,
   nota?: string
 ): Promise<void> {
-  const updates: Record<string, unknown> = {
-    status,
-    auditado_por: auditorUid,
-    data_auditoria: new Date().toISOString(),
-  };
-  if (status === "rejeitado" && nota) updates.motivo_rejeicao = nota;
-  if (status === "aprovado" && nota) updates.observacao_auditoria = nota;
-  await updateDoc(doc(db, "servicos_financeiro", id), updates);
+  const ref = doc(db, "servicos_financeiro", id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Serviço não encontrado — pode ter sido excluído.");
+    const statusAtual = snap.data().status as string;
+    if (statusAtual !== "pendente_auditoria") {
+      throw new Error(`Este serviço já foi auditado por outro usuário (status atual: ${STATUS_LABEL_CURTO[statusAtual] ?? statusAtual}).`);
+    }
+    const updates: Record<string, unknown> = {
+      status,
+      auditado_por: auditorUid,
+      data_auditoria: new Date().toISOString(),
+    };
+    if (status === "rejeitado" && nota) updates.motivo_rejeicao = nota;
+    if (status === "aprovado" && nota) updates.observacao_auditoria = nota;
+    tx.update(ref, updates);
+  });
 }
 
 // =====================
