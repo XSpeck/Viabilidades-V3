@@ -1125,7 +1125,7 @@ function AuditorServicoView() {
     if (!user || !aprovando) return;
     setSaving(true);
     try {
-      await auditarServico(aprovando.id, "aprovado", user.uid, observacaoAprovacao.trim() || undefined);
+      await auditarServico(aprovando.id, "aprovado", user.uid, user.nome, observacaoAprovacao.trim() || undefined);
       setAprovando(null);
       setObservacaoAprovacao("");
       setServicoDetalhe(null);
@@ -1144,7 +1144,7 @@ function AuditorServicoView() {
     if (!user || !rejeitando) return;
     setSaving(true);
     try {
-      await auditarServico(rejeitando.id, "rejeitado", user.uid, motivo.trim() || undefined);
+      await auditarServico(rejeitando.id, "rejeitado", user.uid, user.nome, motivo.trim() || undefined);
       setRejeitando(null);
       setMotivo("");
       setServicoDetalhe(null);
@@ -1934,6 +1934,12 @@ function FechamentoPagamentoView() {
                   <div>
                     <p className="text-gray-400 text-xs">Nº da OS</p>
                     <p className="font-medium text-gray-800">{servicoDetalhe.numero_os}</p>
+                  </div>
+                )}
+                {servicoDetalhe.auditado_por_nome && (
+                  <div>
+                    <p className="text-gray-400 text-xs">Auditado por</p>
+                    <p className="font-medium text-gray-800">{servicoDetalhe.auditado_por_nome}</p>
                   </div>
                 )}
               </div>

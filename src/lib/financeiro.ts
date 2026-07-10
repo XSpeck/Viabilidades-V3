@@ -188,6 +188,7 @@ export async function auditarServico(
   id: string,
   status: "aprovado" | "rejeitado",
   auditorUid: string,
+  auditorNome: string,
   nota?: string
 ): Promise<void> {
   const ref = doc(db, "servicos_financeiro", id);
@@ -201,6 +202,7 @@ export async function auditarServico(
     const updates: Record<string, unknown> = {
       status,
       auditado_por: auditorUid,
+      auditado_por_nome: auditorNome,
       data_auditoria: new Date().toISOString(),
     };
     if (status === "rejeitado" && nota) updates.motivo_rejeicao = nota;

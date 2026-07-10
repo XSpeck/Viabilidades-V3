@@ -240,6 +240,7 @@ export interface ServicoFinanceiro {
   status: StatusServicoFinanceiro;
   criado_em: string;
   auditado_por?: string;
+  auditado_por_nome?: string;
   data_auditoria?: string;
   motivo_rejeicao?: string;
   observacao_auditoria?: string;
