@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext, createContext } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAgendamentos, finalizarEstruturado, reagendarVisita, rejeitarPredio, atualizarObsAgendamento,
@@ -8,13 +8,16 @@ import {
   addNotaDemanda, addNotaVisita, editarInfoDemanda, reabrirDemanda, bustCacheAgenda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
-import { listTecnicos } from "@/lib/users";
+import { listTecnicos, withCurrentOption } from "@/lib/users";
 import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade, AppUser } from "@/types";
 import { TIPOS_SERVICO_REDE } from "@/types";
 import {
   RefreshCw, Loader2, ChevronLeft, ChevronRight, X, Pencil, Check, Plus,
 } from "lucide-react";
 import { canAccess } from "@/lib/access";
+
+/** Técnicos de rede já buscados pela AgendaPage — evita que os modais-filho refaçam a mesma busca. */
+const TecnicosRedeContext = createContext<AppUser[]>([]);
 
 const PRIORIDADE_COLOR: Record<PrioridadeDemanda, string> = {
   baixa:   "bg-gray-100 text-gray-500",
@@ -83,11 +86,13 @@ export default function AgendaPage() {
   const { user } = useAuth();
   const [items, setItems]       = useState<Viabilizacao[]>([]);
   const [demandas, setDemandas] = useState<DemandaRede[]>([]);
-  const [tecnicosRede, setTecnicosRede] = useState<string[]>([]);
+  const [tecnicosRedeFull, setTecnicosRedeFull] = useState<AppUser[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(todayISO());
   const [calView, setCalView]   = useState<"week" | "month">("week");
   const [viewMonth, setViewMonth] = useState<string>(todayISO().slice(0, 7));
+
+  const tecnicosRede = tecnicosRedeFull.map((t) => t.nome);
 
   const load = useCallback(async () => {
     bustCacheAgenda();
@@ -96,7 +101,7 @@ export default function AgendaPage() {
       const [viabs, dems, tec] = await Promise.all([getAgendamentos(), getDemandasAgendadas(), listTecnicos("rede")]);
       setItems(viabs);
       setDemandas(dems);
-      setTecnicosRede(tec.map((t) => t.nome));
+      setTecnicosRedeFull(tec);
     } finally { setLoading(false); }
   }, []);
 
@@ -130,6 +135,7 @@ export default function AgendaPage() {
   }
 
   return (
+    <TecnicosRedeContext.Provider value={tecnicosRedeFull}>
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -327,6 +333,7 @@ export default function AgendaPage() {
         </div>
       )}
     </div>
+    </TecnicosRedeContext.Provider>
   );
 }
 
@@ -489,11 +496,8 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
   const [novoPeriodo, setNovoPeriodo] = useState("Manhã");
   const [novoTecnico, setNovoTecnico] = useState(v.tecnico_responsavel ?? "");
   const [motivoRea, setMotivoRea]     = useState("");
-  const [tecnicos, setTecnicos]       = useState<AppUser[]>([]);
-  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => {}); }, []);
-  const tecnicoOptions = novoTecnico && !tecnicos.some((t) => t.nome === novoTecnico)
-    ? [{ uid: "atual", nome: novoTecnico }, ...tecnicos]
-    : tecnicos;
+  const tecnicos = useContext(TecnicosRedeContext);
+  const tecnicoOptions = withCurrentOption(tecnicos, novoTecnico);
 
   const [motivoRej, setMotivoRej]     = useState("");
 
@@ -784,8 +788,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
   const [editLocal, setEditLocal]   = useState(d.local ?? "");
   const [editTecnicos, setEditTecnicos] = useState(d.tecnicos);
   const [savingEdit, setSavingEdit] = useState(false);
-  const [tecnicosRede, setTecnicosRede] = useState<string[]>([]);
-  useEffect(() => { listTecnicos("rede").then((t) => setTecnicosRede(t.map((x) => x.nome))).catch(() => {}); }, []);
+  const tecnicosRede = useContext(TecnicosRedeContext).map((t) => t.nome);
 
   async function handleSaveEdit() {
     setSavingEdit(true);

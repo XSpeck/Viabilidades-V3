@@ -565,7 +565,8 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [periodo, setPeriodo] = useState(v.periodo_preferencia_visita ?? "Manhã");
   const [tecnico, setTecnico] = useState("");
   const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
-  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => {}); }, []);
+  const [erroTecnicos, setErroTecnicos] = useState(false);
+  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => setErroTecnicos(true)); }, []);
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(true);
   const [obsVisita, setObsVisita] = useState("");
@@ -1112,6 +1113,11 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     {tipoLocal === "Condomínio" ? <option>FTTH</option> : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>
                 </div>
+                {erroTecnicos && (
+                  <p className="text-xs text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Erro ao carregar técnicos — recarregue a página.
+                  </p>
+                )}
                 {(() => {
                   const alwaysGiga = tecnologia === "FTTA" || tipoLocal === "Condomínio";
                   return (

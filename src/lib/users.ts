@@ -2,6 +2,16 @@ import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } f
 import { db } from "./firebase";
 import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, FuncaoTecnico } from "@/types";
 
+/** Fallback pra usuários técnicos cadastrados antes da função virar checkbox (campo antigo `funcao_tecnico`, texto livre). */
+export function inferFuncoesTecnico(data: { funcoes_tecnico?: unknown; funcao_tecnico?: unknown }): FuncaoTecnico[] {
+  if (Array.isArray(data.funcoes_tecnico)) return data.funcoes_tecnico as FuncaoTecnico[];
+  const legado = typeof data.funcao_tecnico === "string" ? data.funcao_tecnico.toLowerCase() : "";
+  const funcoes: FuncaoTecnico[] = [];
+  if (legado.includes("rede")) funcoes.push("rede");
+  if (legado.includes("manuten")) funcoes.push("manutencao");
+  return funcoes;
+}
+
 const USERS_CACHE_KEY = "viab_users_v1";
 const USERS_CACHE_TTL = 5 * 60 * 1000;
 
@@ -36,7 +46,7 @@ export async function listUsers(): Promise<AppUser[]> {
       nivel: u.nivel,
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
       equipe: u.equipe,
-      funcoes_tecnico: Array.isArray(u.funcoes_tecnico) ? u.funcoes_tecnico : [],
+      funcoes_tecnico: inferFuncoesTecnico(u),
       papel_financeiro: u.papel_financeiro,
     };
   });
@@ -49,6 +59,15 @@ export async function listTecnicos(funcao?: FuncaoTecnico): Promise<AppUser[]> {
   return users
     .filter((u) => u.cargo === "tecnico" && (!funcao || u.funcoes_tecnico?.includes(funcao)))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/** Injeta o valor atual (legado, fora da lista filtrada) como opção extra rotulada "(atual)", pra não sumir de um select. */
+export function withCurrentOption<T extends { uid: string; nome: string }>(
+  list: T[],
+  current: string
+): (T | { uid: string; nome: string })[] {
+  if (!current || list.some((t) => t.nome === current)) return list;
+  return [{ uid: "atual", nome: current }, ...list];
 }
 
 function parseFirebaseAuthError(message: string): string {

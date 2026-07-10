@@ -274,6 +274,70 @@ function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
+// ── Seletor de fotos (novas + existentes) ─────────────────
+function FotoPicker({ fotos, onFotosChange, existentes, onRemoveExistente, max = MAX_FOTOS_DEMANDA }: {
+  fotos: File[];
+  onFotosChange: (fotos: File[]) => void;
+  existentes?: string[];
+  onRemoveExistente?: (index: number) => void;
+  max?: number;
+}) {
+  const [previews, setPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = fotos.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [fotos]);
+
+  const totalExistentes = existentes?.length ?? 0;
+  const total = totalExistentes + fotos.length;
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (selected.length === 0) return;
+    const limite = Math.max(0, max - totalExistentes);
+    onFotosChange([...fotos, ...selected].slice(0, limite));
+    e.target.value = "";
+  }
+
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+        <Camera className="w-3.5 h-3.5" /> Fotos (opcional, até {max})
+      </label>
+      {(totalExistentes > 0 || previews.length > 0) && (
+        <div className="grid grid-cols-4 gap-2 mb-2">
+          {existentes?.map((url, i) => (
+            <div key={url} className="relative aspect-square">
+              <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+              <button type="button" onClick={() => onRemoveExistente?.(i)} aria-label="Remover foto"
+                className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {previews.map((url, i) => (
+            <div key={url} className="relative aspect-square">
+              <img src={url} alt={`Nova foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+              <button type="button" onClick={() => onFotosChange(fotos.filter((_, x) => x !== i))} aria-label="Remover foto"
+                className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {total < max && (
+        <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2.5 text-xs text-gray-600 cursor-pointer hover:bg-gray-50">
+          <Camera className="w-3.5 h-3.5" />
+          {total > 0 ? `Adicionar mais (${total}/${max})` : "Tirar foto ou escolher da galeria"}
+          <input type="file" accept="image/*" capture="environment" multiple onChange={handleChange} className="hidden" />
+        </label>
+      )}
+    </div>
+  );
+}
+
 // ── Card de demanda ───────────────────────────────────────
 function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda: DemandaRede; bairros: BairroRede[]; tecnicosRede: string[]; onRefresh: () => void }) {
   const { user } = useAuth();
@@ -313,30 +377,8 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
 
   // Fotos
   const [editFotos, setEditFotos]                 = useState<File[]>([]);
-  const [editFotoPreviews, setEditFotoPreviews]   = useState<string[]>([]);
   const [editFotosExistentes, setEditFotosExistentes] = useState<string[]>(d.foto_urls ?? []);
   const [uploadingFotos, setUploadingFotos]       = useState(false);
-
-  useEffect(() => {
-    const urls = editFotos.map((f) => URL.createObjectURL(f));
-    setEditFotoPreviews(urls);
-    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
-  }, [editFotos]);
-
-  function handleEditFotosChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    if (selected.length === 0) return;
-    setEditFotos((prev) => {
-      const combined = [...prev, ...selected];
-      const limite = MAX_FOTOS_DEMANDA - editFotosExistentes.length;
-      return combined.slice(0, Math.max(0, limite));
-    });
-    e.target.value = "";
-  }
-
-  function removeEditFoto(index: number) {
-    setEditFotos((prev) => prev.filter((_, i) => i !== index));
-  }
 
   function removeEditFotoExistente(index: number) {
     setEditFotosExistentes((prev) => prev.filter((_, i) => i !== index));
@@ -392,6 +434,7 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
       const removedUrls = (d.foto_urls ?? []).filter((u) => !foto_urls.includes(u));
       await updateDemanda(d.id, { tecnicos: editTecnicos, bairro: editBairro, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined, foto_urls });
       if (removedUrls.length > 0) deleteFotos(removedUrls);
+      setEditFotosExistentes(foto_urls);
       setEditFotos([]);
       setShowEditar(false);
       onRefresh();
@@ -683,13 +726,14 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
         <div className="mt-3 border border-indigo-200 rounded-lg p-3 bg-indigo-50 space-y-2">
           <p className="text-xs font-semibold text-indigo-800">👷 {d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}</p>
           <div className="flex flex-wrap gap-1.5">
-            {tecnicosRede.map((t) => {
+            {Array.from(new Set([...tecnicosRede, ...tecnicosAtribuir])).map((t) => {
               const sel = tecnicosAtribuir.includes(t);
+              const naLista = tecnicosRede.includes(t);
               return (
                 <button key={t} type="button"
                   onClick={() => setTecnicosAtribuir(sel ? tecnicosAtribuir.filter((x) => x !== t) : [...tecnicosAtribuir, t])}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-indigo-50"}`}>
-                  <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                  <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />{t}{!naLista ? " (atual)" : ""}
                 </button>
               );
             })}
@@ -717,13 +761,14 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
             </p>
           ) : (
             <div className="flex flex-wrap gap-1.5 col-span-2">
-              {tecnicosRede.map((t) => {
+              {Array.from(new Set([...tecnicosRede, ...editTecnicos])).map((t) => {
                 const sel = editTecnicos.includes(t);
+                const naLista = tecnicosRede.includes(t);
                 return (
                   <button key={t} type="button"
                     onClick={() => setEditTecnicos(sel ? editTecnicos.filter((x) => x !== t) : [...editTecnicos, t])}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                    <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                    <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />{t}{!naLista ? " (atual)" : ""}
                   </button>
                 );
               })}
@@ -797,42 +842,8 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
             className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
 
           {/* Fotos */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-              <Camera className="w-3.5 h-3.5" /> Fotos (opcional, até {MAX_FOTOS_DEMANDA})
-            </label>
-            {(editFotosExistentes.length > 0 || editFotoPreviews.length > 0) && (
-              <div className="grid grid-cols-4 gap-2 mb-2">
-                {editFotosExistentes.map((url, i) => (
-                  <div key={url} className="relative aspect-square">
-                    <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
-                    <button type="button" onClick={() => removeEditFotoExistente(i)} aria-label="Remover foto"
-                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-                {editFotoPreviews.map((url, i) => (
-                  <div key={url} className="relative aspect-square">
-                    <img src={url} alt={`Nova foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
-                    <button type="button" onClick={() => removeEditFoto(i)} aria-label="Remover foto"
-                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {editFotosExistentes.length + editFotos.length < MAX_FOTOS_DEMANDA && (
-              <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2.5 text-xs text-gray-600 cursor-pointer hover:bg-gray-50">
-                <Camera className="w-3.5 h-3.5" />
-                {editFotosExistentes.length + editFotos.length > 0
-                  ? `Adicionar mais (${editFotosExistentes.length + editFotos.length}/${MAX_FOTOS_DEMANDA})`
-                  : "Tirar foto ou escolher da galeria"}
-                <input type="file" accept="image/*" capture="environment" multiple onChange={handleEditFotosChange} className="hidden" />
-              </label>
-            )}
-          </div>
+          <FotoPicker fotos={editFotos} onFotosChange={setEditFotos}
+            existentes={editFotosExistentes} onRemoveExistente={removeEditFotoExistente} />
 
           <div className="flex gap-2">
             <button onClick={handleEditar} disabled={saving}
@@ -960,25 +971,7 @@ function NovaDemandaModal({ auditorNome, bairros, tecnicosRede, onClose, onSaved
 
   // ── Fotos ─────────────────────────────────────────────────
   const [fotos, setFotos]                 = useState<File[]>([]);
-  const [fotoPreviews, setFotoPreviews]   = useState<string[]>([]);
   const [uploadingFotos, setUploadingFotos] = useState(false);
-
-  useEffect(() => {
-    const urls = fotos.map((f) => URL.createObjectURL(f));
-    setFotoPreviews(urls);
-    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
-  }, [fotos]);
-
-  function handleFotosChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    if (selected.length === 0) return;
-    setFotos((prev) => [...prev, ...selected].slice(0, MAX_FOTOS_DEMANDA));
-    e.target.value = "";
-  }
-
-  function removeFoto(index: number) {
-    setFotos((prev) => prev.filter((_, i) => i !== index));
-  }
 
   // ── Localização ──────────────────────────────────────────
   const [inputMethod, setInputMethod]         = useState<InputMethod>("pluscode");
@@ -1055,7 +1048,7 @@ function NovaDemandaModal({ auditorNome, bairros, tecnicosRede, onClose, onSaved
                     <button key={t} type="button"
                       onClick={() => setTecnicos(sel ? tecnicos.filter((x) => x !== t) : [...tecnicos, t])}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border font-medium transition-colors ${sel ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                      <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t]}`} />{t}
+                      <span className={`w-2 h-2 rounded-full ${TECNICO_DOT[t] ?? "bg-gray-400"}`} />{t}
                     </button>
                   );
                 })}
@@ -1144,31 +1137,7 @@ function NovaDemandaModal({ auditorNome, bairros, tecnicosRede, onClose, onSaved
             </div>
 
             {/* Fotos */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-                <Camera className="w-3.5 h-3.5" /> Fotos (opcional, até {MAX_FOTOS_DEMANDA})
-              </label>
-              {fotoPreviews.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 mb-2">
-                  {fotoPreviews.map((url, i) => (
-                    <div key={url} className="relative aspect-square">
-                      <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
-                      <button type="button" onClick={() => removeFoto(i)} aria-label="Remover foto"
-                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {fotos.length < MAX_FOTOS_DEMANDA && (
-                <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2.5 text-xs text-gray-600 cursor-pointer hover:bg-gray-50">
-                  <Camera className="w-3.5 h-3.5" />
-                  {fotos.length > 0 ? `Adicionar mais (${fotos.length}/${MAX_FOTOS_DEMANDA})` : "Tirar foto ou escolher da galeria"}
-                  <input type="file" accept="image/*" capture="environment" multiple onChange={handleFotosChange} className="hidden" />
-                </label>
-              )}
-            </div>
+            <FotoPicker fotos={fotos} onFotosChange={setFotos} />
 
             <div className="flex gap-2 pt-1">
               <button onClick={handleSave} disabled={saving}

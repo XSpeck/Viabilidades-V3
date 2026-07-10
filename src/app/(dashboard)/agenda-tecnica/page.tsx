@@ -14,7 +14,7 @@ import {
   bustCacheAgendaTecnica,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import { listTecnicos } from "@/lib/users";
+import { listTecnicos, withCurrentOption } from "@/lib/users";
 import type { Viabilizacao, AppUser } from "@/types";
 import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList, Pencil } from "lucide-react";
 import { canAccess } from "@/lib/access";
@@ -449,12 +449,8 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
 
   const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
   useEffect(() => { listTecnicos("manutencao").then(setTecnicos).catch(() => {}); }, []);
-  const tecnicoAtribuirOptions = tecnicoAtribuir && !tecnicos.some((t) => t.nome === tecnicoAtribuir)
-    ? [{ uid: "atual", nome: tecnicoAtribuir }, ...tecnicos]
-    : tecnicos;
-  const reagTecnicoOptions = reagTecnico && !tecnicos.some((t) => t.nome === reagTecnico)
-    ? [{ uid: "atual", nome: reagTecnico }, ...tecnicos]
-    : tecnicos;
+  const tecnicoAtribuirOptions = withCurrentOption(tecnicos, tecnicoAtribuir);
+  const reagTecnicoOptions = withCurrentOption(tecnicos, reagTecnico);
 
   function finishWithSuccess(msg: string) {
     setSuccessMsg(msg);

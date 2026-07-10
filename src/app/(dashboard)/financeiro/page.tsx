@@ -8,7 +8,7 @@ import {
   criarServicoFinanceiro, updateServicoFinanceiro, deleteServicoFinanceiro,
   listServicosPorTecnico, listServicosPendentesAuditoria,
   listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico, atualizarNumeroOS,
-  fecharPagamentoMensal, listFechamentos, listServicosPagos,
+  fecharPagamentoMensal, listFechamentos, listServicosPagos, parseValorBR,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
 import { listTecnicos } from "@/lib/users";
@@ -325,7 +325,7 @@ function TecnicoView() {
       setError("Preencha cliente e data.");
       return;
     }
-    const valor = parseFloat(form.valor.replace(",", "."));
+    const valor = parseValorBR(form.valor);
     if (Number.isNaN(valor) || valor <= 0) {
       setError("Informe o valor cobrado.");
       return;
@@ -1528,7 +1528,7 @@ function CadastrosFinanceiro() {
 
   async function handleSave() {
     if (!form.nome.trim()) { setFormError("Informe o nome."); return; }
-    const valor = parseFloat(form.valor.replace(",", "."));
+    const valor = parseValorBR(form.valor);
     if (Number.isNaN(valor) || valor <= 0) { setFormError("Informe um valor válido."); return; }
     setSaving(true);
     setFormError(null);
@@ -1816,9 +1816,12 @@ function FechamentoPagamentoView() {
         tecnico_uid: tecnicoUid,
         tecnico_nome: tecnicoNome,
         mes_referencia: mes,
-        servicos: selecionadosItens.map((i) => ({ id: i.id, valorFinal: parseFloat((valores[i.id] ?? "").replace(",", ".")) || i.valor })),
+        servicos: selecionadosItens.map((i) => ({ id: i.id, valorFinal: parseValorBR(valores[i.id] ?? "") || i.valor })),
         fechado_por: user.uid,
       });
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao fechar pagamento.");
       await load();
     } finally {
       setFechando(null);
@@ -1849,7 +1852,7 @@ function FechamentoPagamentoView() {
         Array.from(porTecnico.entries()).map(([uid, { tecnico_nome, itens }]) => {
           const total = itens
             .filter((i) => selecionados[i.id])
-            .reduce((sum, i) => sum + (parseFloat((valores[i.id] ?? "").replace(",", ".")) || i.valor), 0);
+            .reduce((sum, i) => sum + (parseValorBR(valores[i.id] ?? "") || i.valor), 0);
           return (
             <div key={uid} className="bg-white rounded-xl border shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b bg-gray-50 flex items-center justify-between">

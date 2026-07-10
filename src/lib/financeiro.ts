@@ -9,7 +9,6 @@ import {
   query,
   where,
   orderBy,
-  writeBatch,
   runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -19,6 +18,30 @@ import type {
   ServicoFinanceiro,
   FechamentoPagamento,
 } from "@/types";
+
+/**
+ * Converte um valor digitado em formato brasileiro pra number.
+ * Aceita "1.234,56" (milhar+decimal), "1234,56" (só decimal com vírgula),
+ * "1234.56" (decimal com ponto) e "1.500" (milhar sem decimais, 3 dígitos após o ponto).
+ */
+export function parseValorBR(input: string): number {
+  const s = input.trim();
+  if (!s) return NaN;
+  const temVirgula = s.includes(",");
+  const temPonto = s.includes(".");
+  let normalizado = s;
+  if (temVirgula && temPonto) {
+    normalizado = s.replace(/\./g, "").replace(",", ".");
+  } else if (temVirgula) {
+    normalizado = s.replace(",", ".");
+  } else if (temPonto) {
+    const partes = s.split(".");
+    if (partes.length > 1 && partes[partes.length - 1].length === 3) {
+      normalizado = s.replace(/\./g, "");
+    }
+  }
+  return parseFloat(normalizado);
+}
 
 // =====================
 // Session cache
@@ -214,6 +237,7 @@ export async function auditarServico(
 // =====================
 // Fechamento de pagamento mensal
 // =====================
+/** Usa transação para não fechar pagamento sobre um serviço que já foi excluído ou teve o status alterado por outro usuário nesse meio-tempo. */
 export async function fecharPagamentoMensal(params: {
   tecnico_uid: string;
   tecnico_nome: string;
@@ -222,32 +246,41 @@ export async function fecharPagamentoMensal(params: {
   fechado_por: string;
 }): Promise<void> {
   const { tecnico_uid, tecnico_nome, mes_referencia, servicos, fechado_por } = params;
-  const batch = writeBatch(db);
   const fechamentoRef = doc(collection(db, "fechamentos_pagamento"));
   const total = servicos.reduce((sum, s) => sum + s.valorFinal, 0);
   const dataFechamento = new Date().toISOString();
+  const refs = servicos.map((s) => doc(db, "servicos_financeiro", s.id));
 
-  batch.set(fechamentoRef, {
-    tecnico_uid,
-    tecnico_nome,
-    mes_referencia,
-    total,
-    servicos_ids: servicos.map((s) => s.id),
-    fechado_por,
-    data_fechamento: dataFechamento,
-  } satisfies Omit<FechamentoPagamento, "id">);
+  await runTransaction(db, async (tx) => {
+    const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+    for (const snap of snaps) {
+      if (!snap.exists()) {
+        throw new Error("Um dos serviços selecionados não existe mais (pode ter sido excluído). Atualize a lista e tente novamente.");
+      }
+      if (snap.data().status !== "aprovado") {
+        throw new Error(`Um dos serviços selecionados já não está mais aprovado (status atual: ${STATUS_LABEL_CURTO[snap.data().status] ?? snap.data().status}). Atualize a lista e tente novamente.`);
+      }
+    }
 
-  for (const s of servicos) {
-    const servicoRef = doc(db, "servicos_financeiro", s.id);
-    batch.update(servicoRef, {
-      status: "pago",
-      valor_ajustado: s.valorFinal,
-      fechamento_id: fechamentoRef.id,
-      pago_em: dataFechamento,
+    tx.set(fechamentoRef, {
+      tecnico_uid,
+      tecnico_nome,
+      mes_referencia,
+      total,
+      servicos_ids: servicos.map((s) => s.id),
+      fechado_por,
+      data_fechamento: dataFechamento,
+    } satisfies Omit<FechamentoPagamento, "id">);
+
+    servicos.forEach((s, i) => {
+      tx.update(refs[i], {
+        status: "pago",
+        valor_ajustado: s.valorFinal,
+        fechamento_id: fechamentoRef.id,
+        pago_em: dataFechamento,
+      });
     });
-  }
-
-  await batch.commit();
+  });
 }
 
 export async function listFechamentos(tecnicoUid?: string): Promise<FechamentoPagamento[]> {

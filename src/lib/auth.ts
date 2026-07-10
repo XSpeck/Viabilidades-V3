@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { inferFuncoesTecnico } from "./users";
 import type { AppUser } from "@/types";
 
 const _userCache = new Map<string, AppUser>();
@@ -22,7 +23,7 @@ export async function getUserData(uid: string): Promise<AppUser | null> {
     nivel: data.nivel,
     cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
     equipe: data.equipe,
-    funcoes_tecnico: Array.isArray(data.funcoes_tecnico) ? data.funcoes_tecnico : [],
+    funcoes_tecnico: inferFuncoesTecnico(data),
     papel_financeiro: data.papel_financeiro,
   };
   _userCache.set(uid, user);
