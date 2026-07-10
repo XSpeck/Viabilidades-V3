@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { enqueueNotificacao } from "./notificacoes";
+import { deleteFotos } from "./cloudinary";
 import type {
   Viabilizacao,
   PredioAtendido,
@@ -1199,7 +1200,9 @@ export async function createDemanda(data: Omit<DemandaRede, "id">): Promise<void
 }
 
 export async function updateDemanda(id: string, data: Partial<DemandaRede>): Promise<void> {
-  await updateDoc(doc(db, "demandas_rede", id), stripUndefined(data as Record<string, unknown>));
+  const payload = stripUndefined(data as Record<string, unknown>);
+  if (Array.isArray(data.foto_urls) && data.foto_urls.length === 0) payload.foto_urls = deleteField();
+  await updateDoc(doc(db, "demandas_rede", id), payload);
   bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }
 
@@ -1260,7 +1263,8 @@ export async function avancarStatusDemanda(demanda: DemandaRede, obs?: string): 
   await concluirDemanda(demanda.id, obs);
 }
 
-export async function deleteDemanda(id: string): Promise<void> {
+export async function deleteDemanda(id: string, fotoUrls?: string[]): Promise<void> {
+  if (fotoUrls && fotoUrls.length > 0) await deleteFotos(fotoUrls);
   await deleteDoc(doc(db, "demandas_rede", id));
   bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
 }

@@ -5,10 +5,13 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
 import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
+import { uploadFoto, deleteFotos } from "@/lib/cloudinary";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
 import type { DemandaRede, BairroRede, TecnicoRede, PrioridadeDemanda } from "@/types";
 import { TECNICOS_REDE } from "@/types";
-import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search, Pencil } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search, Pencil, Camera, X } from "lucide-react";
+
+const MAX_FOTOS_DEMANDA = 4;
 
 const LocationPicker = dynamic(() => import("@/components/home/LocationPicker"), { ssr: false });
 const DemandasMap    = dynamic(() => import("@/components/analise-rede/DemandasMap"),  { ssr: false });
@@ -256,11 +259,24 @@ export default function AnaliseRedePage() {
   );
 }
 
+// ── Lightbox de foto ──────────────────────────────────────
+function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <button onClick={onClose} aria-label="Fechar" className="absolute top-4 right-4 text-white/80 hover:text-white p-2">
+        <X className="w-6 h-6" />
+      </button>
+      <img src={url} alt="Foto ampliada" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+    </div>
+  );
+}
+
 // ── Card de demanda ───────────────────────────────────────
 function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede; bairros: BairroRede[]; onRefresh: () => void }) {
   const { user } = useAuth();
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada]   = useState<string | null>(null);
 
   // Notas de andamento
   const [showNotas, setShowNotas]   = useState((d.notas_atividade?.length ?? 0) > 0);
@@ -291,6 +307,37 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
   const [editValidatedPlusCode, setEditValidatedPlusCode] = useState<string | null>(d.local ?? null);
   const [editInputValid, setEditInputValid]               = useState<boolean | null>(d.local ? true : null);
   const [editShowLocationPicker, setEditShowLocationPicker] = useState(false);
+
+  // Fotos
+  const [editFotos, setEditFotos]                 = useState<File[]>([]);
+  const [editFotoPreviews, setEditFotoPreviews]   = useState<string[]>([]);
+  const [editFotosExistentes, setEditFotosExistentes] = useState<string[]>(d.foto_urls ?? []);
+  const [uploadingFotos, setUploadingFotos]       = useState(false);
+
+  useEffect(() => {
+    const urls = editFotos.map((f) => URL.createObjectURL(f));
+    setEditFotoPreviews(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [editFotos]);
+
+  function handleEditFotosChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (selected.length === 0) return;
+    setEditFotos((prev) => {
+      const combined = [...prev, ...selected];
+      const limite = MAX_FOTOS_DEMANDA - editFotosExistentes.length;
+      return combined.slice(0, Math.max(0, limite));
+    });
+    e.target.value = "";
+  }
+
+  function removeEditFoto(index: number) {
+    setEditFotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function removeEditFotoExistente(index: number) {
+    setEditFotosExistentes((prev) => prev.filter((_, i) => i !== index));
+  }
 
   useEffect(() => {
     if (!editLocationInput) { setEditInputValid(null); setEditValidatedPlusCode(null); return; }
@@ -332,10 +379,22 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
     if (!editBairro) { alert("Selecione o bairro."); return; }
     setSaving(true);
     try {
-      await updateDemanda(d.id, { tecnicos: editTecnicos, bairro: editBairro, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined });
+      let novasUrls: string[] = [];
+      if (editFotos.length > 0) {
+        setUploadingFotos(true);
+        novasUrls = await Promise.all(editFotos.map((f) => uploadFoto(f)));
+        setUploadingFotos(false);
+      }
+      const foto_urls = [...editFotosExistentes, ...novasUrls];
+      const removedUrls = (d.foto_urls ?? []).filter((u) => !foto_urls.includes(u));
+      await updateDemanda(d.id, { tecnicos: editTecnicos, bairro: editBairro, tipo: tipoFinal, prioridade: editPrioridade, descricao: editDescricao.trim(), local: editValidatedPlusCode ?? undefined, foto_urls });
+      if (removedUrls.length > 0) deleteFotos(removedUrls);
+      setEditFotos([]);
       setShowEditar(false);
       onRefresh();
-    } finally { setSaving(false); }
+    } catch (e) {
+      alert("Erro ao salvar: " + (e instanceof Error ? e.message : "tente novamente."));
+    } finally { setSaving(false); setUploadingFotos(false); }
   }
 
   async function handleAgendar() {
@@ -410,7 +469,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
   async function handleDelete() {
     setSaving(true);
     try {
-      await deleteDemanda(d.id);
+      await deleteDemanda(d.id, d.foto_urls);
       onRefresh();
     } finally { setSaving(false); }
   }
@@ -467,6 +526,18 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
             )}
           </div>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.descricao}</p>
+
+          {/* Fotos */}
+          {(d.foto_urls?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {d.foto_urls!.map((url, i) => (
+                <button key={url} type="button" onClick={() => setFotoAmpliada(url)}
+                  className="w-12 h-12 rounded-lg overflow-hidden border shrink-0">
+                  <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Local */}
           {d.local && (
@@ -721,10 +792,49 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
           <textarea value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)}
             rows={3} placeholder="Descrição *"
             className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+
+          {/* Fotos */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+              <Camera className="w-3.5 h-3.5" /> Fotos (opcional, até {MAX_FOTOS_DEMANDA})
+            </label>
+            {(editFotosExistentes.length > 0 || editFotoPreviews.length > 0) && (
+              <div className="grid grid-cols-4 gap-2 mb-2">
+                {editFotosExistentes.map((url, i) => (
+                  <div key={url} className="relative aspect-square">
+                    <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                    <button type="button" onClick={() => removeEditFotoExistente(i)} aria-label="Remover foto"
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {editFotoPreviews.map((url, i) => (
+                  <div key={url} className="relative aspect-square">
+                    <img src={url} alt={`Nova foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                    <button type="button" onClick={() => removeEditFoto(i)} aria-label="Remover foto"
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {editFotosExistentes.length + editFotos.length < MAX_FOTOS_DEMANDA && (
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2.5 text-xs text-gray-600 cursor-pointer hover:bg-gray-50">
+                <Camera className="w-3.5 h-3.5" />
+                {editFotosExistentes.length + editFotos.length > 0
+                  ? `Adicionar mais (${editFotosExistentes.length + editFotos.length}/${MAX_FOTOS_DEMANDA})`
+                  : "Tirar foto ou escolher da galeria"}
+                <input type="file" accept="image/*" capture="environment" multiple onChange={handleEditFotosChange} className="hidden" />
+              </label>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <button onClick={handleEditar} disabled={saving}
               className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : uploadingFotos ? "Enviando foto..." : "Salvar"}
             </button>
             <button onClick={() => setShowEditar(false)}
               className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-white">
@@ -826,6 +936,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
         )}
       </div>
 
+      {fotoAmpliada && <FotoLightbox url={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />}
     </div>
   );
 }
@@ -843,6 +954,28 @@ function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
   const [prioridade, setPrioridade] = useState<PrioridadeDemanda>("media");
   const [descricao, setDescricao]   = useState("");
   const [saving, setSaving]         = useState(false);
+
+  // ── Fotos ─────────────────────────────────────────────────
+  const [fotos, setFotos]                 = useState<File[]>([]);
+  const [fotoPreviews, setFotoPreviews]   = useState<string[]>([]);
+  const [uploadingFotos, setUploadingFotos] = useState(false);
+
+  useEffect(() => {
+    const urls = fotos.map((f) => URL.createObjectURL(f));
+    setFotoPreviews(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [fotos]);
+
+  function handleFotosChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (selected.length === 0) return;
+    setFotos((prev) => [...prev, ...selected].slice(0, MAX_FOTOS_DEMANDA));
+    e.target.value = "";
+  }
+
+  function removeFoto(index: number) {
+    setFotos((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // ── Localização ──────────────────────────────────────────
   const [inputMethod, setInputMethod]         = useState<InputMethod>("pluscode");
@@ -877,6 +1010,12 @@ function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
     if (!descricao.trim()) { alert("Informe a descrição."); return; }
     setSaving(true);
     try {
+      let foto_urls: string[] | undefined;
+      if (fotos.length > 0) {
+        setUploadingFotos(true);
+        foto_urls = await Promise.all(fotos.map((f) => uploadFoto(f)));
+        setUploadingFotos(false);
+      }
       await createDemanda({
         tecnicos,
         bairro,
@@ -887,10 +1026,11 @@ function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
         status: "aberta",
         criado_por: auditorNome,
         data_criacao: new Date().toISOString(),
+        foto_urls,
       });
       onSaved();
-    } catch { alert("Erro ao criar demanda."); }
-    finally { setSaving(false); }
+    } catch (e) { alert("Erro ao criar demanda: " + (e instanceof Error ? e.message : "tente novamente.")); }
+    finally { setSaving(false); setUploadingFotos(false); }
   }
 
   return (
@@ -1000,10 +1140,37 @@ function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
                 className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
 
+            {/* Fotos */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                <Camera className="w-3.5 h-3.5" /> Fotos (opcional, até {MAX_FOTOS_DEMANDA})
+              </label>
+              {fotoPreviews.length > 0 && (
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {fotoPreviews.map((url, i) => (
+                    <div key={url} className="relative aspect-square">
+                      <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                      <button type="button" onClick={() => removeFoto(i)} aria-label="Remover foto"
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {fotos.length < MAX_FOTOS_DEMANDA && (
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2.5 text-xs text-gray-600 cursor-pointer hover:bg-gray-50">
+                  <Camera className="w-3.5 h-3.5" />
+                  {fotos.length > 0 ? `Adicionar mais (${fotos.length}/${MAX_FOTOS_DEMANDA})` : "Tirar foto ou escolher da galeria"}
+                  <input type="file" accept="image/*" capture="environment" multiple onChange={handleFotosChange} className="hidden" />
+                </label>
+              )}
+            </div>
+
             <div className="flex gap-2 pt-1">
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2.5 rounded-lg text-sm flex items-center justify-center gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar demanda"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : uploadingFotos ? "Enviando foto..." : "Criar demanda"}
               </button>
               <button onClick={onClose}
                 className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
@@ -1093,8 +1260,8 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
     onRestored();
   }
 
-  async function handleExcluir(id: string) {
-    await deleteDemanda(id);
+  async function handleExcluir(id: string, fotoUrls?: string[]) {
+    await deleteDemanda(id, fotoUrls);
     setSelected(null);
     setDemandas((prev) => prev.filter((d) => d.id !== id));
   }
@@ -1239,7 +1406,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
           demanda={selected}
           onClose={() => setSelected(null)}
           onRestaurar={() => handleRestaurar(selected.id)}
-          onExcluir={() => handleExcluir(selected.id)}
+          onExcluir={() => handleExcluir(selected.id, selected.foto_urls)}
         />
       )}
     </div>
@@ -1292,6 +1459,7 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
 }) {
   const [busy, setBusy]           = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const notas = [...(d.notas_atividade ?? [])].sort((a, b) => b.data.localeCompare(a.data));
 
   useEffect(() => {
@@ -1345,6 +1513,20 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
             <div>
               <p className="text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wide">Localização</p>
               <p className="text-sm font-mono text-gray-700">📍 {d.local}</p>
+            </div>
+          )}
+
+          {/* Fotos */}
+          {(d.foto_urls?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 mb-1 font-semibold uppercase tracking-wide">Fotos</p>
+              <div className="grid grid-cols-4 gap-2">
+                {d.foto_urls!.map((url, i) => (
+                  <button key={url} type="button" onClick={() => setFotoAmpliada(url)} className="aspect-square">
+                    <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover rounded-lg border" />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1445,6 +1627,7 @@ function ArquivoDetalheModal({ demanda: d, onClose, onRestaurar, onExcluir }: {
           </div>
         </div>
       </div>
+      {fotoAmpliada && <FotoLightbox url={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />}
     </div>
   );
 }

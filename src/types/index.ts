@@ -203,6 +203,7 @@ export interface DemandaRede {
   data_conclusao?: string;
   obs_conclusao?: string;
   notas_atividade?: NotaAtividade[];
+  foto_urls?: string[];
   /** Preenchido quando a demanda é um espelho automático de uma visita de estruturação de prédio/condomínio (ver src/lib/firestore.ts). */
   viabilizacao_id?: string;
 }
