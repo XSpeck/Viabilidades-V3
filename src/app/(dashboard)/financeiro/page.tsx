@@ -118,7 +118,7 @@ function TecnicoView() {
   const [fechamentos, setFechamentos] = useState<FechamentoPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
-    tipo_servico_id: "", cliente: "",
+    tipo_servico_id: "", cliente: "", valor: "",
     data_servico: new Date().toISOString().slice(0, 10), observacoes: "",
   });
   const [fotos, setFotos] = useState<File[]>([]);
@@ -162,7 +162,7 @@ function TecnicoView() {
   }
 
   function resetForm() {
-    setForm({ tipo_servico_id: "", cliente: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
+    setForm({ tipo_servico_id: "", cliente: "", valor: "", data_servico: new Date().toISOString().slice(0, 10), observacoes: "" });
     setFotos([]);
     setFotosExistentes([]);
     setEditandoId(null);
@@ -174,6 +174,7 @@ function TecnicoView() {
     setForm({
       tipo_servico_id: s.tipo_servico_id,
       cliente: s.cliente,
+      valor: String(s.valor),
       data_servico: s.data_servico,
       observacoes: s.observacoes ?? "",
     });
@@ -190,6 +191,7 @@ function TecnicoView() {
     setForm({
       tipo_servico_id: s.tipo_servico_id,
       cliente: s.cliente,
+      valor: String(s.valor),
       data_servico: new Date().toISOString().slice(0, 10),
       observacoes: s.motivo_rejeicao ? `Reenvio — motivo da rejeição anterior: ${s.motivo_rejeicao}` : "",
     });
@@ -323,6 +325,11 @@ function TecnicoView() {
       setError("Preencha cliente e data.");
       return;
     }
+    const valor = parseFloat(form.valor.replace(",", "."));
+    if (Number.isNaN(valor) || valor <= 0) {
+      setError("Informe o valor cobrado.");
+      return;
+    }
     if (!form.observacoes.trim()) {
       setError("Preencha a descrição do serviço.");
       return;
@@ -342,7 +349,7 @@ function TecnicoView() {
         await updateServicoFinanceiro(editandoId, {
           tipo_servico_id: tipo.id,
           tipo_servico_nome: tipo.nome,
-          valor: tipo.valor,
+          valor,
           cliente: form.cliente.trim(),
           data_servico: form.data_servico,
           foto_urls,
@@ -354,7 +361,7 @@ function TecnicoView() {
           tecnico_nome: user.nome,
           tipo_servico_id: tipo.id,
           tipo_servico_nome: tipo.nome,
-          valor: tipo.valor,
+          valor,
           cliente: form.cliente.trim(),
           data_servico: form.data_servico,
           foto_urls: foto_urls.length > 0 ? foto_urls : undefined,
@@ -406,14 +413,37 @@ function TecnicoView() {
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <select
-              value={form.tipo_servico_id}
-              onChange={(e) => setForm((f) => ({ ...f, tipo_servico_id: e.target.value }))}
+            <div>
+              <select
+                value={form.tipo_servico_id}
+                onChange={(e) => {
+                  const tipoId = e.target.value;
+                  const tipoSel = tipos.find((t) => t.id === tipoId);
+                  setForm((f) => ({
+                    ...f,
+                    tipo_servico_id: tipoId,
+                    valor: !f.valor && tipoSel ? String(tipoSel.valor) : f.valor,
+                  }));
+                }}
+                className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <option value="">Tipo de serviço</option>
+                {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+              {(() => {
+                const tipoSel = tipos.find((t) => t.id === form.tipo_servico_id);
+                return tipoSel ? (
+                  <p className="text-xs text-gray-400 mt-1">Valor de referência: {formatBRL(tipoSel.valor)}</p>
+                ) : null;
+              })()}
+            </div>
+            <input
+              placeholder="Valor cobrado (R$)"
+              inputMode="decimal"
+              value={form.valor}
+              onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))}
               className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            >
-              <option value="">Tipo de serviço</option>
-              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
+            />
             <input
               type="date"
               value={form.data_servico}
@@ -424,7 +454,7 @@ function TecnicoView() {
               placeholder="Cliente"
               value={form.cliente}
               onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 sm:col-span-2"
+              className="w-full min-w-0 h-11 px-3 text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
           </div>
           <textarea
@@ -1535,7 +1565,10 @@ function CadastrosFinanceiro() {
         <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-emerald-600" />
-            <h3 className="font-semibold text-gray-800">Tipos de serviço e valores</h3>
+            <div>
+              <h3 className="font-semibold text-gray-800">Tipos de serviço e valores de referência</h3>
+              <p className="text-xs text-gray-400 mt-0.5">O valor não é aplicado automaticamente — o técnico informa quanto cobrou e esse valor serve como referência para ele e para o Financeiro.</p>
+            </div>
           </div>
           <button
             onClick={openCreate}
@@ -1553,7 +1586,7 @@ function CadastrosFinanceiro() {
                 <thead>
                   <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pr-4 font-medium">Nome</th>
-                    <th className="text-left py-2 pr-4 font-medium">Valor</th>
+                    <th className="text-left py-2 pr-4 font-medium">Valor de referência</th>
                     <th className="text-left py-2 pr-4 font-medium">Status</th>
                     <th className="py-2" />
                   </tr>
@@ -1640,7 +1673,7 @@ function CadastrosFinanceiro() {
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Valor</label>
+              <label className="block text-xs text-gray-500 mb-1">Valor de referência</label>
               <input
                 value={form.valor}
                 onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))}
@@ -1726,14 +1759,16 @@ function FechamentoPagamentoView() {
   const [fechando, setFechando] = useState<string | null>(null);
   const [servicoDetalhe, setServicoDetalhe] = useState<ServicoFinanceiro | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+  const [valoresRef, setValoresRef] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const s = await listServicosAprovadosNaoPagos();
+      const [s, tipos] = await Promise.all([listServicosAprovadosNaoPagos(), listTiposServico()]);
       setAprovados(s);
       setValores(Object.fromEntries(s.map((x) => [x.id, String(x.valor_ajustado ?? x.valor)])));
       setSelecionados(Object.fromEntries(s.map((x) => [x.id, true])));
+      setValoresRef(Object.fromEntries(tipos.map((t) => [t.id, t.valor])));
     } finally {
       setLoading(false);
     }
@@ -1811,6 +1846,11 @@ function FechamentoPagamentoView() {
                     >
                       {i.tipo_servico_nome} — {i.cliente} ({formatDataBR(i.data_servico)}){i.numero_os ? ` · OS ${i.numero_os}` : ""}
                     </button>
+                    {valoresRef[i.tipo_servico_id] !== undefined && (
+                      <span className="text-xs text-gray-400 shrink-0" title="Valor de referência cadastrado para esse tipo de serviço">
+                        ref: {formatBRL(valoresRef[i.tipo_servico_id])}
+                      </span>
+                    )}
                     <input
                       value={valores[i.id] ?? ""}
                       onChange={(e) => setValores((f) => ({ ...f, [i.id]: e.target.value }))}
