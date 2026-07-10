@@ -12,7 +12,8 @@ import {
   batchImportViabilizacoes,
   getBairros, createBairro, renameBairro, deleteBairro,
 } from "@/lib/firestore";
-import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
+import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, FuncaoTecnico, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
+import { FUNCOES_TECNICO_LABEL } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { canAccess } from "@/lib/access";
 
@@ -610,7 +611,7 @@ function GestaoUsuarios() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcaoTecnico: "", papelFinanceiro: "" as PapelFinanceiro | "" });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcoesTecnico: [] as FuncaoTecnico[], papelFinanceiro: "" as PapelFinanceiro | "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
@@ -631,7 +632,7 @@ function GestaoUsuarios() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcaoTecnico: "", papelFinanceiro: "" });
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcoesTecnico: [], papelFinanceiro: "" });
     setFormError(null);
     setModal({ mode: "create" });
   }
@@ -643,7 +644,7 @@ function GestaoUsuarios() {
       senha: "",
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
       equipe: u.equipe ?? "",
-      funcaoTecnico: u.funcao_tecnico ?? "",
+      funcoesTecnico: u.funcoes_tecnico ?? [],
       papelFinanceiro: u.papel_financeiro ?? "",
     });
     setFormError(null);
@@ -659,16 +660,16 @@ function GestaoUsuarios() {
     setSaving(true);
     setFormError(null);
     try {
-      const funcaoTecnico = form.cargo === "tecnico" ? form.funcaoTecnico.trim() || undefined : undefined;
+      const funcoesTecnico = form.cargo === "tecnico" ? form.funcoesTecnico : undefined;
       const papelFinanceiro = form.cargo !== "tecnico" ? form.papelFinanceiro || undefined : undefined;
       if (modal?.mode === "create") {
-        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcaoTecnico, papelFinanceiro);
+        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcoesTecnico, papelFinanceiro);
       } else if (modal?.mode === "edit") {
         await updateUser(modal.user.uid, {
           nome: form.nome,
           cargo: form.cargo,
           equipe: form.equipe || null,
-          funcao_tecnico: form.cargo === "tecnico" ? (funcaoTecnico ?? null) : null,
+          funcoes_tecnico: form.cargo === "tecnico" ? (funcoesTecnico ?? null) : null,
           papel_financeiro: papelFinanceiro ?? null,
         });
       }
@@ -798,10 +799,14 @@ function GestaoUsuarios() {
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${EQUIPE_COLOR[u.equipe]}`}>
                               {EQUIPE_LABEL[u.equipe]}
                             </span>
-                          ) : u.funcao_tecnico ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700">
-                              {u.funcao_tecnico}
-                            </span>
+                          ) : (u.funcoes_tecnico?.length ?? 0) > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {u.funcoes_tecnico!.map((f) => (
+                                <span key={f} className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700">
+                                  {FUNCOES_TECNICO_LABEL[f]}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-gray-300 text-xs">—</span>
                           )}
@@ -910,12 +915,23 @@ function GestaoUsuarios() {
               {form.cargo === "tecnico" ? (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Função do técnico</label>
-                  <input
-                    value={form.funcaoTecnico}
-                    onChange={(e) => setForm((f) => ({ ...f, funcaoTecnico: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    placeholder="Ex: Técnico de Redes, Técnico de Manutenção"
-                  />
+                  <div className="flex gap-4">
+                    {(["rede", "manutencao"] as FuncaoTecnico[]).map((f) => (
+                      <label key={f} className="flex items-center gap-1.5 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={form.funcoesTecnico.includes(f)}
+                          onChange={(e) => setForm((s) => ({
+                            ...s,
+                            funcoesTecnico: e.target.checked
+                              ? [...s.funcoesTecnico, f]
+                              : s.funcoesTecnico.filter((x) => x !== f),
+                          }))}
+                        />
+                        {FUNCOES_TECNICO_LABEL[f]}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div>

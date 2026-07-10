@@ -5,7 +5,6 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { DemandaRede, PrioridadeDemanda } from "@/types";
-import { TECNICOS_REDE } from "@/types";
 
 const REFERENCE_LAT = -28.6775;
 const REFERENCE_LON = -49.3696;
@@ -85,6 +84,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
 
   const semLocal   = demandas.filter((d) => !d.local).length;
   const visible    = allPins.filter((p) => p.demanda.tecnicos.some((t) => !hidden.has(t)));
+  const tecnicosPresentes = Array.from(new Set(demandas.flatMap((d) => d.tecnicos))).sort();
 
   function toggle(tec: string) {
     setHidden((prev) => {
@@ -100,7 +100,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
       {/* Legenda / filtro por técnico */}
       <div className="flex flex-wrap items-start gap-2">
         <div className="flex flex-wrap gap-2 flex-1">
-          {TECNICOS_REDE.map((tec) => {
+          {tecnicosPresentes.map((tec) => {
             const count = allPins.filter((p) => p.demanda.tecnicos.includes(tec)).length;
             const off   = hidden.has(tec);
             return (

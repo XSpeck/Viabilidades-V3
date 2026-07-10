@@ -11,7 +11,8 @@ import {
   bustCacheAuditoria, getViabilizacoesRelatorio,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao, TipoInstalacao } from "@/types";
+import { listTecnicos } from "@/lib/users";
+import type { Viabilizacao, TipoInstalacao, AppUser } from "@/types";
 import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle, AlertTriangle, History, ChevronDown, ChevronUp } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import CtoBusca from "@/components/auditoria/CtoBusca";
@@ -563,6 +564,8 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
   const [dataVisita, setDataVisita] = useState(v.data_preferencia_visita ?? "");
   const [periodo, setPeriodo] = useState(v.periodo_preferencia_visita ?? "Manhã");
   const [tecnico, setTecnico] = useState("");
+  const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
+  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => {}); }, []);
   const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
   const [giga, setGiga] = useState(true);
   const [obsVisita, setObsVisita] = useState("");
@@ -1101,7 +1104,10 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                   </select>
-                  <input placeholder="Técnico *" value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <select value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="">Técnico *</option>
+                    {tecnicos.map((t) => <option key={t.uid} value={t.nome}>{t.nome}</option>)}
+                  </select>
                   <select value={tecnologia} onChange={(e) => { setTecnologia(e.target.value); if (e.target.value === "FTTA") setGiga(true); }} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     {tipoLocal === "Condomínio" ? <option>FTTH</option> : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
                   </select>

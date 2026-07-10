@@ -4,6 +4,12 @@ export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento" | "come
 /** Papel adicional do módulo financeiro — não substitui o cargo principal, coexiste com ele (ex: um "auditor" também pode ser "financeiro"). */
 export type PapelFinanceiro = "auditor_servico" | "financeiro";
 
+export type FuncaoTecnico = "rede" | "manutencao";
+export const FUNCOES_TECNICO_LABEL: Record<FuncaoTecnico, string> = {
+  rede: "Técnico de Redes",
+  manutencao: "Técnico de Manutenção",
+};
+
 export interface AppUser {
   uid: string;
   nome: string;
@@ -11,8 +17,8 @@ export interface AppUser {
   nivel: UserNivel;
   cargo?: UserCargo;
   equipe?: EquipeUsuario;
-  /** Só usado quando cargo === "tecnico" (ex: "Técnico de Redes", "Técnico de Manutenção"). */
-  funcao_tecnico?: string;
+  /** Só usado quando cargo === "tecnico"; um técnico pode acumular as duas funções. */
+  funcoes_tecnico?: FuncaoTecnico[];
   papel_financeiro?: PapelFinanceiro;
 }
 
@@ -176,9 +182,6 @@ export const TIPOS_SERVICO_REDE = [
   "Manutenção CTO", "Readequação", "Mutirão", "Migração", "Outro",
 ] as const;
 
-export const TECNICOS_REDE = ["Eduardo", "Ulisses", "Zilli", "Andre"] as const;
-export type TecnicoRede = typeof TECNICOS_REDE[number];
-
 export type StatusDemanda    = "aberta" | "agendada" | "em_andamento" | "concluida" | "arquivada";
 export type PrioridadeDemanda = "baixa" | "media" | "alta" | "urgente";
 
@@ -189,7 +192,7 @@ export interface BairroRede {
 
 export interface DemandaRede {
   id: string;
-  tecnicos: TecnicoRede[];
+  tecnicos: string[];
   tipo: string;
   bairro?: string;
   local?: string;

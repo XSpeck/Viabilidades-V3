@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
-import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro } from "@/types";
+import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, FuncaoTecnico } from "@/types";
 
 const USERS_CACHE_KEY = "viab_users_v1";
 const USERS_CACHE_TTL = 5 * 60 * 1000;
@@ -36,12 +36,19 @@ export async function listUsers(): Promise<AppUser[]> {
       nivel: u.nivel,
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
       equipe: u.equipe,
-      funcao_tecnico: u.funcao_tecnico,
+      funcoes_tecnico: Array.isArray(u.funcoes_tecnico) ? u.funcoes_tecnico : [],
       papel_financeiro: u.papel_financeiro,
     };
   });
   setUsersCache(data);
   return data;
+}
+
+export async function listTecnicos(funcao?: FuncaoTecnico): Promise<AppUser[]> {
+  const users = await listUsers();
+  return users
+    .filter((u) => u.cargo === "tecnico" && (!funcao || u.funcoes_tecnico?.includes(funcao)))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 function parseFirebaseAuthError(message: string): string {
@@ -58,7 +65,7 @@ export async function createUser(
   nome: string,
   cargo: UserCargo,
   equipe?: EquipeUsuario,
-  funcaoTecnico?: string,
+  funcoesTecnico?: FuncaoTecnico[],
   papelFinanceiro?: PapelFinanceiro
 ): Promise<void> {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!;
@@ -78,7 +85,7 @@ export async function createUser(
   const nivel = cargo === "usuario" ? 2 : 1;
   const docData: Record<string, unknown> = { nome, login: email, nivel, cargo };
   if (equipe) docData.equipe = equipe;
-  if (funcaoTecnico) docData.funcao_tecnico = funcaoTecnico;
+  if (funcoesTecnico && funcoesTecnico.length > 0) docData.funcoes_tecnico = funcoesTecnico;
   if (papelFinanceiro) docData.papel_financeiro = papelFinanceiro;
   await setDoc(doc(db, "users", localId), docData);
   bustUsersCache();
@@ -90,7 +97,7 @@ export async function updateUser(
     nome?: string;
     cargo?: UserCargo;
     equipe?: EquipeUsuario | null;
-    funcao_tecnico?: string | null;
+    funcoes_tecnico?: FuncaoTecnico[] | null;
     papel_financeiro?: PapelFinanceiro | null;
   }
 ): Promise<void> {
@@ -103,8 +110,9 @@ export async function updateUser(
   if (data.equipe !== undefined) {
     updates.equipe = data.equipe === null ? deleteField() : data.equipe;
   }
-  if (data.funcao_tecnico !== undefined) {
-    updates.funcao_tecnico = data.funcao_tecnico === null ? deleteField() : data.funcao_tecnico;
+  if (data.funcoes_tecnico !== undefined) {
+    updates.funcoes_tecnico = (data.funcoes_tecnico === null || data.funcoes_tecnico.length === 0)
+      ? deleteField() : data.funcoes_tecnico;
   }
   if (data.papel_financeiro !== undefined) {
     updates.papel_financeiro = data.papel_financeiro === null ? deleteField() : data.papel_financeiro;

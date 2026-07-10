@@ -8,8 +8,9 @@ import {
   addNotaDemanda, addNotaVisita, editarInfoDemanda, reabrirDemanda, bustCacheAgenda,
 } from "@/lib/firestore";
 import { locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade } from "@/types";
-import { TECNICOS_REDE, TIPOS_SERVICO_REDE } from "@/types";
+import { listTecnicos } from "@/lib/users";
+import type { Viabilizacao, DemandaRede, PrioridadeDemanda, NotaAtividade, AppUser } from "@/types";
+import { TIPOS_SERVICO_REDE } from "@/types";
 import {
   RefreshCw, Loader2, ChevronLeft, ChevronRight, X, Pencil, Check, Plus,
 } from "lucide-react";
@@ -82,6 +83,7 @@ export default function AgendaPage() {
   const { user } = useAuth();
   const [items, setItems]       = useState<Viabilizacao[]>([]);
   const [demandas, setDemandas] = useState<DemandaRede[]>([]);
+  const [tecnicosRede, setTecnicosRede] = useState<string[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(todayISO());
   const [calView, setCalView]   = useState<"week" | "month">("week");
@@ -91,9 +93,10 @@ export default function AgendaPage() {
     bustCacheAgenda();
     setLoading(true);
     try {
-      const [viabs, dems] = await Promise.all([getAgendamentos(), getDemandasAgendadas()]);
+      const [viabs, dems, tec] = await Promise.all([getAgendamentos(), getDemandasAgendadas(), listTecnicos("rede")]);
       setItems(viabs);
       setDemandas(dems);
+      setTecnicosRede(tec.map((t) => t.nome));
     } finally { setLoading(false); }
   }, []);
 
@@ -106,7 +109,7 @@ export default function AgendaPage() {
   const weekDays = getWeekDays(selectedDate);
 
   const tecnicosVisitas = Array.from(new Set(items.map((v) => v.tecnico_responsavel).filter(Boolean))) as string[];
-  const allTecnicos     = Array.from(new Set([...TECNICOS_REDE, ...tecnicosVisitas]));
+  const allTecnicos     = Array.from(new Set([...tecnicosRede, ...tecnicosVisitas]));
 
   const visitasDay  = items.filter((v) => v.data_visita === selectedDate);
   const demandasDay = demandas.filter((d) => d.data_agendamento === selectedDate);
@@ -123,7 +126,7 @@ export default function AgendaPage() {
     return visitasDay.filter((v) => v.tecnico_responsavel === tec && v.periodo_visita === per);
   }
   function dCell(tec: string, per: string) {
-    return demandasDay.filter((d) => d.tecnicos.includes(tec as typeof TECNICOS_REDE[number]) && d.periodo_agendamento === per);
+    return demandasDay.filter((d) => d.tecnicos.includes(tec) && d.periodo_agendamento === per);
   }
 
   return (
@@ -281,7 +284,7 @@ export default function AgendaPage() {
                 <tr className="border-b bg-gray-50">
                   <th className="w-20 py-3 px-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-r sticky left-0 bg-gray-50 z-10" />
                   {allTecnicos.map((t) => {
-                    const isRede = (TECNICOS_REDE as readonly string[]).includes(t);
+                    const isRede = tecnicosRede.includes(t);
                     return (
                       <th key={t} className="py-3 px-3 text-center border-r last:border-r-0 min-w-[160px]">
                         <div className="flex items-center justify-center gap-1.5">
@@ -486,6 +489,11 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
   const [novoPeriodo, setNovoPeriodo] = useState("Manhã");
   const [novoTecnico, setNovoTecnico] = useState(v.tecnico_responsavel ?? "");
   const [motivoRea, setMotivoRea]     = useState("");
+  const [tecnicos, setTecnicos]       = useState<AppUser[]>([]);
+  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => {}); }, []);
+  const tecnicoOptions = novoTecnico && !tecnicos.some((t) => t.nome === novoTecnico)
+    ? [{ uid: "atual", nome: novoTecnico }, ...tecnicos]
+    : tecnicos;
 
   const [motivoRej, setMotivoRej]     = useState("");
 
@@ -698,8 +706,13 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
                 <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
               </select>
             </div>
-            <input placeholder="Técnico *" value={novoTecnico} onChange={(e) => setNovoTecnico(e.target.value)}
-              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+            <select value={novoTecnico} onChange={(e) => setNovoTecnico(e.target.value)}
+              className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400">
+              <option value="">Técnico *</option>
+              {tecnicoOptions.map((t) => (
+                <option key={t.uid} value={t.nome}>{t.uid === "atual" ? `${t.nome} (atual)` : t.nome}</option>
+              ))}
+            </select>
             <textarea placeholder="Motivo (opcional)" value={motivoRea} onChange={(e) => setMotivoRea(e.target.value)}
               rows={2} className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none" />
             <button onClick={handleReagendar} disabled={busy}
@@ -771,6 +784,8 @@ function DemandaModal({ d, onRefresh, onClose }: {
   const [editLocal, setEditLocal]   = useState(d.local ?? "");
   const [editTecnicos, setEditTecnicos] = useState(d.tecnicos);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [tecnicosRede, setTecnicosRede] = useState<string[]>([]);
+  useEffect(() => { listTecnicos("rede").then((t) => setTecnicosRede(t.map((x) => x.nome))).catch(() => {}); }, []);
 
   async function handleSaveEdit() {
     setSavingEdit(true);
@@ -895,7 +910,7 @@ function DemandaModal({ d, onRefresh, onClose }: {
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Técnico(s)</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {TECNICOS_REDE.map((t) => {
+                  {tecnicosRede.map((t) => {
                     const sel = editTecnicos.includes(t);
                     return (
                       <button key={t} type="button"

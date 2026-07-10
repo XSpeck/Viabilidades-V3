@@ -14,7 +14,8 @@ import {
   bustCacheAgendaTecnica,
 } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import type { Viabilizacao } from "@/types";
+import { listTecnicos } from "@/lib/users";
+import type { Viabilizacao, AppUser } from "@/types";
 import { RefreshCw, Loader2, Wrench, Search, ChevronDown, ChevronUp, History, Download, LayoutGrid, LayoutList, Pencil } from "lucide-react";
 import { canAccess } from "@/lib/access";
 import TempoDecorrido from "@/components/TempoDecorrido";
@@ -446,6 +447,15 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   const [reagTecnico, setReagTecnico] = useState(v.tecnico_instalacao ?? "");
   const [reagMotivo, setReagMotivo] = useState("");
 
+  const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
+  useEffect(() => { listTecnicos("manutencao").then(setTecnicos).catch(() => {}); }, []);
+  const tecnicoAtribuirOptions = tecnicoAtribuir && !tecnicos.some((t) => t.nome === tecnicoAtribuir)
+    ? [{ uid: "atual", nome: tecnicoAtribuir }, ...tecnicos]
+    : tecnicos;
+  const reagTecnicoOptions = reagTecnico && !tecnicos.some((t) => t.nome === reagTecnico)
+    ? [{ uid: "atual", nome: reagTecnico }, ...tecnicos]
+    : tecnicos;
+
   function finishWithSuccess(msg: string) {
     setSuccessMsg(msg);
     setTimeout(onRefresh, 2000);
@@ -709,12 +719,16 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                     👷 {v.tecnico_instalacao ? "Editar técnico" : "Atribuir técnico"}
                   </p>
                   <div className="flex gap-2">
-                    <input
-                      placeholder="Nome do técnico *"
+                    <select
                       value={tecnicoAtribuir}
                       onChange={(e) => setTecnicoAtribuir(e.target.value)}
                       className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
+                    >
+                      <option value="">Técnico *</option>
+                      {tecnicoAtribuirOptions.map((t) => (
+                        <option key={t.uid} value={t.nome}>{t.uid === "atual" ? `${t.nome} (atual)` : t.nome}</option>
+                      ))}
+                    </select>
                     <button
                       onClick={handleAtribuirTecnico}
                       disabled={salvandoTecnico || !tecnicoAtribuir.trim()}
@@ -754,8 +768,13 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                     <select value={reagPeriodo} onChange={(e) => setReagPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg">
                       <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
                     </select>
-                    <input placeholder="Técnico *" value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)}
-                      className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                    <select value={reagTecnico} onChange={(e) => setReagTecnico(e.target.value)}
+                      className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                      <option value="">Técnico *</option>
+                      {reagTecnicoOptions.map((t) => (
+                        <option key={t.uid} value={t.nome}>{t.uid === "atual" ? `${t.nome} (atual)` : t.nome}</option>
+                      ))}
+                    </select>
                     <textarea placeholder="Motivo do reagendamento (opcional)" value={reagMotivo} onChange={(e) => setReagMotivo(e.target.value)}
                       rows={2} className="px-3 py-2 text-sm border rounded-lg col-span-2 focus:outline-none" />
                   </div>
@@ -793,12 +812,16 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                 <div className="border border-orange-200 bg-orange-50 rounded-lg p-3 space-y-2">
                   <p className="text-sm font-medium text-orange-800">👷 Atribuir técnico</p>
                   <div className="flex gap-2">
-                    <input
-                      placeholder="Nome do técnico *"
+                    <select
                       value={tecnicoAtribuir}
                       onChange={(e) => setTecnicoAtribuir(e.target.value)}
                       className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
+                    >
+                      <option value="">Técnico *</option>
+                      {tecnicoAtribuirOptions.map((t) => (
+                        <option key={t.uid} value={t.nome}>{t.uid === "atual" ? `${t.nome} (atual)` : t.nome}</option>
+                      ))}
+                    </select>
                     <button
                       onClick={handleAtribuirTecnico}
                       disabled={salvandoTecnico || !tecnicoAtribuir.trim()}

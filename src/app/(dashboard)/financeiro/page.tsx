@@ -11,8 +11,9 @@ import {
   fecharPagamentoMensal, listFechamentos, listServicosPagos,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
-import { listUsers } from "@/lib/users";
+import { listTecnicos } from "@/lib/users";
 import type { AppUser, TipoServicoFinanceiro, ServicoFinanceiro, StatusServicoFinanceiro, FechamentoPagamento } from "@/types";
+import { FUNCOES_TECNICO_LABEL } from "@/types";
 import {
   Wallet, Camera, CheckCircle, XCircle, Loader2, Plus, History,
   Users as UsersIcon, Settings, ClipboardList, ImageIcon, Trash2, Pencil, AlertTriangle, X,
@@ -1463,9 +1464,9 @@ function CadastrosFinanceiro() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, u] = await Promise.all([listTiposServico(), listUsers()]);
+      const [t, u] = await Promise.all([listTiposServico(), listTecnicos()]);
       setTipos(t);
-      setTecnicos(u.filter((x) => x.cargo === "tecnico"));
+      setTecnicos(u);
     } finally {
       setLoading(false);
     }
@@ -1601,8 +1602,14 @@ function CadastrosFinanceiro() {
               {tecnicos.map((t) => (
                 <div key={t.uid} className="flex items-center justify-between gap-2 p-2 rounded-lg border">
                   <span className="text-sm font-medium text-gray-700">{t.nome}</span>
-                  {t.funcao_tecnico ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-100 text-cyan-700">{t.funcao_tecnico}</span>
+                  {(t.funcoes_tecnico?.length ?? 0) > 0 ? (
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {t.funcoes_tecnico!.map((f) => (
+                        <span key={f} className="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-100 text-cyan-700">
+                          {FUNCOES_TECNICO_LABEL[f]}
+                        </span>
+                      ))}
+                    </div>
                   ) : (
                     <span className="text-xs text-gray-300">Sem função definida</span>
                   )}

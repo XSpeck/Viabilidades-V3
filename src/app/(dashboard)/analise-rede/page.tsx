@@ -6,9 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
 import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
 import { uploadFoto, deleteFotos } from "@/lib/cloudinary";
+import { listTecnicos } from "@/lib/users";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
-import type { DemandaRede, BairroRede, TecnicoRede, PrioridadeDemanda } from "@/types";
-import { TECNICOS_REDE } from "@/types";
+import type { DemandaRede, BairroRede, PrioridadeDemanda } from "@/types";
 import { Loader2, Plus, RefreshCw, Trash2, ChevronRight, CheckCircle, XCircle, Search, Pencil, Camera, X } from "lucide-react";
 
 const MAX_FOTOS_DEMANDA = 4;
@@ -68,10 +68,11 @@ export default function AnaliseRedePage() {
   const { user } = useAuth();
   const [demandas, setDemandas]     = useState<DemandaRede[]>([]);
   const [bairros, setBairros]       = useState<BairroRede[]>([]);
+  const [tecnicosRede, setTecnicosRede] = useState<string[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showModal, setShowModal]   = useState(false);
   const [showMap, setShowMap]       = useState(false);
-  const [tecnicoTab, setTecnicoTab] = useState<"todos" | TecnicoRede>("todos");
+  const [tecnicoTab, setTecnicoTab] = useState<"todos" | string>("todos");
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
   const [bairroFiltro, setBairroFiltro] = useState<"todos" | string>("todos");
 
@@ -79,9 +80,10 @@ export default function AnaliseRedePage() {
     bustCacheAnaliseRede();
     setLoading(true);
     try {
-      const [dem, bai] = await Promise.all([getDemandas(), getBairros()]);
+      const [dem, bai, tec] = await Promise.all([getDemandas(), getBairros(), listTecnicos("rede")]);
       setDemandas(dem);
       setBairros(bai);
+      setTecnicosRede(tec.map((t) => t.nome));
     }
     finally { setLoading(false); }
   }, []);
@@ -110,7 +112,7 @@ export default function AnaliseRedePage() {
     concluida:    demandas.filter((d) => baseAtivos(d) && d.status === "concluida").length,
   };
 
-  const countTecnico = (t: TecnicoRede) =>
+  const countTecnico = (t: string) =>
     demandas.filter((d) => d.tecnicos.includes(t) && d.status !== "concluida" && d.status !== "arquivada" && (bairroFiltro === "todos" || d.bairro === bairroFiltro)).length;
 
   return (
@@ -167,7 +169,7 @@ export default function AnaliseRedePage() {
       {/* Tabs técnico */}
       <div className="bg-white rounded-xl border overflow-hidden">
         <div className="flex overflow-x-auto border-b">
-          {(["todos", ...TECNICOS_REDE] as ("todos" | TecnicoRede)[]).map((t) => {
+          {(["todos", ...tecnicosRede]).map((t) => {
             const pendentes = t === "todos"
               ? demandas.filter((d) => d.status !== "concluida" && d.status !== "arquivada").length
               : countTecnico(t);
@@ -199,7 +201,7 @@ export default function AnaliseRedePage() {
             <button key={f.key} onClick={() => setStatusFiltro(f.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFiltro === f.key ? "bg-indigo-600 text-white" : "bg-white border text-gray-600 hover:bg-gray-100"}`}>
               {f.key === "todas"
-                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede)) && (bairroFiltro === "todos" || d.bairro === bairroFiltro)).length})`
+                ? `Todas (${demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab)) && (bairroFiltro === "todos" || d.bairro === bairroFiltro)).length})`
                 : f.label}
             </button>
           ))}
@@ -215,10 +217,10 @@ export default function AnaliseRedePage() {
               className="flex-1 px-2.5 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
             >
               <option value="todos">
-                Todos ({demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length})
+                Todos ({demandas.filter((d) => d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))).length})
               </option>
               {bairros.map((b) => {
-                const count = demandas.filter((d) => d.bairro === b.nome && d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab as TecnicoRede))).length;
+                const count = demandas.filter((d) => d.bairro === b.nome && d.status !== "arquivada" && (tecnicoTab === "todos" || d.tecnicos.includes(tecnicoTab))).length;
                 return <option key={b.id} value={b.nome}>{b.nome} ({count})</option>;
               })}
             </select>
@@ -239,7 +241,7 @@ export default function AnaliseRedePage() {
         ) : (
           <div className="divide-y">
             {filtradas.map((d) => (
-              <DemandaCard key={d.id} demanda={d} bairros={bairros} onRefresh={load} />
+              <DemandaCard key={d.id} demanda={d} bairros={bairros} tecnicosRede={tecnicosRede} onRefresh={load} />
             ))}
           </div>
         )}
@@ -251,6 +253,7 @@ export default function AnaliseRedePage() {
         <NovaDemandaModal
           auditorNome={user?.nome ?? ""}
           bairros={bairros}
+          tecnicosRede={tecnicosRede}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
         />
@@ -272,7 +275,7 @@ function FotoLightbox({ url, onClose }: { url: string; onClose: () => void }) {
 }
 
 // ── Card de demanda ───────────────────────────────────────
-function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede; bairros: BairroRede[]; onRefresh: () => void }) {
+function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda: DemandaRede; bairros: BairroRede[]; tecnicosRede: string[]; onRefresh: () => void }) {
   const { user } = useAuth();
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -296,7 +299,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
 
   // Editar
   const [showEditar, setShowEditar]         = useState(false);
-  const [editTecnicos, setEditTecnicos]     = useState<TecnicoRede[]>(d.tecnicos);
+  const [editTecnicos, setEditTecnicos]     = useState<string[]>(d.tecnicos);
   const [editBairro, setEditBairro]         = useState(d.bairro ?? "");
   const [editTipo, setEditTipo]             = useState(TIPOS_SERVICO.includes(d.tipo) ? d.tipo : "Outro");
   const [editTipoCustom, setEditTipoCustom] = useState(TIPOS_SERVICO.includes(d.tipo) ? "" : d.tipo);
@@ -370,7 +373,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
 
   // Atribuir técnico
   const [showAtribuirTecnico, setShowAtribuirTecnico] = useState(false);
-  const [tecnicosAtribuir, setTecnicosAtribuir]       = useState<TecnicoRede[]>(d.tecnicos);
+  const [tecnicosAtribuir, setTecnicosAtribuir]       = useState<string[]>(d.tecnicos);
 
   async function handleEditar() {
     const tipoFinal = editTipo === "Outro" ? editTipoCustom.trim() : editTipo;
@@ -680,7 +683,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
         <div className="mt-3 border border-indigo-200 rounded-lg p-3 bg-indigo-50 space-y-2">
           <p className="text-xs font-semibold text-indigo-800">👷 {d.tecnicos.length === 0 ? "Atribuir técnico" : "Editar técnicos"}</p>
           <div className="flex flex-wrap gap-1.5">
-            {TECNICOS_REDE.map((t) => {
+            {tecnicosRede.map((t) => {
               const sel = tecnicosAtribuir.includes(t);
               return (
                 <button key={t} type="button"
@@ -714,7 +717,7 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
             </p>
           ) : (
             <div className="flex flex-wrap gap-1.5 col-span-2">
-              {TECNICOS_REDE.map((t) => {
+              {tecnicosRede.map((t) => {
                 const sel = editTecnicos.includes(t);
                 return (
                   <button key={t} type="button"
@@ -944,10 +947,10 @@ function DemandaCard({ demanda: d, bairros, onRefresh }: { demanda: DemandaRede;
 // ── Modal nova demanda ────────────────────────────────────
 type InputMethod = "pluscode" | "coords";
 
-function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
-  auditorNome: string; bairros: BairroRede[]; onClose: () => void; onSaved: () => void;
+function NovaDemandaModal({ auditorNome, bairros, tecnicosRede, onClose, onSaved }: {
+  auditorNome: string; bairros: BairroRede[]; tecnicosRede: string[]; onClose: () => void; onSaved: () => void;
 }) {
-  const [tecnicos, setTecnicos]     = useState<TecnicoRede[]>([]);
+  const [tecnicos, setTecnicos]     = useState<string[]>([]);
   const [bairro, setBairro]         = useState("");
   const [tipo, setTipo]             = useState(TIPOS_SERVICO[0]);
   const [tipoCustom, setTipoCustom] = useState("");
@@ -1046,7 +1049,7 @@ function NovaDemandaModal({ auditorNome, bairros, onClose, onSaved }: {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Técnico(s) *</label>
               <div className="flex flex-wrap gap-1.5">
-                {TECNICOS_REDE.map((t) => {
+                {tecnicosRede.map((t) => {
                   const sel = tecnicos.includes(t);
                   return (
                     <button key={t} type="button"
@@ -1207,7 +1210,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
 
   // Filtros próprios do arquivo
   const [busca, setBusca]             = useState("");
-  const [filtroTec, setFiltroTec]     = useState<"todos" | TecnicoRede>("todos");
+  const [filtroTec, setFiltroTec]     = useState<"todos" | string>("todos");
   const [filtroBairro, setFiltroBairro] = useState<string>("todos");
   const [dataInicio, setDataInicio]   = useState("");
   const [dataFim, setDataFim]         = useState("");
@@ -1228,9 +1231,10 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
   }
 
   const bairrosArquivados = Array.from(new Set(demandas.map((d) => d.bairro).filter(Boolean))).sort();
+  const tecnicosArquivados = Array.from(new Set(demandas.flatMap((d) => d.tecnicos))).sort();
 
   const filtradas = demandas
-    .filter((d) => filtroTec === "todos" || d.tecnicos.includes(filtroTec as TecnicoRede))
+    .filter((d) => filtroTec === "todos" || d.tecnicos.includes(filtroTec))
     .filter((d) => filtroBairro === "todos" || d.bairro === filtroBairro)
     .filter((d) => {
       if (!busca.trim()) return true;
@@ -1304,7 +1308,7 @@ function ArquivoPanel({ onRestored }: { onRestored: () => void }) {
             </div>
             {/* Técnico + datas */}
             <div className="flex flex-wrap gap-2 items-center">
-              {(["todos", ...TECNICOS_REDE] as ("todos" | TecnicoRede)[]).map((t) => (
+              {["todos", ...tecnicosArquivados].map((t) => (
                 <button key={t} onClick={() => setFiltroTec(t)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     filtroTec === t
