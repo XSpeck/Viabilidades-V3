@@ -1770,6 +1770,8 @@ function FechamentoPagamentoView() {
   const [servicoDetalhe, setServicoDetalhe] = useState<ServicoFinanceiro | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [valoresRef, setValoresRef] = useState<Record<string, number>>({});
+  const [confirmExcluir, setConfirmExcluir] = useState<ServicoFinanceiro | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1785,6 +1787,18 @@ function FechamentoPagamentoView() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleExcluir(s: ServicoFinanceiro) {
+    setExcluindo(true);
+    try {
+      await deleteServicoFinanceiro(s.id, s.foto_urls);
+      setConfirmExcluir(null);
+      setServicoDetalhe(null);
+      await load();
+    } finally {
+      setExcluindo(false);
+    }
+  }
 
   const porTecnico = new Map<string, { tecnico_nome: string; itens: ServicoFinanceiro[] }>();
   for (const s of aprovados) {
@@ -1974,6 +1988,40 @@ function FechamentoPagamentoView() {
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={() => setConfirmExcluir(servicoDetalhe)}
+                className="w-full flex items-center justify-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-medium py-2 rounded-lg"
+              >
+                <Trash2 className="w-4 h-4" /> Excluir serviço
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmExcluir && (
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">Excluir serviço?</h3>
+            <p className="text-sm text-gray-600">
+              <strong>{confirmExcluir.tipo_servico_nome}</strong> — {confirmExcluir.cliente} ({confirmExcluir.tecnico_nome}) será removido e não entrará no pagamento. Essa ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmExcluir(null)}
+                className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleExcluir(confirmExcluir)}
+                disabled={excluindo}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {excluindo && <Loader2 className="w-4 h-4 animate-spin" />}
+                Excluir
+              </button>
             </div>
           </div>
         </div>
