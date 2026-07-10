@@ -1462,9 +1462,9 @@ function FinanceiroAdminView() {
 
   const chips: { key: typeof tab; label: string; icon: React.ReactNode }[] = [
     { key: "fechamento", label: "Fechamento", icon: <Wallet className="w-4 h-4" /> },
-    { key: "auditoria", label: "Auditoria", icon: <CheckCircle className="w-4 h-4" /> },
-    { key: "cadastros", label: "Cadastros", icon: <Settings className="w-4 h-4" /> },
     { key: "historico", label: "Histórico", icon: <History className="w-4 h-4" /> },
+    { key: "cadastros", label: "Cadastros", icon: <Settings className="w-4 h-4" /> },
+    { key: "auditoria", label: "Auditoria", icon: <CheckCircle className="w-4 h-4" /> },
   ];
 
   return (
