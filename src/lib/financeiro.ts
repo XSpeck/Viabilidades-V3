@@ -125,6 +125,36 @@ export async function criarServicoFinanceiro(data: {
   await addDoc(collection(db, "servicos_financeiro"), payload);
 }
 
+/** Financeiro lança um item avulso (bônus, ajuste, reembolso) já aprovado, direto na fila de fechamento — sem passar pela auditoria. */
+export async function criarEntradaAvulsa(data: {
+  tecnico_uid: string;
+  tecnico_nome: string;
+  descricao: string;
+  valor: number;
+  data_servico: string;
+  observacoes?: string;
+  lancado_por: string;
+  lancado_por_nome: string;
+}): Promise<void> {
+  const agora = new Date().toISOString();
+  await addDoc(collection(db, "servicos_financeiro"), {
+    tecnico_uid: data.tecnico_uid,
+    tecnico_nome: data.tecnico_nome,
+    tipo_servico_id: "",
+    tipo_servico_nome: data.descricao.trim(),
+    valor: data.valor,
+    cliente: "—",
+    data_servico: data.data_servico,
+    observacoes: data.observacoes?.trim() || "",
+    status: "aprovado",
+    origem: "avulso",
+    criado_em: agora,
+    auditado_por: data.lancado_por,
+    auditado_por_nome: data.lancado_por_nome,
+    data_auditoria: agora,
+  } satisfies Omit<ServicoFinanceiro, "id">);
+}
+
 /** Só deve ser chamado enquanto o servico ainda estiver "pendente_auditoria" (garantido pela UI). */
 export async function updateServicoFinanceiro(
   id: string,

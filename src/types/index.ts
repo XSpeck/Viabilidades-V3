@@ -249,6 +249,8 @@ export interface ServicoFinanceiro {
   pago_em?: string;
   /** id do servico rejeitado que este e um reenvio de (opcional). */
   reenviado_de?: string;
+  /** Presente quando o Financeiro lança o item direto (bônus, ajuste, reembolso), sem passar pela auditoria. */
+  origem?: "avulso";
 }
 
 export interface FechamentoPagamento {

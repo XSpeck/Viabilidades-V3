@@ -8,7 +8,7 @@ import {
   criarServicoFinanceiro, updateServicoFinanceiro, deleteServicoFinanceiro,
   listServicosPorTecnico, listServicosPendentesAuditoria,
   listServicosAuditadosPor, listServicosAprovadosNaoPagos, auditarServico, atualizarNumeroOS,
-  fecharPagamentoMensal, listFechamentos, listServicosPagos, parseValorBR,
+  fecharPagamentoMensal, listFechamentos, listServicosPagos, parseValorBR, criarEntradaAvulsa,
 } from "@/lib/financeiro";
 import { uploadFoto } from "@/lib/cloudinary";
 import { listTecnicos } from "@/lib/users";
@@ -827,7 +827,12 @@ function TecnicoView() {
                           onClick={() => setServicoSelecionado(s)}
                           className="border-b last:border-0 cursor-pointer hover:bg-gray-50"
                         >
-                          <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
+                          <td className="py-2.5 pr-4 font-medium text-gray-800">
+                            {s.origem === "avulso" && (
+                              <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Avulso</span>
+                            )}
+                            {s.tipo_servico_nome}
+                          </td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{formatDataBR(s.data_servico)}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{formatBRL(valorDe(s))}</td>
@@ -1773,6 +1778,16 @@ function FechamentoPagamentoView() {
   const [confirmExcluir, setConfirmExcluir] = useState<ServicoFinanceiro | null>(null);
   const [excluindo, setExcluindo] = useState(false);
 
+  // ── Entrada avulsa (bônus, ajuste, reembolso) ──────────
+  const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
+  const [showAvulso, setShowAvulso] = useState(false);
+  const [avTecnico, setAvTecnico] = useState("");
+  const [avDescricao, setAvDescricao] = useState("");
+  const [avValor, setAvValor] = useState("");
+  const [avData, setAvData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [avObs, setAvObs] = useState("");
+  const [salvandoAvulso, setSalvandoAvulso] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -1787,6 +1802,34 @@ function FechamentoPagamentoView() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { listTecnicos().then(setTecnicos).catch(() => {}); }, []);
+
+  async function handleCriarAvulso() {
+    if (!user) return;
+    const tecnico = tecnicos.find((t) => t.uid === avTecnico);
+    const valorNum = parseValorBR(avValor);
+    if (!tecnico || !avDescricao.trim() || !valorNum) { alert("Preencha técnico, descrição e valor!"); return; }
+    setSalvandoAvulso(true);
+    try {
+      await criarEntradaAvulsa({
+        tecnico_uid: tecnico.uid,
+        tecnico_nome: tecnico.nome,
+        descricao: avDescricao,
+        valor: valorNum,
+        data_servico: avData,
+        observacoes: avObs || undefined,
+        lancado_por: user.uid,
+        lancado_por_nome: user.nome,
+      });
+      setShowAvulso(false);
+      setAvTecnico(""); setAvDescricao(""); setAvValor(""); setAvObs("");
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao lançar entrada avulsa.");
+    } finally {
+      setSalvandoAvulso(false);
+    }
+  }
 
   async function handleExcluir(s: ServicoFinanceiro) {
     setExcluindo(true);
@@ -1840,6 +1883,70 @@ function FechamentoPagamentoView() {
         />
       </div>
 
+      <div className="bg-white rounded-xl border shadow-sm p-4">
+        {!showAvulso ? (
+          <button
+            onClick={() => setShowAvulso(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+          >
+            <Plus className="w-4 h-4" /> Lançar entrada avulsa (bônus, ajuste, reembolso...)
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-800">Nova entrada avulsa</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <select
+                value={avTecnico}
+                onChange={(e) => setAvTecnico(e.target.value)}
+                className="h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <option value="">Técnico *</option>
+                {tecnicos.map((t) => <option key={t.uid} value={t.uid}>{t.nome}</option>)}
+              </select>
+              <input
+                type="date"
+                value={avData}
+                onChange={(e) => setAvData(e.target.value)}
+                className="h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              <input
+                placeholder="Descrição (ex: Bônus produtividade) *"
+                value={avDescricao}
+                onChange={(e) => setAvDescricao(e.target.value)}
+                className="h-10 px-2 text-sm border rounded-lg sm:col-span-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              <input
+                placeholder="Valor (R$) *"
+                value={avValor}
+                onChange={(e) => setAvValor(e.target.value)}
+                className="h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              <input
+                placeholder="Observação (opcional)"
+                value={avObs}
+                onChange={(e) => setAvObs(e.target.value)}
+                className="h-10 px-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCriarAvulso}
+                disabled={salvandoAvulso}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              >
+                {salvandoAvulso && <Loader2 className="w-4 h-4 animate-spin" />} Lançar
+              </button>
+              <button
+                onClick={() => setShowAvulso(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex items-center gap-2 text-gray-400 py-10 justify-center text-sm">
           <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
@@ -1871,7 +1978,10 @@ function FechamentoPagamentoView() {
                       onClick={() => setServicoDetalhe(i)}
                       className="flex-1 text-left text-gray-700 hover:text-emerald-700 hover:underline truncate"
                     >
-                      {i.tipo_servico_nome} — {i.cliente} ({formatDataBR(i.data_servico)}){i.numero_os ? ` · OS ${i.numero_os}` : ""}
+                      {i.origem === "avulso" && (
+                        <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Avulso</span>
+                      )}
+                      {i.tipo_servico_nome}{i.origem !== "avulso" && ` — ${i.cliente}`} ({formatDataBR(i.data_servico)}){i.numero_os ? ` · OS ${i.numero_os}` : ""}
                     </button>
                     {valoresRef[i.tipo_servico_id] !== undefined && (
                       <span className="text-xs text-gray-400 shrink-0" title="Valor de referência cadastrado para esse tipo de serviço">
@@ -2189,7 +2299,12 @@ function HistoricoFechamentos() {
                       const fechamento = s.fechamento_id ? fechamentoPorId.get(s.fechamento_id) : undefined;
                       return (
                         <tr key={s.id} className="border-b last:border-0">
-                          <td className="py-2.5 pr-4 font-medium text-gray-800">{s.tipo_servico_nome}</td>
+                          <td className="py-2.5 pr-4 font-medium text-gray-800">
+                            {s.origem === "avulso" && (
+                              <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Avulso</span>
+                            )}
+                            {s.tipo_servico_nome}
+                          </td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.tecnico_nome}</td>
                           <td className="py-2.5 pr-4 text-gray-600">{s.cliente}</td>
                           <td className="py-2.5 pr-4 text-gray-500">{s.numero_os ?? "—"}</td>
