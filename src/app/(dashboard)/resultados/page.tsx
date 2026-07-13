@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, arquivarPorDesistencia, enviarDadosPredio, enviarPropostaInstalacao, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita, bustCacheResultados } from "@/lib/firestore";
+import { getViabilizacoesUsuario, getViabilizacoesHistorico, finalizarViabilizacao, arquivarPorDesistencia, enviarDadosPredio, enviarPropostaInstalacao, agendarViaWhatsapp, confirmarPropostaUsuario, contestarViabilizacao, reenviarParaAuditoria, confirmarPropostaVisita, contraproporVisita, bustCacheResultados } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
 import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Building2, Search, History, Download, ChevronDown, ChevronUp } from "lucide-react";
@@ -558,6 +558,15 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
     finally { setEnviandoProposta(false); }
   }
 
+  async function handleAgendarWhatsapp() {
+    setEnviandoProposta(true);
+    try {
+      await agendarViaWhatsapp(r.id, r.historico_agendamento);
+      onRefresh();
+    } catch { alert("Erro ao agendar. Tente novamente."); }
+    finally { setEnviandoProposta(false); }
+  }
+
   async function handleConfirmarProposta() {
     if (!r.agendamento_data) return;
     setEnviandoProposta(true);
@@ -920,6 +929,10 @@ function ResultCard({ r, onFinalizar, onRefresh }: {
                   <button onClick={handleEnviarProposta} disabled={enviandoProposta || !propostaData}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                     {enviandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : "📤 Enviar para agendamento"}
+                  </button>
+                  <button onClick={handleAgendarWhatsapp} disabled={enviandoProposta}
+                    className="w-full border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                    {enviandoProposta ? <Loader2 className="w-4 h-4 animate-spin" /> : "📱 Já combinei direto via WhatsApp"}
                   </button>
                 </div>
               )}

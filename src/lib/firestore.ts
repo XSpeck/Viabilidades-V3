@@ -754,6 +754,16 @@ export async function enviarPropostaInstalacao(
   void enqueueNotificacao(id, "proposta_enviada");
 }
 
+// Usuário já combinou tudo direto com o cliente via WhatsApp — pula a negociação e vai direto pra agendado
+export async function agendarViaWhatsapp(id: string, historicoAnterior?: string): Promise<void> {
+  const entrada = "Agendado diretamente via WhatsApp com o cliente (data controlada fora do sistema).";
+  const historico = historicoAnterior ? `${historicoAnterior}\n${entrada}` : entrada;
+  await updateViabilizacao(id, {
+    status_instalacao: "agendado",
+    historico_agendamento: historico,
+  });
+}
+
 // Setor de agendamento confirma (com ou sem alteração)
 // Se confirmou sem alteração → agendado direto
 // Se alterou data/período → aguarda confirmação do usuário
