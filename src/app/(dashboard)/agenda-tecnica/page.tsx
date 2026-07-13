@@ -7,6 +7,7 @@ import {
   getInstalacoesArquivadas,
   confirmarAgendamentoTecnico,
   marcarInstalado,
+  desfazerInstalado,
   finalizarViabilizacao,
   arquivarPorDesistencia,
   reagendarInstalacao,
@@ -506,6 +507,14 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
     } finally { setLoading(false); }
   }
 
+  async function handleDesfazerInstalado() {
+    setLoading(true);
+    try {
+      await desfazerInstalado(v.id);
+      onRefresh();
+    } finally { setLoading(false); }
+  }
+
   async function handleArquivar() {
     if (!v.tecnico_instalacao?.trim()) { alert("Defina um técnico antes de arquivar!"); return; }
     setLoading(true);
@@ -797,11 +806,18 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
                   </p>
                   <p className="text-xs text-blue-500">Aguardando arquivamento pelo usuário.</p>
                 </div>
-                <button onClick={handleArquivar} disabled={loading || !v.tecnico_instalacao?.trim()}
-                  title={!v.tecnico_instalacao?.trim() ? "Defina um técnico antes de arquivar" : undefined}
-                  className="shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium">
-                  📁 Arquivar
-                </button>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button onClick={handleArquivar} disabled={loading || !v.tecnico_instalacao?.trim()}
+                    title={!v.tecnico_instalacao?.trim() ? "Defina um técnico antes de arquivar" : undefined}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    📁 Arquivar
+                  </button>
+                  <button onClick={handleDesfazerInstalado} disabled={loading}
+                    title="Marcou como instalado sem querer? Volta para agendado."
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors font-medium">
+                    ↩️ Desfazer
+                  </button>
+                </div>
               </div>
 
               {!v.tecnico_instalacao?.trim() && (

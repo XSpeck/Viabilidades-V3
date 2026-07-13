@@ -834,6 +834,11 @@ export async function marcarInstalado(id: string): Promise<void> {
   void enqueueNotificacao(id, "instalado");
 }
 
+// Desfaz o "marcar como instalado" feito por engano, voltando para agendado
+export async function desfazerInstalado(id: string): Promise<void> {
+  await updateViabilizacao(id, { status_instalacao: "agendado" });
+}
+
 // Arquivadas da Agenda Técnica: FTTH + FTTA direto
 export async function getInstalacoesArquivadas(): Promise<Viabilizacao[]> {
   const cached = getCached<Viabilizacao[]>("viab_instalacoes_arquivadas_v1");
