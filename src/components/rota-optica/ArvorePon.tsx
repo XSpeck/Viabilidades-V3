@@ -69,6 +69,12 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   /** Elemento cujo diagrama de caixa está aberto em cima da árvore */
   const [caixaAberta, setCaixaAberta] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
+  const quadroRef = useRef<HTMLDivElement>(null);
+
+  // Ao abrir o diagrama, rola a área para o quadro ficar inteiro à vista
+  useEffect(() => {
+    if (caixaAberta) quadroRef.current?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [caixaAberta]);
 
   function selecionar(n: NoArvore) {
     setSelId(n.id);
@@ -335,6 +341,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
             </svg>
             {quadro && (
               <div
+                ref={quadroRef}
                 data-quadro-caixa
                 className="absolute z-10 w-[320px] cursor-auto select-text"
                 style={{ left: quadro.left, top: quadro.top }}
