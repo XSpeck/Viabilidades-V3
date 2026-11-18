@@ -311,7 +311,8 @@ function DetalheNo({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
               )}
               {(() => {
                 // A saída deste elemento, no caminho, é a chegada do próximo (num nó que ramifica, cada ramo sai por um cabo).
-                const prox = caminho[i + 1]?.elemento;
+                // No elemento clicado (fim do caminho), usa o ramo seguinte quando só existe um.
+                const prox = caminho[i + 1]?.elemento ?? (n.filhos.length === 1 ? n.filhos[0].elemento : undefined);
                 const ent = n.elemento;
                 if (!prox || !ent.cabo_entrada || !prox.cabo_entrada) return null;
                 if (ent.cabo_entrada === prox.cabo_entrada && ent.fibra_entrada === prox.fibra_entrada) return null;
