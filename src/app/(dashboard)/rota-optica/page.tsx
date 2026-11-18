@@ -19,6 +19,7 @@ import {
 } from "@/lib/rotaOptica";
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
 import RotaEditor from "@/components/rota-optica/RotaEditor";
+import ArvorePonView from "@/components/rota-optica/ArvorePon";
 import { FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
@@ -40,6 +41,7 @@ export default function RotaOpticaPage() {
   const [busca, setBusca] = useState("");
   const [selId, setSelId] = useState<string | null>(null);
   const [modo, setModo] = useState<Modo>({ tipo: "ver" });
+  const [aba, setAba] = useState<"rotas" | "arvore">("rotas");
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -185,6 +187,39 @@ export default function RotaOpticaPage() {
       )}
 
       {modo.tipo === "ver" && (
+        <div className="flex gap-1 border-b border-gray-200" role="tablist">
+          {([
+            ["rotas", "Rotas"],
+            ["arvore", "Árvore por porta PON"],
+          ] as const).map(([k, rotulo]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={aba === k}
+              onClick={() => setAba(k)}
+              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
+                aba === k ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modo.tipo === "ver" && aba === "arvore" && (
+        carregando ? (
+          <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+        ) : (
+          <ArvorePonView
+            rotas={rotas}
+            onAbrirRota={(id) => { setSelId(id); setBusca(""); setAba("rotas"); }}
+          />
+        )
+      )}
+
+      {modo.tipo === "ver" && aba === "rotas" && (
         <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5 items-start">
           {/* Lista de rotas */}
           <aside className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">
