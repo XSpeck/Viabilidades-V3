@@ -66,7 +66,14 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   const [selId, setSelId] = useState<string>("0");
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
+  /** Elemento cujo diagrama de caixa está aberto em cima da árvore */
+  const [caixaAberta, setCaixaAberta] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
+
+  function selecionar(n: NoArvore) {
+    setSelId(n.id);
+    setCaixaAberta(n.elemento.tipo === "olt" ? null : n.id);
+  }
   const arraste = useRef<{ x: number; y: number; sl: number; st: number; id: number } | null>(null);
   const moveu = useRef(false);
 
@@ -86,6 +93,8 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   // Arrastar a área com o mouse (clique simples continua selecionando o elemento)
   function iniciarArraste(e: React.PointerEvent<HTMLDivElement>) {
     if (e.pointerType !== "mouse" || e.button !== 0 || !areaRef.current) return;
+    // Dentro do quadro da caixa (campos, botões) não arrasta
+    if ((e.target as HTMLElement).closest("[data-quadro-caixa]")) return;
     arraste.current = { x: e.clientX, y: e.clientY, sl: areaRef.current.scrollLeft, st: areaRef.current.scrollTop, id: e.pointerId };
     moveu.current = false;
   }
@@ -122,10 +131,24 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
 
   const sel = arvore.nos.find((n) => n.id === selId) ?? arvore.raiz;
   const { y, livres, linhas, maxD } = layout(arvore);
-  const W = PADX * 2 + maxD * COL;
+  // Margem direita: nomes das portas (até 22 letras) ficam à direita da última coluna; nomes dos elementos são centralizados.
+  const W = PADX + maxD * COL + (livres.length ? 170 : 80);
   const H = PADY * 2 + (linhas - 1) * ROW;
   const X = (d: number) => PADX + d * COL;
   const Y = (v: number) => PADY + v * ROW;
+
+  // Quadro do diagrama: ao lado da caixa clicada (à direita; à esquerda se não couber)
+  const noQuadro = caixaAberta ? arvore.nos.find((n) => n.id === caixaAberta) : undefined;
+  const quadro = noQuadro
+    ? (() => {
+        const larg = Math.max(W, 560) * zoom;
+        const cx = X(noQuadro.profundidade) * zoom;
+        const cy = Y(y.get(noQuadro)!) * zoom;
+        const direita = cx + 26;
+        const left = direita + 320 <= larg ? direita : Math.max(4, cx - 26 - 320);
+        return { no: noQuadro, left, top: Math.max(4, cy - 40) };
+      })()
+    : null;
 
   const caminho = new Set(caminhoAte(sel));
   const sub = new Set<NoArvore>();
@@ -143,7 +166,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
             <button
               key={a.chave}
               type="button"
-              onClick={() => { setChave(a.chave); setSelId("0"); }}
+              onClick={() => { setChave(a.chave); setSelId("0"); setCaixaAberta(null); }}
               className={`text-left rounded-lg border-2 px-3 py-1.5 text-sm leading-tight ${
                 ativo ? "bg-gray-900 border-gray-900 text-white" : "border-gray-900 bg-white text-gray-900 hover:bg-gray-50"
               }`}
@@ -214,6 +237,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
             }}
             className={`overflow-auto select-none cursor-grab active:cursor-grabbing ${cheia ? "flex-1 min-h-0" : "max-h-[70vh]"}`}
           >
+            <div className="relative" style={{ width: Math.max(W, 560) * zoom, minHeight: H * zoom }}>
             <svg
               viewBox={`0 0 ${W} ${H}`}
               width={Math.max(W, 560) * zoom}
@@ -295,8 +319,8 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
                     role="button"
                     tabIndex={0}
                     aria-label={`${n.elemento.nome}, ${TIPO_ELEMENTO_LABEL[t]}`}
-                    onClick={() => setSelId(n.id)}
-                    onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setSelId(n.id); } }}
+                    onClick={() => selecionar(n)}
+                    onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); selecionar(n); } }}
                   >
                     <title>{n.elemento.nome}</title>
                     {ativo && <circle cx={x} cy={yy} r={19} fill="none" stroke="#111827" strokeWidth={2} strokeDasharray="3 3" />}
@@ -309,6 +333,29 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
                 );
               })}
             </svg>
+            {quadro && (
+              <div
+                data-quadro-caixa
+                className="absolute z-10 w-[320px] cursor-auto select-text"
+                style={{ left: quadro.left, top: quadro.top }}
+              >
+                <EditorCaixa
+                  key={chaveElemento(quadro.no.elemento)}
+                  chave={chaveElemento(quadro.no.elemento)}
+                  nome={quadro.no.elemento.nome}
+                  tipo={quadro.no.elemento.tipo}
+                  caixa={quadro.no.caixa}
+                  splitterRota={quadro.no.elemento.splitter}
+                  caboEntrada={quadro.no.elemento.cabo_entrada}
+                  fibraEntrada={quadro.no.elemento.fibra_entrada}
+                  ramos={quadro.no.filhos.map((f) => f.elemento.nome)}
+                  usuario={usuario}
+                  onSalva={onCaixaSalva}
+                  onFechar={() => setCaixaAberta(null)}
+                />
+              </div>
+            )}
+            </div>
           </div>
           <p className="text-xs text-gray-500 px-4 py-2.5 border-t border-gray-200">
             Rotas que saem da mesma porta da OLT são juntadas: onde passam pelas mesmas caixas (mesmo código PT ou mesmo
@@ -324,7 +371,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
           {sel === arvore.raiz ? (
             <ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} />
           ) : (
-            <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} usuario={usuario} onCaixaSalva={onCaixaSalva} />
+            <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setCaixaAberta(sel.id)} />
           )}
         </aside>
       </div>
@@ -389,13 +436,12 @@ function ListaRotas({ ids, rotas, onAbrirRota }: { ids: string[]; rotas: RotaOpt
 }
 
 function DetalheNo({
-  no, rotas, onAbrirRota, usuario, onCaixaSalva,
+  no, rotas, onAbrirRota, onAbrirCaixa,
 }: {
   no: NoArvore;
   rotas: RotaOptica[];
   onAbrirRota: (id: string) => void;
-  usuario: string;
-  onCaixaSalva: (c: CaixaRede) => void;
+  onAbrirCaixa: () => void;
 }) {
   const caminho = caminhoAte(no);
   const e = no.elemento;
@@ -431,16 +477,13 @@ function DetalheNo({
         </p>
       )}
       {e.tipo !== "olt" && (
-        <EditorCaixa
-          key={chaveElemento(e)}
-          chave={chaveElemento(e)}
-          nome={e.nome}
-          caixa={no.caixa}
-          splitterRota={e.splitter}
-          ramosArvore={no.filhos.length}
-          usuario={usuario}
-          onSalva={onCaixaSalva}
-        />
+        <button
+          type="button"
+          onClick={onAbrirCaixa}
+          className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 font-medium hover:bg-indigo-100"
+        >
+          {no.caixa ? "Ver diagrama da caixa na árvore" : "Cadastrar diagrama da caixa"}
+        </button>
       )}
 
       <ol className="border-l-2 border-gray-200 space-y-3 pl-4">
