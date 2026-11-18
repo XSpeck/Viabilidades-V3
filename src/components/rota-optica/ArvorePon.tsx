@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
@@ -63,6 +64,51 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
   const [chave, setChave] = useState<string | null>(null);
   const [selId, setSelId] = useState<string>("0");
+  const [cheia, setCheia] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const arraste = useRef<{ x: number; y: number; sl: number; st: number; id: number } | null>(null);
+  const moveu = useRef(false);
+
+  // Tela cheia: Esc fecha e a página de fundo não rola
+  useEffect(() => {
+    if (!cheia) return;
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") setCheia(false); };
+    window.addEventListener("keydown", tecla);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", tecla);
+      document.body.style.overflow = overflow;
+    };
+  }, [cheia]);
+
+  // Arrastar a área com o mouse (clique simples continua selecionando o elemento)
+  function iniciarArraste(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "mouse" || e.button !== 0 || !areaRef.current) return;
+    arraste.current = { x: e.clientX, y: e.clientY, sl: areaRef.current.scrollLeft, st: areaRef.current.scrollTop, id: e.pointerId };
+    moveu.current = false;
+  }
+  function arrastar(e: React.PointerEvent<HTMLDivElement>) {
+    const a = arraste.current;
+    const el = areaRef.current;
+    if (!a || !el) return;
+    const dx = e.clientX - a.x;
+    const dy = e.clientY - a.y;
+    if (!moveu.current && Math.abs(dx) + Math.abs(dy) > 4) {
+      moveu.current = true;
+      el.setPointerCapture(a.id);
+    }
+    if (moveu.current) {
+      el.scrollLeft = a.sl - dx;
+      el.scrollTop = a.st - dy;
+    }
+  }
+  function soltar() {
+    const a = arraste.current;
+    if (a && areaRef.current?.hasPointerCapture(a.id)) areaRef.current.releasePointerCapture(a.id);
+    arraste.current = null;
+  }
 
   const arvore = arvores.find((a) => a.chave === chave) ?? arvores[0];
 
@@ -111,13 +157,67 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
         })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
-        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+      <div
+        className={
+          cheia
+            ? "fixed inset-0 z-50 bg-gray-100 p-3 grid gap-3 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,40%)] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]"
+            : "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start"
+        }
+      >
+        <section className={`bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col ${cheia ? "min-h-0" : ""}`}>
+          <div className="flex items-center gap-1 px-3 py-2 border-b border-gray-200">
+            {cheia && <span className="text-sm font-semibold text-gray-900 mr-2 truncate">{arvore.rotulo}</span>}
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(0.4, Math.round((z - 0.2) * 10) / 10))}
+              className="p-1.5 rounded hover:bg-gray-100"
+              aria-label="Diminuir zoom"
+              title="Diminuir zoom"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              className="text-xs tabular-nums w-12 text-center rounded hover:bg-gray-100 py-1"
+              title="Voltar para 100%"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.2) * 10) / 10))}
+              className="p-1.5 rounded hover:bg-gray-100"
+              aria-label="Aumentar zoom"
+              title="Aumentar zoom"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <span className="hidden sm:inline text-xs text-gray-400 ml-2">Arraste com o mouse para mover</span>
+            <button
+              type="button"
+              onClick={() => setCheia((c) => !c)}
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 hover:bg-gray-50"
+            >
+              {cheia ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {cheia ? "Sair da tela cheia" : "Tela cheia"}
+            </button>
+          </div>
+          <div
+            ref={areaRef}
+            onPointerDown={iniciarArraste}
+            onPointerMove={arrastar}
+            onPointerUp={soltar}
+            onPointerCancel={soltar}
+            onClickCapture={(e) => {
+              if (moveu.current) { e.stopPropagation(); e.preventDefault(); moveu.current = false; }
+            }}
+            className={`overflow-auto select-none cursor-grab active:cursor-grabbing ${cheia ? "flex-1 min-h-0" : "max-h-[70vh]"}`}
+          >
             <svg
               viewBox={`0 0 ${W} ${H}`}
-              width={Math.max(W, 560)}
-              height={H}
+              width={Math.max(W, 560) * zoom}
+              height={H * zoom}
               role="img"
               aria-label={`Árvore da ${arvore.rotulo}`}
               className="block"
@@ -217,7 +317,10 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
           </p>
         </section>
 
-        <aside className="bg-white rounded-xl border border-gray-200 p-4 xl:sticky xl:top-4" aria-live="polite">
+        <aside
+          className={`bg-white rounded-xl border border-gray-200 p-4 ${cheia ? "overflow-auto min-h-0" : "xl:sticky xl:top-4"}`}
+          aria-live="polite"
+        >
           {sel === arvore.raiz ? (
             <ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} />
           ) : (
@@ -324,7 +427,7 @@ function DetalheNo({
       </p>
       {pern && (
         <p className="text-sm text-gray-700">
-          Splitter {pern.splitter}: <b>{pern.clientes} cliente{pern.clientes !== 1 ? "s" : ""}, {pern.ramais} ramal{pern.ramais !== 1 ? "is" : ""}, {pern.livres} livre{pern.livres !== 1 ? "s" : ""}</b> de {pern.total}
+          Splitter {pern.splitter}: <b>{pern.clientes} cliente{pern.clientes !== 1 ? "s" : ""}, {pern.ramais} {pern.ramais !== 1 ? "ramais" : "ramal"}, {pern.livres} livre{pern.livres !== 1 ? "s" : ""}</b> de {pern.total}
         </p>
       )}
       {e.tipo !== "olt" && (
