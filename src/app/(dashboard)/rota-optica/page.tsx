@@ -20,6 +20,7 @@ import {
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
 import RotaEditor from "@/components/rota-optica/RotaEditor";
 import ArvorePonView from "@/components/rota-optica/ArvorePon";
+import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
@@ -36,6 +37,7 @@ type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { ti
 export default function RotaOpticaPage() {
   const { user } = useAuth();
   const [rotas, setRotas] = useState<RotaOptica[]>([]);
+  const [caixas, setCaixas] = useState<CaixaRede[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
@@ -62,6 +64,10 @@ export default function RotaOpticaPage() {
   useEffect(() => {
     if (!permitido) return;
     let ativo = true;
+    // Caixas são opcionais: se falhar (ex.: regra ainda não publicada), a árvore aparece sem os diagramas.
+    listarCaixas()
+      .then((cx) => { if (ativo) setCaixas(cx); })
+      .catch((e) => console.warn("Não foi possível carregar as caixas:", e));
     listarRotas()
       .then((lista) => {
         if (!ativo) return;
@@ -214,6 +220,9 @@ export default function RotaOpticaPage() {
         ) : (
           <ArvorePonView
             rotas={rotas}
+            caixas={caixas}
+            usuario={user?.nome ?? ""}
+            onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             onAbrirRota={(id) => { setSelId(id); setBusca(""); setAba("rotas"); }}
           />
         )

@@ -4,10 +4,15 @@
 // onde elas se separam, a árvore ramifica.
 // =====================
 import type { ElementoRota, RotaOptica } from "./rotaOptica";
+import { totalPernas, type CaixaRede } from "./caixasRede";
 
 export interface NoArvore {
   id: string;
   elemento: ElementoRota;
+  /** Diagrama interno cadastrado para esta caixa (splitter e portas) */
+  caixa?: CaixaRede;
+  /** Clientes marcados nas portas desta caixa e de todas abaixo */
+  clientes: number;
   pai: NoArvore | null;
   filhos: NoArvore[];
   profundidade: number;
@@ -83,10 +88,11 @@ function criarNo(elemento: ElementoRota, pai: NoArvore | null, id: string, dista
     distancia,
     pontas: 0,
     abaixo: 0,
+    clientes: 0,
   };
 }
 
-function montar(chave: string, rotulo: string, olt: string, rotas: RotaOptica[]): ArvorePon {
+function montar(chave: string, rotulo: string, olt: string, rotas: RotaOptica[], caixas: Map<string, CaixaRede>): ArvorePon {
   const primeira = rotas[0].elementos[0];
   const raiz = criarNo(primeira, null, "0", 0);
   const nos: NoArvore[] = [raiz];
@@ -116,9 +122,13 @@ function montar(chave: string, rotulo: string, olt: string, rotas: RotaOptica[])
     atual.fimDe.push(r.id);
   }
 
-  // Pontas e elementos abaixo (pós-ordem)
+  // Diagrama interno cadastrado de cada caixa
+  for (const n of nos) n.caixa = caixas.get(chaveElemento(n.elemento));
+
+  // Pontas, clientes e elementos abaixo (pós-ordem)
   const calc = (n: NoArvore): void => {
     n.filhos.forEach(calc);
+    n.clientes = (pernasSplitter(n)?.clientes ?? 0) + n.filhos.reduce((s, f) => s + f.clientes, 0);
     n.pontas = (n.fimDe.length > 0 ? 1 : 0) + n.filhos.reduce((s, f) => s + f.pontas, 0);
     n.abaixo = n.filhos.reduce((s, f) => s + 1 + f.abaixo, 0);
   };
@@ -128,7 +138,8 @@ function montar(chave: string, rotulo: string, olt: string, rotas: RotaOptica[])
 }
 
 /** Agrupa as rotas por porta PON e monta uma árvore para cada porta. */
-export function montarArvoresPon(rotas: RotaOptica[]): ArvorePon[] {
+export function montarArvoresPon(rotas: RotaOptica[], caixas: CaixaRede[] = []): ArvorePon[] {
+  const mapaCaixas = new Map(caixas.map((c) => [c.chave, c]));
   const grupos = new Map<string, { rotulo: string; olt: string; rotas: RotaOptica[] }>();
   for (const r of rotas) {
     if (r.elementos.length === 0) continue;
@@ -138,7 +149,7 @@ export function montarArvoresPon(rotas: RotaOptica[]): ArvorePon[] {
     grupos.set(p.chave, g);
   }
   return [...grupos.entries()]
-    .map(([chave, g]) => montar(chave, g.rotulo, g.olt, g.rotas))
+    .map(([chave, g]) => montar(chave, g.rotulo, g.olt, g.rotas, mapaCaixas))
     .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true }));
 }
 
@@ -149,11 +160,29 @@ export function caminhoAte(n: NoArvore): NoArvore[] {
   return p;
 }
 
-/** Pernas do splitter, se o elemento tiver splitter informado ("1:8"). */
-export function pernasSplitter(n: NoArvore): { total: number; usadas: number; livres: number } | null {
-  const m = n.elemento.splitter?.match(/1\s*:\s*(\d+)/);
-  if (!m) return null;
-  const total = parseInt(m[1], 10);
-  const usadas = n.filhos.length;
-  return { total, usadas, livres: Math.max(0, total - usadas) };
+export interface PernasNo {
+  splitter: string;
+  total: number;
+  /** Portas marcadas como cliente */
+  clientes: number;
+  /** Pernas que seguem para outra caixa: as marcadas como ramal ou os ramos da árvore, o que for maior */
+  ramais: number;
+  livres: number;
+  /** Portas de cliente, para desenhar na árvore */
+  portasCliente: { numero: number; descricao?: string }[];
+}
+
+/** Pernas do splitter do nó: usa o diagrama cadastrado da caixa ou o splitter informado na rota. */
+export function pernasSplitter(n: NoArvore): PernasNo | null {
+  const splitter = n.caixa?.splitter ?? n.elemento.splitter;
+  const total = totalPernas(splitter);
+  if (total === null || !splitter) return null;
+  const portas = n.caixa?.portas ?? [];
+  const portasCliente = portas
+    .filter((p) => p.status === "cliente" && p.numero <= total)
+    .map((p) => ({ numero: p.numero, descricao: p.descricao }));
+  const ramaisMarcados = portas.filter((p) => p.status === "ramal" && p.numero <= total).length;
+  const clientes = portasCliente.length;
+  const ramais = Math.max(ramaisMarcados, n.filhos.length);
+  return { splitter, total, clientes, ramais, livres: Math.max(0, total - clientes - ramais), portasCliente };
 }

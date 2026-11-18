@@ -64,6 +64,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Diagrama interno das caixas (splitter e portas), editado na árvore PON — só ADM
+    match /caixas_rede/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // Bairros de rede
     match /bairros_rede/{id} {
       allow read: if isAuth();

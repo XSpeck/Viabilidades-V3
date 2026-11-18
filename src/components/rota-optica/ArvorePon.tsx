@@ -2,10 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type RotaOptica } from "@/lib/rotaOptica";
-import { caminhoAte, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import type { CaixaRede } from "@/lib/caixasRede";
+import EditorCaixa from "./EditorCaixa";
 
 interface Props {
   rotas: RotaOptica[];
+  caixas: CaixaRede[];
+  usuario: string;
+  onCaixaSalva: (c: CaixaRede) => void;
   onAbrirRota: (id: string) => void;
 }
 
@@ -26,7 +31,7 @@ function TF(fibra?: number) {
   return `T${Math.ceil(fibra / 12)} F${String(fibra).padStart(2, "0")}`;
 }
 
-interface Folha { tipo: "livre"; pai: NoArvore; y: number }
+interface Folha { tipo: "livre" | "cliente"; pai: NoArvore; y: number; rotulo?: string }
 
 function layout(a: ArvorePon) {
   const y = new Map<NoArvore, number>();
@@ -35,12 +40,17 @@ function layout(a: ArvorePon) {
   const f = (n: NoArvore) => {
     const pern = pernasSplitter(n);
     const nLivres = pern?.livres ?? 0;
-    if (n.filhos.length === 0 && nLivres === 0) {
+    const clientes = pern?.portasCliente ?? [];
+    if (n.filhos.length === 0 && nLivres === 0 && clientes.length === 0) {
       y.set(n, linha++);
       return;
     }
     const ys: number[] = [];
     n.filhos.forEach((c) => { f(c); ys.push(y.get(c)!); });
+    for (const c of clientes) {
+      livres.push({ tipo: "cliente", pai: n, y: linha, rotulo: `P${c.numero}${c.descricao ? " · " + c.descricao : ""}` });
+      ys.push(linha++);
+    }
     for (let i = 0; i < nLivres; i++) { livres.push({ tipo: "livre", pai: n, y: linha }); ys.push(linha++); }
     y.set(n, (ys[0] + ys[ys.length - 1]) / 2);
   };
@@ -49,8 +59,8 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, onAbrirRota }: Props) {
-  const arvores = useMemo(() => montarArvoresPon(rotas), [rotas]);
+export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, onAbrirRota }: Props) {
+  const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
   const [chave, setChave] = useState<string | null>(null);
   const [selId, setSelId] = useState<string>("0");
 
@@ -136,11 +146,23 @@ export default function ArvorePonView({ rotas, onAbrirRota }: Props) {
                 const p = l.pai;
                 const x1 = X(p.profundidade), y1 = Y(y.get(p)!), x2 = X(p.profundidade + 1), y2 = Y(l.y);
                 const mx = x1 + COL / 2;
+                const vis = estado(p) === 1 || sub.has(p) ? 1 : 0.3;
+                if (l.tipo === "cliente") {
+                  const rot = l.rotulo && l.rotulo.length > 22 ? l.rotulo.slice(0, 21) + "…" : l.rotulo;
+                  return (
+                    <g key={`f${i}`} opacity={vis}>
+                      <title>{l.rotulo}</title>
+                      <path d={`M${x1} ${y1}H${mx}V${y2}H${x2}`} fill="none" stroke="#374151" strokeWidth={2} />
+                      <circle cx={x2} cy={y2} r={6} fill="#fff" stroke="#111827" strokeWidth={2.5} />
+                      <text x={x2 + 10} y={y2 + 4} fontSize={10} fill="#111827">{rot}</text>
+                    </g>
+                  );
+                }
                 return (
-                  <g key={`f${i}`} opacity={estado(p) === 1 ? 1 : 0.3}>
+                  <g key={`f${i}`} opacity={vis}>
                     <path d={`M${x1} ${y1}H${mx}V${y2}H${x2}`} fill="none" stroke="#9ca3af" strokeWidth={2} strokeDasharray="5 4" />
                     <circle cx={x2} cy={y2} r={6} fill="none" stroke="#9ca3af" strokeWidth={2} strokeDasharray="3 3" />
-                    <text x={x2} y={y2 - 12} fontSize={10} textAnchor="middle" fill="#6b7280">perna livre</text>
+                    <text x={x2 + 10} y={y2 + 4} fontSize={10} fill="#6b7280">livre</text>
                   </g>
                 );
               })}
@@ -190,13 +212,17 @@ export default function ArvorePonView({ rotas, onAbrirRota }: Props) {
           </div>
           <p className="text-xs text-gray-500 px-4 py-2.5 border-t border-gray-200">
             Rotas que saem da mesma porta da OLT são juntadas: onde passam pelas mesmas caixas (mesmo código PT ou mesmo
-            nome) formam o tronco, e onde se separam a árvore ramifica. A linha usa a cor real da fibra (ABNT). Tracejado é
-            perna livre de splitter (aparece quando o splitter está informado no elemento).
+            nome) formam o tronco, e onde se separam a árvore ramifica. A linha usa a cor real da fibra (ABNT). Clique num
+            HUB ou CTO para cadastrar o splitter e as portas: clientes aparecem como pontas cheias e pernas livres tracejadas.
           </p>
         </section>
 
         <aside className="bg-white rounded-xl border border-gray-200 p-4 xl:sticky xl:top-4" aria-live="polite">
-          {sel === arvore.raiz ? <ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} /> : <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} />}
+          {sel === arvore.raiz ? (
+            <ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} />
+          ) : (
+            <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} usuario={usuario} onCaixaSalva={onCaixaSalva} />
+          )}
         </aside>
       </div>
     </div>
@@ -209,7 +235,7 @@ function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (i
   const comSplitter = arvore.nos.filter((n) => pernasSplitter(n)).length;
   const itens: [string, string][] = [
     ["Rotas juntadas", String(arvore.rotas.length)],
-    ["Pontas (fins de rota)", String(arvore.raiz.pontas)],
+    ["Clientes cadastrados", String(arvore.raiz.clientes)],
     ["Fibra lançada", formatMetros(fibra)],
     ["Elementos", String(arvore.nos.length)],
     ["Caixas de emenda", String(arvore.nos.filter((n) => n.elemento.tipo === "ceo").length)],
@@ -231,7 +257,7 @@ function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (i
       </dl>
       {!comSplitter && (
         <p className="text-xs text-gray-500">
-          Para ver pernas livres, informe o splitter (ex.: 1:8) nos hubs e CTOs pela edição da rota.
+          Para ver clientes e pernas livres, clique num HUB ou CTO da árvore e cadastre o splitter e as portas.
         </p>
       )}
       <ListaRotas ids={arvore.rotas.map((r) => r.id)} rotas={arvore.rotas} onAbrirRota={onAbrirRota} />
@@ -259,7 +285,15 @@ function ListaRotas({ ids, rotas, onAbrirRota }: { ids: string[]; rotas: RotaOpt
   );
 }
 
-function DetalheNo({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica[]; onAbrirRota: (id: string) => void }) {
+function DetalheNo({
+  no, rotas, onAbrirRota, usuario, onCaixaSalva,
+}: {
+  no: NoArvore;
+  rotas: RotaOptica[];
+  onAbrirRota: (id: string) => void;
+  usuario: string;
+  onCaixaSalva: (c: CaixaRede) => void;
+}) {
   const caminho = caminhoAte(no);
   const e = no.elemento;
   const pot0 = caminho[0].elemento.potencia_entrada ?? caminho[0].elemento.potencia_saida;
@@ -283,13 +317,27 @@ function DetalheNo({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
       </dl>
 
       <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-        Se o trecho que chega aqui romper: <b>{no.pontas} ponta{no.pontas !== 1 ? "s" : ""}</b> e{" "}
+        Se o trecho que chega aqui romper:{" "}
+        {no.clientes > 0 && <><b>{no.clientes} cliente{no.clientes !== 1 ? "s" : ""}</b>, </>}
+        <b>{no.pontas} ponta{no.pontas !== 1 ? "s" : ""} de rota</b> e{" "}
         <b>{no.abaixo + 1} elemento{no.abaixo > 0 ? "s" : ""}</b> ficam sem sinal.
       </p>
       {pern && (
         <p className="text-sm text-gray-700">
-          Splitter {e.splitter}: <b>{pern.usadas} perna{pern.usadas !== 1 ? "s" : ""} em uso, {pern.livres} livre{pern.livres !== 1 ? "s" : ""}</b>
+          Splitter {pern.splitter}: <b>{pern.clientes} cliente{pern.clientes !== 1 ? "s" : ""}, {pern.ramais} ramal{pern.ramais !== 1 ? "is" : ""}, {pern.livres} livre{pern.livres !== 1 ? "s" : ""}</b> de {pern.total}
         </p>
+      )}
+      {e.tipo !== "olt" && (
+        <EditorCaixa
+          key={chaveElemento(e)}
+          chave={chaveElemento(e)}
+          nome={e.nome}
+          caixa={no.caixa}
+          splitterRota={e.splitter}
+          ramosArvore={no.filhos.length}
+          usuario={usuario}
+          onSalva={onCaixaSalva}
+        />
       )}
 
       <ol className="border-l-2 border-gray-200 space-y-3 pl-4">
