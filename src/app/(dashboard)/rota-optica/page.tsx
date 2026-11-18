@@ -1,0 +1,400 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useAuth } from "@/contexts/AuthContext";
+import { canAccess } from "@/lib/access";
+import {
+  atualizarRota,
+  criarRota,
+  excluirRota,
+  formatDbm,
+  formatMetros,
+  listarRotas,
+  parseGeoGridKml,
+  resumoRota,
+  textoBuscaRota,
+  type RotaOptica,
+  type RotaOpticaInput,
+} from "@/lib/rotaOptica";
+import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
+import RotaEditor from "@/components/rota-optica/RotaEditor";
+import { FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
+
+const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[420px] bg-gray-100 rounded-xl flex items-center justify-center">
+      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+    </div>
+  ),
+});
+
+type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
+
+export default function RotaOpticaPage() {
+  const { user } = useAuth();
+  const [rotas, setRotas] = useState<RotaOptica[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [selId, setSelId] = useState<string | null>(null);
+  const [modo, setModo] = useState<Modo>({ tipo: "ver" });
+  const inputKml = useRef<HTMLInputElement>(null);
+
+  const permitido = canAccess(user ?? null, "rota-optica");
+
+  async function recarregar(selecionar?: string) {
+    try {
+      const lista = await listarRotas();
+      setRotas(lista);
+      setSelId((atual) => selecionar ?? (atual && lista.some((r) => r.id === atual) ? atual : lista[0]?.id ?? null));
+      setErro(null);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao carregar rotas.");
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!permitido) return;
+    let ativo = true;
+    listarRotas()
+      .then((lista) => {
+        if (!ativo) return;
+        setRotas(lista);
+        setSelId(lista[0]?.id ?? null);
+      })
+      .catch((e) => ativo && setErro(e instanceof Error ? e.message : "Erro ao carregar rotas."))
+      .finally(() => ativo && setCarregando(false));
+    return () => { ativo = false; };
+  }, [permitido]);
+
+  const filtradas = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    if (!t) return rotas;
+    return rotas.filter((r) => textoBuscaRota(r).includes(t));
+  }, [rotas, busca]);
+
+  if (!permitido) {
+    return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a administradores.</div>;
+  }
+
+  async function lerKml(file: File) {
+    setErro(null);
+    try {
+      const texto = await file.text();
+      const { elementos, trechos, nomeSugerido } = parseGeoGridKml(texto);
+      setModo({
+        tipo: "importar",
+        rota: { nome: nomeSugerido, origem: "geogrid", elementos, trechos, criado_por: user?.nome },
+      });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível ler o KML.");
+    }
+  }
+
+  async function salvarNova(dados: RotaOpticaInput) {
+    const id = await criarRota(dados);
+    setModo({ tipo: "ver" });
+    await recarregar(id);
+  }
+
+  async function salvarEdicao(id: string, dados: RotaOpticaInput) {
+    await atualizarRota(id, dados);
+    setModo({ tipo: "ver" });
+    await recarregar(id);
+  }
+
+  async function excluir(r: RotaOptica) {
+    if (!confirm(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.`)) return;
+    try {
+      await excluirRota(r.id);
+      await recarregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao excluir.");
+    }
+  }
+
+  const selecionada = rotas.find((r) => r.id === selId) ?? null;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Route className="w-7 h-7 text-indigo-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Rota Óptica</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Caminho da fibra da OLT até a ponta: cabos, fibras, emendas e potência</p>
+          </div>
+        </div>
+        {modo.tipo === "ver" && (
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={inputKml}
+              type="file"
+              accept=".kml,application/vnd.google-earth.kml+xml"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) lerKml(f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => inputKml.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700"
+            >
+              <FileUp className="w-4 h-4" /> Importar KML do GeoGrid
+            </button>
+            <button
+              type="button"
+              onClick={() => setModo({ tipo: "editar", rota: null })}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
+            >
+              <Plus className="w-4 h-4" /> Cadastrar manualmente
+            </button>
+          </div>
+        )}
+      </div>
+
+      {erro && (
+        <div className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          <span>{erro}</span>
+          <button type="button" onClick={() => setErro(null)} aria-label="Fechar aviso"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {modo.tipo === "editar" && (
+        <RotaEditor
+          inicial={modo.rota}
+          usuario={user?.nome ?? ""}
+          onCancelar={() => setModo({ tipo: "ver" })}
+          onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
+        />
+      )}
+
+      {modo.tipo === "importar" && (
+        <PreviaImportacao
+          rota={modo.rota}
+          onCancelar={() => setModo({ tipo: "ver" })}
+          onSalvar={salvarNova}
+        />
+      )}
+
+      {modo.tipo === "ver" && (
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5 items-start">
+          {/* Lista de rotas */}
+          <aside className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar rota, CTO, caixa, cabo…"
+                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+            </div>
+            {carregando ? (
+              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+            ) : filtradas.length === 0 ? (
+              <p className="text-sm text-gray-500 py-6 text-center">
+                {rotas.length === 0 ? "Nenhuma rota cadastrada ainda." : "Nenhuma rota encontrada."}
+              </p>
+            ) : (
+              <ul className="space-y-1 max-h-[60vh] overflow-auto">
+                {filtradas.map((r) => {
+                  const res = resumoRota(r.elementos);
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelId(r.id)}
+                        className={`w-full text-left rounded-lg px-3 py-2 ${r.id === selId ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}
+                      >
+                        <span className="block text-sm font-medium text-gray-900 leading-tight">{r.nome}</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          {r.elementos.length} elementos · {formatMetros(res.distancia_m)} ·{" "}
+                          {r.origem === "geogrid" ? "GeoGrid" : "manual"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </aside>
+
+          {/* Rota selecionada */}
+          {selecionada ? (
+            <VisualizarRota
+              key={selecionada.id}
+              rota={selecionada}
+              onEditar={() => setModo({ tipo: "editar", rota: selecionada })}
+              onExcluir={() => excluir(selecionada)}
+            />
+          ) : (
+            !carregando && (
+              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 text-sm">
+                Importe o KML &quot;Rota da fibra&quot; exportado do GeoGrid ou cadastre uma rota manualmente.
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================
+// Prévia antes de salvar o KML importado
+// =====================
+function PreviaImportacao({
+  rota,
+  onCancelar,
+  onSalvar,
+}: {
+  rota: RotaOpticaInput;
+  onCancelar: () => void;
+  onSalvar: (r: RotaOpticaInput) => Promise<void>;
+}) {
+  const [nome, setNome] = useState(rota.nome);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function salvar() {
+    if (!nome.trim()) return setErro("Dê um nome para a rota.");
+    setSalvando(true);
+    setErro(null);
+    try {
+      await onSalvar({ ...rota, nome: nome.trim() });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-indigo-200 p-4 space-y-3">
+        <p className="text-sm text-gray-700">
+          KML lido: <b>{rota.elementos.length}</b> elementos e <b>{rota.trechos.length}</b> trechos de cabo. Confira abaixo e salve.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            aria-label="Nome da rota"
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={onCancelar} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={salvar}
+              disabled={salvando}
+              className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5"
+            >
+              {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar rota
+            </button>
+          </div>
+        </div>
+        {erro && <p className="text-sm text-red-600">{erro}</p>}
+      </div>
+      <VisualizarRota rota={{ ...rota, id: "previa", nome }} />
+    </div>
+  );
+}
+
+// =====================
+// Visualização: resumo, diagrama, detalhe e mapa
+// =====================
+function VisualizarRota({
+  rota,
+  onEditar,
+  onExcluir,
+}: {
+  rota: RotaOptica;
+  onEditar?: () => void;
+  onExcluir?: () => void;
+}) {
+  const [sel, setSel] = useState<number | null>(null);
+  const res = resumoRota(rota.elementos);
+
+  return (
+    <section className="space-y-4 min-w-0">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900 leading-tight">{rota.nome}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {rota.origem === "geogrid" ? "Importada do GeoGrid" : "Cadastro manual"}
+              {rota.criado_por ? ` · por ${rota.criado_por}` : ""}
+              {rota.atualizado_em ? ` · atualizada em ${new Date(rota.atualizado_em).toLocaleDateString("pt-BR")}` : ""}
+            </p>
+            {rota.obs && <p className="text-sm text-gray-600 mt-1">{rota.obs}</p>}
+          </div>
+          {(onEditar || onExcluir) && (
+            <div className="flex gap-1">
+              {onEditar && (
+                <button type="button" onClick={onEditar} className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 hover:bg-gray-50">
+                  <Pencil className="w-3.5 h-3.5" /> Editar
+                </button>
+              )}
+              {onExcluir && (
+                <button type="button" onClick={onExcluir} className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50">
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            ["Distância total", formatMetros(res.distancia_m)],
+            ["Potência na OLT", formatDbm(res.potencia_inicial)],
+            ["Potência no fim", formatDbm(res.potencia_final)],
+            ["Perda total", res.perda_db !== undefined ? `${res.perda_db.toFixed(2).replace(".", ",")} dB` : "—"],
+            ["Caixas de emenda", String(res.emendas)],
+            ["Cabos percorridos", String(res.cabos.length)],
+          ].map(([k, v]) => (
+            <div key={k} className="bg-gray-50 rounded-lg px-3 py-2">
+              <dt className="text-[11px] text-gray-500">{k}</dt>
+              <dd className="text-base font-bold text-gray-900 tabular-nums">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+        <div className="bg-white rounded-xl border border-gray-200 p-3">
+          <p className="text-xs text-gray-500 px-2 pb-2">
+            A cor da linha é a cor real da fibra (padrão ABNT, 12 cores por tubo). Clique num elemento para ver os detalhes.
+          </p>
+          <RotaDiagrama elementos={rota.elementos} selecionado={sel} onSelect={setSel} />
+        </div>
+        <aside className="bg-white rounded-xl border border-gray-200 p-4 xl:sticky xl:top-4">
+          {sel !== null ? (
+            <DetalheElemento elementos={rota.elementos} indice={sel} />
+          ) : (
+            <div className="text-sm text-gray-600 space-y-2">
+              <p className="font-semibold text-gray-900">Cabos desta rota</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                {res.cabos.map((c) => <li key={c}>{c}</li>)}
+              </ol>
+              <p className="text-gray-500 pt-2">Clique num elemento do diagrama ou do mapa para ver o caminho até ele.</p>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-3">
+        <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={setSel} />
+      </div>
+    </section>
+  );
+}

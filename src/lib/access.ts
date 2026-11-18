@@ -9,6 +9,7 @@ export const PAGE_CARGOS: Record<string, UserCargo[]> = {
   "agenda-tecnica": ["adm", "agendamento"],
   relatorios:       ["adm", "auditor"],
   "analise-rede":   ["adm", "auditor"],
+  "rota-optica":    ["adm"],
   adm:              ["adm"],
 };
 
