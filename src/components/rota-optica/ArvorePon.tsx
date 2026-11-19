@@ -614,9 +614,9 @@ function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (i
               <span className="bg-indigo-500" style={{ width: `${pct(tot.ramais)}%` }} />
             </div>
             <div className="flex gap-3 mt-1.5 text-[11px] text-slate-600">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />{tot.clientes} clientes</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />{tot.ramais} ramais</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />{tot.livres} livres</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />{tot.clientes} cliente{tot.clientes !== 1 ? "s" : ""}</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />{tot.ramais} {tot.ramais !== 1 ? "ramais" : "ramal"}</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />{tot.livres} livre{tot.livres !== 1 ? "s" : ""}</span>
             </div>
           </>
         ) : (
