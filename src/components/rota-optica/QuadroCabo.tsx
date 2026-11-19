@@ -209,6 +209,8 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             const corTubo = corFibraPorCapacidade(lista[0], cap, porTubo).corTubo!;
             const ocupadas = lista.filter((n) => statusDe(n) !== "livre").length;
             const mostrar = lista.filter(visivel);
+            // Em "Só ocupadas", tubo sem nada ocupado fica de fora (resumido no fim)
+            if (soOcupadas && mostrar.length === 0) return null;
             return (
               <section
                 key={t}
@@ -302,6 +304,14 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             );
           })}
           {nenhumaVisivel && <p className="py-3 text-center text-xs text-gray-400">Nenhuma fibra ocupada neste cabo.</p>}
+          {soOcupadas && nTubos > 1 && (() => {
+            const vazios = tubos.filter((l) => !l.some(visivel)).length;
+            return vazios > 0 ? (
+              <button type="button" onClick={() => setSoOcupadas(false)} className="w-full text-[11px] text-slate-500 hover:text-slate-800 py-1">
+                + {vazios} tubo{vazios > 1 ? "s" : ""} sem fibra ocupada · ver todas
+              </button>
+            ) : null;
+          })()}
         </div>
 
         {editando ? (
