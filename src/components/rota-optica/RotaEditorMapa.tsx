@@ -65,15 +65,16 @@ function Cliques({ onClicar }: { onClicar: (lat: number, lon: number) => void })
   return null;
 }
 
-/** Enquadra a rota uma vez, quando aparecem os primeiros pontos. */
+/** Enquadra a rota existente ao abrir; em rota nova não mexe no mapa enquanto se desenha. */
 function Enquadrar({ pontos }: { pontos: [number, number][] }) {
   const map = useMap();
   const feito = useRef(false);
   useEffect(() => {
-    if (feito.current || pontos.length === 0) return;
+    if (feito.current) return;
+    feito.current = true;
+    if (pontos.length === 0) return;
     if (pontos.length === 1) map.setView(pontos[0], 17);
     else map.fitBounds(L.latLngBounds(pontos), { padding: [40, 40] });
-    feito.current = true;
   }, [map, pontos]);
   return null;
 }
