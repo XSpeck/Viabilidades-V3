@@ -7,6 +7,8 @@ import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
 import type { TipoElementoRota, TrechoCabo } from "@/lib/rotaOptica";
 import { iconeSvg } from "./IconesRede";
+import { Search, X } from "lucide-react";
+import { formatarCoordenada, lerCoordenada, type Coordenada } from "@/lib/coordenadas";
 
 /** Ferramenta ativa: selecionar/mover, marcar poste do cabo, ou colocar um elemento do tipo escolhido */
 export type Ferramenta = "selecionar" | "poste" | TipoElementoRota;
@@ -84,6 +86,22 @@ const iconePoste = (cor: string, tam = 12) =>
     html: `<div style="width:${tam}px;height:${tam}px;border-radius:9999px;background:#fff;border:2.5px solid ${cor};box-shadow:0 1px 2px rgba(0,0,0,.4)"></div>`,
   });
 
+const iconePino = L.divIcon({
+  className: "",
+  iconSize: [30, 40],
+  iconAnchor: [15, 38],
+  html: `<svg viewBox="0 0 30 40" width="30" height="40" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))"><path d="M15 39C15 39 28 23.5 28 14A13 13 0 0 0 2 14C2 23.5 15 39 15 39Z" fill="#dc2626" stroke="#fff" stroke-width="2"/><circle cx="15" cy="14" r="5" fill="#fff"/></svg>`,
+});
+
+/** Leva o mapa até a coordenada buscada */
+function IrPara({ alvo }: { alvo: (Coordenada & { vez: number }) | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (alvo) map.flyTo([alvo.lat, alvo.lon], Math.max(map.getZoom(), 18), { duration: 0.8 });
+  }, [map, alvo]);
+  return null;
+}
+
 function Cliques({ onClicar }: { onClicar: (lat: number, lon: number) => void }) {
   useMapEvents({ click: (e) => onClicar(e.latlng.lat, e.latlng.lng) });
   return null;
@@ -118,6 +136,17 @@ export default function RotaEditorMapa({
   rede, redeCabos, onClicarRede,
 }: Props) {
   const [satelite, setSatelite] = useState(false);
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  const [textoBusca, setTextoBusca] = useState("");
+  const [erroBusca, setErroBusca] = useState<string | null>(null);
+  const [achado, setAchado] = useState<(Coordenada & { vez: number }) | null>(null);
+
+  function buscar() {
+    const c = lerCoordenada(textoBusca);
+    if (!c) return setErroBusca("Não entendi. Use -28.69170, -49.34236 ou cole um link do Google Maps.");
+    setErroBusca(null);
+    setAchado((a) => ({ ...c, vez: (a?.vez ?? 0) + 1 }));
+  }
 
   const comPos = pontos.map((p, i) => ({ p, i })).filter(({ p }) => p.lat !== undefined && p.lon !== undefined);
   const todos = useMemo<[number, number][]>(
@@ -172,6 +201,20 @@ export default function RotaEditorMapa({
         <Cliques onClicar={onClicarMapa} />
         <Enquadrar pontos={todos.length ? todos : pontosRede} />
         <Centralizar alvo={alvo} />
+        <IrPara alvo={achado} />
+        {achado && (
+          <Marker
+            position={[achado.lat, achado.lon]}
+            icon={iconePino}
+            zIndexOffset={2000}
+            eventHandlers={{ click: () => onClicarMapa(achado.lat, achado.lon) }}
+          >
+            <Tooltip direction="top" offset={[0, -36]} permanent>
+              {formatarCoordenada(achado)}
+              {ferramenta !== "selecionar" ? " · clique no pino para colocar aqui" : ""}
+            </Tooltip>
+          </Marker>
+        )}
 
         {/* Rede existente (outras rotas), ao fundo */}
         {redeCabos.map((c, k) => (
@@ -284,13 +327,57 @@ export default function RotaEditorMapa({
           </Marker>
         ))}
       </MapContainer>
-      <button
-        type="button"
-        onClick={() => setSatelite((v) => !v)}
-        className="absolute bottom-6 right-3 z-[500] bg-white/95 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-white"
-      >
-        {satelite ? "Mapa de ruas" : "Satélite"}
-      </button>
+      <div className="absolute bottom-6 right-3 z-[500] flex flex-col items-end gap-1.5">
+        {buscaAberta && (
+          <div className="w-[300px] rounded-xl bg-white border border-slate-300 shadow-xl p-2">
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={textoBusca}
+                onChange={(e) => { setTextoBusca(e.target.value); setErroBusca(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); buscar(); }
+                  if (e.key === "Escape") { e.stopPropagation(); setBuscaAberta(false); }
+                }}
+                placeholder="-28.69170, -49.34236 ou link do Maps"
+                className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
+                aria-label="Coordenada"
+              />
+              <button type="button" onClick={buscar} className="rounded-lg bg-indigo-600 text-white text-xs font-semibold px-2.5 py-1.5 hover:bg-indigo-700">
+                Ir
+              </button>
+            </div>
+            {erroBusca && <p className="text-[11px] text-red-600 mt-1">{erroBusca}</p>}
+            {achado && !erroBusca && (
+              <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                <span>Pino em {formatarCoordenada(achado)}</span>
+                <button type="button" onClick={() => setAchado(null)} className="flex items-center gap-0.5 hover:text-slate-800">
+                  <X className="w-3 h-3" /> tirar pino
+                </button>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400 mt-1">Aceita decimal, graus/min/seg (28°41&apos;30&quot;S 49°20&apos;32&quot;W) e link do Google Maps.</p>
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setBuscaAberta((v) => !v)}
+            className={`border rounded-lg p-1.5 shadow ${buscaAberta ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white/95 border-slate-300 hover:bg-white text-slate-700"}`}
+            title="Buscar coordenada"
+            aria-label="Buscar coordenada"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSatelite((v) => !v)}
+            className="bg-white/95 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-white"
+          >
+            {satelite ? "Mapa de ruas" : "Satélite"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
