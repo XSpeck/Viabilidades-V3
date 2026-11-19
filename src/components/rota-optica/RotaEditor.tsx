@@ -209,9 +209,14 @@ function herdaCabo(ant?: Linha): ant is Linha {
   return !!ant && ant.tipo !== "dio" && ant.tipo !== "hub" && ant.tipo !== "cto" && ant.tipo !== "cdoi";
 }
 
-function nomeAuto(tipo: TipoElementoRota, ls: Linha[]): string {
+/** Nome automático ("CDOI 3"): pula os nomes que já existem nesta rota e na rede */
+function nomeAuto(tipo: TipoElementoRota, ls: Linha[], outros: string[] = []): string {
   const qtd = ls.filter((l) => l.tipo === tipo).length;
-  return tipo === "olt" && qtd === 0 ? "OLT" : `${PREFIXO[tipo]} ${qtd + 1}`;
+  if (tipo === "olt" && qtd === 0) return "OLT";
+  const usados = new Set([...ls.map((l) => l.nome), ...outros].map((x) => x.trim().toUpperCase()));
+  let k = qtd + 1;
+  while (usados.has(`${PREFIXO[tipo]} ${k}`.toUpperCase())) k++;
+  return `${PREFIXO[tipo]} ${k}`;
 }
 
 function nivelCor(v?: number) {
@@ -313,6 +318,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }));
 
   const tiposDeCabo = catalogo.filter((c) => c.categoria === "cabo");
+  /** Nomes das caixas da rede (para o nome automático não repetir) */
+  const nomesRede = rede.flatMap((r) => r.elementos.map((e) => e.nome));
   const modelosSplitter = catalogo.filter((c) => c.categoria === "splitter");
   const olts = catalogo.filter((c) => c.categoria === "olt");
   const dios = catalogo.filter((c) => c.categoria === "dio");
@@ -428,7 +435,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (sel !== null && sel < linhas.length - 1 && tipo !== "olt") {
       const prox = linhas[sel + 1];
       const ref = linhas[sel];
-      const nomeNovo = nomeAuto(tipo, linhas);
+      const nomeNovo = nomeAuto(tipo, linhas, nomesRede);
       const extra = tipo === "dio" && ref.tipo === "olt" ? dioDepoisDaOlt(ref, nomeNovo, prox) : {};
       mudar((ls) => {
         const c = [...ls];
@@ -452,13 +459,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // Colocar um elemento: entra no fim, ligado ao anterior pelo mesmo cabo/fibra, com os postes marcados
     const novoIndice = linhas.length;
     const ultimo = linhas[linhas.length - 1];
-    const extraDio = tipo === "dio" && ultimo?.tipo === "olt" ? dioDepoisDaOlt(ultimo, nomeAuto("dio", linhas)) : {};
+    const extraDio = tipo === "dio" && ultimo?.tipo === "olt" ? dioDepoisDaOlt(ultimo, nomeAuto("dio", linhas, nomesRede)) : {};
     const olt = tipo === "olt" && olts.length === 1 ? olts[0] : undefined;
     mudar((ls) => {
       const ant = ls[ls.length - 1];
       const nova: Linha = {
         ...linhaVazia(tipo),
-        nome: olt?.nome ?? nomeAuto(tipo, ls),
+        nome: olt?.nome ?? nomeAuto(tipo, ls, nomesRede),
         // OLT é a raiz e é reconhecida pelo nome; os demais ganham código único
         codigo: tipo === "olt" ? "" : proximoCodigo(ls),
         coords: fmtCoord(p),
@@ -728,7 +735,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       const c = [...ls];
       const nova: Linha = {
         ...linhaVazia(tipo),
-        nome: nomeAuto(tipo, ls),
+        nome: nomeAuto(tipo, ls, nomesRede),
         codigo: tipo === "olt" ? "" : proximoCodigo(ls),
         coords: fmtCoord(p),
         vertices: antes,
@@ -754,7 +761,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       const c = [...ls];
       c.splice(i, 0, {
         ...linhaVazia(tipo),
-        nome: nomeAuto(tipo, ls),
+        nome: nomeAuto(tipo, ls, nomesRede),
         codigo: tipo === "olt" ? "" : proximoCodigo(ls),
         dist_auto: true,
         cabo_entrada: cur?.cabo_entrada ?? "",
@@ -1644,7 +1651,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               onClick={() => {
                 const tipo: TipoElementoRota = tipoDaFerramenta(ferramenta) ?? (linhas.length ? "ceo" : "olt");
                 const ant = linhas[linhas.length - 1];
-                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "", fibra_entrada: herdaCabo(ant) ? ant.fibra_entrada : "" }]);
+                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls, nomesRede), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "", fibra_entrada: herdaCabo(ant) ? ant.fibra_entrada : "" }]);
                 setSel(linhas.length);
                 setFerramenta("selecionar");
               }}

@@ -30,7 +30,7 @@ import { IconeElementoSvg } from "./IconesRede";
 const CORES = ["#0284c7", "#7c3aed", "#db2777", "#059669", "#ea580c", "#0d9488", "#4f46e5", "#ca8a04"];
 const FH = 20; // altura de um andar
 const GAP = 44; // espaço entre blocos (rótulos dos andares)
-const ESQ = 64; // rua à esquerda
+const ESQ = 96; // rua à esquerda (com o nome do cabo que chega)
 const TOPO = 44; // telhado + nome do bloco
 const POCO = 26; // largura do poço da prumada
 
@@ -457,7 +457,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
               </g>
             ))}
             {/* etiqueta na rua */}
-            <text x="6" y={yRotulo} fontSize="6.5" fontWeight={800} fill="#0f172a">{curto(g.cabo, 16)}</text>
+            <text x="6" y={yRotulo} fontSize="6.5" fontWeight={800} fill="#0f172a">{curto(g.cabo, 20)}</text>
             <text x="6" y={yRotulo + 8} fontSize="5.8" fill="#475569">{n} fibra{n !== 1 ? "s" : ""} · de {curto(g.de, 12)}</text>
           </g>
         );
