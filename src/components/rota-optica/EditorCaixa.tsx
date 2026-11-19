@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Pencil, Save, X } from "lucide-react";
+import { GripHorizontal, Loader2, Pencil, Save, X } from "lucide-react";
 import {
   portasPara,
   salvarCaixa,
@@ -147,10 +147,12 @@ export default function EditorCaixa({
 
   return (
     <div className="bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden">
-      <div className="flex items-start justify-between gap-2 px-3 py-2 bg-gray-900 text-white">
+      <div data-alca className="flex items-start justify-between gap-2 px-3 py-2 bg-gray-900 text-white cursor-move">
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
-          <p className="text-[11px] text-gray-300">{TIPO_ELEMENTO_LABEL[tipo]} · diagrama da caixa</p>
+          <p className="text-[11px] text-gray-300 flex items-center gap-1">
+            <GripHorizontal className="w-3 h-3" /> {TIPO_ELEMENTO_LABEL[tipo]} · diagrama da caixa
+          </p>
         </div>
         <button type="button" onClick={onFechar} className="text-gray-300 hover:text-white shrink-0" aria-label="Fechar diagrama">
           <X className="w-4 h-4" />

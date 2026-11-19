@@ -5,15 +5,28 @@ import { Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
+import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import EditorCaixa from "./EditorCaixa";
+import QuadroCabo from "./QuadroCabo";
 
 interface Props {
   rotas: RotaOptica[];
   caixas: CaixaRede[];
+  cabos: CaboRede[];
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
+  onCaboSalvo: (c: CaboRede) => void;
   onAbrirRota: (id: string) => void;
 }
+
+/** Quadro flutuante aberto em cima da árvore (posição em px dentro da área desenhada). */
+type Quadro =
+  | { id: string; tipo: "caixa"; noId: string; x: number; y: number }
+  | { id: string; tipo: "cabo"; cabo: string; fibra?: number; x: number; y: number };
+
+const LARG_QUADRO = 320;
+/** Quadro ainda sem posição (Omit distribuído pela união). */
+type QuadroNovo = Quadro extends infer T ? (T extends Quadro ? Omit<T, "x" | "y"> : never) : never;
 
 const COL = 140;
 const ROW = 50;
@@ -60,25 +73,65 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, onAbrirRota }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota }: Props) {
   const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
+  const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
   const [chave, setChave] = useState<string | null>(null);
   const [selId, setSelId] = useState<string>("0");
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
-  /** Elemento cujo diagrama de caixa está aberto em cima da árvore */
-  const [caixaAberta, setCaixaAberta] = useState<string | null>(null);
+  /** Quadros abertos (caixas e cabos); o último da lista fica por cima */
+  const [quadros, setQuadros] = useState<Quadro[]>([]);
+  const [ultimoAberto, setUltimoAberto] = useState<{ id: string; vez: number } | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
-  const quadroRef = useRef<HTMLDivElement>(null);
+  const quadroRefs = useRef(new Map<string, HTMLDivElement>());
+  const arrasteQuadro = useRef<{ id: string; x: number; y: number; qx: number; qy: number; pid: number } | null>(null);
 
-  // Ao abrir o diagrama, rola a área para o quadro ficar inteiro à vista
+  // Ao abrir um quadro, rola a área para ele ficar inteiro à vista
   useEffect(() => {
-    if (caixaAberta) quadroRef.current?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  }, [caixaAberta]);
+    if (ultimoAberto) quadroRefs.current.get(ultimoAberto.id)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [ultimoAberto]);
 
-  function selecionar(n: NoArvore) {
-    setSelId(n.id);
-    setCaixaAberta(n.elemento.tipo === "olt" ? null : n.id);
+  /** Abre (ou traz para frente) um quadro perto do ponto (px, py) da área desenhada. */
+  function abrirQuadro(q: QuadroNovo, px: number, py: number, larguraArea: number) {
+    setQuadros((qs) => {
+      const existente = qs.find((x) => x.id === q.id);
+      if (existente) return [...qs.filter((x) => x.id !== q.id), { ...existente, ...q } as Quadro];
+      const direita = px + 26;
+      const x = direita + LARG_QUADRO <= larguraArea ? direita : Math.max(4, px - 26 - LARG_QUADRO);
+      // Cascata leve para quadros abertos no mesmo lugar não ficarem exatamente sobrepostos
+      const desloc = (qs.length % 5) * 18;
+      return [...qs, { ...q, x: x + desloc, y: Math.max(4, py - 40) + desloc } as Quadro];
+    });
+    setUltimoAberto((u) => ({ id: q.id, vez: (u?.vez ?? 0) + 1 }));
+  }
+  function fecharQuadro(id: string) {
+    setQuadros((qs) => qs.filter((q) => q.id !== id));
+  }
+  function trazerParaFrente(id: string) {
+    setQuadros((qs) => (qs[qs.length - 1]?.id === id ? qs : [...qs.filter((q) => q.id !== id), qs.find((q) => q.id === id)!]));
+  }
+
+  // Arrastar um quadro pela barra de título
+  function iniciarArrasteQuadro(e: React.PointerEvent<HTMLDivElement>, q: Quadro) {
+    trazerParaFrente(q.id);
+    if (e.button !== 0 || !(e.target as HTMLElement).closest("[data-alca]") || (e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    arrasteQuadro.current = { id: q.id, x: e.clientX, y: e.clientY, qx: q.x, qy: q.y, pid: e.pointerId };
+  }
+  function arrastarQuadro(e: React.PointerEvent<HTMLDivElement>) {
+    const a = arrasteQuadro.current;
+    if (!a) return;
+    const nx = Math.max(0, a.qx + e.clientX - a.x);
+    const ny = Math.max(0, a.qy + e.clientY - a.y);
+    setQuadros((qs) => qs.map((q) => (q.id === a.id ? { ...q, x: nx, y: ny } : q)));
+  }
+  function soltarQuadro(e: React.PointerEvent<HTMLDivElement>) {
+    if (arrasteQuadro.current && e.currentTarget.hasPointerCapture(arrasteQuadro.current.pid)) {
+      e.currentTarget.releasePointerCapture(arrasteQuadro.current.pid);
+    }
+    arrasteQuadro.current = null;
   }
   const arraste = useRef<{ x: number; y: number; sl: number; st: number; id: number } | null>(null);
   const moveu = useRef(false);
@@ -99,8 +152,8 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   // Arrastar a área com o mouse (clique simples continua selecionando o elemento)
   function iniciarArraste(e: React.PointerEvent<HTMLDivElement>) {
     if (e.pointerType !== "mouse" || e.button !== 0 || !areaRef.current) return;
-    // Dentro do quadro da caixa (campos, botões) não arrasta
-    if ((e.target as HTMLElement).closest("[data-quadro-caixa]")) return;
+    // Dentro de um quadro (campos, botões, barra de título) a área não arrasta
+    if ((e.target as HTMLElement).closest("[data-quadro]")) return;
     arraste.current = { x: e.clientX, y: e.clientY, sl: areaRef.current.scrollLeft, st: areaRef.current.scrollTop, id: e.pointerId };
     moveu.current = false;
   }
@@ -143,18 +196,18 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
   const X = (d: number) => PADX + d * COL;
   const Y = (v: number) => PADY + v * ROW;
 
-  // Quadro do diagrama: ao lado da caixa clicada (à direita; à esquerda se não couber)
-  const noQuadro = caixaAberta ? arvore.nos.find((n) => n.id === caixaAberta) : undefined;
-  const quadro = noQuadro
-    ? (() => {
-        const larg = Math.max(W, 560) * zoom;
-        const cx = X(noQuadro.profundidade) * zoom;
-        const cy = Y(y.get(noQuadro)!) * zoom;
-        const direita = cx + 26;
-        const left = direita + 320 <= larg ? direita : Math.max(4, cx - 26 - 320);
-        return { no: noQuadro, left, top: Math.max(4, cy - 40) };
-      })()
-    : null;
+  const larguraArea = Math.max(W, 560) * zoom;
+
+  function selecionar(n: NoArvore) {
+    setSelId(n.id);
+    if (n.elemento.tipo === "olt") return;
+    abrirQuadro({ id: `caixa:${n.id}`, tipo: "caixa", noId: n.id }, X(n.profundidade) * zoom, Y(y.get(n)!) * zoom, larguraArea);
+  }
+  function abrirCabo(n: NoArvore, px: number, py: number) {
+    const nomeCabo = n.elemento.cabo_entrada;
+    if (!nomeCabo) return;
+    abrirQuadro({ id: `cabo:${chaveCabo(nomeCabo)}`, tipo: "cabo", cabo: nomeCabo, fibra: n.elemento.fibra_entrada }, px * zoom, py * zoom, larguraArea);
+  }
 
   const caminho = new Set(caminhoAte(sel));
   const sub = new Set<NoArvore>();
@@ -172,7 +225,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
             <button
               key={a.chave}
               type="button"
-              onClick={() => { setChave(a.chave); setSelId("0"); setCaixaAberta(null); }}
+              onClick={() => { setChave(a.chave); setSelId("0"); setQuadros([]); }}
               className={`text-left rounded-lg border-2 px-3 py-1.5 text-sm leading-tight ${
                 ativo ? "bg-gray-900 border-gray-900 text-white" : "border-gray-900 bg-white text-gray-900 hover:bg-gray-50"
               }`}
@@ -259,8 +312,17 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
                 const mx = x1 + COL / 2;
                 const d = `M${x1} ${y1}H${mx}V${y2}H${x2}`;
                 const cor = corFibra(c.elemento.fibra_entrada).hex;
+                const temCabo = !!c.elemento.cabo_entrada;
                 return (
-                  <g key={`l${c.id}`} opacity={estado(c)}>
+                  <g
+                    key={`l${c.id}`}
+                    opacity={estado(c)}
+                    className={temCabo ? "cursor-pointer" : undefined}
+                    onClick={temCabo ? () => abrirCabo(c, (mx + x2) / 2, y2) : undefined}
+                  >
+                    {temCabo && <title>{`${c.elemento.cabo_entrada} · fibra ${c.elemento.fibra_entrada ?? "?"} — clique para ver as fibras do cabo`}</title>}
+                    {/* área de clique mais larga que a linha */}
+                    <path d={d} fill="none" stroke="transparent" strokeWidth={16} strokeLinejoin="round" />
                     <path d={d} fill="none" stroke="#111827" strokeWidth={6.5} strokeLinejoin="round" />
                     <path d={d} fill="none" stroke={cor} strokeWidth={3.5} strokeLinejoin="round" />
                     {c.elemento.fibra_entrada ? (
@@ -339,29 +401,60 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
                 );
               })}
             </svg>
-            {quadro && (
-              <div
-                ref={quadroRef}
-                data-quadro-caixa
-                className="absolute z-10 w-[320px] cursor-auto select-text"
-                style={{ left: quadro.left, top: quadro.top }}
-              >
-                <EditorCaixa
-                  key={chaveElemento(quadro.no.elemento)}
-                  chave={chaveElemento(quadro.no.elemento)}
-                  nome={quadro.no.elemento.nome}
-                  tipo={quadro.no.elemento.tipo}
-                  caixa={quadro.no.caixa}
-                  splitterRota={quadro.no.elemento.splitter}
-                  caboEntrada={quadro.no.elemento.cabo_entrada}
-                  fibraEntrada={quadro.no.elemento.fibra_entrada}
-                  ramos={quadro.no.filhos.map((f) => f.elemento.nome)}
-                  usuario={usuario}
-                  onSalva={onCaixaSalva}
-                  onFechar={() => setCaixaAberta(null)}
-                />
-              </div>
-            )}
+            {quadros.map((q, i) => {
+              let conteudo: React.ReactNode = null;
+              if (q.tipo === "caixa") {
+                const no = arvore.nos.find((n) => n.id === q.noId);
+                if (!no) return null;
+                conteudo = (
+                  <EditorCaixa
+                    key={chaveElemento(no.elemento)}
+                    chave={chaveElemento(no.elemento)}
+                    nome={no.elemento.nome}
+                    tipo={no.elemento.tipo}
+                    caixa={no.caixa}
+                    splitterRota={no.elemento.splitter}
+                    caboEntrada={no.elemento.cabo_entrada}
+                    fibraEntrada={no.elemento.fibra_entrada}
+                    ramos={no.filhos.map((f) => f.elemento.nome)}
+                    usuario={usuario}
+                    onSalva={onCaixaSalva}
+                    onFechar={() => fecharQuadro(q.id)}
+                  />
+                );
+              } else {
+                const k = chaveCabo(q.cabo);
+                conteudo = (
+                  <QuadroCabo
+                    key={`${k}:${q.fibra ?? ""}`}
+                    chave={k}
+                    nome={q.cabo}
+                    cabo={cabos.find((c) => c.chave === k)}
+                    uso={usoFibras.get(k)?.fibras ?? new Map()}
+                    fibraDestaque={q.fibra}
+                    usuario={usuario}
+                    onSalva={onCaboSalvo}
+                    onFechar={() => fecharQuadro(q.id)}
+                    onAbrirRota={onAbrirRota}
+                  />
+                );
+              }
+              return (
+                <div
+                  key={q.id}
+                  ref={(el) => { if (el) quadroRefs.current.set(q.id, el); else quadroRefs.current.delete(q.id); }}
+                  data-quadro
+                  onPointerDown={(e) => iniciarArrasteQuadro(e, q)}
+                  onPointerMove={arrastarQuadro}
+                  onPointerUp={soltarQuadro}
+                  onPointerCancel={soltarQuadro}
+                  className="absolute cursor-auto select-text"
+                  style={{ left: q.x, top: q.y, width: LARG_QUADRO, zIndex: 10 + i }}
+                >
+                  {conteudo}
+                </div>
+              );
+            })}
             </div>
           </div>
           <p className="text-xs text-gray-500 px-4 py-2.5 border-t border-gray-200">
@@ -378,7 +471,7 @@ export default function ArvorePonView({ rotas, caixas, usuario, onCaixaSalva, on
           {sel === arvore.raiz ? (
             <ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} />
           ) : (
-            <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setCaixaAberta(sel.id)} />
+            <DetalheNo no={sel} rotas={arvore.rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => selecionar(sel)} />
           )}
         </aside>
       </div>
