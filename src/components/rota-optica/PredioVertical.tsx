@@ -316,7 +316,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
       const t = e ? totalPernas(e.splitter) : null;
       if (t) return t;
     }
-    return null;
+    return totalPernas(o.splitter);
   };
   const cobertura = (pontos: PontoPredio[], aptos: number) => {
     const caps = pontos.map(capacidade);
@@ -780,6 +780,23 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
                         </select>
                       </div>
                     </div>
+                    {(() => {
+                      const doDiagrama = portasDe(o)?.total;
+                      const daRota = rotas.flatMap((r) => r.elementos).find((x) => chaveElemento(x) === o.chave && totalPernas(x.splitter))?.splitter;
+                      if (doDiagrama || daRota) {
+                        return <p className="mt-1 text-[10px] text-slate-500">Splitter {doDiagrama ? `1:${doDiagrama} (diagrama da caixa)` : `${daRota} (da rota)`}</p>;
+                      }
+                      return (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <label className="text-[10px] font-semibold text-slate-500">Splitter</label>
+                          <select className={`${campo} w-auto`} value={o.splitter ?? ""} onChange={(e) => mudarPonto(o.id, { splitter: e.target.value || undefined })}>
+                            <option value="">não informado</option>
+                            {["1:4", "1:8", "1:16", "1:32"].map((x) => <option key={x} value={x}>{x}</option>)}
+                          </select>
+                          <span className="text-[10px] text-slate-400">para a cobertura</span>
+                        </div>
+                      );
+                    })()}
                     {o.chave === "" && <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>}
                   </div>
                 );
