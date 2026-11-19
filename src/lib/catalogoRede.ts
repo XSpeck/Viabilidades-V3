@@ -32,6 +32,10 @@ export interface ItemCatalogo {
   modelo?: string;
   placas?: number;
   portas_por_placa?: number;
+  /** Número da primeira placa (0 ou 1, depende do fabricante) */
+  placa_inicial?: number;
+  /** Número da primeira porta PON de cada placa (0 ou 1) */
+  porta_inicial?: number;
   /** Potência de saída da porta PON (dBm) */
   potencia_tx?: number;
   local?: string;
@@ -82,11 +86,39 @@ export function resumoItem(i: ItemCatalogo): string {
     if (i.conector) partes.push(i.conector);
   } else {
     if (i.modelo) partes.push(i.modelo);
-    if (i.placas && i.portas_por_placa) partes.push(`${i.placas} placas × ${i.portas_por_placa} PON = ${i.placas * i.portas_por_placa} portas`);
+    if (i.placas && i.portas_por_placa) {
+      const n0 = numeracaoOlt(i);
+      partes.push(`placas ${n0.placas[0]}–${n0.placas[n0.placas.length - 1]} × portas ${n0.portas[0]}–${n0.portas[n0.portas.length - 1]}`);
+    }
     if (i.potencia_tx !== undefined) partes.push(`${String(i.potencia_tx).replace(".", ",")} dBm`);
     if (i.local) partes.push(i.local);
   }
   return partes.join(" · ");
+}
+
+// =====================
+// Numeração das portas da OLT (há modelos que começam em 0 e outros em 1)
+// =====================
+const pad2 = (v: number) => String(v).padStart(2, "0");
+
+/** Números das placas e das portas PON de uma OLT do cadastro */
+export function numeracaoOlt(o?: ItemCatalogo): { placas: number[]; portas: number[] } {
+  const p0 = o?.placa_inicial ?? 1;
+  const q0 = o?.porta_inicial ?? 1;
+  return {
+    placas: Array.from({ length: Math.max(0, o?.placas ?? 0) }, (_, k) => p0 + k),
+    portas: Array.from({ length: Math.max(0, o?.portas_por_placa ?? 0) }, (_, k) => q0 + k),
+  };
+}
+
+/** "PL 04 - Porta 13" → { placa: 4, porta: 13 } (aceita 0) */
+export function lerPortaOlt(texto: string): { placa: number; porta: number } | null {
+  const m = texto.match(/PL\s*(\d+)\D+?(\d+)/i);
+  return m ? { placa: parseInt(m[1], 10), porta: parseInt(m[2], 10) } : null;
+}
+
+export function textoPortaOlt(placa: number, porta: number): string {
+  return `PL ${pad2(placa)} - Porta ${pad2(porta)}`;
 }
 
 // =====================

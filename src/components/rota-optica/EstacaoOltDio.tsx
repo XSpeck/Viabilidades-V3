@@ -1,7 +1,7 @@
 "use client";
 
 import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
-import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
+import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 
 /** Dados da estação (elementos 1 = OLT e 2 = DIO da rota, e o cabo que sai do DIO) */
@@ -40,17 +40,21 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
   const olt = olts.find((o) => o.id === dados.oltEquip);
   const dio = dios.find((d) => d.id === dados.dioEquip);
   const tipoSaida = tiposCabo.find((t) => t.id === dados.saidaTipo);
-  const placas = Math.min(olt?.placas ?? 8, 16);
-  const portasPlaca = Math.min(olt?.portas_por_placa ?? 16, 16);
-  const portasDio = Math.min(dio?.portas ?? tipoSaida?.capacidade ?? 24, 144);
+  // Numeração de placas e portas vem do cadastro da OLT (há modelos 0–15 e modelos 1–16)
+  const num = numeracaoOlt(olt);
+  const listaPlacas = num.placas.slice(0, 16);
+  const listaPortas = num.portas.slice(0, 16);
+  const placas = listaPlacas.length;
+  const portasPlaca = listaPortas.length;
+  const portasDio = dio ? Math.min(dio.portas ?? 0, 144) : 0;
 
-  const m = dados.oltPorta.match(/PL\s*0*(\d+)\D+0*(\d+)/i);
-  const placa = m ? +m[1] : 0;
-  const pon = m ? +m[2] : 0;
+  const lida = lerPortaOlt(dados.oltPorta);
+  const placa = lida ? lida.placa : null;
+  const pon = lida ? lida.porta : null;
   const md = dados.dioPorta.match(/Porta\s*0*(\d+)/i);
   const portaDio = md ? +md[1] : n(dados.saidaFibra) ?? 0;
 
-  const setPon = (pl: number, po: number) => onMudar({ oltPorta: `PL ${pad2(pl)} - Porta ${pad2(po)}` });
+  const setPon = (pl: number, po: number) => onMudar({ oltPorta: textoPortaOlt(pl, po) });
   const setDio = (p: number) => onMudar({ dioPorta: `Porta ${pad2(p)}`, saidaFibra: String(p) });
 
   // ---------- Desenho ----------
@@ -58,28 +62,29 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
   const xO = 12, wO = 168, xD = 200, wD = 168;
   const y0 = 34;
   const colsPl = 8;
-  const linhasPl = Math.ceil(placas / colsPl);
+  const linhasPl = Math.max(1, Math.ceil(placas / colsPl));
   const yPortas = y0 + 26 + linhasPl * 18 + 6;
   const colsPon = 8;
-  const linhasPon = Math.ceil(portasPlaca / colsPon);
+  const linhasPon = Math.max(1, Math.ceil(portasPlaca / colsPon));
   const hO = yPortas - y0 + linhasPon * 19 + 8;
   const colsDio = 12;
-  const linhasDio = Math.ceil(portasDio / colsDio);
+  const linhasDio = Math.max(2, Math.ceil(portasDio / colsDio));
   const passoDio = 13;
   const hD = 26 + linhasDio * passoDio + 10;
   const hRack = Math.max(hO, hD);
   const ySaida = y0 + hRack + 26;
   const H = ySaida + 44;
 
-  const posPon = (po: number) => {
-    const k = po - 1;
+  /** posição da porta PON pelo índice (0 = primeira porta, seja ela 0 ou 1) */
+  const posPon = (k: number) => {
     return { x: xO + 10 + (k % colsPon) * 19 + 8, y: yPortas + Math.floor(k / colsPon) * 19 + 7 };
   };
   const posDio = (p: number) => {
     const k = p - 1;
     return { x: xD + 8 + (k % colsDio) * passoDio + 5, y: y0 + 26 + Math.floor(k / colsDio) * passoDio + 5 };
   };
-  const a = pon ? posPon(pon) : null;
+  const idxPon = pon !== null ? listaPortas.indexOf(pon) : -1;
+  const a = placa !== null && idxPon >= 0 && listaPlacas.includes(placa) ? posPon(idxPon) : null;
   const b = portaDio && portaDio <= portasDio ? posDio(portaDio) : null;
   const corSaida = portaDio && tipoSaida?.capacidade
     ? corFibraPorCapacidade(portaDio, tipoSaida.capacidade, tipoSaida.fibras_por_tubo ?? fibrasPorTubo(tipoSaida.capacidade))
@@ -124,27 +129,32 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
         <rect x={xO} y={y0} width={wO} height={hO} rx={8} fill="url(#rackOlt)" stroke="#0f172a" />
         <text x={xO + 8} y={y0 + 15} fontSize={10} fontWeight={800} fill="#fff">OLT</text>
         <text x={xO + 32} y={y0 + 15} fontSize={9} fill="#cbd5e1">{curto(dados.oltNome || "OLT", 20)}</text>
-        {Array.from({ length: placas }, (_, k) => {
-          const pl = k + 1;
+        {!olt && (
+          <text x={xO + wO / 2} y={y0 + 46} fontSize={9} textAnchor="middle" fill="#fbbf24" fontWeight={700}>
+            Escolha a OLT do cadastro
+          </text>
+        )}
+        {listaPlacas.map((pl, k) => {
           const x = xO + 8 + (k % colsPl) * 19.5;
           const y = y0 + 22 + Math.floor(k / colsPl) * 18;
           const ativo = pl === placa;
           return (
-            <g key={`pl${pl}`} className="cursor-pointer" onClick={() => setPon(pl, pon || 1)}>
+            <g key={`pl${pl}`} className="cursor-pointer" onClick={() => setPon(pl, pon !== null && listaPortas.includes(pon) ? pon : listaPortas[0] ?? 0)}>
               <title>{`Placa PL ${pad2(pl)}`}</title>
               <rect x={x} y={y} width={17} height={14} rx={2.5} fill={ativo ? "#4f46e5" : "#1e293b"} stroke={ativo ? "#c7d2fe" : "#475569"} />
               <text x={x + 8.5} y={y + 10} fontSize={7.5} textAnchor="middle" fill={ativo ? "#fff" : "#94a3b8"} fontWeight={700}>{pl}</text>
             </g>
           );
         })}
-        <text x={xO + 8} y={yPortas - 3} fontSize={7.5} fill="#94a3b8">{placa ? `portas PON da placa ${pad2(placa)}` : "escolha a placa"}</text>
-        {Array.from({ length: portasPlaca }, (_, k) => {
-          const po = k + 1;
-          const { x, y } = posPon(po);
-          const ativo = po === pon && !!placa;
+        {olt && (
+          <text x={xO + 8} y={yPortas - 3} fontSize={7.5} fill="#94a3b8">{placa !== null ? `portas PON da placa ${pad2(placa)}` : "escolha a placa"}</text>
+        )}
+        {listaPortas.map((po, k) => {
+          const { x, y } = posPon(k);
+          const ativo = po === pon && placa !== null;
           return (
-            <g key={`po${po}`} className="cursor-pointer" onClick={() => setPon(placa || 1, po)}>
-              <title>{`PON ${placa || 1}/${po}`}</title>
+            <g key={`po${po}`} className="cursor-pointer" onClick={() => setPon(placa ?? listaPlacas[0] ?? 0, po)}>
+              <title>{`PON ${placa ?? listaPlacas[0] ?? 0}/${po}`}</title>
               <rect x={x - 7.5} y={y - 6.5} width={15} height={13} rx={2} fill={ativo ? "#16a34a" : "#0b1220"} stroke={ativo ? "#bbf7d0" : "#334155"} />
               <text x={x} y={y + 3} fontSize={7} textAnchor="middle" fill={ativo ? "#fff" : "#64748b"} fontWeight={700}>{po}</text>
             </g>
@@ -154,7 +164,12 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
         {/* DIO */}
         <rect x={xD} y={y0} width={wD} height={hD} rx={8} fill="url(#rackDio)" stroke="#1e293b" />
         <text x={xD + 8} y={y0 + 15} fontSize={10} fontWeight={800} fill="#fff">DIO</text>
-        <text x={xD + 32} y={y0 + 15} fontSize={9} fill="#e2e8f0">{curto(dados.dioNome || "DIO", 14)} · {portasDio}p</text>
+        <text x={xD + 32} y={y0 + 15} fontSize={9} fill="#e2e8f0">{dio ? `${curto(dados.dioNome || "DIO", 14)} · ${portasDio}p` : ""}</text>
+        {!dio && (
+          <text x={xD + wD / 2} y={y0 + 46} fontSize={9} textAnchor="middle" fill="#fbbf24" fontWeight={700}>
+            Escolha o DIO do cadastro
+          </text>
+        )}
         {Array.from({ length: portasDio }, (_, k) => {
           const p = k + 1;
           const { x, y } = posDio(p);
@@ -220,7 +235,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
                 {olts.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
             ) : (
-              <input className={campo} value={dados.oltNome} onChange={(e) => onMudar({ oltNome: e.target.value })} placeholder="Nome da OLT" />
+              <p className="text-[11px] text-red-600 leading-tight">Nenhuma OLT cadastrada. Cadastre em Cadastros → OLTs.</p>
             )}
           </div>
           <div>
@@ -242,7 +257,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
                 {dios.map((d) => <option key={d.id} value={d.id}>{d.nome} · {resumoItem(d)}</option>)}
               </select>
             ) : (
-              <input className={campo} value={dados.dioNome} onChange={(e) => onMudar({ dioNome: e.target.value })} placeholder="Nome do DIO" />
+              <p className="text-[11px] text-red-600 leading-tight">Nenhum DIO cadastrado. Cadastre em Cadastros → DIOs.</p>
             )}
           </div>
           <div>
@@ -250,9 +265,10 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
             <input className={campo} inputMode="decimal" value={dados.cordaoMetros} onChange={(e) => onMudar({ cordaoMetros: e.target.value })} placeholder="ex.: 3" />
           </div>
         </div>
+        {cordoes.length === 0 && <p className="text-[11px] text-red-600">Nenhum cordão cadastrado (cabo de 1 fibra). Cadastre em Cadastros → Cabos.</p>}
         {cordoes.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[10px] text-slate-500">Cordão:</span>
+            <span className={`text-[10px] ${dados.cordaoTipo ? "text-slate-500" : "text-red-600 font-semibold"}`}>Cordão:</span>
             {cordoes.map((t) => (
               <button
                 key={t.id}
@@ -269,7 +285,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
         <div className="rounded-xl border border-slate-200 bg-white p-2 space-y-1.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
             <IconeCabo tamanho={15} /> Cabo que sai do DIO
-            <span className="ml-auto font-normal text-slate-500">mesmo tamanho do DIO ({portasDio} fibras)</span>
+            <span className="ml-auto font-normal text-slate-500">{dio ? `mesmo tamanho do DIO (${portasDio} fibras)` : "escolha o DIO"}</span>
           </p>
           {dados.destino === undefined ? (
             <p className="text-[11px] text-slate-500">Coloque no mapa a primeira caixa fora da estação; o cabo de saída é configurado aqui.</p>
@@ -301,7 +317,8 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
                   </button>
                 ))}
               </div>
-              {tipoSaida?.capacidade && tipoSaida.capacidade !== portasDio && (
+              {!dados.saidaTipo && <p className="text-[10px] text-red-600">Escolha o tipo do cabo de saída (só cabos do cadastro).</p>}
+              {dio && tipoSaida?.capacidade && tipoSaida.capacidade !== portasDio && (
                 <p className="text-[10px] text-amber-700">O cabo tem {tipoSaida.capacidade} fibras e o DIO {portasDio} portas.</p>
               )}
             </>

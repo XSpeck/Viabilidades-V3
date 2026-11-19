@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  ArrowDown, ArrowUp, ChevronDown, Loader2, MapPin, MousePointer2, Plus, Route, Save, Settings2, Trash2, Undo2, X,
+  AlertTriangle, ArrowDown, ArrowUp, ChevronDown, Loader2, MapPin, MousePointer2, Plus, Route, Save, Settings2, Trash2, Undo2, X,
 } from "lucide-react";
 import {
   CALCULO_PADRAO,
@@ -23,8 +23,7 @@ import {
   type TrechoCabo,
 } from "@/lib/rotaOptica";
 import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
-import { SPLITTERS } from "@/lib/caixasRede";
-import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
+import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento } from "@/lib/arvorePon";
 import { IconeCabo, IconeElemento } from "./IconesRede";
@@ -256,6 +255,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     () => inicial?.calculo_potencia ?? (inicial?.origem === "geogrid" ? { ...CALCULO_PADRAO, auto: false } : CALCULO_PADRAO)
   );
   const [verCalc, setVerCalc] = useState(false);
+  const [verPendencias, setVerPendencias] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -381,6 +381,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (ferramenta === "selecionar") {
       if (sel !== null && !posDe(linhas[sel])) alterar(sel, { coords: fmtCoord(p) });
       return;
+    }
+    if ((ferramenta === "estacao" || ferramenta === "olt") && !olts.length) {
+      return setAviso("Cadastre a OLT primeiro (Cadastros → OLTs). Só equipamentos cadastrados são aceitos.");
     }
     if (ferramenta === "estacao") {
       if (linhas.length) return setAviso("A estação é o começo da rota. Para mudar a OLT ou o DIO, use o cartão Estação ao lado.");
@@ -654,6 +657,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setSel(i);
   }
 
+  // Só equipamentos do cadastro: o que faltar vira pendência e impede salvar
+  const pendencias: { i: number; msg: string }[] = [];
+  if (linhas.length && linhas[0].tipo !== "olt") pendencias.push({ i: 0, msg: "A rota precisa começar numa OLT" });
+  linhas.forEach((l, i) => {
+    const nome = l.nome || `elemento ${i + 1}`;
+    if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
+    if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
+    if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
+    if (i > 0) {
+      if (!l.cabo_entrada.trim()) pendencias.push({ i, msg: `${nome}: informe o cabo que chega` });
+      else if (!tipoDoCabo(l.cabo_entrada)) pendencias.push({ i, msg: `${nome}: o cabo "${l.cabo_entrada}" precisa de um tipo do cadastro` });
+      if (!n(l.fibra_entrada)) pendencias.push({ i, msg: `${nome}: escolha a fibra` });
+    }
+    if (l.splitter && !modelosSplitter.some((m) => m.id === l.splitter_modelo)) pendencias.push({ i, msg: `${nome}: splitter ${l.splitter} não é do cadastro` });
+  });
+  const pendentesDe = new Set(pendencias.map((p) => p.i));
+
   const temEstacao = linhas[0]?.tipo === "olt" && linhas[1]?.tipo === "dio";
   const estacao: DadosEstacao | null = temEstacao
     ? {
@@ -717,6 +737,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setErro(null);
     if (!nome.trim()) return setErro("Dê um nome para a rota (campo no topo).");
     if (linhas.length < 2) return setErro("A rota precisa de pelo menos 2 elementos: a OLT e o ponto final.");
+    if (pendencias.length) {
+      setVerPendencias(true);
+      setSel(pendencias[0].i);
+      return setErro(`Há ${pendencias.length} pendência${pendencias.length > 1 ? "s" : ""}: só são aceitos equipamentos e cabos do cadastro.`);
+    }
     const elementos: ElementoRota[] = [];
     for (let i = 0; i < linhas.length; i++) {
       const l = linhas[i];
@@ -831,13 +856,19 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function camposEquipamento(i: number) {
     const l = linhas[i];
     const lista = l.tipo === "olt" ? olts : l.tipo === "dio" ? dios : [];
-    if (!lista.length) return null;
+    if (l.tipo !== "olt" && l.tipo !== "dio") return null;
+    if (!lista.length) {
+      return (
+        <p className="col-span-2 text-[11px] text-red-600">
+          Nenhuma {l.tipo === "olt" ? "OLT" : "DIO"} cadastrada. Cadastre em Cadastros → {l.tipo === "olt" ? "OLTs" : "DIOs"}.
+        </p>
+      );
+    }
     const eq = lista.find((x) => x.id === l.equipamento_id);
     if (l.tipo === "olt") {
-      const m = l.porta.match(/PL\s*0*(\d+)\D+0*(\d+)/i);
-      const placa = m ? +m[1] : 0;
-      const porta = m ? +m[2] : 0;
-      const setPorta = (pl: number, po: number) => alterar(i, { porta: pl && po ? `PL ${pad2(pl)} - Porta ${pad2(po)}` : l.porta });
+      const lida = lerPortaOlt(l.porta);
+      const num = numeracaoOlt(eq);
+      const setPorta = (pl: number, po: number) => alterar(i, { porta: textoPortaOlt(pl, po) });
       return (
         <>
           <div className="col-span-2">
@@ -854,24 +885,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 });
               }}
             >
-              <option value="">— não vinculada —</option>
+              <option value="">— escolha a OLT —</option>
               {lista.map((o) => <option key={o.id} value={o.id}>{o.nome} · {resumoItem(o)}</option>)}
             </select>
           </div>
-          {eq?.placas && eq.portas_por_placa ? (
+          {num.placas.length && num.portas.length ? (
             <>
               <div>
                 <label className={rot}>Placa PON</label>
-                <select className={campo} value={placa || ""} onChange={(e) => setPorta(+e.target.value, porta || 1)}>
+                <select className={campo} value={lida ? lida.placa : ""} onChange={(e) => setPorta(+e.target.value, lida?.porta ?? num.portas[0])}>
                   <option value="">—</option>
-                  {Array.from({ length: eq.placas }, (_, k) => k + 1).map((v) => <option key={v} value={v}>PL {pad2(v)}</option>)}
+                  {num.placas.map((v) => <option key={v} value={v}>PL {pad2(v)}</option>)}
                 </select>
               </div>
               <div>
                 <label className={rot}>Porta PON</label>
-                <select className={campo} value={porta || ""} onChange={(e) => setPorta(placa || 1, +e.target.value)}>
+                <select className={campo} value={lida ? lida.porta : ""} onChange={(e) => setPorta(lida?.placa ?? num.placas[0], +e.target.value)}>
                   <option value="">—</option>
-                  {Array.from({ length: eq.portas_por_placa }, (_, k) => k + 1).map((v) => <option key={v} value={v}>Porta {pad2(v)}</option>)}
+                  {num.portas.map((v) => <option key={v} value={v}>Porta {pad2(v)}</option>)}
                 </select>
               </div>
             </>
@@ -885,7 +916,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         <div className="col-span-2">
           <label className={rot}>DIO do cadastro</label>
           <select className={campo} value={l.equipamento_id} onChange={(e) => alterar(i, { equipamento_id: e.target.value })}>
-            <option value="">— não vinculado —</option>
+            <option value="">— escolha o DIO —</option>
             {lista.map((o) => <option key={o.id} value={o.id}>{o.nome} · {resumoItem(o)}</option>)}
           </select>
         </div>
@@ -905,7 +936,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function campoSplitter(i: number) {
     const l = linhas[i];
     const valor = l.splitter_modelo && modelosSplitter.some((m) => m.id === l.splitter_modelo) ? `m:${l.splitter_modelo}` : l.splitter;
-    const generico = l.splitter && !SPLITTERS.includes(l.splitter as (typeof SPLITTERS)[number]) && !valor.startsWith("m:");
+    const naoCadastrado = !!l.splitter && !valor.startsWith("m:");
     return (
       <div>
         <label className={rot}>Splitter</label>
@@ -919,16 +950,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           }}
         >
           <option value="">Sem splitter</option>
-          {modelosSplitter.length > 0 && (
-            <optgroup label="Cadastrados">
-              {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome}</option>)}
-            </optgroup>
-          )}
-          <optgroup label="Genérico">
-            {SPLITTERS.map((x) => <option key={x} value={x}>{x}</option>)}
-            {generico && <option value={l.splitter}>{l.splitter}</option>}
-          </optgroup>
+          {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>)}
+          {naoCadastrado && <option value={l.splitter}>{l.splitter} (não cadastrado)</option>}
         </select>
+        {naoCadastrado && <p className="text-[10px] text-red-600 mt-0.5">Troque por um splitter do cadastro.</p>}
+        {!modelosSplitter.length && <p className="text-[10px] text-slate-500 mt-0.5">Nenhum splitter cadastrado (Cadastros → Splitters).</p>}
       </div>
     );
   }
@@ -1123,6 +1149,18 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {linhas.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setVerPendencias((v) => !v)}
+              className={`flex items-center gap-1 px-2.5 py-2 rounded-lg border text-xs font-semibold ${
+                pendencias.length ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-emerald-50 border-emerald-300 text-emerald-700"
+              }`}
+              title="Pendências para salvar"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" /> {pendencias.length ? `${pendencias.length} pendência${pendencias.length > 1 ? "s" : ""}` : "tudo ok"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setVerCalc((v) => !v)}
@@ -1267,6 +1305,22 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
         {/* Lista da rota */}
         <aside className="border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col min-h-0 bg-white">
+          {verPendencias && linhas.length > 0 && (
+            <div className="p-3 border-b border-slate-200 bg-amber-50/60">
+              <p className="text-xs font-semibold text-slate-800 mb-1.5">
+                {pendencias.length ? "Falta resolver para salvar (só equipamentos e cabos do cadastro):" : "Tudo certo para salvar."}
+              </p>
+              <ul className="space-y-1 max-h-40 overflow-auto">
+                {pendencias.map((p, k) => (
+                  <li key={k}>
+                    <button type="button" onClick={() => setSel(p.i)} className="w-full text-left text-[11px] text-amber-900 hover:underline">
+                      • {p.msg}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {verCalc && (
             <div className="p-3 border-b border-slate-200 bg-indigo-50/50 space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -1371,7 +1425,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                           <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${ativo ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700"}`}>
                             {i + 1}
                           </span>
-                          <IconeElemento tipo={l.tipo} tamanho={26} />
+                          <span className="relative">
+                            <IconeElemento tipo={l.tipo} tamanho={26} />
+                            {pendentesDe.has(i) && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white" title="Tem pendência" />}
+                          </span>
                           <div className="min-w-0 flex-1">
                             <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{l.nome || "sem nome"}</p>
                             <p className="text-[10.5px] text-slate-500 truncate flex items-center gap-1">

@@ -34,7 +34,7 @@ function novoItem(categoria: CategoriaCatalogo, usuario: string): ItemCatalogoIn
   if (categoria === "splitter")
     return { categoria, nome: "", relacao: "1:8", balanceamento: "balanceado", conector: "SC/APC", perda_db: PERDA_TIPICA["1:8"], atualizado_por: usuario };
   if (categoria === "dio") return { categoria, nome: "", portas: 24, conector: "SC/APC", atualizado_por: usuario };
-  return { categoria, nome: "", modelo: "", placas: 1, portas_por_placa: 16, potencia_tx: 5, atualizado_por: usuario };
+  return { categoria, nome: "", modelo: "", placas: 1, portas_por_placa: 16, placa_inicial: 1, porta_inicial: 0, potencia_tx: 5, atualizado_por: usuario };
 }
 
 const campo = "w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300";
@@ -290,7 +290,25 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props)
                   <Campo rotulo="Portas por placa">
                     <input className={campo} inputMode="numeric" value={d.portas_por_placa ?? ""} onChange={(e) => set({ portas_por_placa: numero(e.target.value) })} />
                   </Campo>
+                  <Campo rotulo="Placas começam em">
+                    <select className={campo} value={d.placa_inicial ?? 1} onChange={(e) => set({ placa_inicial: parseInt(e.target.value, 10) })}>
+                      <option value={0}>0</option>
+                      <option value={1}>1</option>
+                    </select>
+                  </Campo>
+                  <Campo rotulo="Portas começam em">
+                    <select className={campo} value={d.porta_inicial ?? 1} onChange={(e) => set({ porta_inicial: parseInt(e.target.value, 10) })}>
+                      <option value={0}>0</option>
+                      <option value={1}>1</option>
+                    </select>
+                  </Campo>
                 </div>
+                {d.placas && d.portas_por_placa ? (
+                  <p className="text-[11px] text-slate-500">
+                    Placas {d.placa_inicial ?? 1} a {(d.placa_inicial ?? 1) + d.placas - 1} · portas {d.porta_inicial ?? 1} a {(d.porta_inicial ?? 1) + d.portas_por_placa - 1}
+                    {" "}(ex.: PON {d.placa_inicial ?? 1}/{d.porta_inicial ?? 1})
+                  </p>
+                ) : null}
                 <Campo rotulo="Potência de saída da porta PON (dBm)">
                   <input
                     className={campo}

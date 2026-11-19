@@ -5,7 +5,6 @@ import { GripHorizontal, Loader2, Pencil, Save, X } from "lucide-react";
 import {
   portasPara,
   salvarCaixa,
-  SPLITTERS,
   STATUS_PORTA_LABEL,
   type CaixaRede,
   type PortaCaixa,
@@ -242,6 +241,10 @@ export default function EditorCaixa({
   }
 
   async function salvar() {
+    if (splitter && !(modeloId && modelos.some((m) => m.id === modeloId))) {
+      setErro("Escolha um splitter do cadastro.");
+      return;
+    }
     setSalvando(true);
     setErro(null);
     try {
@@ -337,21 +340,19 @@ export default function EditorCaixa({
               className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
             >
               <option value="">Sem splitter (só passagem/emenda)</option>
-              {modelos.length > 0 && (
-                <optgroup label="Cadastrados">
-                  {modelos.map((m) => (
-                    <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>
-                  ))}
-                </optgroup>
+              {modelos.map((m) => (
+                <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>
+              ))}
+              {splitter && !(modeloId && modelos.some((m) => m.id === modeloId)) && (
+                <option value={splitter}>{splitter} (não cadastrado)</option>
               )}
-              <optgroup label="Genérico">
-                {SPLITTERS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </optgroup>
             </select>
           </div>
 
+          {!modelos.length && <p className="text-[11px] text-red-600">Nenhum splitter cadastrado. Cadastre em Cadastros → Splitters.</p>}
+          {splitter && !(modeloId && modelos.some((m) => m.id === modeloId)) && (
+            <p className="text-[11px] text-red-600">Este splitter não é do cadastro: escolha um modelo cadastrado.</p>
+          )}
           {portas.length > 0 && (
             <div className="space-y-1.5">
               <ResumoPortasChips portas={portas} />
