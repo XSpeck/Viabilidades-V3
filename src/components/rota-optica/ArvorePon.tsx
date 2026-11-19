@@ -9,6 +9,7 @@ import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
+import { listarPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
@@ -93,6 +94,13 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [janelas, setJanelas] = useState<JanelaArv[]>([]);
+  /** Prédios (para oferecer as CDOIs como destino das fibras de um cabo) */
+  const [predios, setPredios] = useState<PredioRede[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    listarPredios().then((ps) => vivo && setPredios(ps)).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   /** Elemento escolhido na busca: a área rola até ele */
   const [foco, setFoco] = useState<{ id: string; vez: number } | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -105,6 +113,30 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
       return [...js, { ...j, x: cx + 28 + desloc, y: cy - 60 + desloc } as JanelaArv];
     });
   }
+  /** Caixas que este cabo alcança (primeiro) e as demais caixas da rede, para o destino de uma fibra */
+  function destinosDoCabo(k: string) {
+    const doCabo = new Set<string>();
+    const todas = new Set<string>();
+    for (const r of rotas) {
+      r.elementos.forEach((e, i) => {
+        if (i === 0 || e.tipo === "olt" || e.tipo === "dio" || e.tipo === "onu") return;
+        todas.add(e.nome);
+        if (e.cabo_entrada && chaveCabo(e.cabo_entrada) === k) doCabo.add(e.nome);
+      });
+    }
+    // CDOIs dos prédios (inclusive as ainda sem rota, com fibra planejada neste cabo)
+    for (const p of predios) {
+      for (const o of p.pontos) {
+        todas.add(o.nome);
+        if (o.cabo && chaveCabo(o.cabo) === k) doCabo.add(o.nome);
+      }
+    }
+    return [
+      ...[...doCabo].sort().map((nome) => ({ nome, doCabo: true })),
+      ...[...todas].filter((x) => !doCabo.has(x)).sort().map((nome) => ({ nome, doCabo: false })),
+    ];
+  }
+
   function fecharJanela(id: string) {
     setJanelas((js) => js.filter((j) => j.id !== id));
   }
@@ -454,6 +486,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 onSalva={onCaboSalvo}
                 onFechar={() => fecharJanela(j.id)}
                 onAbrirRota={onAbrirRota}
+                destinos={destinosDoCabo(k)}
                 semMoldura
               />
             </Janela>

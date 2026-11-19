@@ -31,12 +31,16 @@ interface Props {
   onAbrirRota: (id: string) => void;
   /** Dentro de uma janela: sem barra de título própria */
   semMoldura?: boolean;
+  /** Caixas para escolher como destino de uma fibra marcada à mão (as deste cabo primeiro) */
+  destinos?: { nome: string; doCabo: boolean }[];
 }
 
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, destinos = [] }: Props) {
+  /** Fibras com "Outro (digitar)…" escolhido */
+  const [textoLivre, setTextoLivre] = useState<Set<number>>(new Set());
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
@@ -287,12 +291,51 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                                 <option value="reservada">Reservada</option>
                                 <option value="rompida">Rompida</option>
                               </select>
-                              <input
-                                value={manuais[n]?.descricao ?? ""}
-                                onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: m[n]?.status ?? "livre", descricao: e.target.value } }))}
-                                placeholder="O que vai nesta fibra"
-                                className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-0.5 text-[11px]"
-                              />
+                              {(() => {
+                                const st = manuais[n]?.status ?? "livre";
+                                const desc = manuais[n]?.descricao ?? "";
+                                const setDesc = (v: string) => setManuais((m) => ({ ...m, [n]: { numero: n, status: m[n]?.status ?? "livre", descricao: v } }));
+                                const usarLista = (st === "uso" || st === "reservada") && destinos.length > 0 && !textoLivre.has(n) && (!desc || destinos.some((d) => d.nome === desc));
+                                if (usarLista) {
+                                  const doCabo = destinos.filter((d) => d.doCabo);
+                                  const outros = destinos.filter((d) => !d.doCabo);
+                                  const ja = (v: string) => Object.values(manuais).find((x) => x.numero !== n && x.descricao === v)?.numero;
+                                  const opt = (d: { nome: string }) => {
+                                    const outra = ja(d.nome);
+                                    return (
+                                      <option key={d.nome} value={d.nome}>
+                                        {d.nome.split(" - ")[0].slice(0, 40)}{outra ? ` · já na F${outra}` : ""}
+                                      </option>
+                                    );
+                                  };
+                                  return (
+                                    <select
+                                      value={desc}
+                                      onChange={(e) => {
+                                        if (e.target.value === "__outro") {
+                                          setTextoLivre((t) => new Set(t).add(n));
+                                          setDesc("");
+                                        } else setDesc(e.target.value);
+                                      }}
+                                      className="flex-1 min-w-0 border border-amber-300 rounded px-1 py-0.5 text-[11px] bg-amber-50/60"
+                                      aria-label={`Destino da fibra ${n}`}
+                                    >
+                                      <option value="">Para onde vai esta fibra…</option>
+                                      {doCabo.length > 0 && <optgroup label="Caixas deste cabo">{doCabo.map(opt)}</optgroup>}
+                                      {outros.length > 0 && <optgroup label="Outras caixas da rede">{outros.map(opt)}</optgroup>}
+                                      <option value="__outro">Outro (digitar)…</option>
+                                    </select>
+                                  );
+                                }
+                                return (
+                                  <input
+                                    value={desc}
+                                    onChange={(e) => setDesc(e.target.value)}
+                                    placeholder="O que vai nesta fibra"
+                                    className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-0.5 text-[11px]"
+                                  />
+                                );
+                              })()}
                             </div>
                           )}
                         </li>
