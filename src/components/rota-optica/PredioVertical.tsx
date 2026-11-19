@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
-import { capacidadeDoCabo, corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
+import { capacidadeRegistrada, corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
 import { resumoPortas, totalPernas, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
@@ -853,7 +853,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                       if (!nomesCabos.length) return <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>;
                       const caboSel = o.cabo ?? "";
                       const g = cabos.find((x) => chaveCabo(x.cabo) === chaveCabo(caboSel));
-                      const cap = caboSel ? Math.max(12, capacidadeDoCabo(caboSel, 1)) : 12;
+                      const cap = capacidadeRegistrada(caboSel) ?? 12;
                       return (
                         <div className="mt-1 grid grid-cols-[1fr_92px] gap-1">
                           <select className={campo} value={caboSel} onChange={(e) => mudarPonto(o.id, { cabo: e.target.value || undefined, fibra: undefined })} title="Cabo que leva a fibra até esta CDOI">

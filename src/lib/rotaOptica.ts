@@ -228,6 +228,11 @@ export function registrarCapacidadesCabos(capacidades: Map<string, number>, fibr
   fibrasTubo?.forEach((v, k) => tubosCabos.set(chaveNomeCabo(k), v));
 }
 
+/** Capacidade cadastrada para o cabo (pelo nome), se houver */
+export function capacidadeRegistrada(cabo: string | undefined): number | undefined {
+  return cabo ? capacidadesCabos.get(chaveNomeCabo(cabo)) : undefined;
+}
+
 export function capacidadeDoCabo(cabo: string | undefined, fibra: number): number {
   const c = cabo ? capacidadesCabos.get(chaveNomeCabo(cabo)) : undefined;
   return c && c >= fibra ? c : capacidadeMinima(fibra);
