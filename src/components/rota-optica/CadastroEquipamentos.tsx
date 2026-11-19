@@ -351,7 +351,11 @@ function PreviaTubos({ capacidade, porTubo }: { capacidade: number; porTubo: num
             <span
               key={t}
               className="flex items-center gap-0.5 rounded-full border-2 px-1 py-0.5"
-              style={{ borderColor: capacidade === 1 ? "#cbd5e1" : c0.corTubo?.hex }}
+              style={{
+                borderColor: capacidade === 1 ? "#cbd5e1" : c0.corTubo?.hex,
+                // tubo branco: contorno para aparecer no fundo branco
+                boxShadow: /^#f/i.test(c0.corTubo?.hex ?? "") ? "0 0 0 1px #64748b" : undefined,
+              }}
               title={`Tubo ${t + 1} (${c0.corTubo?.nome.toLowerCase()})`}
             >
               {Array.from({ length: Math.min(nF, 12) }, (_, k) => {
