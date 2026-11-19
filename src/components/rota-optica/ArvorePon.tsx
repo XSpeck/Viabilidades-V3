@@ -31,7 +31,7 @@ type JanelaArv =
 /** Janela ainda sem posição (Omit distribuído pela união). */
 type JanelaNova = JanelaArv extends infer T ? (T extends JanelaArv ? Omit<T, "x" | "y"> : never) : never;
 
-const COL = 160;
+const COL = 180;
 const ROW = 54;
 const PADX = 50;
 const PADY = 44;
@@ -288,9 +288,10 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const d = `M${x1} ${y1}H${mx}V${y2}H${x2}`;
               const cor = corFibra(c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
               const temCabo = !!c.elemento.cabo_entrada;
-              const ex = (mx + x2) / 2 - 2;
               const rot = c.elemento.fibra_entrada ? TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada) : "cabo";
-              const lw = 22 + rot.length * 5.6;
+              const lw = 36 + rot.length * 6;
+              // Reta: etiqueta no meio do trecho; ramo: no trecho horizontal final, longe do ícone
+              const ex = y1 === y2 ? (x1 + x2) / 2 : (mx + x2 - 16) / 2;
               return (
                 <g
                   key={`l${c.id}`}
@@ -306,7 +307,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                     <g transform={`translate(${ex - lw / 2} ${y2 - 9})`}>
                       <rect width={lw} height={18} rx={9} fill="#fff" stroke="#0f172a" strokeWidth={1.3} />
                       <svg x={2} y={2} width={14} height={14} viewBox="0 0 32 32" dangerouslySetInnerHTML={{ __html: DESENHO_CABO }} />
-                      <circle cx={lw - 8} cy={9} r={3.4} fill={cor} stroke="#0f172a" strokeWidth={1} />
+                      <circle cx={lw - 9} cy={9} r={4} fill={cor} stroke="#0f172a" strokeWidth={1} />
                       <text x={19} y={12.6} fontSize={9.5} fontWeight={600} fill="#0f172a">{rot}</text>
                     </g>
                   )}
