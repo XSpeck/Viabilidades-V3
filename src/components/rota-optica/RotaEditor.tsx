@@ -456,14 +456,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
    */
   function dioDepoisDaOlt(olt: Linha, nomeDio: string, saida?: Linha): Partial<Linha> {
     const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`)) ?? tiposDeCabo.find((t) => t.capacidade === 1);
-    const nomeCordao = `Cordão ${olt.nome} → ${nomeDio}`;
-    if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
     const fibra = saida ? n(saida.fibra_entrada) : undefined;
     const cap = saida ? tipoDoCabo(saida.cabo_entrada)?.capacidade : undefined;
     const dio =
       (cap ? dios.find((d) => d.portas === cap) : undefined) ??
       [...dios].filter((d) => (d.portas ?? 0) >= (fibra ?? 1)).sort((a, b) => (a.portas ?? 0) - (b.portas ?? 0))[0] ??
       (dios.length === 1 ? dios[0] : undefined);
+    const nomeCordao = `Cordão ${olt.nome.split(" / ")[0]} → ${dio?.nome ?? nomeDio}`;
+    if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
     return {
       nome: dio?.nome ?? nomeDio,
       cabo_entrada: nomeCordao,
