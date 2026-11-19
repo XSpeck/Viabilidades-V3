@@ -25,6 +25,8 @@ export interface CaboRede {
   chave: string;
   nome: string;
   capacidade?: number;
+  /** Tipo de cabo do cadastro de equipamentos (define capacidade e fibras por tubo) */
+  tipo_id?: string;
   /** Só as fibras anotadas à mão (as demais seguem as rotas ou ficam livres) */
   fibras: FibraCabo[];
   obs?: string;
@@ -117,6 +119,7 @@ export async function listarCabos(): Promise<CaboRede[]> {
       chave: data.chave ?? d.id,
       nome: data.nome ?? "",
       capacidade: typeof data.capacidade === "number" && data.capacidade > 0 ? data.capacidade : undefined,
+      tipo_id: data.tipo_id || undefined,
       fibras: Array.isArray(data.fibras) ? data.fibras : [],
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
@@ -137,6 +140,7 @@ export async function salvarCabo(dados: Omit<CaboRede, "id" | "atualizado_em">):
     chave: dados.chave,
     nome: dados.nome,
     capacidade: dados.capacidade ?? 0,
+    tipo_id: dados.tipo_id ?? "",
     fibras,
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
@@ -146,6 +150,7 @@ export async function salvarCabo(dados: Omit<CaboRede, "id" | "atualizado_em">):
     id,
     ...registro,
     capacidade: registro.capacidade || undefined,
+    tipo_id: registro.tipo_id || undefined,
     obs: registro.obs || undefined,
     atualizado_em: new Date().toISOString(),
   };

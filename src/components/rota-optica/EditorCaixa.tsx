@@ -11,6 +11,7 @@ import {
   type PortaCaixa,
   type StatusPorta,
 } from "@/lib/caixasRede";
+import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { corFibra, TIPO_ELEMENTO_LABEL, type TipoElementoRota } from "@/lib/rotaOptica";
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
   fibraEntrada?: number;
   /** Nomes dos ramos de rota que saem desta caixa na árvore */
   ramos: string[];
+  /** Modelos de splitter do cadastro de equipamentos */
+  modelos: ItemCatalogo[];
   usuario: string;
   onSalva: (c: CaixaRede) => void;
   onFechar: () => void;
@@ -110,16 +113,22 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada }: {
 
 /** Quadro da caixa, aberto em cima do elemento na árvore: desenho do splitter e cadastro das portas. */
 export default function EditorCaixa({
-  chave, nome, tipo, caixa, splitterRota, caboEntrada, fibraEntrada, ramos, usuario, onSalva, onFechar,
+  chave, nome, tipo, caixa, splitterRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar,
 }: Props) {
   const [editando, setEditando] = useState(!caixa);
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
   const [portas, setPortas] = useState<PortaCaixa[]>(portasPara(caixa?.splitter ?? splitterRota, caixa?.portas));
   const [obs, setObs] = useState(caixa?.obs ?? "");
+  const [modeloId, setModeloId] = useState(caixa?.splitter_modelo ?? "");
+  const modeloSalvo = modelos.find((m) => m.id === caixa?.splitter_modelo);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  function trocarSplitter(v: string) {
+  function trocarSplitter(valor: string) {
+    // "m:<id>" = modelo do cadastro; senão relação genérica
+    const m = valor.startsWith("m:") ? modelos.find((x) => x.id === valor.slice(2)) : undefined;
+    const v = m ? m.relacao ?? "" : valor;
+    setModeloId(m?.id ?? "");
     setSplitter(v);
     setPortas((atuais) => portasPara(v || undefined, atuais));
   }
@@ -132,7 +141,7 @@ export default function EditorCaixa({
     setSalvando(true);
     setErro(null);
     try {
-      const salva = await salvarCaixa({ chave, nome, splitter: splitter || undefined, portas, obs, atualizado_por: usuario });
+      const salva = await salvarCaixa({ chave, nome, splitter: splitter || undefined, splitter_modelo: modeloId || undefined, portas, obs, atualizado_por: usuario });
       onSalva(salva);
       setEditando(false);
     } catch (e) {
@@ -166,6 +175,11 @@ export default function EditorCaixa({
           ) : (
             <p className="text-xs text-gray-500">Caixa sem splitter (só passagem/emenda).</p>
           )}
+          {modeloSalvo && (
+            <p className="text-[11px] text-gray-600">
+              <b>{modeloSalvo.nome}</b> · {resumoItem(modeloSalvo)}
+            </p>
+          )}
           {ramos.length > 0 && (
             <p className="text-[11px] text-gray-500">
               Segue para: {ramos.map((r) => curto(r, 30)).join(", ")}
@@ -192,14 +206,23 @@ export default function EditorCaixa({
             <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`spl-${chave}`}>Splitter</label>
             <select
               id={`spl-${chave}`}
-              value={splitter}
+              value={modeloId && modelos.some((m) => m.id === modeloId) ? `m:${modeloId}` : splitter}
               onChange={(e) => trocarSplitter(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
             >
               <option value="">Sem splitter (só passagem/emenda)</option>
-              {SPLITTERS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {modelos.length > 0 && (
+                <optgroup label="Cadastrados">
+                  {modelos.map((m) => (
+                    <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Genérico">
+                {SPLITTERS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </optgroup>
             </select>
           </div>
 

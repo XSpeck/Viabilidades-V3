@@ -13,6 +13,7 @@ import {
   type StatusFibra,
   type UsoFibra,
 } from "@/lib/cabosRede";
+import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 
 interface Props {
   chave: string;
@@ -22,6 +23,8 @@ interface Props {
   uso: Map<number, UsoFibra[]>;
   /** Fibra do trecho clicado, destacada */
   fibraDestaque?: number;
+  /** Tipos de cabo do cadastro de equipamentos */
+  tipos: ItemCatalogo[];
   usuario: string;
   onSalva: (c: CaboRede) => void;
   onFechar: () => void;
@@ -37,11 +40,12 @@ const COR_STATUS: Record<StatusFibra, string> = {
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usuario, onSalva, onFechar, onAbrirRota }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota }: Props) {
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
   const [capacidade, setCapacidade] = useState(capInicial);
+  const [tipoId, setTipoId] = useState(cabo?.tipo_id ?? "");
   const [manuais, setManuais] = useState<Record<number, FibraCabo>>(
     Object.fromEntries((cabo?.fibras ?? []).map((f) => [f.numero, f]))
   );
@@ -56,8 +60,15 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
   }, []);
 
   const cap = editando ? capacidade : cabo?.capacidade ?? capInicial;
+  const tipo = tipos.find((t) => t.id === (editando ? tipoId : cabo?.tipo_id));
   const fibras = Array.from({ length: Math.max(cap, maiorUsada) }, (_, i) => i + 1);
-  const porTubo = fibrasPorTubo(cap);
+  const porTubo = tipo?.fibras_por_tubo ?? fibrasPorTubo(cap);
+
+  function escolherTipo(id: string) {
+    setTipoId(id);
+    const t = tipos.find((x) => x.id === id);
+    if (t?.capacidade) setCapacidade(t.capacidade);
+  }
 
   function statusDe(n: number): StatusFibra {
     const m = (editando ? manuais : Object.fromEntries((cabo?.fibras ?? []).map((f) => [f.numero, f])))[n];
@@ -81,6 +92,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
         chave,
         nome,
         capacidade,
+        tipo_id: tipoId || undefined,
         fibras: Object.values(manuais),
         obs,
         atualizado_por: usuario,
@@ -102,7 +114,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
           <p className="text-[11px] text-indigo-200 flex items-center gap-1">
-            <GripHorizontal className="w-3 h-3" /> Cabo · {cap} fibras{!cabo?.capacidade && !editando ? " (estimado)" : ""}
+            <GripHorizontal className="w-3 h-3" /> {tipo ? tipo.nome : "Cabo"} · {cap} fibras{!cabo?.capacidade && !editando ? " (estimado)" : ""}
           </p>
         </div>
         <button type="button" onClick={onFechar} className="text-indigo-200 hover:text-white shrink-0" aria-label="Fechar cabo">
@@ -120,12 +132,27 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
 
         {editando && (
           <div>
+            <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`tipo-${chave}`}>Tipo de cabo (cadastro)</label>
+            <select
+              id={`tipo-${chave}`}
+              value={tipoId}
+              onChange={(e) => escolherTipo(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white mb-1.5"
+            >
+              <option value="">{tipos.length ? "Sem tipo (só capacidade)" : "Nenhum tipo cadastrado"}</option>
+              {tipos.map((t) => (
+                <option key={t.id} value={t.id} disabled={(t.capacidade ?? 0) < maiorUsada}>
+                  {t.nome} · {resumoItem(t)}{(t.capacidade ?? 0) < maiorUsada ? " (menor que a fibra usada)" : ""}
+                </option>
+              ))}
+            </select>
             <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`cap-${chave}`}>Capacidade do cabo</label>
             <select
               id={`cap-${chave}`}
               value={capacidade}
               onChange={(e) => setCapacidade(parseInt(e.target.value, 10))}
-              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
+              disabled={!!tipoId}
+              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-500"
             >
               {CAPACIDADES.map((c) => (
                 <option key={c} value={c} disabled={c < maiorUsada}>{c} fibras{c < maiorUsada ? " (menor que a fibra usada)" : ""}</option>
@@ -141,7 +168,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
 
         <ul className="max-h-[45vh] overflow-auto divide-y divide-gray-100 border-y border-gray-100">
           {visiveis.map((n, idx) => {
-            const c = corFibraPorCapacidade(n, cap);
+            const c = corFibraPorCapacidade(n, cap, porTubo);
             const st = statusDe(n);
             const usos = uso.get(n) ?? [];
             const novoTubo = idx === 0 || Math.ceil(visiveis[idx - 1] / porTubo) !== Math.ceil(n / porTubo);
@@ -155,7 +182,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
                 {novoTubo && (
                   <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
                     <span className="inline-block w-3 h-3 rounded-full border border-gray-800" style={{ background: corTubo.hex }} />
-                    Tubo {c.tubo} ({corTubo.nome.toLowerCase()}){cap > 12 ? ` · ${porTubo} fibras` : ""}
+                    Tubo {c.tubo} ({corTubo.nome.toLowerCase()}){cap > porTubo ? ` · ${porTubo} fibras` : ""}
                   </p>
                 )}
                 <div className="flex items-start gap-2">

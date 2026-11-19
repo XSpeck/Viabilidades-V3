@@ -107,10 +107,14 @@ function chaveNomeCabo(nome: string): string {
 
 /** Capacidade conhecida de cada cabo (cadastrada ou estimada pelas rotas); preenchida pela tela. */
 const capacidadesCabos = new Map<string, number>();
+/** Fibras por tubo vindas do tipo de cabo cadastrado (quando foge do padrão). */
+const tubosCabos = new Map<string, number>();
 
-export function registrarCapacidadesCabos(capacidades: Map<string, number>): void {
+export function registrarCapacidadesCabos(capacidades: Map<string, number>, fibrasTubo?: Map<string, number>): void {
   capacidadesCabos.clear();
   capacidades.forEach((v, k) => capacidadesCabos.set(chaveNomeCabo(k), v));
+  tubosCabos.clear();
+  fibrasTubo?.forEach((v, k) => tubosCabos.set(chaveNomeCabo(k), v));
 }
 
 export function capacidadeDoCabo(cabo: string | undefined, fibra: number): number {
@@ -129,9 +133,9 @@ export interface InfoFibra {
 }
 
 /** Cor e tubo de uma fibra conhecendo a capacidade do cabo. */
-export function corFibraPorCapacidade(fibra: number | undefined, capacidade: number): InfoFibra {
+export function corFibraPorCapacidade(fibra: number | undefined, capacidade: number, fibrasTubo?: number): InfoFibra {
   if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90", rotulo: "" };
-  const porTubo = fibrasPorTubo(capacidade);
+  const porTubo = fibrasTubo && fibrasTubo > 0 ? fibrasTubo : fibrasPorTubo(capacidade);
   const tubo = Math.ceil(fibra / porTubo);
   const posicao = ((fibra - 1) % porTubo) + 1;
   const [nome, hex] = CORES_FIBRA[(posicao - 1) % 12];
@@ -149,7 +153,9 @@ export function corFibraPorCapacidade(fibra: number | undefined, capacidade: num
 /** Cor e tubo da fibra num cabo (usa a capacidade cadastrada/estimada do cabo). */
 export function corFibra(fibra?: number, cabo?: string): InfoFibra {
   if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90", rotulo: "" };
-  return corFibraPorCapacidade(fibra, capacidadeDoCabo(cabo, fibra));
+  const cap = capacidadeDoCabo(cabo, fibra);
+  const t = cabo ? tubosCabos.get(chaveNomeCabo(cabo)) : undefined;
+  return corFibraPorCapacidade(fibra, cap, t && cap >= fibra ? t : undefined);
 }
 
 /** KML usa aabbggrr; devolve #rrggbb. */

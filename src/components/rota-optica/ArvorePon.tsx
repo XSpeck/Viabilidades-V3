@@ -6,6 +6,7 @@ import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type RotaOptica
 import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import QuadroCabo from "./QuadroCabo";
 
@@ -13,6 +14,7 @@ interface Props {
   rotas: RotaOptica[];
   caixas: CaixaRede[];
   cabos: CaboRede[];
+  catalogo: ItemCatalogo[];
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
   onCaboSalvo: (c: CaboRede) => void;
@@ -72,7 +74,7 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota }: Props) {
   const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
   const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
   const [chave, setChave] = useState<string | null>(null);
@@ -416,6 +418,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSa
                     caboEntrada={no.elemento.cabo_entrada}
                     fibraEntrada={no.elemento.fibra_entrada}
                     ramos={no.filhos.map((f) => f.elemento.nome)}
+                    modelos={catalogo.filter((m) => m.categoria === "splitter")}
                     usuario={usuario}
                     onSalva={onCaixaSalva}
                     onFechar={() => fecharQuadro(q.id)}
@@ -431,6 +434,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSa
                     cabo={cabos.find((c) => c.chave === k)}
                     uso={usoFibras.get(k)?.fibras ?? new Map()}
                     fibraDestaque={q.fibra}
+                    tipos={catalogo.filter((t) => t.categoria === "cabo")}
                     usuario={usuario}
                     onSalva={onCaboSalvo}
                     onFechar={() => fecharQuadro(q.id)}

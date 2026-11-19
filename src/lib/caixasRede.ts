@@ -25,6 +25,8 @@ export interface CaixaRede {
   nome: string;
   /** "1:8", "1:16"... vazio quando a caixa não tem splitter */
   splitter?: string;
+  /** Modelo de splitter do cadastro de equipamentos */
+  splitter_modelo?: string;
   portas: PortaCaixa[];
   obs?: string;
   atualizado_por?: string;
@@ -88,6 +90,7 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       chave: data.chave ?? d.id,
       nome: data.nome ?? "",
       splitter: data.splitter || undefined,
+      splitter_modelo: data.splitter_modelo || undefined,
       portas: Array.isArray(data.portas) ? data.portas : [],
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
@@ -107,10 +110,11 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     chave: dados.chave,
     nome: dados.nome,
     splitter: dados.splitter ?? "",
+    splitter_modelo: dados.splitter ? dados.splitter_modelo ?? "" : "",
     portas,
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
   };
   await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
-  return { id, ...registro, splitter: registro.splitter || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+  return { id, ...registro, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
 }

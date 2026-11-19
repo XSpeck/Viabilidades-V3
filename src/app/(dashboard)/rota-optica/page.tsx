@@ -23,7 +23,9 @@ import ArvorePonView from "@/components/rota-optica/ArvorePon";
 import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
-import { FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
+import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
+import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
+import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -34,13 +36,14 @@ const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ),
 });
 
-type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
+type Modo = { tipo: "ver" } | { tipo: "cadastro" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
 
 export default function RotaOpticaPage() {
   const { user } = useAuth();
   const [rotas, setRotas] = useState<RotaOptica[]>([]);
   const [caixas, setCaixas] = useState<CaixaRede[]>([]);
   const [cabos, setCabos] = useState<CaboRede[]>([]);
+  const [catalogo, setCatalogo] = useState<ItemCatalogo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
@@ -68,6 +71,9 @@ export default function RotaOpticaPage() {
     if (!permitido) return;
     let ativo = true;
     // Caixas são opcionais: se falhar (ex.: regra ainda não publicada), a árvore aparece sem os diagramas.
+    listarCatalogo()
+      .then((it) => { if (ativo) setCatalogo(it); })
+      .catch((e) => console.warn("Não foi possível carregar o cadastro de equipamentos:", e));
     listarCabos()
       .then((cb) => { if (ativo) setCabos(cb); })
       .catch((e) => console.warn("Não foi possível carregar os cabos:", e));
@@ -93,7 +99,16 @@ export default function RotaOpticaPage() {
 
   // Capacidade de cada cabo (cadastrada ou estimada) define tubos e cores das fibras em todas as telas
   const capacidades = useMemo(() => capacidadesDosCabos(cabos, usoDasFibras(rotas)), [cabos, rotas]);
-  registrarCapacidadesCabos(capacidades);
+  // Tipo de cabo cadastrado pode ter tubos fora do padrão (ex.: 96 fibras em tubos de 8)
+  const tubos = useMemo(() => {
+    const m = new Map<string, number>();
+    cabos.forEach((c) => {
+      const t = catalogo.find((i) => i.id === c.tipo_id);
+      if (t?.fibras_por_tubo) m.set(c.chave, t.fibras_por_tubo);
+    });
+    return m;
+  }, [cabos, catalogo]);
+  registrarCapacidadesCabos(capacidades, tubos);
 
   if (!permitido) {
     return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a administradores.</div>;
@@ -169,6 +184,13 @@ export default function RotaOpticaPage() {
             </button>
             <button
               type="button"
+              onClick={() => setModo({ tipo: "cadastro" })}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
+            >
+              <Boxes className="w-4 h-4" /> Cadastros
+            </button>
+            <button
+              type="button"
               onClick={() => setModo({ tipo: "editar", rota: null })}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
             >
@@ -191,6 +213,15 @@ export default function RotaOpticaPage() {
           usuario={user?.nome ?? ""}
           onCancelar={() => setModo({ tipo: "ver" })}
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
+        />
+      )}
+
+      {modo.tipo === "cadastro" && (
+        <CadastroEquipamentos
+          itens={catalogo}
+          usuario={user?.nome ?? ""}
+          onMudou={setCatalogo}
+          onFechar={() => setModo({ tipo: "ver" })}
         />
       )}
 
@@ -232,6 +263,7 @@ export default function RotaOpticaPage() {
             rotas={rotas}
             caixas={caixas}
             cabos={cabos}
+            catalogo={catalogo}
             onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             usuario={user?.nome ?? ""}
             onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
