@@ -4,6 +4,7 @@ import { corFibra, perdaSplitter, tipoVisual, CALCULO_PADRAO } from "@/lib/rotaO
 import { pernasSplitter, type NoArvore } from "@/lib/arvorePon";
 import { totalPernas, portasPara } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
+import { chaveCabo } from "@/lib/cabosRede";
 import { IconeElementoSvg } from "./IconesRede";
 
 /**
@@ -22,6 +23,8 @@ interface Props {
 }
 
 const ROW = 40;
+/** Cor de cada cabo que sai da HUB (A, B, C…) */
+const CORES_CABO = ["#f59e0b", "#38bdf8", "#a78bfa", "#f472b6", "#34d399", "#fb923c"];
 const W = 440;
 const TOPO = 58;
 
@@ -119,6 +122,20 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
   const pior = pontas.length ? Math.min(...pontas) : undefined;
   const usadas = saidas.filter((s) => s.tipo !== "livre").length;
 
+  // A HUB pode mandar as fibras por mais de um cabo: cada cabo ganha uma letra e uma cor
+  const cabosSaida: { chave: string; nome: string; letra: string; cor: string; fibras: { porta: number; fibra?: number; destino: string }[] }[] = [];
+  for (const rm of ramos) {
+    const nome = rm.filho.elemento.cabo_entrada ?? "cabo não informado";
+    const k = chaveCabo(nome);
+    let c = cabosSaida.find((x) => x.chave === k);
+    if (!c) {
+      c = { chave: k, nome, letra: String.fromCharCode(65 + cabosSaida.length), cor: CORES_CABO[cabosSaida.length % CORES_CABO.length], fibras: [] };
+      cabosSaida.push(c);
+    }
+    c.fibras.push({ porta: rm.porta, fibra: rm.filho.elemento.fibra_entrada, destino: rm.sec[0].elemento.nome });
+  }
+  const caboDe = (f: NoArvore) => cabosSaida.find((x) => x.chave === chaveCabo(f.elemento.cabo_entrada ?? "cabo não informado"));
+
   // ---------- Desenho ----------
   const n = saidas.length;
   const H = TOPO + n * ROW + 8;
@@ -152,7 +169,7 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
       <div className="grid grid-cols-4 gap-1.5">
         {[
           { r: "Primário", v: relacao, d: `−${perda.toFixed(1).replace(".", ",")} dB` },
-          { r: "Saídas", v: `${usadas}/${total}`, d: `${total - usadas} livre${total - usadas !== 1 ? "s" : ""}` },
+          { r: "Saídas", v: `${usadas}/${total}`, d: cabosSaida.length > 1 ? `em ${cabosSaida.length} cabos` : `${total - usadas} livre${total - usadas !== 1 ? "s" : ""}` },
           { r: "Clientes", v: capSec ? `${cliSec}/${capSec}` : String(cliSec), d: capSec ? "nos secundários" : "marque os secundários" },
           { r: "Pior ponta", v: pior !== undefined ? dbm(pior) : "—", d: pior !== undefined ? `dBm · ${nivel(pior).texto}` : "sem medida", cor: pior !== undefined ? nivel(pior).cor : undefined },
         ].map((t) => (
@@ -267,12 +284,22 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
             const cFib = corFibra(s.filho.elemento.fibra_entrada, s.filho.elemento.cabo_entrada);
             const ocup = ps ? (ps.clientes + ps.ramais) / ps.total : 0;
             const larg = W - xCard - 6;
+            const cb = caboDe(s.filho);
+            const xBadge = (xAd + 8 + xCard) / 2;
             return (
               <g key={`p${k}`} className={onAbrirNo ? "cursor-pointer" : undefined} onClick={() => onAbrirNo?.(sec.id)}>
                 <title>{`Porta ${s.porta} → ${s.sec.map((x) => x.elemento.nome).join(", ")}${s.sugerida ? " (porta não marcada: sugerida)" : ""}`}</title>
                 <path d={`M${xAd + 8} ${y} H${xCard}`} stroke="#020617" strokeWidth="4.5" />
                 <path d={`M${xAd + 8} ${y} H${xCard}`} stroke={cFib.hex} strokeWidth="1.8" />
                 <rect x={xCard} y={yc + 4} width={larg} height={ROW - 10} rx="8" fill="#1e293b" stroke={s.sugerida ? "#f59e0b" : "#334155"} strokeDasharray={s.sugerida ? "4 2" : undefined} />
+                {/* faixa e letra do cabo por onde esta fibra sai */}
+                {cb && (
+                  <>
+                    <rect x={xCard} y={yc + 8} width="3" height={ROW - 18} rx="1.5" fill={cb.cor} />
+                    <circle cx={xBadge} cy={y} r="6" fill="#0f172a" stroke={cb.cor} strokeWidth="1.6" />
+                    <text x={xBadge} y={y + 2.6} fontSize="7" fill={cb.cor} textAnchor="middle" fontWeight={900}>{cb.letra}</text>
+                  </>
+                )}
                 {/* barra de ocupação do secundário */}
                 {ps && <rect x={xCard + 1} y={yc + ROW - 8} width={(larg - 2) * Math.min(1, ocup)} height="2" rx="1" fill={ocup >= 1 ? "#ef4444" : "#22c55e"} />}
                 <IconeElementoSvg tipo={tipoVisual(sec.elemento)} x={xCard + 15} y={yc + ROW / 2 - 1} tamanho={20} />
@@ -280,7 +307,8 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
                   {curto(sec.elemento.nome, s.sec.length > 1 ? 16 : 22)}{s.sec.length > 1 ? ` +${s.sec.length - 1}` : ""}
                 </text>
                 <text x={xCard + 29} y={yc + ROW / 2 + 9} fontSize="7" fill="#94a3b8">
-                  {ps ? `secundário ${ps.splitter} · ${ps.clientes}/${ps.total} clientes` : "sem splitter"}
+                  {cb ? `${cb.letra} · F${s.filho.elemento.fibra_entrada ?? "?"} · ` : ""}
+                  {ps ? `sec. ${ps.splitter} · ${ps.clientes}/${ps.total} clientes` : "sem splitter"}
                   {s.sugerida ? " · porta?" : ""}
                 </text>
                 <text x={W - 12} y={yc + ROW / 2 - 2} fontSize="9" fill={nv.cor} textAnchor="end" fontWeight={800}>{dbm(pOut ?? pIn)}</text>
@@ -291,6 +319,32 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
           })}
         </svg>
       </div>
+
+      {/* Cabos que saem da HUB */}
+      {cabosSaida.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-slate-600">
+            {cabosSaida.length > 1 ? `Sai em ${cabosSaida.length} cabos` : "Cabo de saída"}
+          </p>
+          {cabosSaida.map((c) => (
+            <div key={c.chave} className="rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] text-slate-100">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black" style={{ border: `1.5px solid ${c.cor}`, color: c.cor }}>{c.letra}</span>
+                {curto(c.nome, 44)}
+                <span className="ml-auto font-normal text-slate-400">{c.fibras.length} fibra{c.fibras.length !== 1 ? "s" : ""}</span>
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {c.fibras.map((f, k) => (
+                  <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px]">
+                    <span className="inline-block h-2 w-2 rounded-full ring-1 ring-white/40" style={{ background: corFibra(f.fibra, c.nome).hex }} />
+                    porta {f.porta} · F{f.fibra ?? "?"} → {curto(f.destino, 16)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Cascata */}
       <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-900">
