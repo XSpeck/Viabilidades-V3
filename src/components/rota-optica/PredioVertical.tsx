@@ -5,6 +5,7 @@ import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
 import { resumoPortas, type CaixaRede } from "@/lib/caixasRede";
+import { chaveCabo } from "@/lib/cabosRede";
 import {
   andaresDoBloco,
   excluirPredio,
@@ -46,10 +47,21 @@ const curto = (s: string, n = 26) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-/** De onde chega a fibra de cada CDOI: da rua (rota) ou de outra CDOI do mesmo prédio */
+interface CaboEntrada {
+  cabo: string;
+  /** Caixa de onde o cabo vem (ex.: o HUB perto do prédio) */
+  de: string;
+  /** Uma fibra para cada CDOI */
+  gotas: { ponto: string; fibra?: number }[];
+}
+
+/**
+ * Como a fibra chega em cada CDOI. Normalmente é UM cabo que sai do HUB próximo e entra no prédio levando
+ * várias fibras, uma para cada CDOI: as CDOIs que recebem pelo mesmo cabo viram um grupo só.
+ * Cabo diferente entre duas CDOIs do prédio vira ligação interna (entre blocos).
+ */
 function chegadas(p: PredioRede, rotas: RotaOptica[]) {
-  const externas: { ponto: string; cabo: string; fibra?: number; de: string }[] = [];
-  const internas: { de: string; para: string; cabo: string; fibra?: number }[] = [];
+  const lista: { ponto: string; cabo: string; fibra?: number; kAnt: string; antNome: string }[] = [];
   const visto = new Set<string>();
   for (const o of p.pontos) {
     if (!o.chave) continue;
@@ -58,17 +70,40 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
       if (i <= 0) continue;
       const e = r.elementos[i];
       const ant = r.elementos[i - 1];
-      const kAnt = chaveElemento(ant);
       const cabo = e.cabo_entrada ?? "cabo não informado";
-      const id = `${o.id}|${kAnt}|${cabo}|${e.fibra_entrada}`;
+      // fibra que só passa por esta CDOI e segue no mesmo cabo para outra CDOI do prédio: não é desta
+      const prox = r.elementos[i + 1];
+      if (
+        prox &&
+        prox.fibra_entrada === e.fibra_entrada &&
+        chaveCabo(prox.cabo_entrada ?? "") === chaveCabo(cabo) &&
+        p.pontos.some((x) => x.chave === chaveElemento(prox))
+      ) continue;
+      const id = `${o.id}|${chaveCabo(cabo)}|${e.fibra_entrada}`;
       if (visto.has(id)) continue;
       visto.add(id);
-      const origem = p.pontos.find((x) => x.chave === kAnt);
-      if (origem) internas.push({ de: origem.id, para: o.id, cabo, fibra: e.fibra_entrada });
-      else externas.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, de: ant.nome });
+      lista.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, kAnt: chaveElemento(ant), antNome: ant.nome });
     }
   }
-  return { externas, internas };
+  const dentro = (k: string) => p.pontos.find((x) => x.chave === k);
+  const grupos = new Map<string, CaboEntrada>();
+  for (const l of lista.filter((x) => !dentro(x.kAnt))) {
+    const k = chaveCabo(l.cabo);
+    const g = grupos.get(k) ?? { cabo: l.cabo, de: l.antNome, gotas: [] };
+    if (!g.gotas.some((x) => x.ponto === l.ponto && x.fibra === l.fibra)) g.gotas.push({ ponto: l.ponto, fibra: l.fibra });
+    grupos.set(k, g);
+  }
+  const internas: { de: string; para: string; cabo: string; fibra?: number }[] = [];
+  for (const l of lista.filter((x) => dentro(x.kAnt))) {
+    const g = grupos.get(chaveCabo(l.cabo));
+    // mesmo cabo que entrou da rua, só passando por outra CDOI: é mais uma fibra do mesmo cabo
+    if (g) {
+      if (!g.gotas.some((x) => x.ponto === l.ponto && x.fibra === l.fibra)) g.gotas.push({ ponto: l.ponto, fibra: l.fibra });
+    } else internas.push({ de: dentro(l.kAnt)!.id, para: l.ponto, cabo: l.cabo, fibra: l.fibra });
+  }
+  const cabos = [...grupos.values()];
+  cabos.forEach((g) => g.gotas.sort((a, b) => (a.fibra ?? 0) - (b.fibra ?? 0)));
+  return { cabos, internas };
 }
 
 export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: Props) {
@@ -227,8 +262,9 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
   predio.blocos.reduce((x, b) => { xs.push(x); return x + largura(b) + GAP; }, ESQ);
   const W = (xs[xs.length - 1] ?? ESQ) + largura(predio.blocos[predio.blocos.length - 1]) + 16;
   const yVala = chao + maxSub * FH + 12; // vala por onde passam os cabos
-  const { externas, internas } = chegadas(predio, rotas);
-  const H = yVala + 16 + internas.length * 7;
+  const { cabos, internas } = chegadas(predio, rotas);
+  const yInterna = yVala + Math.max(cabos.length, 1) * 10 + 4;
+  const H = yInterna + 10 + internas.length * 7;
 
   const posPonto = (o: PontoPredio) => {
     const bi = predio.blocos.findIndex((b) => b.id === o.bloco);
@@ -272,7 +308,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
       {/* calçada / rua */}
       <rect x="0" y={chao - 5} width={ESQ - 14} height="5" fill="#94a3b8" />
       <text x="6" y={chao - 9} fontSize="8" fill="#475569" fontWeight={700}>RUA</text>
-      {externas.length > 0 && <text x="6" y={chao - 19 - externas.length * 8} fontSize="6" fill="#64748b">chega da rua</text>}
+
 
       {predio.blocos.map((b, bi) => {
         const x0 = xs[bi];
@@ -364,7 +400,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
         const pa = a && posPonto(a);
         const pb = b && posPonto(b);
         if (!pa || !pb) return null;
-        const y = yVala + 6 + k * 7;
+        const y = yInterna + k * 7;
         const c = corFibra(l.fibra, l.cabo).hex;
         return (
           <g key={`in${k}`}>
@@ -375,22 +411,54 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
         );
       })}
 
-      {/* fibra que chega da rua */}
-      {externas.map((l, k) => {
-        const o = predio.pontos.find((x) => x.id === l.ponto);
-        const p = o && posPonto(o);
-        if (!p) return null;
-        const y = yVala - k * 5;
-        const c = corFibra(l.fibra, l.cabo);
+      {/* cabo que chega da rua (do HUB próximo): entra inteiro e abre uma fibra para cada CDOI */}
+      {cabos.map((g, gi) => {
+        const y = yVala + gi * 10;
+        const gotas = g.gotas
+          .map((gt) => {
+            const o = predio.pontos.find((x) => x.id === gt.ponto);
+            const p = o && posPonto(o);
+            return o && p ? { ...gt, p, x: p.x - 3, c: corFibra(gt.fibra, g.cabo), nome: o.nome } : null;
+          })
+          .filter((x): x is NonNullable<typeof x> => !!x)
+          .sort((a, b) => a.x - b.x);
+        if (!gotas.length) return null;
+        const xFim = Math.max(...gotas.map((x) => x.x));
+        const xDesce = ESQ - 30 + gi * 4;
+        const capa = `M4 ${chao - 2} H${xDesce} V${y} H${xFim}`;
+        const n = gotas.length;
+        const yRotulo = chao - 30 - gi * 20;
         return (
-          <g key={`ex${k}`}>
-            <title>{`${l.cabo}${l.fibra ? ` · fibra ${l.fibra} ${c.nome}` : ""} · vem de ${l.de}`}</title>
-            <path d={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} fill="none" stroke="#0f172a" strokeWidth="5" strokeLinejoin="round" />
-            <path d={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} fill="none" stroke={c.hex} strokeWidth="2" strokeLinejoin="round" />
-            <circle r="2.2" fill="#fff">
-              <animateMotion dur="3.5s" repeatCount="indefinite" path={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} />
-            </circle>
-            <text x="6" y={chao - 18 - k * 8} fontSize="6.5" fill="#0f172a" fontWeight={700}>{curto(l.cabo, 14)}{l.fibra ? ` F${l.fibra}` : ""}</text>
+          <g key={`cb${gi}`}>
+            <title>{`${g.cabo} · vem de ${g.de} · ${n} fibra${n !== 1 ? "s" : ""}`}</title>
+            {/* capa do cabo */}
+            <path d={capa} fill="none" stroke="#0f172a" strokeWidth={4 + Math.min(n, 6) * 1.2} strokeLinejoin="round" strokeLinecap="round" />
+            {/* fibras dentro do cabo, cada uma saindo para a sua CDOI */}
+            {gotas.map((gt, k) => {
+              const d = (k - (n - 1) / 2) * 1.3;
+              const caminho = `M4 ${chao - 2 + d} H${xDesce + d} V${y + d} H${gt.x} V${gt.p.y}`;
+              return (
+                <g key={k}>
+                  <path d={caminho} fill="none" stroke={gt.c.hex} strokeWidth="1.3" strokeLinejoin="round" />
+                  <circle r="1.6" fill="#fff" opacity=".9">
+                    <animateMotion dur={`${3 + k * 0.4}s`} repeatCount="indefinite" path={caminho} />
+                  </circle>
+                </g>
+              );
+            })}
+            {/* ponto onde cada fibra sai do cabo */}
+            {gotas.map((gt, k) => (
+              <g key={`d${k}`}>
+                <title>{`${gt.fibra ? `Fibra ${gt.fibra} (${gt.c.nome})` : "Fibra"} → ${gt.nome}`}</title>
+                <circle cx={gt.x} cy={y} r="2.6" fill="#fff" stroke={gt.c.hex} strokeWidth="1.4" />
+                {gt.fibra && (
+                  <text x={gt.x + 4} y={y - 4} fontSize="5.8" fontWeight={800} fill="#1c1917">F{gt.fibra}</text>
+                )}
+              </g>
+            ))}
+            {/* etiqueta na rua */}
+            <text x="6" y={yRotulo} fontSize="6.5" fontWeight={800} fill="#0f172a">{curto(g.cabo, 16)}</text>
+            <text x="6" y={yRotulo + 8} fontSize="5.8" fill="#475569">{n} fibra{n !== 1 ? "s" : ""} · de {curto(g.de, 12)}</text>
           </g>
         );
       })}
@@ -472,10 +540,31 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
       {/* Legenda das CDOIs */}
       {!editando && (
         <div className="space-y-1.5">
+          {cabos.map((g, gi) => (
+            <div key={gi} className="rounded-xl border border-slate-300 bg-slate-900 px-2.5 py-2 text-[11px] text-slate-100">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <span className="inline-block h-2.5 w-5 rounded-full bg-black ring-1 ring-slate-500" />
+                {curto(g.cabo, 40)}
+                <span className="ml-auto font-normal text-slate-400">de {curto(g.de, 22)}</span>
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {g.gotas.map((gt, k) => {
+                  const o = predio.pontos.find((x) => x.id === gt.ponto);
+                  const c = corFibra(gt.fibra, g.cabo);
+                  return (
+                    <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px]">
+                      <span className="inline-block h-2 w-2 rounded-full ring-1 ring-white/40" style={{ background: c.hex }} />
+                      {gt.fibra ? `F${gt.fibra}` : "fibra"} → {curto(o?.nome ?? "", 18)}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {predio.pontos.map((o, i) => {
             const b = predio.blocos.find((x) => x.id === o.bloco);
             const pr = portasDe(o);
-            const chega = externas.filter((l) => l.ponto === o.id);
+            const chega = cabos.flatMap((g) => g.gotas.filter((x) => x.ponto === o.id).map((x) => ({ cabo: g.cabo, fibra: x.fibra })));
             const vemDe = internas.filter((l) => l.para === o.id).map((l) => predio.pontos.find((x) => x.id === l.de)?.nome).filter(Boolean);
             return (
               <div key={o.id} className={`flex items-start gap-2 rounded-xl border px-2.5 py-1.5 ${o.chave === chave ? "border-amber-300 bg-amber-50/60" : "border-slate-200 bg-white"}`}>
@@ -488,7 +577,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
                   {chega.map((l, k) => (
                     <p key={k} className="flex items-center gap-1 text-slate-500">
                       <span className="inline-block h-2 w-2 rounded-full" style={{ background: corFibra(l.fibra, l.cabo).hex }} />
-                      chega da rua: {curto(l.cabo, 30)}{l.fibra ? ` · F${l.fibra}` : ""} (de {curto(l.de, 20)})
+                      {l.fibra ? `fibra ${l.fibra} (${corFibra(l.fibra, l.cabo).nome})` : "fibra"} do cabo {curto(l.cabo, 30)}
                     </p>
                   ))}
                   {vemDe.length > 0 && <p className="text-slate-500">recebe de: {vemDe.join(", ")}</p>}
