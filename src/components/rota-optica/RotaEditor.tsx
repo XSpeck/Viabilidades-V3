@@ -256,7 +256,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               ? inicial.trechos.find((t) => t.ate === i)?.pontos.slice(1, -1) ?? []
               : verticesDoKml(inicial.elementos, i, inicial.trechos)
           )
-        )
+        ).map((l) => {
+          // splitter salvo só com a relação (ex.: "1:8"): liga ao modelo do cadastro com a mesma relação
+          if (!l.splitter || catalogo.some((m) => m.categoria === "splitter" && m.id === l.splitter_modelo)) return l;
+          const m = catalogo.find((x) => x.categoria === "splitter" && x.relacao === l.splitter);
+          return m ? { ...l, splitter_modelo: m.id } : l;
+        })
       : []
   );
   const [sel, setSel] = useState<number | null>(null);

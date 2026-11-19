@@ -244,7 +244,13 @@ export default function EditorCaixa({
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
   const [portas, setPortas] = useState<PortaCaixa[]>(portasPara(caixa?.splitter ?? splitterRota, caixa?.portas));
   const [obs, setObs] = useState(caixa?.obs ?? "");
-  const [modeloId, setModeloId] = useState(caixa ? caixa.splitter_modelo ?? "" : modeloRota ?? "");
+  // Modelo do cadastro: o salvo; senão, o da rota; senão, o primeiro do cadastro com a mesma relação (ex.: 1:8)
+  const [modeloId, setModeloId] = useState(() => {
+    const id = caixa ? caixa.splitter_modelo ?? "" : modeloRota ?? "";
+    if (id && modelos.some((m) => m.id === id)) return id;
+    const rel = caixa?.splitter ?? splitterRota;
+    return (rel && modelos.find((m) => m.relacao === rel)?.id) || id;
+  });
   const modeloSalvo = modelos.find((m) => m.id === caixa?.splitter_modelo);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

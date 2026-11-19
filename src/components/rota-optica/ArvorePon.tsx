@@ -599,7 +599,7 @@ function JanelaNo({
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
       ) : aba === "predio" ? (
-        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} />
+        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (

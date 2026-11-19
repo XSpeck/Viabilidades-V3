@@ -30,6 +30,7 @@ import {
   type PredioRede,
 } from "@/lib/prediosRede";
 import { IconeElementoSvg } from "./IconesRede";
+import type { ItemCatalogo } from "@/lib/catalogoRede";
 
 /**
  * Prédio vertical: blocos lado a lado com térreo, andares e subsolos; cada CDOI no seu andar,
@@ -66,6 +67,8 @@ interface Props {
   onAbrirRota?: (id: string) => void;
   /** Uma rota foi criada aqui (a página recarrega as rotas) */
   onRotasMudaram?: () => void;
+  /** Splitters do cadastro (a CDOI nova usa o modelo com a relação escolhida) */
+  modelosSplitter?: ItemCatalogo[];
 }
 
 /** Formulário "Nova CDOI com rota" */
@@ -154,7 +157,7 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
   return { cabos, internas, rotaDe };
 }
 
-export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram }: Props) {
+export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram, modelosSplitter = [] }: Props) {
   const [nova, setNova] = useState<NovaCdoi | null>(null);
   const [criando, setCriando] = useState(false);
   const [predios, setPredios] = useState<PredioRede[] | null>(null);
@@ -412,6 +415,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       potencia_entrada: pin,
       potencia_saida: pin !== undefined ? Math.round((pin - perda) * 100) / 100 : undefined,
       splitter: nova.splitter || undefined,
+      splitter_modelo: nova.splitter ? modelosSplitter.find((m) => m.relacao === nova.splitter)?.id : undefined,
     };
     const cor = corFibra(nova.fibra, ref.cabo).hex;
     const trechos = rt.origem === "geogrid"
