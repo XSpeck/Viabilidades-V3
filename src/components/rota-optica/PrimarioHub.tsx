@@ -176,16 +176,16 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
           <text x={W - 10} y="16" fontSize="8" fill="#94a3b8" textAnchor="end" fontWeight={700} letterSpacing=".08em">SAÍDAS → SECUNDÁRIOS</text>
           <text x={W - 10} y="29" fontSize="8" fill="#94a3b8" textAnchor="end">cada porta {dbm(potSaida)} dBm</text>
 
+          {/* caixa da HUB */}
+          <rect x={xHub} y={yHub0} width={wHub} height={yHub1 - yHub0} rx="12" fill="url(#hubCaixa)" stroke="#818cf8" strokeWidth="1.2" />
+          <text x={xHub + wHub / 2} y={yHub0 + 12} fontSize="7.5" fill="#c7d2fe" textAnchor="middle" fontWeight={800} letterSpacing=".1em">HUB</text>
+
           {/* fibra de entrada */}
           <path d={`M0 ${yMeio} H${xPlc}`} stroke="#020617" strokeWidth="7" strokeLinecap="round" />
           <path d={`M0 ${yMeio} H${xPlc}`} stroke={cIn.hex} strokeWidth="2.6" strokeLinecap="round" />
           <circle r="2.2" fill="#fff">
             <animateMotion dur="1.8s" repeatCount="indefinite" path={`M0 ${yMeio} H${xPlc}`} />
           </circle>
-
-          {/* caixa da HUB */}
-          <rect x={xHub} y={yHub0} width={wHub} height={yHub1 - yHub0} rx="12" fill="url(#hubCaixa)" stroke="#818cf8" strokeWidth="1.2" />
-          <text x={xHub + wHub / 2} y={yHub0 + 12} fontSize="7.5" fill="#c7d2fe" textAnchor="middle" fontWeight={800} letterSpacing=".1em">HUB</text>
 
           {/* fibras do PLC até cada adaptador */}
           {saidas.map((s, k) => {
