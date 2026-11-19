@@ -619,7 +619,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // nome criado pelo editor ("72 FO ASO · DIO → CEO 1"): ao trocar o tipo, o nome acompanha
     const nomeAutomatico = tiposDeCabo.some((c) => atual.startsWith(`${c.nome} · `));
     const nomeCabo =
-      atual && !separar && !(nomeAutomatico && trocouTipo) ? atual : `${t.nome} · ${curtoNome(ant?.nome ?? "")} → ${curtoNome(l.nome)}`;
+      atual && !separar && !(nomeAutomatico && (trocouTipo || !atual.startsWith(`${t.nome} · `))) ? atual : `${t.nome} · ${curtoNome(ant?.nome ?? "")} → ${curtoNome(l.nome)}`;
     setTiposCabo((tc) => ({ ...tc, [chaveCabo(nomeCabo)]: t.id }));
     const fibraOk = (f: string) => {
       const v = n(f);
