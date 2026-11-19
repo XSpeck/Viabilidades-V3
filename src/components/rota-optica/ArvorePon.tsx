@@ -438,6 +438,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             titulo={no.elemento.nome}
             subtitulo={`${TIPO_ELEMENTO_LABEL[t]}${no.elemento.codigo ? ` · ${no.elemento.codigo}` : ""}`}
             icone={<IconeElemento tipo={t} tamanho={22} />}
+            largura={420}
             onFechar={() => fecharJanela(j.id)}
           >
             <JanelaNo

@@ -74,7 +74,7 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada, tipo, pe
   potenciaEntrada?: number;
   conector?: string;
 }) {
-  const W = 340;
+  const W = 400;
   const LIN = 26;
   const TOPO = 30;
   const H = Math.max(150, TOPO + portas.length * LIN + 18);
@@ -156,7 +156,7 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada, tipo, pe
         const livre = p.status === "livre";
         const ySai = meio - hSpl / 2 + 8 + (i * (hSpl - 16)) / Math.max(1, portas.length - 1);
         const ys = portas.length === 1 ? meio : ySai;
-        const texto = livre ? "livre" : curto(p.descricao || (p.status === "cliente" ? "cliente" : "ramal"), 13);
+        const texto = livre ? "livre" : curto(p.descricao || (p.status === "cliente" ? "cliente" : "ramal"), 22);
         return (
           <g key={p.numero}>
             <title>{`Porta ${p.numero}: ${p.descricao || STATUS_PORTA_LABEL[p.status]}`}</title>
