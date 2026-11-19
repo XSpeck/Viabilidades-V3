@@ -51,6 +51,8 @@ interface Props {
   onMoverVertice: (i: number, k: number, lat: number, lon: number) => void;
   onRemoverVertice: (i: number, k: number) => void;
   onInserirCurva: (i: number, lat: number, lon: number) => void;
+  /** Com um tipo escolhido, clicar num cabo insere o elemento ali (i = trecho; -1 = descobrir pelo ponto) */
+  onInserirElemento: (i: number, lat: number, lon: number) => void;
   onRemoverPendente: (k: number) => void;
   /** Rede existente (outras rotas): caixas e cabos ao fundo */
   rede: PontoRede[];
@@ -132,7 +134,7 @@ function Centralizar({ alvo }: { alvo: [number, number] | null }) {
 /** Mapa do editor: as ferramentas decidem o que o clique faz; marcadores e postes arrastam. */
 export default function RotaEditorMapa({
   pontos, trechosFixos, selecionado, ferramenta, pendentes, centroPadrao,
-  onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onRemoverPendente,
+  onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onInserirElemento, onRemoverPendente,
   rede, redeCabos, onClicarRede,
 }: Props) {
   const [satelite, setSatelite] = useState(false);
@@ -244,8 +246,22 @@ export default function RotaEditorMapa({
           <Polyline key={`fc${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: "#0f172a", weight: 8, opacity: 0.7 }} />
         ))}
         {trechosFixos.map((t, k) => (
-          <Polyline key={`f${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: t.cor ?? "#3b82f6", weight: 4 }}>
-            <Tooltip sticky>{t.nome}</Tooltip>
+          <Polyline
+            key={`f${k}`}
+            positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])}
+            pathOptions={{ color: t.cor ?? "#3b82f6", weight: 4 }}
+            eventHandlers={{
+              click: (e) => {
+                if (ferramenta === "selecionar" || ferramenta === "poste") return;
+                L.DomEvent.stopPropagation(e);
+                onInserirElemento(-1, e.latlng.lat, e.latlng.lng);
+              },
+            }}
+          >
+            <Tooltip sticky>
+              {t.nome}
+              {ferramenta !== "selecionar" && ferramenta !== "poste" ? " · clique para inserir aqui" : ""}
+            </Tooltip>
           </Polyline>
         ))}
 
@@ -262,17 +278,23 @@ export default function RotaEditorMapa({
                   pathOptions={{ color: "#000", opacity: 0, weight: 18 }}
                   eventHandlers={{
                     click: (e) => {
-                      if (ferramenta !== "selecionar") return;
+                      if (ferramenta === "poste") return;
                       L.DomEvent.stopPropagation(e);
+                      // Com um tipo escolhido: insere o elemento no meio deste trecho
+                      if (ferramenta !== "selecionar") { onInserirElemento(i, e.latlng.lat, e.latlng.lng); return; }
                       // 1º clique seleciona o trecho (abre o cabo); clique no trecho já selecionado cria um poste
                       if (i !== selecionado) onSelect(i);
                       else onInserirCurva(i, e.latlng.lat, e.latlng.lng);
                     },
                   }}
                 >
-                  {ferramenta === "selecionar" && (
+                  {ferramenta !== "poste" && (
                     <Tooltip sticky>
-                      {i === selecionado ? "Clique para criar um poste aqui (depois arraste)" : `Cabo até ${pontos[i].nome || `elemento ${i + 1}`} · clique para editar`}
+                      {ferramenta !== "selecionar"
+                        ? `Clique para inserir aqui, entre ${pontos[i - 1].nome || `elemento ${i}`} e ${pontos[i].nome || `elemento ${i + 1}`}`
+                        : i === selecionado
+                          ? "Clique para criar um poste aqui (depois arraste)"
+                          : `Cabo até ${pontos[i].nome || `elemento ${i + 1}`} · clique para editar`}
                     </Tooltip>
                   )}
                 </Polyline>

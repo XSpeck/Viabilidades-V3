@@ -419,6 +419,98 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     });
   }
 
+  /** Distância (graus², plano local) do ponto ao segmento a–b, para achar o trecho clicado */
+  function dist2(a: Ponto, b: Ponto, p: Ponto) {
+    const k = Math.cos((p.lat * Math.PI) / 180);
+    const ax = a.lon * k, ay = a.lat, bx = b.lon * k, by = b.lat, px = p.lon * k, py = p.lat;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+    return (ax + t * dx - px) ** 2 + (ay + t * dy - py) ** 2;
+  }
+
+  /** Insere um elemento (tipo da ferramenta) no meio do trecho que chega em i, no ponto clicado */
+  function inserirElemento(iHint: number, lat: number, lon: number, tipoForcado?: TipoElementoRota) {
+    const tipo = tipoForcado ?? (ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : "ceo");
+    const p = { lat, lon };
+    let i = iHint;
+    if (i < 1) {
+      // Descobre o trecho mais perto do ponto (rotas do GeoGrid: linha entre as caixas)
+      let melhor = Infinity;
+      for (let k = 1; k < linhas.length; k++) {
+        const a = posDe(linhas[k - 1]);
+        const b = posDe(linhas[k]);
+        if (!a || !b) continue;
+        const pts = [a, ...linhas[k].vertices, b];
+        for (let j = 0; j < pts.length - 1; j++) {
+          const d = dist2(pts[j], pts[j + 1], p);
+          if (d < melhor) { melhor = d; i = k; }
+        }
+      }
+    }
+    if (i < 1) return clicarMapa(lat, lon);
+    const cur = linhas[i];
+    const a = posDe(linhas[i - 1]);
+    const b = posDe(cur);
+    const pts = a && b ? [a, ...cur.vertices, b] : [];
+    const j = pts.length ? segmentoMaisPerto(pts, p) : 0;
+    const antes = cur.vertices.slice(0, j);
+    const depois = cur.vertices.slice(j);
+    // Distância digitada (ex.: GeoGrid com reserva): divide na proporção do mapa
+    let distNovo = "";
+    let distCur = cur.distancia_m;
+    const autoDist = cur.dist_auto || !n(cur.distancia_m);
+    if (!autoDist && a && b) {
+      const dA = comprimentoTracado([a, ...antes, p]);
+      const dB = comprimentoTracado([p, ...depois, b]);
+      const total = n(cur.distancia_m)!;
+      const parte = Math.round((total * dA) / (dA + dB || 1));
+      distNovo = String(parte);
+      distCur = String(Math.max(0, Math.round(total - parte)));
+    }
+    mudar((ls) => {
+      const c = [...ls];
+      const nova: Linha = {
+        ...linhaVazia(tipo),
+        nome: nomeAuto(tipo, ls),
+        codigo: tipo === "olt" ? "" : proximoCodigo(ls),
+        coords: fmtCoord(p),
+        vertices: antes,
+        dist_auto: autoDist,
+        distancia_m: distNovo,
+        // O mesmo cabo/fibra passa pela caixa nova
+        cabo_entrada: cur.cabo_entrada,
+        fibra_entrada: cur.fibra_entrada,
+      };
+      c[i] = { ...cur, vertices: depois, dist_auto: autoDist, distancia_m: autoDist ? cur.distancia_m : distCur };
+      c.splice(i, 0, nova);
+      return c;
+    });
+    setSel(i);
+    setAviso(null);
+  }
+
+  /** Insere um elemento sem local antes de i (pela lista); o próximo clique no mapa posiciona */
+  function inserirNaLista(i: number) {
+    const tipo: TipoElementoRota = ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : "ceo";
+    const cur = linhas[i];
+    mudar((ls) => {
+      const c = [...ls];
+      c.splice(i, 0, {
+        ...linhaVazia(tipo),
+        nome: nomeAuto(tipo, ls),
+        codigo: tipo === "olt" ? "" : proximoCodigo(ls),
+        dist_auto: true,
+        cabo_entrada: cur?.cabo_entrada ?? "",
+        fibra_entrada: cur?.fibra_entrada ?? "",
+      });
+      // O trecho seguinte agora sai da caixa nova: os postes antigos ficam com ele
+      return c;
+    });
+    setSel(i);
+    setFerramenta("selecionar");
+    setAviso(`Clique no mapa onde fica o novo ${PREFIXO[tipo]} (entre ${linhas[i - 1]?.nome ?? "o início"} e ${cur?.nome ?? "o fim"}).`);
+  }
+
   function inserirCurva(i: number, lat: number, lon: number) {
     const a = posDe(linhas[i - 1]);
     const b = posDe(linhas[i]);
@@ -848,7 +940,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           ? pontosRede.length
             ? `Clique numa caixa da rede (ícones claros) para continuar a partir dela, ou no mapa para colocar a ${nomeFerramenta}.`
             : `Clique no mapa onde fica a ${nomeFerramenta}. Ela é o início da rota.`
-          : `Clique no mapa para colocar ${nomeFerramenta} (ou em cima de um ícone da rota para o mesmo local)${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
+          : `Clique no mapa para colocar ${nomeFerramenta} no fim, em cima de um cabo para inserir no meio, ou num ícone para o mesmo local${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -931,6 +1023,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             onMoverVertice={(i, k, lat, lon) => alterar(i, { vertices: linhas[i].vertices.map((v, j) => (j === k ? { lat, lon } : v)) })}
             onRemoverVertice={(i, k) => alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) })}
             onInserirCurva={inserirCurva}
+            onInserirElemento={(i, lat, lon) => inserirElemento(i, lat, lon)}
             onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
             rede={pontosRede}
             redeCabos={redeInfo.cabos}
@@ -1061,7 +1154,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     <li key={i} ref={(el) => { itemRefs.current[i] = el; }}>
                       {/* Trecho de cabo que chega */}
                       {i > 0 && (
-                        <div className="flex items-stretch gap-2 pl-[22px]">
+                        <div className="group/trecho relative flex items-stretch gap-2 pl-[22px]">
+                          <button
+                            type="button"
+                            onClick={() => inserirNaLista(i)}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/trecho:opacity-100 focus:opacity-100 rounded-full border border-indigo-300 bg-white text-indigo-700 text-[10px] font-semibold px-2 py-0.5 shadow-sm hover:bg-indigo-50"
+                            title="Inserir um elemento entre estes dois"
+                          >
+                            + inserir aqui
+                          </button>
                           <span className="w-[6px] rounded-full border-2 border-slate-800 my-0.5" style={{ background: info?.c.hex ?? "#cbd5e1", minHeight: 26 }} />
                           <p className="text-[10.5px] text-slate-500 py-1 leading-tight truncate">
                             {l.cabo_entrada ? <span className="text-slate-700 font-medium">{l.cabo_entrada.split(" - ")[0]}</span> : <span className="text-amber-600">cabo não informado</span>}
