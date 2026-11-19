@@ -34,6 +34,8 @@ export interface PontoEditor {
   vertices: Ponto[];
   /** Cor da fibra que chega (para pintar o trecho) */
   cor?: string;
+  /** Etiqueta do trecho que chega (cabo · fibra · metros) */
+  rotulo?: string;
 }
 
 interface Props {
@@ -58,6 +60,8 @@ interface Props {
   rede: PontoRede[];
   redeCabos: { pts: [number, number][]; cor?: string }[];
   onClicarRede: (k: number) => void;
+  /** Enquadra o trecho que chega no elemento i */
+  focoTrecho?: { i: number; vez: number } | null;
 }
 
 function marcador(tipo: TipoElementoRota, numero: number, ativo: boolean) {
@@ -123,6 +127,18 @@ function Enquadrar({ pontos }: { pontos: [number, number][] }) {
   return null;
 }
 
+/** Dá zoom num trecho (útil para cabos curtos, como o que sai da estação) */
+function FocarTrecho({ pts, vez }: { pts: [number, number][] | null; vez: number }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!pts || pts.length < 2) return;
+    map.fitBounds(L.latLngBounds(pts), { padding: [90, 90], maxZoom: 20 });
+    // só quando pedido (vez muda)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, vez]);
+  return null;
+}
+
 function Centralizar({ alvo }: { alvo: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
@@ -135,7 +151,7 @@ function Centralizar({ alvo }: { alvo: [number, number] | null }) {
 export default function RotaEditorMapa({
   pontos, trechosFixos, selecionado, ferramenta, pendentes, centroPadrao,
   onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onInserirElemento, onRemoverPendente,
-  rede, redeCabos, onClicarRede,
+  rede, redeCabos, onClicarRede, focoTrecho,
 }: Props) {
   const [satelite, setSatelite] = useState(false);
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -203,6 +219,7 @@ export default function RotaEditorMapa({
         <Cliques onClicar={onClicarMapa} />
         <Enquadrar pontos={todos.length ? todos : pontosRede} />
         <Centralizar alvo={alvo} />
+        <FocarTrecho pts={focoTrecho ? trechos.find((t) => t.i === focoTrecho.i)?.pts ?? null : null} vez={focoTrecho?.vez ?? 0} />
         <IrPara alvo={achado} />
         {achado && (
           <Marker
@@ -272,7 +289,13 @@ export default function RotaEditorMapa({
             return (
               <Fragment key={`t${i}`}>
                 <Polyline positions={pts} pathOptions={{ color: ativo ? "#ca8a04" : "#0f172a", weight: ativo ? 10 : 8, opacity: 0.85, lineCap: "round", lineJoin: "round" }} />
-                <Polyline positions={pts} pathOptions={{ color: pontos[i].cor ?? "#3b82f6", weight: 4, lineCap: "round", lineJoin: "round" }} />
+                <Polyline positions={pts} pathOptions={{ color: pontos[i].cor ?? "#3b82f6", weight: 4, lineCap: "round", lineJoin: "round" }}>
+                  {ativo && pontos[i].rotulo && (
+                    <Tooltip permanent direction="top" className="!bg-amber-50 !border-amber-400 !text-amber-900 !font-semibold">
+                      {pontos[i].rotulo}
+                    </Tooltip>
+                  )}
+                </Polyline>
                 <Polyline
                   positions={pts}
                   pathOptions={{ color: "#000", opacity: 0, weight: 18 }}

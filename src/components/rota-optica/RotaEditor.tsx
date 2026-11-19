@@ -256,6 +256,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   );
   const [verCalc, setVerCalc] = useState(false);
   const [verPendencias, setVerPendencias] = useState(false);
+  /** Pede ao mapa para enquadrar um trecho (ex.: cabo curto que sai da estação) */
+  const [focoTrecho, setFocoTrecho] = useState<{ i: number; vez: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -395,17 +397,20 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (sel !== null && sel < linhas.length - 1 && tipo !== "olt") {
       const prox = linhas[sel + 1];
       const ref = linhas[sel];
+      const nomeNovo = nomeAuto(tipo, linhas);
+      const extra = tipo === "dio" && ref.tipo === "olt" ? dioDepoisDaOlt(ref, nomeNovo, prox) : {};
       mudar((ls) => {
         const c = [...ls];
         c.splice(sel + 1, 0, {
           ...linhaVazia(tipo),
-          nome: nomeAuto(tipo, ls),
+          nome: nomeNovo,
           codigo: proximoCodigo(ls),
           coords: fmtCoord(p),
           vertices: pendentes,
           dist_auto: true,
-          cabo_entrada: ref.tipo === "dio" ? prox.cabo_entrada : prox.cabo_entrada,
+          cabo_entrada: prox.cabo_entrada,
           fibra_entrada: prox.fibra_entrada,
+          ...extra,
         });
         return c;
       });
@@ -415,6 +420,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
     // Colocar um elemento: entra no fim, ligado ao anterior pelo mesmo cabo/fibra, com os postes marcados
     const novoIndice = linhas.length;
+    const ultimo = linhas[linhas.length - 1];
+    const extraDio = tipo === "dio" && ultimo?.tipo === "olt" ? dioDepoisDaOlt(ultimo, nomeAuto("dio", linhas)) : {};
     const olt = tipo === "olt" && olts.length === 1 ? olts[0] : undefined;
     mudar((ls) => {
       const ant = ls[ls.length - 1];
@@ -431,6 +438,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         fibra_entrada: ant?.tipo === "dio" ? ant.porta.match(/Porta\s*0*(\d+)/i)?.[1] ?? "" : ant?.fibra_entrada ?? "",
         equipamento_id: olt?.id ?? "",
         potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
+        ...extraDio,
       };
       return [...ls, nova];
     });
@@ -440,6 +448,32 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // Depois da OLT normalmente vem o DIO; depois do DIO, a caixa de emenda
     if (tipo === "olt") setFerramenta("dio");
     else if (tipo === "dio") setFerramenta("ceo");
+  }
+
+  /**
+   * DIO colocado logo depois da OLT: chega por um cordão (3 m, fibra 1); a porta do DIO é a fibra do cabo
+   * que já sai para fora (porta N = fibra N) e o DIO sugerido é o do mesmo tamanho desse cabo.
+   */
+  function dioDepoisDaOlt(olt: Linha, nomeDio: string, saida?: Linha): Partial<Linha> {
+    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`)) ?? tiposDeCabo.find((t) => t.capacidade === 1);
+    const nomeCordao = `Cordão ${olt.nome} → ${nomeDio}`;
+    if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
+    const fibra = saida ? n(saida.fibra_entrada) : undefined;
+    const cap = saida ? tipoDoCabo(saida.cabo_entrada)?.capacidade : undefined;
+    const dio =
+      (cap ? dios.find((d) => d.portas === cap) : undefined) ??
+      [...dios].filter((d) => (d.portas ?? 0) >= (fibra ?? 1)).sort((a, b) => (a.portas ?? 0) - (b.portas ?? 0))[0] ??
+      (dios.length === 1 ? dios[0] : undefined);
+    return {
+      nome: dio?.nome ?? nomeDio,
+      cabo_entrada: nomeCordao,
+      fibra_entrada: "1",
+      distancia_m: "3",
+      dist_auto: false,
+      vertices: [],
+      equipamento_id: dio?.id ?? "",
+      porta: fibra ? `Porta ${pad2(fibra)}` : "",
+    };
   }
 
   /** Cria OLT + DIO no mesmo local, ligados por um cordão */
@@ -697,7 +731,17 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const pontosMapa: PontoEditor[] = linhas.map((l) => {
     const p = posDe(l);
     const f = n(l.fibra_entrada);
-    return { nome: l.nome, tipo: l.tipo, lat: p?.lat, lon: p?.lon, vertices: l.vertices, cor: f ? infoFibra(l.cabo_entrada, l.fibra_entrada)?.c.hex : undefined };
+    const info = f ? infoFibra(l.cabo_entrada, l.fibra_entrada) : null;
+    const d = n(l.distancia_m);
+    return {
+      nome: l.nome,
+      tipo: l.tipo,
+      lat: p?.lat,
+      lon: p?.lon,
+      vertices: l.vertices,
+      cor: info?.c.hex,
+      rotulo: `${l.cabo_entrada.split(" - ")[0] || "cabo ?"}${info ? ` · ${info.c.rotulo}` : ""}${d !== undefined ? ` · ${formatMetros(d)}` : ""}`,
+    };
   });
 
   // ---------- Potência ----------
@@ -1218,6 +1262,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             onRemoverVertice={(i, k) => alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) })}
             onInserirCurva={inserirCurva}
             onInserirElemento={(i, lat, lon) => inserirElemento(i, lat, lon)}
+            focoTrecho={focoTrecho}
             onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
             rede={pontosRede}
             redeCabos={redeInfo.cabos}
@@ -1382,7 +1427,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <>
               {estacao && (
                 <div className={`mb-3 ${sel === 0 || sel === 1 ? "ring-2 ring-indigo-300 rounded-2xl" : ""}`}>
-                  <EstacaoOltDio dados={estacao} olts={olts} dios={dios} tiposCabo={tiposDeCabo} onMudar={aplicarEstacao} />
+                  <EstacaoOltDio
+                    dados={estacao}
+                    olts={olts}
+                    dios={dios}
+                    tiposCabo={tiposDeCabo}
+                    onMudar={aplicarEstacao}
+                    onVerSaida={linhas[2] ? () => { setSel(2); setFerramenta("selecionar"); setFocoTrecho((f) => ({ i: 2, vez: (f?.vez ?? 0) + 1 })); } : undefined}
+                  />
                   {linhas.length > 2 && <p className="mt-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fora da estação</p>}
                 </div>
               )}

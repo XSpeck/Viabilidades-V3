@@ -29,6 +29,8 @@ interface Props {
   dios: ItemCatalogo[];
   tiposCabo: ItemCatalogo[];
   onMudar: (p: Partial<DadosEstacao>) => void;
+  /** Mostra no mapa o cabo que sai do DIO */
+  onVerSaida?: () => void;
 }
 
 const pad2 = (v: number) => String(v).padStart(2, "0");
@@ -36,7 +38,7 @@ const campo = "w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-
 const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
 
 /** Estação (POP): OLT → cordão → DIO → cabo para fora, desenhada como um rack clicável. */
-export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }: Props) {
+export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, onVerSaida }: Props) {
   const olt = olts.find((o) => o.id === dados.oltEquip);
   const dio = dios.find((d) => d.id === dados.dioEquip);
   const tipoSaida = tiposCabo.find((t) => t.id === dados.saidaTipo);
@@ -291,6 +293,15 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar }:
             <p className="text-[11px] text-slate-500">Coloque no mapa a primeira caixa fora da estação; o cabo de saída é configurado aqui.</p>
           ) : (
             <>
+              {onVerSaida && (
+                <button
+                  type="button"
+                  onClick={onVerSaida}
+                  className="w-full flex items-center justify-center gap-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-semibold py-1 hover:bg-amber-100"
+                >
+                  Ver no mapa o cabo até {curto(dados.destino || "a primeira caixa", 24)}
+                </button>
+              )}
               <input
                 className={campo}
                 list="cabos-conhecidos"
