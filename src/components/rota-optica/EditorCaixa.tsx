@@ -52,6 +52,10 @@ interface Props {
   semMoldura?: boolean;
   /** Potência (dBm) que chega na caixa, para estimar a das portas */
   potenciaEntrada?: number;
+  /** A caixa sempre tem splitter (HUB): some a opção "sem splitter" */
+  exigeSplitter?: boolean;
+  /** Abre direto na edição; Cancelar e Salvar voltam com onFechar (a vista fica em outro lugar) */
+  soEdicao?: boolean;
 }
 
 const COR_STATUS: Record<StatusPorta, string> = {
@@ -232,11 +236,11 @@ function ResumoPortasChips({ portas }: { portas: PortaCaixa[] }) {
 
 /** Quadro da caixa, aberto em cima do elemento na árvore: desenho do splitter e cadastro das portas. */
 export default function EditorCaixa({
-  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, saidas = [], modelos, usuario, onSalva, onFechar, semMoldura, potenciaEntrada,
+  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, saidas = [], modelos, usuario, onSalva, onFechar, semMoldura, potenciaEntrada, exigeSplitter, soEdicao,
 }: Props) {
   /** Portas com "Outra…" escolhida no Ramal (texto livre) */
   const [livreTexto, setLivreTexto] = useState<Set<number>>(new Set());
-  const [editando, setEditando] = useState(!caixa);
+  const [editando, setEditando] = useState(!caixa || !!soEdicao);
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
   const [portas, setPortas] = useState<PortaCaixa[]>(portasPara(caixa?.splitter ?? splitterRota, caixa?.portas));
   const [obs, setObs] = useState(caixa?.obs ?? "");
@@ -259,6 +263,10 @@ export default function EditorCaixa({
   }
 
   async function salvar() {
+    if (exigeSplitter && !splitter) {
+      setErro("A HUB sempre tem splitter: escolha o splitter primário do cadastro.");
+      return;
+    }
     if (splitter && !(modeloId && modelos.some((m) => m.id === modeloId))) {
       setErro("Escolha um splitter do cadastro.");
       return;
@@ -268,7 +276,8 @@ export default function EditorCaixa({
     try {
       const salva = await salvarCaixa({ chave, nome, splitter: splitter || undefined, splitter_modelo: modeloId || undefined, portas, obs, atualizado_por: usuario });
       onSalva(salva);
-      setEditando(false);
+      if (soEdicao) onFechar();
+      else setEditando(false);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar a caixa.");
     } finally {
@@ -350,14 +359,18 @@ export default function EditorCaixa({
       ) : (
         <div className={`p-3 space-y-3 ${semMoldura ? "" : "max-h-[60vh] overflow-auto"}`}>
           <div>
-            <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`spl-${chave}`}>Splitter</label>
+            <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`spl-${chave}`}>{exigeSplitter ? "Splitter primário" : "Splitter"}</label>
             <select
               id={`spl-${chave}`}
               value={modeloId && modelos.some((m) => m.id === modeloId) ? `m:${modeloId}` : splitter}
               onChange={(e) => trocarSplitter(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
             >
-              <option value="">Sem splitter (só passagem/emenda)</option>
+              {exigeSplitter ? (
+                <option value="" disabled>Escolha o splitter primário…</option>
+              ) : (
+                <option value="">Sem splitter (só passagem/emenda)</option>
+              )}
               {modelos.map((m) => (
                 <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>
               ))}
@@ -468,7 +481,7 @@ export default function EditorCaixa({
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => (caixa ? setEditando(false) : onFechar())}
+              onClick={() => (caixa && !soEdicao ? setEditando(false) : onFechar())}
               className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
             >
               Cancelar

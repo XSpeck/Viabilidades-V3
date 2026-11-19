@@ -68,7 +68,7 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
         <p className="mt-1 text-xs text-slate-500">Escolha o splitter (ex.: 1:8) do cadastro para ver as saídas até os secundários.</p>
         {onEditarPortas && (
           <button type="button" onClick={onEditarPortas} className="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
-            Definir splitter
+            Escolher o splitter primário
           </button>
         )}
       </div>
@@ -136,6 +136,18 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
 
   return (
     <div className="p-3 space-y-3">
+      {onEditarPortas && (
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-slate-500">Splitter primário da HUB e para onde vai cada porta.</p>
+          <button
+            type="button"
+            onClick={onEditarPortas}
+            className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-indigo-400"
+          >
+            ✎ Editar splitter e portas
+          </button>
+        </div>
+      )}
       {/* Números */}
       <div className="grid grid-cols-4 gap-1.5">
         {[

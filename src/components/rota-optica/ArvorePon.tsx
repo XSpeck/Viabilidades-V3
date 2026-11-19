@@ -511,6 +511,8 @@ function JanelaNo({
   const [aba, setAba] = useState<"primario" | "predio" | "emendas" | "diagrama" | "caminho">(
     ehHub ? "primario" : ehCdoi ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
+  /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
+  const [editandoHub, setEditandoHub] = useState(false);
   return (
     <div>
       <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
@@ -518,7 +520,7 @@ function JanelaNo({
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
           ...(ehCdoi ? ([["predio", "Prédio"]] as const) : []),
           ["emendas", "Emendas"],
-          ["diagrama", "Splitter e portas"],
+          ...(ehHub ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -534,7 +536,31 @@ function JanelaNo({
         ))}
       </div>
       {aba === "primario" ? (
-        <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setAba("diagrama")} />
+        editandoHub ? (
+          <EditorCaixa
+            key={`ed-${chaveElemento(no.elemento)}`}
+            chave={chaveElemento(no.elemento)}
+            nome={no.elemento.nome}
+            tipo={no.elemento.tipo}
+            caixa={no.caixa}
+            splitterRota={no.elemento.splitter}
+            modeloRota={no.elemento.splitter_modelo}
+            caboEntrada={no.elemento.cabo_entrada}
+            fibraEntrada={no.elemento.fibra_entrada}
+            ramos={no.filhos.map((f) => f.elemento.nome)}
+            saidas={no.filhos.map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+            modelos={catalogo.filter((m) => m.categoria === "splitter")}
+            usuario={usuario}
+            onSalva={onCaixaSalva}
+            onFechar={() => setEditandoHub(false)}
+            potenciaEntrada={no.elemento.potencia_entrada}
+            exigeSplitter
+            soEdicao
+            semMoldura
+          />
+        ) : (
+          <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
+        )
       ) : aba === "predio" ? (
         <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} />
       ) : aba === "emendas" ? (
