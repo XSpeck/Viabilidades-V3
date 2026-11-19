@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
-import { capacidadeRegistrada, corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
+import { capacidadeRegistrada, corFibra, distanciaMetros, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
 import { resumoPortas, totalPernas, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
@@ -35,6 +35,8 @@ const TOPO = 44; // telhado + nome do bloco
 const POCO = 26; // largura do poço da prumada
 /** Normalmente cabem no máximo 4 CDOIs por bloco */
 const MAX_POR_BLOCO = 4;
+/** Só entram no prédio as CDOIs que estão perto dele (metros) */
+const RAIO_PREDIO = 60;
 /** Meta: as portas das CDOIs atendem pelo menos 50% dos apartamentos */
 const META_COBERTURA = 0.5;
 
@@ -152,10 +154,27 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
   const predio = rascunho ?? salvo;
   const editando = !!rascunho;
 
-  // CDOIs da rede (todas as rotas), para colocar no prédio
+  // CDOIs da rede (todas as rotas), com a posição, para colocar no prédio
   const cdoisRede = new Map<string, string>();
-  rotas.forEach((r) => r.elementos.forEach((e) => { if (tipoVisual(e) === "cdoi") cdoisRede.set(chaveElemento(e), e.nome); }));
+  const posCdoi = new Map<string, { lat: number; lon: number }>();
+  rotas.forEach((r) =>
+    r.elementos.forEach((e) => {
+      if (tipoVisual(e) !== "cdoi") return;
+      const k = chaveElemento(e);
+      cdoisRede.set(k, e.nome);
+      if (e.lat !== undefined && e.lon !== undefined && !posCdoi.has(k)) posCdoi.set(k, { lat: e.lat, lon: e.lon });
+    }),
+  );
   if (!cdoisRede.has(chave)) cdoisRede.set(chave, nome);
+  /** Está perto do prédio? (de qualquer CDOI já colocada nele, ou desta) */
+  const pertoDe = (k: string, chaves: string[]) => {
+    const a = posCdoi.get(k);
+    if (!a) return false;
+    return chaves.some((c) => {
+      const b = posCdoi.get(c);
+      return !!b && distanciaMetros(a, b) <= RAIO_PREDIO;
+    });
+  };
   const emOutroPredio = new Set((predios ?? []).filter((p) => p.id !== predio?.id).flatMap((p) => p.chaves));
 
   function mudar(fn: (p: PredioRede) => PredioRede) {
@@ -246,7 +265,8 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
 
   // ---------- Sem prédio: montar um ou entrar num existente ----------
   if (!predio) {
-    const outros = predios.filter((p) => !p.chaves.includes(chave));
+    // só prédios perto desta CDOI
+    const outros = predios.filter((p) => !p.chaves.includes(chave) && pertoDe(chave, p.chaves));
     return (
       <div className="p-4 space-y-3">
         {erroCarga && <p className="text-xs text-red-600">{erroCarga}</p>}
@@ -886,9 +906,16 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
               onChange={(e) => { if (e.target.value === "__nova") addPonto(""); else if (e.target.value) addPonto(e.target.value); }}
             >
               <option value="">+ Colocar outra CDOI…</option>
-              {[...cdoisRede.entries()]
-                .filter(([k]) => !predio.pontos.some((o) => o.chave === k) && !emOutroPredio.has(k))
-                .map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+              {(() => {
+                const ancoras = [chave, ...predio.pontos.map((o) => o.chave).filter(Boolean)];
+                const livres = [...cdoisRede.entries()].filter(([k]) => !predio.pontos.some((o) => o.chave === k) && !emOutroPredio.has(k));
+                const perto = livres.filter(([k]) => pertoDe(k, ancoras));
+                return perto.length ? (
+                  <optgroup label={`CDOIs perto deste prédio (até ${RAIO_PREDIO} m)`}>
+                    {perto.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+                  </optgroup>
+                ) : null;
+              })()}
               <option value="__nova">CDOI ainda sem rota (só desenho)</option>
             </select>
           </div>
