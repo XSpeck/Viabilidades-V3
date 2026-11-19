@@ -605,6 +605,39 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setSel(novoIndice);
   }
 
+  /**
+   * Cabos que já saem da caixa anterior (nas outras rotas salvas), com as fibras em uso.
+   * Ex.: da HUB já sai "06 FO ASO · HUB → CDOI Ed Majestoso" com a F1: a próxima CDOI pode seguir nele na F2.
+   */
+  function cabosSaindoDe(i: number) {
+    const ant = linhas[i - 1];
+    if (!ant || i < 1) return [];
+    const k = chaveLinha(ant);
+    const mapa = new Map<string, { nome: string; usadas: Set<number> }>();
+    for (const r of rede) {
+      r.elementos.forEach((e, j) => {
+        if (chaveElemento(e) !== k) return;
+        const prox = r.elementos[j + 1];
+        if (!prox?.cabo_entrada?.trim()) return;
+        const kc = chaveCabo(prox.cabo_entrada);
+        const m = mapa.get(kc) ?? { nome: prox.cabo_entrada.trim(), usadas: new Set<number>() };
+        if (prox.fibra_entrada) m.usadas.add(prox.fibra_entrada);
+        mapa.set(kc, m);
+      });
+    }
+    return [...mapa.entries()].map(([chave, m]) => {
+      const cap = tipoDoCabo(m.nome)?.capacidade ?? 12;
+      let livre: number | undefined;
+      for (let f = 1; f <= cap; f++) if (!m.usadas.has(f)) { livre = f; break; }
+      return { chave, nome: m.nome, usadas: [...m.usadas].sort((a, b) => a - b), livre, cap };
+    });
+  }
+
+  /** Segue num cabo que já sai da caixa anterior, na próxima fibra livre */
+  function continuarCabo(i: number, nome: string, fibra?: number) {
+    alterar(i, { cabo_entrada: nome, fibra_entrada: fibra ? String(fibra) : "" });
+  }
+
   /** Escolhe um tipo de cabo do cadastro para o trecho que chega em i */
   function usarTipoCabo(i: number, t: ItemCatalogo) {
     const l = linhas[i];
@@ -1111,9 +1144,51 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <IconeCabo tamanho={16} /> Cabo que chega aqui
               <span className="ml-auto font-normal text-amber-700">em amarelo no mapa</span>
             </p>
+            {(() => {
+              const existentes = cabosSaindoDe(i);
+              if (!existentes.length) return null;
+              return (
+                <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-1.5">
+                  <p className="text-[10px] font-semibold text-emerald-800 mb-1">
+                    Seguir num cabo que já sai de {linhas[i - 1]?.nome.split(" - ")[0].split(" / ")[0]} (usa a próxima fibra livre):
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {existentes.map((c) => {
+                      const ativo = kCabo === c.chave;
+                      const cor = c.livre ? infoFibra(c.nome, String(c.livre))?.c ?? null : null;
+                      return (
+                        <button
+                          key={c.chave}
+                          type="button"
+                          disabled={!c.livre && !ativo}
+                          onClick={() => !ativo && continuarCabo(i, c.nome, c.livre)}
+                          title={`Fibras em uso: ${c.usadas.map((f) => `F${f}`).join(", ") || "nenhuma"}`}
+                          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] ${ativo ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-300 bg-white text-slate-700 hover:border-emerald-500"} disabled:opacity-50`}
+                        >
+                          <span className="min-w-0 flex-1 truncate font-medium">{c.nome}</span>
+                          <span className={`shrink-0 text-[10px] ${ativo ? "text-emerald-100" : "text-slate-500"}`}>
+                            em uso {c.usadas.map((f) => `F${f}`).join(" ")}
+                          </span>
+                          {ativo ? (
+                            <span className="shrink-0 text-[10px] font-bold">✓ neste cabo</span>
+                          ) : c.livre ? (
+                            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-800">
+                              <span className="inline-block h-2 w-2 rounded-full ring-1 ring-black/20" style={{ background: cor?.hex }} />
+                              usar F{c.livre}
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-[10px] text-red-600">cheio</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {tiposDeCabo.length > 0 && (
               <div className="mb-2">
-                <p className="text-[10px] text-slate-500 mb-1">Cabo do cadastro (um clique preenche nome, tipo e fibra):</p>
+                <p className="text-[10px] text-slate-500 mb-1">Ou um cabo novo do cadastro (um clique preenche nome, tipo e fibra):</p>
                 <div className="flex flex-wrap gap-1">
                   {tiposDeCabo.map((t) => {
                     const ativo = !!kCabo && tiposCabo[kCabo] === t.id;
