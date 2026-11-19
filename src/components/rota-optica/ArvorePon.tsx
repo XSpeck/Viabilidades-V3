@@ -211,7 +211,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
           if (ch !== arvore.chave) { setChave(ch); setJanelas([]); }
           setSelId(noId);
           setFoco((f) => ({ id: noId, vez: (f?.vez ?? 0) + 1 }));
-          abrirJanela({ id: `no:${noId}`, tipo: "no", noId }, Math.max(20, window.innerWidth / 2 - 20), 140);
+          abrirJanela({ id: `no:${noId}`, tipo: "no", noId }, Math.max(20, window.innerWidth - 480), 120);
         }}
         onCabo={(nome) => abrirJanela({ id: `cabo:${chaveCabo(nome)}`, tipo: "cabo", cabo: nome }, Math.max(20, window.innerWidth / 2 - 200), 140)}
       />
