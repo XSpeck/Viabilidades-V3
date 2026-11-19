@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowDown, ArrowUp, Crosshair, Loader2, MapPin, Plus, Route, Save, Trash2, Undo2, X } from "lucide-react";
+import {
+  ArrowDown, ArrowUp, ChevronDown, Loader2, MapPin, MousePointer2, Plus, Route, Save, Settings2, Trash2, Undo2, X,
+} from "lucide-react";
 import {
   CALCULO_PADRAO,
   calcularPotencias,
@@ -22,14 +24,14 @@ import {
 import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { SPLITTERS } from "@/lib/caixasRede";
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
-import type { ModoMapa, PontoEditor } from "./RotaEditorMapa";
-import { IconeElemento } from "./IconesRede";
+import type { Ferramenta, PontoEditor } from "./RotaEditorMapa";
+import { IconeCabo, IconeElemento } from "./IconesRede";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
   loading: () => (
-    <div className="h-[520px] bg-gray-100 rounded-xl flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+    <div className="h-full bg-slate-100 flex items-center justify-center">
+      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
     </div>
   ),
 });
@@ -55,7 +57,7 @@ interface Linha {
   equipamento_id: string;
   porta: string;
   coords: string;
-  /** Curvas do cabo (postes) no trecho que chega neste elemento */
+  /** Postes do cabo no trecho que chega neste elemento */
   vertices: Ponto[];
   obs: string;
 }
@@ -113,7 +115,7 @@ function posDe(l: Linha): Ponto | null {
   return c.lat !== undefined && c.lon !== undefined ? { lat: c.lat, lon: c.lon } : null;
 }
 
-/** Comprimento pelo mapa do trecho que chega em ls[i] (anterior → curvas → este). */
+/** Comprimento pelo mapa do trecho que chega em ls[i] (anterior → postes → este). */
 function distMapa(ls: Linha[], i: number): number | null {
   if (i === 0) return null;
   const a = posDe(ls[i - 1]);
@@ -128,6 +130,49 @@ function recalcular(ls: Linha[]): Linha[] {
     const d = distMapa(ls, i);
     return d === null ? l : { ...l, distancia_m: String(d) };
   });
+}
+
+/** Índice do segmento (entre pts[j] e pts[j+1]) mais perto do ponto, em plano local. */
+function segmentoMaisPerto(pts: Ponto[], p: Ponto): number {
+  const k = Math.cos((p.lat * Math.PI) / 180);
+  let melhor = 0;
+  let dMin = Infinity;
+  for (let j = 0; j < pts.length - 1; j++) {
+    const ax = pts[j].lon * k, ay = pts[j].lat, bx = pts[j + 1].lon * k, by = pts[j + 1].lat, px = p.lon * k, py = p.lat;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+    const d = (ax + t * dx - px) ** 2 + (ay + t * dy - py) ** 2;
+    if (d < dMin) { dMin = d; melhor = j; }
+  }
+  return melhor;
+}
+
+const PALETA: { t: TipoElementoRota; rot: string }[] = [
+  { t: "olt", rot: "OLT" },
+  { t: "dio", rot: "DIO" },
+  { t: "ceo", rot: "CEO" },
+  { t: "ct", rot: "CT" },
+  { t: "hub", rot: "HUB" },
+  { t: "cto", rot: "CTO" },
+  { t: "cdoi", rot: "CDOI" },
+  { t: "onu", rot: "Cliente" },
+];
+
+const PREFIXO: Record<TipoElementoRota, string> = {
+  olt: "OLT", dio: "DIO", ceo: "CEO", ct: "CT", hub: "HUB", cto: "CTO", cdoi: "CDOI", onu: "Cliente", outro: "Ponto",
+};
+
+function nomeAuto(tipo: TipoElementoRota, ls: Linha[]): string {
+  const qtd = ls.filter((l) => l.tipo === tipo).length;
+  return tipo === "olt" && qtd === 0 ? "OLT" : `${PREFIXO[tipo]} ${qtd + 1}`;
+}
+
+function nivelCor(v?: number) {
+  if (v === undefined) return "text-slate-500";
+  if (v >= -20) return "text-emerald-600";
+  if (v >= -25) return "text-lime-600";
+  if (v >= -27) return "text-amber-600";
+  return "text-red-600";
 }
 
 interface Props {
@@ -156,22 +201,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       ? inicial.elementos.map((e, i) =>
           paraLinha(e, trechosFixos.length ? [] : inicial.trechos.find((t) => t.ate === i)?.pontos.slice(1, -1) ?? [])
         )
-      : [linhaVazia("olt"), linhaVazia("cto")]
+      : []
   );
   const [sel, setSel] = useState<number | null>(null);
-  const [modo, setModo] = useState<ModoMapa>("adicionar");
-  const [tipoNovo, setTipoNovo] = useState<TipoElementoRota>("ceo");
+  const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "olt");
+  const [pendentes, setPendentes] = useState<Ponto[]>([]);
   const [tiposCabo, setTiposCabo] = useState<Record<string, string>>(() =>
     Object.fromEntries(cabos.filter((c) => c.tipo_id).map((c) => [c.chave, c.tipo_id!]))
   );
-  const [aviso, setAviso] = useState<string | null>(null);
   // Potência: automática por padrão; rotas do GeoGrid já vêm com a potência calculada lá
   const [calc, setCalc] = useState<CalculoPotencia>(
     () => inicial?.calculo_potencia ?? (inicial?.origem === "geogrid" ? { ...CALCULO_PADRAO, auto: false } : CALCULO_PADRAO)
   );
+  const [verCalc, setVerCalc] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const cardRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const [historico, setHistorico] = useState<Linha[][]>([]);
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   const tiposDeCabo = catalogo.filter((c) => c.categoria === "cabo");
   const modelosSplitter = catalogo.filter((c) => c.categoria === "splitter");
@@ -179,30 +226,39 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const dios = catalogo.filter((c) => c.categoria === "dio");
 
   useEffect(() => {
-    if (sel !== null) cardRefs.current[sel]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (sel !== null) itemRefs.current[sel]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [sel]);
 
+  // ---------- Alterações (com histórico para desfazer) ----------
   function mudar(fn: (ls: Linha[]) => Linha[]) {
+    setHistorico((h) => [...h.slice(-49), linhas]);
     setLinhas((ls) => recalcular(fn(ls)));
   }
-
   function alterar(i: number, mudanca: Partial<Linha>) {
     mudar((ls) => ls.map((l, j) => (j === i ? { ...l, ...mudanca } : l)));
   }
-
-  /** Cabo/fibra de saída de um elemento = cabo/fibra de chegada do próximo: preenche o outro lado se estiver vazio ou igual. */
-  function alterarLigacao(i: number, lado: "entrada" | "saida", campo: "cabo" | "fibra", valor: string) {
-    mudar((ls) => {
-      const c = ls.map((l) => ({ ...l }));
-      const k = `${campo}_${lado}` as "cabo_entrada" | "fibra_entrada" | "cabo_saida" | "fibra_saida";
-      const antigo = c[i][k];
-      c[i][k] = valor;
-      const j = lado === "saida" ? i + 1 : i - 1;
-      const ko = `${campo}_${lado === "saida" ? "entrada" : "saida"}` as typeof k;
-      if (c[j] && (c[j][ko] === "" || c[j][ko] === antigo)) c[j][ko] = valor;
-      return c;
-    });
+  function desfazer() {
+    if (pendentes.length) return setPendentes((p) => p.slice(0, -1));
+    const ant = historico[historico.length - 1];
+    if (ant) {
+      setHistorico((h) => h.slice(0, -1));
+      setLinhas(ant);
+      setSel((s0) => (s0 !== null && s0 < ant.length ? s0 : null));
+    }
   }
+
+  // Atalhos: Esc = Selecionar; Ctrl+Z = desfazer (fora dos campos)
+  const desfazerRef = useRef(desfazer);
+  useEffect(() => { desfazerRef.current = desfazer; });
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      const campoAtivo = /INPUT|TEXTAREA|SELECT/.test((e.target as HTMLElement).tagName);
+      if (e.key === "Escape") { setFerramenta("selecionar"); setAviso(null); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !campoAtivo) { e.preventDefault(); desfazerRef.current(); }
+    };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
 
   function mover(i: number, d: -1 | 1) {
     mudar((ls) => {
@@ -210,17 +266,26 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       if (j < 0 || j >= ls.length) return ls;
       const c = [...ls];
       [c[i], c[j]] = [c[j], c[i]];
-      // As curvas do cabo pertencem ao trecho, que mudou: descarta as dos dois
-      c[i] = { ...c[i], vertices: [] };
-      c[j] = { ...c[j], vertices: [] };
-      if (c[j + 1]) c[j + 1] = { ...c[j + 1], vertices: [] };
+      // Os postes pertencem ao trecho, que mudou: descarta os dos trechos afetados
+      [i, j, Math.max(i, j) + 1].forEach((k) => { if (c[k]) c[k] = { ...c[k], vertices: [] }; });
       return c;
     });
     setSel((s0) => (s0 === i ? i + d : s0));
   }
 
   function remover(i: number) {
-    mudar((ls) => ls.filter((_, j) => j !== i).map((l, j) => (j === i ? { ...l, vertices: [] } : l)));
+    mudar((ls) => {
+      const c = [...ls];
+      const tirado = c[i];
+      const prox = c[i + 1];
+      // O cabo passa direto: postes do trecho removido + local da caixa removida viram postes do próximo trecho
+      if (prox) {
+        const p = posDe(tirado);
+        c[i + 1] = { ...prox, vertices: i === 0 ? [] : [...tirado.vertices, ...(p ? [p] : []), ...prox.vertices], dist_auto: true };
+      }
+      c.splice(i, 1);
+      return c;
+    });
     setSel(null);
   }
 
@@ -228,39 +293,59 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function clicarMapa(lat: number, lon: number) {
     setAviso(null);
     const p = { lat, lon };
-    if (modo === "tracar") {
-      if (sel === null || sel === 0) return setAviso("Selecione o elemento onde o cabo chega (a partir do 2º) e clique nos postes do caminho.");
-      if (!posDe(linhas[sel - 1])) return setAviso(`Posicione antes o elemento ${sel} no mapa.`);
-      alterar(sel, { vertices: [...linhas[sel].vertices, p] });
+    if (ferramenta === "poste") {
+      if (!linhas.some((l) => posDe(l))) return setAviso("Coloque primeiro a OLT (ou o ponto de partida) no mapa.");
+      setPendentes((ps) => [...ps, p]);
       return;
     }
-    if (modo === "posicionar") {
-      if (sel === null) return setAviso("Selecione um elemento (no mapa ou na lista) e clique onde ele fica.");
-      alterar(sel, { coords: fmtCoord(p) });
+    if (ferramenta === "selecionar") {
+      if (sel !== null && !posDe(linhas[sel])) alterar(sel, { coords: fmtCoord(p) });
       return;
     }
-    // adicionar: posiciona o próximo elemento sem local; se todos têm, cria um novo no fim
-    const livre = linhas.findIndex((l) => !posDe(l));
-    if (livre >= 0) {
-      alterar(livre, { coords: fmtCoord(p) });
-      setSel(livre);
-      return;
-    }
-    const ant = linhas[linhas.length - 1];
-    const nova: Linha = {
-      ...linhaVazia(tipoNovo),
-      coords: fmtCoord(p),
-      cabo_entrada: ant?.cabo_saida ?? "",
-      fibra_entrada: ant?.fibra_saida ?? "",
-    };
-    mudar((ls) => [...ls, nova]);
-    setSel(linhas.length);
+    // Colocar um elemento: entra no fim, ligado ao anterior pelo mesmo cabo/fibra, com os postes marcados
+    const tipo = ferramenta;
+    const novoIndice = linhas.length;
+    const olt = tipo === "olt" && olts.length === 1 ? olts[0] : undefined;
+    mudar((ls) => {
+      const ant = ls[ls.length - 1];
+      const nova: Linha = {
+        ...linhaVazia(tipo),
+        nome: olt?.nome ?? nomeAuto(tipo, ls),
+        coords: fmtCoord(p),
+        vertices: ls.length ? pendentes : [],
+        dist_auto: true,
+        cabo_entrada: ant?.cabo_entrada ?? "",
+        fibra_entrada: ant?.fibra_entrada ?? "",
+        equipamento_id: olt?.id ?? "",
+        potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
+      };
+      return [...ls, nova];
+    });
+    setPendentes([]);
+    setSel(novoIndice);
+    // Depois da OLT, o normal é seguir com caixas de emenda
+    if (tipo === "olt") setFerramenta("ceo");
+  }
+
+  function inserirCurva(i: number, lat: number, lon: number) {
+    const a = posDe(linhas[i - 1]);
+    const b = posDe(linhas[i]);
+    if (!a || !b) return;
+    const pts = [a, ...linhas[i].vertices, b];
+    const j = segmentoMaisPerto(pts, { lat, lon });
+    const v = [...linhas[i].vertices];
+    v.splice(j, 0, { lat, lon });
+    alterar(i, { vertices: v });
+    setSel(i);
   }
 
   const pontosMapa: PontoEditor[] = linhas.map((l) => {
     const p = posDe(l);
-    return { nome: l.nome, tipo: l.tipo, lat: p?.lat, lon: p?.lon, vertices: l.vertices };
+    const f = n(l.fibra_entrada);
+    return { nome: l.nome, tipo: l.tipo, lat: p?.lat, lon: p?.lon, vertices: l.vertices, cor: f ? infoFibra(l.cabo_entrada, l.fibra_entrada)?.c.hex : undefined };
   });
+
+  // ---------- Potência ----------
   const tx = linhas[0] ? n(linhas[0].potencia_saida) ?? n(linhas[0].potencia_entrada) : undefined;
   const pots =
     calc.auto && tx !== undefined
@@ -275,9 +360,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           calc
         )
       : null;
-  const potFinal = pots?.[pots.length - 1]?.saida;
-  const totalMapa = linhas.reduce((t, _, i) => t + (distMapa(linhas, i) ?? 0), 0);
-  const totalInformado = linhas.reduce((t, l) => t + (n(l.distancia_m) ?? 0), 0);
+  const potDe = (i: number) => (pots ? pots[i]?.saida : n(linhas[i].potencia_saida) ?? n(linhas[i].potencia_entrada));
+  const potFinal = linhas.length ? potDe(linhas.length - 1) : undefined;
+  const totalDist = linhas.reduce((t, l) => t + (n(l.distancia_m) ?? 0), 0);
 
   // ---------- Cadastro ----------
   function tipoDoCabo(nomeCabo: string): ItemCatalogo | undefined {
@@ -295,29 +380,34 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   async function salvar() {
     setErro(null);
-    if (!nome.trim()) return setErro("Dê um nome para a rota.");
-    if (linhas.length < 2) return setErro("A rota precisa de pelo menos 2 elementos.");
+    if (!nome.trim()) return setErro("Dê um nome para a rota (campo no topo).");
+    if (linhas.length < 2) return setErro("A rota precisa de pelo menos 2 elementos: a OLT e o ponto final.");
     const elementos: ElementoRota[] = [];
     for (let i = 0; i < linhas.length; i++) {
       const l = linhas[i];
       if (!l.nome.trim()) {
         setSel(i);
-        return setErro(`Elemento ${i + 1}: informe o nome.`);
+        return setErro(`Elemento ${i + 1} está sem nome.`);
       }
       const c = parseCoords(l.coords);
-      if (c.erro) return setErro(`Elemento ${i + 1}: coordenadas inválidas. Use "-28.6917, -49.3423".`);
-      for (const [cabo, fibra] of [[l.cabo_entrada, l.fibra_entrada], [l.cabo_saida, l.fibra_saida]] as const) {
-        if (infoFibra(cabo, fibra)?.excede) return setErro(`Elemento ${i + 1}: fibra ${fibra} não existe no cabo "${cabo}" (${tipoDoCabo(cabo)?.nome}).`);
+      if (c.erro) { setSel(i); return setErro(`Elemento ${i + 1}: coordenadas inválidas. Use "-28.6917, -49.3423".`); }
+      if (infoFibra(l.cabo_entrada, l.fibra_entrada)?.excede) {
+        setSel(i);
+        return setErro(`Elemento ${i + 1}: a fibra ${l.fibra_entrada} não existe no cabo "${l.cabo_entrada}".`);
       }
+      // Saída de um elemento = chegada do próximo (quando informada)
+      const prox = linhas[i + 1];
+      const caboSaida = prox?.cabo_entrada.trim() || l.cabo_saida.trim();
+      const fibraSaida = prox && n(prox.fibra_entrada) !== undefined ? n(prox.fibra_entrada) : n(l.fibra_saida);
       elementos.push({
         nome: l.nome.trim(),
         tipo: l.tipo,
         codigo: l.codigo.trim() || undefined,
-        cabo_entrada: l.cabo_entrada.trim() || undefined,
-        fibra_entrada: n(l.fibra_entrada),
-        cabo_saida: l.cabo_saida.trim() || undefined,
-        fibra_saida: n(l.fibra_saida),
-        distancia_m: n(l.distancia_m),
+        cabo_entrada: i > 0 ? l.cabo_entrada.trim() || undefined : undefined,
+        fibra_entrada: i > 0 ? n(l.fibra_entrada) : undefined,
+        cabo_saida: prox ? caboSaida || undefined : undefined,
+        fibra_saida: prox ? fibraSaida : undefined,
+        distancia_m: i > 0 ? n(l.distancia_m) : undefined,
         potencia_entrada: pots ? pots[i].entrada : n(l.potencia_entrada),
         potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
         splitter: l.splitter.trim() || undefined,
@@ -343,7 +433,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     try {
       // Tipo de cabo escolhido aqui vai para o cadastro do cabo (vale para todas as rotas)
       const nomesUsados = new Map<string, string>();
-      linhas.forEach((l) => [l.cabo_entrada, l.cabo_saida].forEach((c) => c.trim() && nomesUsados.set(chaveCabo(c), c.trim())));
+      linhas.forEach((l) => l.cabo_entrada.trim() && nomesUsados.set(chaveCabo(l.cabo_entrada), l.cabo_entrada.trim()));
       for (const [chave, nomeCabo] of nomesUsados) {
         const novo = tiposCabo[chave] ?? "";
         const atual = cabos.find((c) => c.chave === chave);
@@ -376,67 +466,30 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
   }
 
-  const campo = "w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300";
-  const rot = "block text-[11px] text-gray-500 mb-0.5";
+  // ---------- Campos do painel ----------
+  const campo = "w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400";
+  const rot = "block text-[11px] font-medium text-slate-500 mb-0.5";
 
-  function seletorTipoCabo(nomeCabo: string, rotulo = "Tipo do cabo") {
-    if (!tiposDeCabo.length) return null;
-    const k = nomeCabo.trim() ? chaveCabo(nomeCabo) : "";
-    return (
-      <div>
-        <label className={rot}>{rotulo}</label>
-        <select
-          className={campo}
-          disabled={!k}
-          value={k ? tiposCabo[k] ?? "" : ""}
-          onChange={(e) => setTiposCabo((t) => ({ ...t, [k]: e.target.value }))}
-          title={k ? "Vale para este cabo em todas as rotas" : "Informe o nome do cabo"}
-        >
-          <option value="">{k ? "— não definido —" : "—"}</option>
-          {tiposDeCabo.map((t) => (
-            <option key={t.id} value={t.id}>{t.nome}</option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  function campoFibra(i: number, lado: "entrada" | "saida") {
+  function campoFibra(i: number) {
     const l = linhas[i];
-    const cabo = lado === "entrada" ? l.cabo_entrada : l.cabo_saida;
-    const valor = lado === "entrada" ? l.fibra_entrada : l.fibra_saida;
-    const t = tipoDoCabo(cabo);
-    const info = infoFibra(cabo, valor);
+    const t = tipoDoCabo(l.cabo_entrada);
+    const info = infoFibra(l.cabo_entrada, l.fibra_entrada);
     return (
       <div>
-        <label className={rot}>
-          Fibra de {lado === "entrada" ? "chegada" : "saída"}
+        <label className={rot}>Fibra</label>
+        <div className="relative">
           {info && (
-            <span className={`ml-1 inline-flex items-center gap-1 ${info.excede ? "text-red-600" : "text-gray-600"}`}>
-              <span className="inline-block w-2.5 h-2.5 rounded-full border border-gray-800 align-middle" style={{ background: info.c.hex }} />
-              {info.c.nome.toLowerCase()} · {info.c.rotulo}
-            </span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-slate-800 pointer-events-none" style={{ background: info.c.hex }} />
           )}
-        </label>
-        <select
-          className={campo}
-          value={valor}
-          onChange={(e) => alterarLigacao(i, lado, "fibra", e.target.value)}
-          title={t ? undefined : "Escolha o tipo do cabo para ver o tubo de cada fibra"}
-        >
-          <option value="">—</option>
-          {Array.from({ length: Math.max(t?.capacidade ?? 144, n(valor) ?? 0) }, (_, k) => k + 1).map((f) => {
-            if (!t?.capacidade) {
-              return <option key={f} value={String(f)}>F{pad2(f)} {corFibraPorCapacidade(f, 12).nome.toLowerCase()}</option>;
-            }
-            const c = corFibraPorCapacidade(f, t.capacidade, t.fibras_por_tubo ?? fibrasPorTubo(t.capacidade));
-            return (
-              <option key={f} value={String(f)}>
-                F{pad2(f)} {c.nome.toLowerCase()} · tubo {c.tubo} ({c.corTubo?.nome.toLowerCase()}){f > t.capacidade ? " ⚠" : ""}
-              </option>
-            );
-          })}
-        </select>
+          <select className={`${campo} ${info ? "pl-7" : ""} ${info?.excede ? "border-red-400" : ""}`} value={l.fibra_entrada} onChange={(e) => alterar(i, { fibra_entrada: e.target.value })}>
+            <option value="">—</option>
+            {Array.from({ length: Math.max(t?.capacidade ?? 144, n(l.fibra_entrada) ?? 0) }, (_, k) => k + 1).map((f) => {
+              if (!t?.capacidade) return <option key={f} value={String(f)}>F{pad2(f)} {corFibraPorCapacidade(f, 12).nome.toLowerCase()}</option>;
+              const c = corFibraPorCapacidade(f, t.capacidade, t.fibras_por_tubo ?? fibrasPorTubo(t.capacidade));
+              return <option key={f} value={String(f)}>F{pad2(f)} {c.nome.toLowerCase()} · T{c.tubo}{f > t.capacidade ? " ⚠" : ""}</option>;
+            })}
+          </select>
+        </div>
       </div>
     );
   }
@@ -454,7 +507,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       return (
         <>
           <div className="col-span-2">
-            <label className={rot}>OLT cadastrada</label>
+            <label className={rot}>OLT do cadastro</label>
             <select
               className={campo}
               value={l.equipamento_id}
@@ -462,8 +515,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 const x = lista.find((o) => o.id === e.target.value);
                 alterar(i, {
                   equipamento_id: e.target.value,
-                  nome: l.nome.trim() ? l.nome : x?.nome ?? "",
-                  potencia_saida: x?.potencia_tx !== undefined ? String(x.potencia_tx).replace(".", ",") : l.potencia_saida,
+                  nome: x && (!l.nome.trim() || /^OLT( \d+)?$/.test(l.nome)) ? x.nome : l.nome,
+                  potencia_saida: x?.potencia_tx !== undefined ? s(x.potencia_tx) : l.potencia_saida,
                 });
               }}
             >
@@ -496,7 +549,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return (
       <>
         <div className="col-span-2">
-          <label className={rot}>DIO cadastrado</label>
+          <label className={rot}>DIO do cadastro</label>
           <select className={campo} value={l.equipamento_id} onChange={(e) => alterar(i, { equipamento_id: e.target.value })}>
             <option value="">— não vinculado —</option>
             {lista.map((o) => <option key={o.id} value={o.id}>{o.nome} · {resumoItem(o)}</option>)}
@@ -534,7 +587,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           <option value="">Sem splitter</option>
           {modelosSplitter.length > 0 && (
             <optgroup label="Cadastrados">
-              {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>)}
+              {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome}</option>)}
             </optgroup>
           )}
           <optgroup label="Genérico">
@@ -546,115 +599,287 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     );
   }
 
-  const modos: { k: ModoMapa; rotulo: string; icone: React.ReactNode; dica: string }[] = [
-    { k: "adicionar", rotulo: "Adicionar", icone: <Plus className="w-3.5 h-3.5" />, dica: "Clique no mapa: posiciona o próximo elemento sem local ou cria um novo no fim da rota." },
-    { k: "posicionar", rotulo: "Reposicionar", icone: <Crosshair className="w-3.5 h-3.5" />, dica: "Clique no mapa para mudar o local do elemento selecionado (ou arraste o marcador)." },
-    { k: "tracar", rotulo: "Traçar cabo", icone: <Route className="w-3.5 h-3.5" />, dica: "Clique nos postes do caminho do cabo até o elemento selecionado. Clique numa curva para removê-la." },
-  ];
+  /** Painel do elemento selecionado (abre dentro da lista) */
+  function painel(i: number) {
+    const l = linhas[i];
+    const dm = distMapa(linhas, i);
+    const kCabo = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
+    return (
+      <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <label className={rot}>Nome</label>
+            <input className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""}`} value={l.nome} onChange={(e) => alterar(i, { nome: e.target.value })} placeholder="Ex.: CE 2222 - P. CHAMINE" />
+          </div>
+          <div>
+            <label className={rot}>Tipo</label>
+            <select className={campo} value={l.tipo} onChange={(e) => alterar(i, { tipo: e.target.value as TipoElementoRota })}>
+              {Object.entries(TIPO_ELEMENTO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={rot}>Código (PT…)</label>
+            <input className={campo} value={l.codigo} onChange={(e) => alterar(i, { codigo: e.target.value })} />
+          </div>
+          {camposEquipamento(i)}
+          {i === 0 && (
+            <div className="col-span-2">
+              <label className={rot}>Potência da porta PON (dBm)</label>
+              <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} placeholder="ex.: 5" />
+            </div>
+          )}
+        </div>
+
+        {i > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 mb-1.5">
+              <IconeCabo tamanho={16} /> Cabo que chega aqui
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <input className={campo} list="cabos-conhecidos" value={l.cabo_entrada} onChange={(e) => alterar(i, { cabo_entrada: e.target.value })} placeholder="Nome do cabo (ex.: 15 - P. CHAMINE)" />
+              </div>
+              {tiposDeCabo.length > 0 && (
+                <div className="col-span-2">
+                  <select
+                    className={campo}
+                    disabled={!kCabo}
+                    value={kCabo ? tiposCabo[kCabo] ?? "" : ""}
+                    onChange={(e) => setTiposCabo((t) => ({ ...t, [kCabo]: e.target.value }))}
+                    title="Vale para este cabo em todas as rotas"
+                  >
+                    <option value="">{kCabo ? "Tipo do cabo: não definido" : "Informe o cabo para escolher o tipo"}</option>
+                    {tiposDeCabo.map((t) => <option key={t.id} value={t.id}>{t.nome} · {resumoItem(t)}</option>)}
+                  </select>
+                </div>
+              )}
+              {campoFibra(i)}
+              <div>
+                <label className={rot}>Distância (m){l.dist_auto && dm !== null ? " · pelo mapa" : ""}</label>
+                <input className={campo} inputMode="decimal" value={l.distancia_m} onChange={(e) => alterar(i, { distancia_m: e.target.value, dist_auto: false })} />
+                {!l.dist_auto && dm !== null && (
+                  <button type="button" onClick={() => alterar(i, { dist_auto: true })} className="text-[11px] text-indigo-600 hover:underline">
+                    usar o mapa ({formatMetros(dm)})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {l.tipo !== "olt" && l.tipo !== "onu" && <div className="grid grid-cols-2 gap-2">{campoSplitter(i)}</div>}
+
+        <details className="group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 list-none">
+            <ChevronDown className="w-3.5 h-3.5 transition group-open:rotate-180" /> Mais detalhes
+          </summary>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="col-span-2">
+              <label className={rot}>Coordenadas (lat, lon)</label>
+              <input className={campo} value={l.coords} onChange={(e) => alterar(i, { coords: e.target.value })} placeholder="clique no mapa ou -28.69170, -49.34236" />
+            </div>
+            <div className="col-span-2">
+              <label className={rot}>Porta (texto)</label>
+              <input className={campo} value={l.porta} onChange={(e) => alterar(i, { porta: e.target.value })} placeholder="Ex.: PL 04 - Porta 13" />
+            </div>
+            {!pots && i > 0 && (
+              <>
+                <div>
+                  <label className={rot}>Potência chegada</label>
+                  <input className={campo} inputMode="decimal" value={l.potencia_entrada} onChange={(e) => alterar(i, { potencia_entrada: e.target.value })} />
+                </div>
+                <div>
+                  <label className={rot}>Potência saída</label>
+                  <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} />
+                </div>
+              </>
+            )}
+            <div className="col-span-2">
+              <label className={rot}>Observação</label>
+              <input className={campo} value={l.obs} onChange={(e) => alterar(i, { obs: e.target.value })} />
+            </div>
+          </div>
+        </details>
+        {pots && pots[i] && i > 0 && <p className="text-[10px] text-slate-500 leading-tight">Potência: −{pots[i].detalhe}</p>}
+      </div>
+    );
+  }
+
+  const nomeFerramenta = ferramenta === "selecionar" ? "" : ferramenta === "poste" ? "poste" : PALETA.find((p) => p.t === ferramenta)?.rot ?? "";
+  const dica =
+    ferramenta === "selecionar"
+      ? sel !== null && !posDe(linhas[sel])
+        ? `Clique no mapa onde fica "${linhas[sel].nome || `elemento ${sel + 1}`}".`
+        : "Arraste os ícones para mover · clique no cabo para criar um poste · escolha um tipo acima para adicionar"
+      : ferramenta === "poste"
+        ? "Clique nos postes do caminho. Depois escolha o tipo da próxima caixa e clique onde ela fica."
+        : linhas.length === 0
+          ? `Clique no mapa onde fica a ${nomeFerramenta}. Ela é o início da rota.`
+          : `Clique no mapa para colocar ${nomeFerramenta}${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <datalist id="cabos-conhecidos">
         {nomesCabos.map((c) => <option key={c} value={c} />)}
       </datalist>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-gray-900">{inicial ? "Editar rota" : "Cadastrar rota"}</h2>
-        <button type="button" onClick={onCancelar} className="text-gray-400 hover:text-gray-600" aria-label="Fechar">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className={rot}>Nome da rota *</label>
-          <input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: OLT1_ST PL04 P13 → HUB 0/4/13" />
+      {/* Barra do topo */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60">
+        <span className="rounded-lg bg-indigo-600 text-white p-1.5"><Route className="w-4 h-4" /></span>
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder={inicial ? "Nome da rota" : "Nome da nova rota (ex.: OLT1 PL04 P13 → HUB 0/4/13)"}
+          className={`flex-1 min-w-[220px] bg-transparent text-base font-semibold text-slate-900 border-b-2 py-1 outline-none placeholder:font-normal placeholder:text-slate-400 ${
+            erro && !nome.trim() ? "border-red-400" : "border-transparent focus:border-indigo-400"
+          }`}
+        />
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1"><b>{linhas.length}</b> elementos</span>
+          <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1"><b>{formatMetros(totalDist)}</b></span>
+          <span className={`rounded-full bg-white border border-slate-200 px-2.5 py-1 font-semibold ${nivelCor(potFinal)}`}>
+            {potFinal !== undefined ? fmtDbm(potFinal) : "— dBm"}
+          </span>
         </div>
-        <div>
-          <label className={rot}>Observação</label>
-          <input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} />
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setVerCalc((v) => !v)}
+            className={`p-2 rounded-lg border ${verCalc ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-300 hover:bg-slate-50"}`}
+            title="Cálculo de potência"
+            aria-label="Cálculo de potência"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={desfazer}
+            disabled={!pendentes.length && !historico.length}
+            className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
+            title="Desfazer (Ctrl+Z)"
+            aria-label="Desfazer"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={onCancelar} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={salvando}
+            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5 shadow-sm"
+          >
+            {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar rota
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 items-start">
-        {/* Mapa (em telas grandes fica do lado e acompanha a rolagem) */}
-        <div className="xl:order-2 xl:sticky xl:top-4 space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {modos.map((m) => (
-              <button
-                key={m.k}
-                type="button"
-                onClick={() => { setModo(m.k); setAviso(null); }}
-                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border font-medium ${
-                  modo === m.k ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                {m.icone} {m.rotulo}
-              </button>
-            ))}
-            {modo === "adicionar" && (
-              <select
-                value={tipoNovo}
-                onChange={(e) => setTipoNovo(e.target.value as TipoElementoRota)}
-                className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs bg-white"
-                aria-label="Tipo do elemento novo"
-              >
-                {Object.entries(TIPO_ELEMENTO_LABEL).map(([k, v]) => <option key={k} value={k}>Novo: {v}</option>)}
-              </select>
-            )}
-            {modo === "tracar" && sel !== null && linhas[sel]?.vertices.length > 0 && (
-              <button
-                type="button"
-                onClick={() => alterar(sel, { vertices: linhas[sel].vertices.slice(0, -1) })}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-              >
-                <Undo2 className="w-3.5 h-3.5" /> Desfazer curva
-              </button>
-            )}
-          </div>
-          <p className="text-[11px] text-gray-500">
-            {modos.find((m) => m.k === modo)?.dica}
-            {modo !== "adicionar" && sel !== null ? ` Selecionado: ${sel + 1}. ${linhas[sel]?.nome || "(sem nome)"}.` : ""}
-          </p>
-          {aviso && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">{aviso}</p>}
-          {trechosFixos.length > 0 && modo === "tracar" && (
-            <p className="text-xs text-gray-500">Esta rota veio do GeoGrid e usa o traçado do KML; o desenho de cabo vale só para rotas cadastradas aqui.</p>
-          )}
+      {erro && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700">
+          <span>{erro}</span>
+          <button type="button" onClick={() => setErro(null)} aria-label="Fechar aviso"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] lg:h-[calc(100vh-190px)] lg:min-h-[560px]">
+        {/* Mapa com a paleta */}
+        <div className="relative h-[460px] lg:h-full">
           <RotaEditorMapa
             pontos={pontosMapa}
             trechosFixos={trechosFixos}
             selecionado={sel}
-            modo={modo}
+            ferramenta={ferramenta}
+            pendentes={pendentes}
             centroPadrao={centroPadrao}
-            onSelect={setSel}
+            onSelect={(i) => setSel(i)}
             onClicarMapa={clicarMapa}
             onMoverElemento={(i, lat, lon) => alterar(i, { coords: fmtCoord({ lat, lon }) })}
             onMoverVertice={(i, k, lat, lon) => alterar(i, { vertices: linhas[i].vertices.map((v, j) => (j === k ? { lat, lon } : v)) })}
             onRemoverVertice={(i, k) => alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) })}
+            onInserirCurva={inserirCurva}
+            onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
           />
-          <p className="text-[11px] text-gray-500">
-            Total informado: <b>{formatMetros(totalInformado)}</b>
-            {totalMapa > 0 && <> · medido no mapa: <b>{formatMetros(totalMapa)}</b></>}
-            {" "}· distância do trecho com o ícone 📍 é calculada pelo mapa (cabo traçado ou linha reta). Some reservas técnicas à mão, se precisar.
-          </p>
+
+          {/* Paleta de ferramentas */}
+          <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-none flex">
+            <div className="pointer-events-auto flex flex-wrap items-stretch gap-1 rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg p-1.5">
+              {([
+                { k: "selecionar" as Ferramenta, rot: "Mover", icone: <MousePointer2 className="w-5 h-5 text-slate-700" /> },
+                {
+                  k: "poste" as Ferramenta,
+                  rot: "Poste",
+                  icone: (
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
+                      <path d="M3 18 Q 9 6 21 8" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeDasharray="4 3" />
+                      <circle cx="9" cy="10.5" r="3" fill="#fff" stroke="#f59e0b" strokeWidth="2" />
+                    </svg>
+                  ),
+                },
+              ]).map((b) => (
+                <button
+                  key={b.k}
+                  type="button"
+                  onClick={() => { setFerramenta(b.k); setAviso(null); }}
+                  className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === b.k ? "bg-indigo-600 text-white [&_svg_path]:stroke-white" : "hover:bg-slate-100"}`}
+                  title={b.rot}
+                >
+                  <span className={ferramenta === b.k ? "[&_*]:!text-white" : ""}>{b.icone}</span>
+                  <span className={`text-[9px] font-semibold mt-0.5 ${ferramenta === b.k ? "text-white" : "text-slate-600"}`}>{b.rot}</span>
+                </button>
+              ))}
+              <span className="w-px bg-slate-200 mx-0.5" />
+              {PALETA.map((p) => (
+                <button
+                  key={p.t}
+                  type="button"
+                  onClick={() => { setFerramenta(p.t); setAviso(null); }}
+                  className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === p.t ? "bg-indigo-100 ring-2 ring-indigo-500" : "hover:bg-slate-100"}`}
+                  title={`Adicionar ${TIPO_ELEMENTO_LABEL[p.t]}`}
+                >
+                  <IconeElemento tipo={p.t} tamanho={24} />
+                  <span className="text-[9px] font-semibold text-slate-700 mt-0.5">{p.rot}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dica do que o clique faz */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] max-w-[90%] flex flex-col items-center gap-1.5 pointer-events-none">
+            {aviso && <p className="pointer-events-auto rounded-xl bg-amber-500 text-white text-xs font-medium px-3 py-1.5 shadow">{aviso}</p>}
+            {pendentes.length > 0 && (
+              <div className="pointer-events-auto flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs px-3 py-1.5 shadow">
+                <b>{pendentes.length}</b> poste{pendentes.length > 1 ? "s" : ""} marcado{pendentes.length > 1 ? "s" : ""}
+                <button type="button" onClick={() => setPendentes((p) => p.slice(0, -1))} className="underline">desfazer</button>
+                <button type="button" onClick={() => setPendentes([])} className="underline">limpar</button>
+              </div>
+            )}
+            <p className="rounded-xl bg-slate-900/85 text-white text-xs px-3 py-1.5 shadow text-center">{dica}</p>
+          </div>
+          {trechosFixos.length > 0 && (
+            <p className="absolute top-[86px] left-3 z-[500] rounded-lg bg-white/95 border border-slate-200 text-[11px] text-slate-600 px-2 py-1 shadow">
+              Rota do GeoGrid: o cabo segue o traçado do KML.
+            </p>
+          )}
         </div>
 
-        {/* Elementos */}
-        <div className="xl:order-1 space-y-3">
-          <div className="border border-gray-200 rounded-lg p-3 space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
-              <input type="checkbox" checked={calc.auto} onChange={(e) => setCalc((c) => ({ ...c, auto: e.target.checked }))} />
-              Calcular a potência automaticamente
-            </label>
-            {calc.auto && (
-              <>
+        {/* Lista da rota */}
+        <aside className="border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col min-h-0 bg-white">
+          {verCalc && (
+            <div className="p-3 border-b border-slate-200 bg-indigo-50/50 space-y-2">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <input type="checkbox" checked={calc.auto} onChange={(e) => setCalc((c) => ({ ...c, auto: e.target.checked }))} />
+                Calcular a potência automaticamente
+              </label>
+              {calc.auto && (
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    ["atenuacao_db_km", "Fibra (dB/km)"],
-                    ["emenda_db", "Fusão (dB)"],
-                    ["conector_db", "Conector (dB)"],
-                  ] as const).map(([k, rotulo]) => (
+                    ["atenuacao_db_km", "Fibra dB/km"],
+                    ["emenda_db", "Fusão dB"],
+                    ["conector_db", "Conector dB"],
+                  ] as const).map(([k, r]) => (
                     <div key={k}>
-                      <label className={rot}>{rotulo}</label>
+                      <label className={rot}>{r}</label>
                       <input
                         className={campo}
                         inputMode="decimal"
@@ -664,178 +889,99 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     </div>
                   ))}
                 </div>
-                <p className="text-[11px] text-gray-500">
-                  Parte da potência da porta PON (elemento 1) e desconta a fibra pela distância, uma fusão em cada caixa, conector + fusão no
-                  DIO, a perda do splitter (do modelo cadastrado ou a típica) e o conector de saída da CTO.
-                </p>
-                {tx === undefined ? (
-                  <p className="text-xs text-amber-700">Informe a potência da porta PON no elemento 1 (ou escolha uma OLT cadastrada com potência).</p>
-                ) : potFinal !== undefined && (
-                  <p className={`text-sm font-semibold ${potFinal < -27 ? "text-red-600" : potFinal < -25 ? "text-amber-600" : "text-green-700"}`}>
-                    No fim da rota: {fmtDbm(potFinal)} (perda total {(tx - potFinal).toFixed(2).replace(".", ",")} dB)
-                    {potFinal < -27 ? " · abaixo da sensibilidade típica da ONU (−27 dBm)" : potFinal < -25 ? " · perto do limite" : ""}
-                  </p>
-                )}
-              </>
+              )}
+              {calc.auto && tx === undefined && linhas.length > 0 && (
+                <p className="text-xs text-amber-700">Informe a potência da porta PON no elemento 1 (OLT).</p>
+              )}
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 overflow-auto p-3">
+            {linhas.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center px-4 py-10 text-slate-500">
+                <IconeElemento tipo="olt" tamanho={44} />
+                <p className="mt-3 font-semibold text-slate-800">Comece pela OLT</p>
+                <ol className="mt-2 text-xs text-left space-y-1.5 max-w-[260px]">
+                  <li><b>1.</b> Com <b>OLT</b> selecionada na paleta, clique no mapa onde ela fica.</li>
+                  <li><b>2.</b> Use <b>Poste</b> para marcar o caminho do cabo (opcional).</li>
+                  <li><b>3.</b> Escolha <b>CEO, HUB, CTO…</b> e clique onde cada caixa fica. A distância é calculada sozinha.</li>
+                  <li><b>4.</b> Clique num item da lista para informar cabo, fibra e splitter.</li>
+                </ol>
+              </div>
+            ) : (
+              <ol>
+                {linhas.map((l, i) => {
+                  const ativo = i === sel;
+                  const info = i > 0 ? infoFibra(l.cabo_entrada, l.fibra_entrada) : null;
+                  const pot = potDe(i);
+                  const emenda = i > 0 && linhas[i + 1] && l.cabo_entrada.trim() && linhas[i + 1].cabo_entrada.trim() && chaveCabo(l.cabo_entrada) !== chaveCabo(linhas[i + 1].cabo_entrada);
+                  return (
+                    <li key={i} ref={(el) => { itemRefs.current[i] = el; }}>
+                      {/* Trecho de cabo que chega */}
+                      {i > 0 && (
+                        <div className="flex items-stretch gap-2 pl-[22px]">
+                          <span className="w-[6px] rounded-full border-2 border-slate-800 my-0.5" style={{ background: info?.c.hex ?? "#cbd5e1", minHeight: 26 }} />
+                          <p className="text-[10.5px] text-slate-500 py-1 leading-tight truncate">
+                            {l.cabo_entrada ? <span className="text-slate-700 font-medium">{l.cabo_entrada.split(" - ")[0]}</span> : <span className="text-amber-600">cabo não informado</span>}
+                            {info ? ` · ${info.c.rotulo} ${info.c.nome.toLowerCase()}` : ""}
+                            {l.distancia_m ? ` · ${formatMetros(n(l.distancia_m) ?? 0)}` : ""}
+                            {l.vertices.length ? ` · ${l.vertices.length} poste${l.vertices.length > 1 ? "s" : ""}` : ""}
+                          </p>
+                        </div>
+                      )}
+                      <div
+                        onClick={() => setSel(ativo ? null : i)}
+                        className={`group rounded-xl border px-2.5 py-2 cursor-pointer transition ${
+                          ativo ? "border-indigo-400 ring-2 ring-indigo-100 bg-white shadow-sm" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${ativo ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+                            {i + 1}
+                          </span>
+                          <IconeElemento tipo={l.tipo} tamanho={26} />
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{l.nome || "sem nome"}</p>
+                            <p className="text-[10.5px] text-slate-500 truncate flex items-center gap-1">
+                              {TIPO_ELEMENTO_LABEL[l.tipo].split(" (")[0]}
+                              {l.splitter ? ` · ${l.splitter}` : ""}
+                              {!posDe(l) && <span className="text-amber-600 flex items-center gap-0.5"><MapPin className="w-3 h-3" />sem local</span>}
+                              {emenda && <span className="rounded bg-amber-100 text-amber-800 px-1">emenda</span>}
+                            </p>
+                          </div>
+                          <span className={`text-[11px] font-semibold tabular-nums ${nivelCor(pot)}`}>{pot !== undefined ? fmtDbm(pot).replace(" dBm", "") : ""}</span>
+                          <span className={`flex ${ativo ? "" : "opacity-0 group-hover:opacity-100"}`} onClick={(e) => e.stopPropagation()}>
+                            <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30" aria-label="Subir"><ArrowUp className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => mover(i, 1)} disabled={i === linhas.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30" aria-label="Descer"><ArrowDown className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => remover(i)} className="p-1 rounded hover:bg-red-100 text-red-600" aria-label="Remover"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </span>
+                        </div>
+                        {ativo && painel(i)}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
           </div>
-          <p className="text-xs text-gray-500">
-            Elementos na ordem em que o sinal passa, da OLT até a ponta. Clique num cartão para selecioná-lo no mapa.
-          </p>
-          <ol className="space-y-3">
-            {linhas.map((l, i) => {
-              const dm = distMapa(linhas, i);
-              return (
-                <li
-                  key={i}
-                  ref={(el) => { cardRefs.current[i] = el; }}
-                  onClick={() => setSel(i)}
-                  className={`border rounded-lg p-3 ${i === sel ? "border-indigo-400 ring-2 ring-indigo-200 bg-indigo-50/40" : "border-gray-200 bg-gray-50/60"}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                      <IconeElemento tipo={l.tipo} tamanho={22} />
-                      Elemento {i + 1}
-                      {posDe(l) ? <MapPin className="w-3.5 h-3.5 text-indigo-500" aria-label="Posicionado no mapa" /> : <span className="text-[11px] font-normal text-gray-400">sem local</span>}
-                    </span>
-                    <span className="flex gap-1">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); mover(i, -1); }} disabled={i === 0} className="p-1 rounded hover:bg-gray-200 disabled:opacity-30" aria-label="Subir">
-                        <ArrowUp className="w-4 h-4" />
-                      </button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); mover(i, 1); }} disabled={i === linhas.length - 1} className="p-1 rounded hover:bg-gray-200 disabled:opacity-30" aria-label="Descer">
-                        <ArrowDown className="w-4 h-4" />
-                      </button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); remover(i); }} className="p-1 rounded hover:bg-red-100 text-red-600" aria-label="Remover elemento">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div className="col-span-2">
-                      <label className={rot}>Nome *</label>
-                      <input className={campo} value={l.nome} onChange={(e) => alterar(i, { nome: e.target.value })} placeholder="Ex.: CE 2222 - P. CHAMINE" />
-                    </div>
-                    <div>
-                      <label className={rot}>Tipo</label>
-                      <select className={campo} value={l.tipo} onChange={(e) => alterar(i, { tipo: e.target.value as TipoElementoRota })}>
-                        {Object.entries(TIPO_ELEMENTO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={rot}>Código (PT…)</label>
-                      <input className={campo} value={l.codigo} onChange={(e) => alterar(i, { codigo: e.target.value })} />
-                    </div>
 
-                    {camposEquipamento(i)}
-
-                    {i > 0 && (
-                      <>
-                        <div className="col-span-2 md:col-span-1">
-                          <label className={rot}>Cabo de chegada</label>
-                          <input className={campo} list="cabos-conhecidos" value={l.cabo_entrada} onChange={(e) => alterarLigacao(i, "entrada", "cabo", e.target.value)} />
-                        </div>
-                        {seletorTipoCabo(l.cabo_entrada)}
-                        {campoFibra(i, "entrada")}
-                        <div>
-                          <label className={rot}>
-                            Distância do anterior (m){l.dist_auto && dm !== null ? " 📍" : ""}
-                          </label>
-                          <input
-                            className={campo}
-                            inputMode="decimal"
-                            value={l.distancia_m}
-                            onChange={(e) => alterar(i, { distancia_m: e.target.value, dist_auto: false })}
-                          />
-                          {!l.dist_auto && dm !== null && (
-                            <button type="button" onClick={() => alterar(i, { dist_auto: true })} className="text-[11px] text-indigo-600 hover:underline">
-                              usar mapa ({formatMetros(dm)})
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                    {i === 0 ? (
-                      <div>
-                        <label className={rot}>Potência da porta PON (dBm)</label>
-                        <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} placeholder="ex.: 5" />
-                      </div>
-                    ) : pots ? (
-                      <div className="col-span-2" title={pots[i].detalhe}>
-                        <label className={rot}>Potência calculada</label>
-                        <p className={`text-sm font-semibold tabular-nums ${pots[i].saida < -27 ? "text-red-600" : pots[i].saida < -25 ? "text-amber-600" : "text-gray-900"}`}>
-                          {fmtDbm(pots[i].entrada)} na chegada{pots[i].saida !== pots[i].entrada ? ` → ${fmtDbm(pots[i].saida)} na saída` : ""}
-                        </p>
-                        <p className="text-[10px] text-gray-500 leading-tight">−{pots[i].detalhe}</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <label className={rot}>Potência na chegada (dBm)</label>
-                        <input className={campo} inputMode="decimal" value={l.potencia_entrada} onChange={(e) => alterar(i, { potencia_entrada: e.target.value })} />
-                      </div>
-                    )}
-                    {i < linhas.length - 1 && (
-                      <>
-                        <div className="col-span-2 md:col-span-1">
-                          <label className={rot}>Cabo de saída</label>
-                          <input className={campo} list="cabos-conhecidos" value={l.cabo_saida} onChange={(e) => alterarLigacao(i, "saida", "cabo", e.target.value)} />
-                        </div>
-                        {seletorTipoCabo(l.cabo_saida, "Tipo do cabo de saída")}
-                        {campoFibra(i, "saida")}
-                      </>
-                    )}
-                    {i > 0 && !pots && (
-                      <div>
-                        <label className={rot}>Potência na saída (dBm)</label>
-                        <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} />
-                      </div>
-                    )}
-                    {campoSplitter(i)}
-                    <div className="col-span-2">
-                      <label className={rot}>Porta</label>
-                      <input className={campo} value={l.porta} onChange={(e) => alterar(i, { porta: e.target.value })} placeholder="Ex.: PL 04 - Porta 13" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className={rot}>Coordenadas (lat, lon)</label>
-                      <input className={campo} value={l.coords} onChange={(e) => alterar(i, { coords: e.target.value })} placeholder="clique no mapa ou -28.69170, -49.34236" />
-                    </div>
-                    <div className="col-span-2 md:col-span-4">
-                      <label className={rot}>Observação</label>
-                      <input className={campo} value={l.obs} onChange={(e) => alterar(i, { obs: e.target.value })} />
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-
-          <button
-            type="button"
-            onClick={() => {
-              const ant = linhas[linhas.length - 1];
-              mudar((ls) => [...ls, { ...linhaVazia(), cabo_entrada: ant?.cabo_saida ?? "", fibra_entrada: ant?.fibra_saida ?? "" }]);
-              setSel(linhas.length);
-            }}
-            className="flex items-center gap-1.5 text-sm text-indigo-600 font-medium hover:text-indigo-800"
-          >
-            <Plus className="w-4 h-4" /> Adicionar elemento
-          </button>
-        </div>
-      </div>
-
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
-
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onCancelar} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={salvar}
-          disabled={salvando}
-          className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5"
-        >
-          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar rota
-        </button>
+          <div className="border-t border-slate-200 p-3 space-y-2 bg-slate-50/60">
+            <button
+              type="button"
+              onClick={() => {
+                const tipo: TipoElementoRota = ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : linhas.length ? "ceo" : "olt";
+                const ant = linhas[linhas.length - 1];
+                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
+                setSel(linhas.length);
+                setFerramenta("selecionar");
+              }}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-700 rounded-lg border border-dashed border-indigo-300 py-1.5 hover:bg-indigo-50"
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar elemento sem o mapa
+            </button>
+            <input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação da rota (opcional)" />
+          </div>
+        </aside>
       </div>
     </div>
   );

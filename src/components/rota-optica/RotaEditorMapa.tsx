@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
 import type { TipoElementoRota, TrechoCabo } from "@/lib/rotaOptica";
 import { iconeSvg } from "./IconesRede";
 
-export type ModoMapa = "adicionar" | "posicionar" | "tracar";
+/** Ferramenta ativa: selecionar/mover, marcar poste do cabo, ou colocar um elemento do tipo escolhido */
+export type Ferramenta = "selecionar" | "poste" | TipoElementoRota;
+
+type Ponto = { lat: number; lon: number };
 
 export interface PontoEditor {
   nome: string;
@@ -16,7 +19,9 @@ export interface PontoEditor {
   lat?: number;
   lon?: number;
   /** Curvas do cabo (postes) no trecho que chega neste elemento */
-  vertices: { lat: number; lon: number }[];
+  vertices: Ponto[];
+  /** Cor da fibra que chega (para pintar o trecho) */
+  cor?: string;
 }
 
 interface Props {
@@ -24,25 +29,36 @@ interface Props {
   /** Traçado vindo do KML (rotas do GeoGrid): só exibido */
   trechosFixos: TrechoCabo[];
   selecionado: number | null;
-  modo: ModoMapa;
+  ferramenta: Ferramenta;
+  /** Postes marcados antes de colocar o próximo elemento */
+  pendentes: Ponto[];
   centroPadrao?: [number, number];
   onSelect: (i: number) => void;
   onClicarMapa: (lat: number, lon: number) => void;
   onMoverElemento: (i: number, lat: number, lon: number) => void;
   onMoverVertice: (i: number, k: number, lat: number, lon: number) => void;
   onRemoverVertice: (i: number, k: number) => void;
+  onInserirCurva: (i: number, lat: number, lon: number) => void;
+  onRemoverPendente: (k: number) => void;
 }
 
-/** Marcador do mapa: ícone do tipo, com número da ordem e destaque quando selecionado. */
 function marcador(tipo: TipoElementoRota, numero: number, ativo: boolean) {
-  const tam = ativo ? 40 : 32;
+  const tam = ativo ? 42 : 34;
   return L.divIcon({
     className: "",
     iconSize: [tam, tam],
     iconAnchor: [tam / 2, tam / 2],
-    html: `<div style="position:relative;width:${tam}px;height:${tam}px;${ativo ? "filter:drop-shadow(0 0 6px #facc15)" : "filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))"}">${iconeSvg(tipo, tam)}<span style="position:absolute;right:-6px;top:-6px;min-width:16px;height:16px;padding:0 3px;border-radius:9999px;background:${ativo ? "#facc15" : "#fff"};color:#0f172a;border:1.5px solid #0f172a;font:700 10px/13px system-ui,sans-serif;text-align:center">${numero}</span></div>`,
+    html: `<div style="position:relative;width:${tam}px;height:${tam}px;${ativo ? "filter:drop-shadow(0 0 7px #facc15)" : "filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"}">${iconeSvg(tipo, tam)}<span style="position:absolute;right:-6px;top:-6px;min-width:17px;height:17px;padding:0 3px;border-radius:9999px;background:${ativo ? "#facc15" : "#fff"};color:#0f172a;border:1.5px solid #0f172a;font:700 10px/14px system-ui,sans-serif;text-align:center">${numero}</span></div>`,
   });
 }
+
+const iconePoste = (cor: string, tam = 12) =>
+  L.divIcon({
+    className: "",
+    iconSize: [tam, tam],
+    iconAnchor: [tam / 2, tam / 2],
+    html: `<div style="width:${tam}px;height:${tam}px;border-radius:9999px;background:#fff;border:2.5px solid ${cor};box-shadow:0 1px 2px rgba(0,0,0,.4)"></div>`,
+  });
 
 function Cliques({ onClicar }: { onClicar: (lat: number, lon: number) => void }) {
   useMapEvents({ click: (e) => onClicar(e.latlng.lat, e.latlng.lng) });
@@ -56,7 +72,7 @@ function Enquadrar({ pontos }: { pontos: [number, number][] }) {
   useEffect(() => {
     if (feito.current || pontos.length === 0) return;
     if (pontos.length === 1) map.setView(pontos[0], 17);
-    else map.fitBounds(L.latLngBounds(pontos), { padding: [30, 30] });
+    else map.fitBounds(L.latLngBounds(pontos), { padding: [40, 40] });
     feito.current = true;
   }, [map, pontos]);
   return null;
@@ -65,14 +81,15 @@ function Enquadrar({ pontos }: { pontos: [number, number][] }) {
 function Centralizar({ alvo }: { alvo: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
-    if (alvo && !map.getBounds().contains(alvo)) map.panTo(alvo);
+    if (alvo && !map.getBounds().pad(-0.1).contains(alvo)) map.panTo(alvo);
   }, [map, alvo]);
   return null;
 }
 
-/** Mapa do editor de rota: clicar posiciona elementos e traça o cabo; marcadores arrastáveis. */
+/** Mapa do editor: as ferramentas decidem o que o clique faz; marcadores e postes arrastam. */
 export default function RotaEditorMapa({
-  pontos, trechosFixos, selecionado, modo, centroPadrao, onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice,
+  pontos, trechosFixos, selecionado, ferramenta, pendentes, centroPadrao,
+  onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onRemoverPendente,
 }: Props) {
   const [satelite, setSatelite] = useState(false);
 
@@ -85,37 +102,37 @@ export default function RotaEditorMapa({
     [pontos, trechosFixos]
   );
 
-  // Trechos desenhados: elemento anterior com posição → curvas → este elemento
+  // Trechos desenhados: elemento anterior → postes → este elemento
   const trechos: { i: number; pts: [number, number][] }[] = [];
   for (let i = 1; i < pontos.length; i++) {
     const a = pontos[i - 1];
     const b = pontos[i];
-    if (a.lat === undefined || a.lon === undefined) continue;
-    const pts: [number, number][] = [[a.lat, a.lon], ...b.vertices.map((v) => [v.lat, v.lon] as [number, number])];
-    if (b.lat !== undefined && b.lon !== undefined) pts.push([b.lat, b.lon]);
-    if (pts.length > 1) trechos.push({ i, pts });
+    if (a.lat === undefined || a.lon === undefined || b.lat === undefined || b.lon === undefined) continue;
+    trechos.push({ i, pts: [[a.lat, a.lon], ...b.vertices.map((v) => [v.lat, v.lon] as [number, number]), [b.lat, b.lon]] });
   }
+
+  // Caminho em construção: último elemento posicionado → postes marcados
+  const ultimo = [...pontos].reverse().find((p) => p.lat !== undefined && p.lon !== undefined);
+  const caminhoPendente: [number, number][] =
+    ultimo && pendentes.length ? [[ultimo.lat!, ultimo.lon!], ...pendentes.map((p) => [p.lat, p.lon] as [number, number])] : [];
 
   const sel = selecionado !== null ? pontos[selecionado] : null;
   const alvo: [number, number] | null = sel?.lat !== undefined && sel?.lon !== undefined ? [sel.lat, sel.lon] : null;
   const centro: [number, number] = todos[0] ?? centroPadrao ?? [-28.68, -49.37];
+  const desenhando = ferramenta !== "selecionar";
+  const editavel = trechosFixos.length === 0;
 
   return (
-    <div className="relative">
+    <div className="relative h-full">
       <MapContainer
         center={centro}
-        zoom={todos.length ? 16 : 14}
+        zoom={todos.length ? 16 : 15}
         scrollWheelZoom={false}
         doubleClickZoom={false}
-        className={`h-[520px] w-full rounded-xl z-0 ${modo === "tracar" || modo === "adicionar" || selecionado !== null ? "cursor-crosshair" : ""}`}
+        className={`h-full w-full z-0 ${desenhando ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}
       >
         {satelite ? (
-          <TileLayer
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-            attribution="Tiles © Esri"
-            maxZoom={20}
-            maxNativeZoom={19}
-          />
+          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={19} />
         ) : (
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -129,58 +146,72 @@ export default function RotaEditorMapa({
         <Enquadrar pontos={todos} />
         <Centralizar alvo={alvo} />
 
+        {/* Traçado do KML (rotas do GeoGrid) */}
         {trechosFixos.map((t, k) => (
           <Polyline key={`fc${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: "#0f172a", weight: 8, opacity: 0.7 }} />
         ))}
         {trechosFixos.map((t, k) => (
-          <Polyline key={`f${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: t.cor ?? "#2563eb", weight: 5, opacity: 0.8 }}>
+          <Polyline key={`f${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: t.cor ?? "#3b82f6", weight: 4 }}>
             <Tooltip sticky>{t.nome}</Tooltip>
           </Polyline>
         ))}
 
-        {trechosFixos.length === 0 &&
-          trechos.map(({ i, pts }) => (
-            <Polyline
-              key={`t${i}-${pts.length}`}
-              positions={pts}
-              pathOptions={{
-                color: i === selecionado ? "#facc15" : "#2563eb",
-                weight: i === selecionado ? 6 : 4,
-                dashArray: pontos[i].lat === undefined ? "6 6" : undefined,
-              }}
-            />
-          ))}
-
-        {/* Curvas do cabo: arrastar move, clique remove */}
-        {trechosFixos.length === 0 &&
-          pontos.flatMap((p, i) =>
-            p.vertices.map((v, k) =>
-              i === selecionado ? (
-                <Marker
-                  key={`v${i}-${k}`}
-                  position={[v.lat, v.lon]}
-                  draggable
-                  icon={L.divIcon({
-                    className: "",
-                    iconSize: [12, 12],
-                    iconAnchor: [6, 6],
-                    html: '<div style="width:12px;height:12px;border-radius:9999px;background:#fff;border:2px solid #1d4ed8"></div>',
-                  })}
+        {/* Cabos desenhados: capa + cor da fibra; clique no cabo (ferramenta Selecionar) cria um poste ali */}
+        {editavel &&
+          trechos.map(({ i, pts }) => {
+            const ativo = i === selecionado;
+            return (
+              <Fragment key={`t${i}`}>
+                <Polyline positions={pts} pathOptions={{ color: ativo ? "#ca8a04" : "#0f172a", weight: ativo ? 10 : 8, opacity: 0.85, lineCap: "round", lineJoin: "round" }} />
+                <Polyline positions={pts} pathOptions={{ color: pontos[i].cor ?? "#3b82f6", weight: 4, lineCap: "round", lineJoin: "round" }} />
+                <Polyline
+                  positions={pts}
+                  pathOptions={{ color: "#000", opacity: 0, weight: 18 }}
                   eventHandlers={{
-                    dragend: (e) => {
-                      const ll = (e.target as L.Marker).getLatLng();
-                      onMoverVertice(i, k, ll.lat, ll.lng);
+                    click: (e) => {
+                      if (ferramenta !== "selecionar") return;
+                      L.DomEvent.stopPropagation(e);
+                      onInserirCurva(i, e.latlng.lat, e.latlng.lng);
                     },
-                    click: () => onRemoverVertice(i, k),
                   }}
                 >
-                  <Tooltip direction="top">Curva/poste · clique para remover</Tooltip>
-                </Marker>
-              ) : (
-                <CircleMarker key={`v${i}-${k}`} center={[v.lat, v.lon]} radius={3} pathOptions={{ color: "#1d4ed8", fillColor: "#fff", fillOpacity: 1, weight: 2 }} />
-              )
-            )
+                  {ferramenta === "selecionar" && <Tooltip sticky>Clique no cabo para criar um poste e arraste para ajustar</Tooltip>}
+                </Polyline>
+              </Fragment>
+            );
+          })}
+
+        {/* Postes já no cabo: arrastar move, clique remove */}
+        {editavel &&
+          pontos.flatMap((p, i) =>
+            p.vertices.map((v, k) => (
+              <Marker
+                key={`v${i}-${k}-${v.lat}`}
+                position={[v.lat, v.lon]}
+                draggable
+                icon={iconePoste(i === selecionado ? "#ca8a04" : "#1d4ed8", i === selecionado ? 14 : 11)}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const ll = (e.target as L.Marker).getLatLng();
+                    onMoverVertice(i, k, ll.lat, ll.lng);
+                  },
+                  click: () => onRemoverVertice(i, k),
+                }}
+              >
+                <Tooltip direction="top">Poste · arraste para mover, clique para remover</Tooltip>
+              </Marker>
+            ))
           )}
+
+        {/* Caminho em construção (postes antes do próximo elemento) */}
+        {caminhoPendente.length > 1 && (
+          <Polyline positions={caminhoPendente} pathOptions={{ color: "#f59e0b", weight: 4, dashArray: "8 6", lineCap: "round" }} />
+        )}
+        {pendentes.map((p, k) => (
+          <Marker key={`p${k}-${p.lat}`} position={[p.lat, p.lon]} icon={iconePoste("#f59e0b", 13)} eventHandlers={{ click: () => onRemoverPendente(k) }}>
+            <Tooltip direction="top">Poste marcado · clique para remover</Tooltip>
+          </Marker>
+        ))}
 
         {comPos.map(({ p, i }) => (
           <Marker
@@ -188,7 +219,7 @@ export default function RotaEditorMapa({
             position={[p.lat!, p.lon!]}
             draggable
             icon={marcador(p.tipo, i + 1, i === selecionado)}
-            zIndexOffset={i === selecionado ? 1000 : 0}
+            zIndexOffset={i === selecionado ? 1000 : 500}
             eventHandlers={{
               click: () => onSelect(i),
               dragend: (e) => {
@@ -197,7 +228,7 @@ export default function RotaEditorMapa({
               },
             }}
           >
-            <Tooltip direction="top" offset={[0, -16]}>
+            <Tooltip direction="top" offset={[0, -18]}>
               {i + 1}. {p.nome || "(sem nome)"}
             </Tooltip>
           </Marker>
@@ -206,7 +237,7 @@ export default function RotaEditorMapa({
       <button
         type="button"
         onClick={() => setSatelite((v) => !v)}
-        className="absolute top-2 right-2 z-[500] bg-white/95 border border-gray-300 rounded-md px-2 py-1 text-xs font-medium shadow hover:bg-white"
+        className="absolute bottom-6 right-3 z-[500] bg-white/95 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-white"
       >
         {satelite ? "Mapa de ruas" : "Satélite"}
       </button>
