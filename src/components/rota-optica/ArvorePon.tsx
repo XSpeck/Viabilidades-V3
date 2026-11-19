@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Info, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
-import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
+import { AlertTriangle, Info, Maximize2, Minimize2, Route as RouteIcon, ZoomIn, ZoomOut } from "lucide-react";
+import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
@@ -559,16 +559,91 @@ function ListaRotas({ ids, rotas, onAbrirRota }: { ids: string[]; rotas: RotaOpt
   if (!lista.length) return null;
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-1">Rotas que passam aqui</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Rotas que passam aqui</p>
       <ul className="space-y-1">
         {lista.map((r) => (
           <li key={r.id}>
-            <button type="button" onClick={() => onAbrirRota(r.id)} className="text-sm text-indigo-600 hover:underline text-left">
-              {r.nome}
+            <button
+              type="button"
+              onClick={() => onAbrirRota(r.id)}
+              className="w-full flex items-center gap-2 text-left text-sm text-indigo-700 rounded-lg border border-indigo-100 bg-indigo-50/60 px-2.5 py-1.5 hover:bg-indigo-100"
+            >
+              <RouteIcon className="w-4 h-4 shrink-0" />
+              <span className="min-w-0 truncate">{r.nome}</span>
             </button>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Faixa de cor da potência (GPON: ONU costuma operar até ~−27 dBm) */
+function nivelPotencia(v?: number) {
+  if (v === undefined) return { cor: "#94a3b8", texto: "sem medida", classe: "text-slate-500" };
+  if (v >= -20) return { cor: "#16a34a", texto: "ótima", classe: "text-emerald-700" };
+  if (v >= -25) return { cor: "#65a30d", texto: "boa", classe: "text-lime-700" };
+  if (v >= -27) return { cor: "#d97706", texto: "no limite", classe: "text-amber-700" };
+  return { cor: "#dc2626", texto: "abaixo da sensibilidade", classe: "text-red-700" };
+}
+
+const dbm = (v?: number) => (v === undefined ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2).replace(".", ",")}`);
+
+/** Gráfico da potência ao longo do caminho (degrau nos splitters), com a linha de −27 dBm. */
+function GraficoPotencia({ caminho }: { caminho: NoArvore[] }) {
+  const pts: { x: number; y: number; no: NoArvore }[] = [];
+  for (const n of caminho) {
+    const e = n.elemento;
+    if (e.potencia_entrada !== undefined) pts.push({ x: n.distancia, y: e.potencia_entrada, no: n });
+    if (e.potencia_saida !== undefined && e.potencia_saida !== e.potencia_entrada) pts.push({ x: n.distancia, y: e.potencia_saida, no: n });
+  }
+  if (pts.length < 2) return null;
+  const W = 360, H = 130, L = 34, R = 10, T = 12, B = 22;
+  const maxX = Math.max(1, ...pts.map((p) => p.x));
+  const ys = pts.map((p) => p.y);
+  const maxY = Math.ceil(Math.max(...ys) + 1);
+  const minY = Math.floor(Math.min(-28, Math.min(...ys) - 1));
+  const sx = (x: number) => L + (x / maxX) * (W - L - R);
+  const sy = (y: number) => T + ((maxY - y) / (maxY - minY)) * (H - T - B);
+  const linha = pts.map((p, i) => `${i ? "L" : "M"}${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(" ");
+  const area = `${linha} L${sx(pts[pts.length - 1].x)} ${H - B} L${sx(pts[0].x)} ${H - B} Z`;
+  const ticksY = [maxY, Math.round((maxY + minY) / 2), minY];
+  const final = pts[pts.length - 1].y;
+  const nv = nivelPotencia(final);
+  const gid = `pot-${caminho[caminho.length - 1].id.replace(/\W/g, "")}`;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-2">
+      <p className="text-[11px] font-semibold text-slate-600 px-1">Potência ao longo do caminho</p>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Gráfico de potência por distância">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={nv.cor} stopOpacity=".28" />
+            <stop offset="1" stopColor={nv.cor} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticksY.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={sy(t)} y2={sy(t)} stroke="#e2e8f0" />
+            <text x={L - 4} y={sy(t) + 3} fontSize={8.5} textAnchor="end" fill="#94a3b8">{t}</text>
+          </g>
+        ))}
+        {-27 >= minY && -27 <= maxY && (
+          <g>
+            <line x1={L} x2={W - R} y1={sy(-27)} y2={sy(-27)} stroke="#dc2626" strokeDasharray="4 3" />
+            <text x={W - R} y={sy(-27) - 3} fontSize={8} textAnchor="end" fill="#dc2626">−27 dBm (limite ONU)</text>
+          </g>
+        )}
+        <path d={area} fill={`url(#${gid})`} />
+        <path d={linha} fill="none" stroke={nv.cor} strokeWidth={2.4} strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={sx(p.x)} cy={sy(p.y)} r={3} fill="#fff" stroke={nv.cor} strokeWidth={2}>
+            <title>{`${p.no.elemento.nome}: ${dbm(p.y)} dBm a ${formatMetros(p.x)}`}</title>
+          </circle>
+        ))}
+        <text x={L} y={H - 6} fontSize={8.5} fill="#94a3b8">OLT</text>
+        <text x={W - R} y={H - 6} fontSize={8.5} fill="#94a3b8" textAnchor="end">{formatMetros(maxX)}</text>
+        <text x={4} y={T + 2} fontSize={8} fill="#94a3b8">dBm</text>
+      </svg>
     </div>
   );
 }
@@ -583,81 +658,147 @@ function DetalheNo({
 }) {
   const caminho = caminhoAte(no);
   const e = no.elemento;
-  const pot0 = caminho[0].elemento.potencia_entrada ?? caminho[0].elemento.potencia_saida;
+  const pot0 = caminho[0].elemento.potencia_saida ?? caminho[0].elemento.potencia_entrada;
   const potAqui = e.potencia_saida ?? e.potencia_entrada;
+  const perda = pot0 !== undefined && potAqui !== undefined ? pot0 - potAqui : undefined;
   const pern = pernasSplitter(no);
+  const nv = nivelPotencia(potAqui);
+  // posição no medidor: +7 dBm (cheio) a −30 dBm (vazio)
+  const pos = potAqui === undefined ? 0 : Math.min(100, Math.max(0, ((potAqui + 30) / 37) * 100));
 
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-lg font-bold text-gray-900 leading-tight">{e.nome}</p>
-        <p className="text-sm text-gray-500">
-          {TIPO_ELEMENTO_LABEL[tipoVisual(e)]}
-          {e.codigo ? ` · ${e.codigo}` : ""} · {caminho.length - 1} trecho{caminho.length > 2 ? "s" : ""} desde a OLT
+      {/* Cartão principal */}
+      <div className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white p-3">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-300">Da OLT</p>
+            <p className="text-lg font-bold tabular-nums leading-tight">{formatMetros(no.distancia)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-300">Potência</p>
+            <p className="text-lg font-bold tabular-nums leading-tight">{dbm(potAqui)}<span className="text-xs font-medium"> dBm</span></p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-300">Perda</p>
+            <p className="text-lg font-bold tabular-nums leading-tight">{perda !== undefined ? perda.toFixed(2).replace(".", ",") : "—"}<span className="text-xs font-medium"> dB</span></p>
+          </div>
+        </div>
+        {/* Medidor */}
+        <div className="mt-3">
+          <div className="relative h-2 rounded-full bg-gradient-to-r from-red-500 via-amber-400 via-55% to-emerald-500">
+            {potAqui !== undefined && (
+              <span className="absolute -top-1 w-4 h-4 rounded-full bg-white border-2 shadow" style={{ left: `calc(${pos}% - 8px)`, borderColor: nv.cor }} />
+            )}
+          </div>
+          <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+            <span>−30</span><span>−27 limite</span><span>−20</span><span>+7 dBm</span>
+          </div>
+          <p className="text-[11px] mt-1 text-center">
+            Sinal <b style={{ color: potAqui === undefined ? undefined : nv.cor === "#dc2626" ? "#fca5a5" : nv.cor === "#d97706" ? "#fcd34d" : "#86efac" }}>{nv.texto}</b>
+            {" · "}{caminho.length - 1} trecho{caminho.length > 2 ? "s" : ""} desde a OLT
+          </p>
+        </div>
+      </div>
+
+      <GraficoPotencia caminho={caminho} />
+
+      {/* Impacto de rompimento */}
+      <div className="flex gap-2 items-start rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+        <p className="text-xs text-red-800">
+          Se o trecho que chega aqui romper, ficam sem sinal:{" "}
+          {no.clientes > 0 && <><b>{no.clientes} cliente{no.clientes !== 1 ? "s" : ""}</b>, </>}
+          <b>{no.pontas} ponta{no.pontas !== 1 ? "s" : ""} de rota</b> e <b>{no.abaixo + 1} elemento{no.abaixo > 0 ? "s" : ""}</b>.
         </p>
       </div>
-      <dl className="grid grid-cols-2 border-t border-gray-200">
-        <div className="py-2 border-b border-gray-200 pr-2"><dt className="text-xs text-gray-500">Distância da OLT</dt><dd className="text-lg font-bold">{formatMetros(no.distancia)}</dd></div>
-        <div className="py-2 border-b border-gray-200"><dt className="text-xs text-gray-500">Potência aqui</dt><dd className="text-lg font-bold">{formatDbm(potAqui)}</dd></div>
-        <div className="py-2 border-b border-gray-200 pr-2"><dt className="text-xs text-gray-500">Perda desde a OLT</dt><dd className="text-lg font-bold">{pot0 !== undefined && potAqui !== undefined ? `${(pot0 - potAqui).toFixed(2).replace(".", ",")} dB` : "—"}</dd></div>
-        <div className="py-2 border-b border-gray-200"><dt className="text-xs text-gray-500">Ramos a partir daqui</dt><dd className="text-lg font-bold">{no.filhos.length}</dd></div>
-      </dl>
 
-      <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-        Se o trecho que chega aqui romper:{" "}
-        {no.clientes > 0 && <><b>{no.clientes} cliente{no.clientes !== 1 ? "s" : ""}</b>, </>}
-        <b>{no.pontas} ponta{no.pontas !== 1 ? "s" : ""} de rota</b> e{" "}
-        <b>{no.abaixo + 1} elemento{no.abaixo > 0 ? "s" : ""}</b> ficam sem sinal.
-      </p>
       {pern && (
-        <p className="text-sm text-gray-700">
-          Splitter {pern.splitter}: <b>{pern.clientes} cliente{pern.clientes !== 1 ? "s" : ""}, {pern.ramais} {pern.ramais !== 1 ? "ramais" : "ramal"}, {pern.livres} livre{pern.livres !== 1 ? "s" : ""}</b> de {pern.total}
-        </p>
-      )}
-      {e.tipo !== "olt" && (
         <button
           type="button"
           onClick={onAbrirCaixa}
-          className="w-full text-sm px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 font-medium hover:bg-indigo-100"
+          className="w-full flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 text-left"
         >
-          {no.caixa ? "Ver diagrama da caixa" : "Cadastrar diagrama da caixa"}
+          <IconeElemento tipo={tipoVisual(e)} tamanho={26} />
+          <span className="flex-1 min-w-0">
+            <span className="block text-xs font-semibold text-slate-800">Splitter {pern.splitter}</span>
+            <span className="flex flex-wrap gap-1 mt-0.5 text-[10px]">
+              <span className="rounded-full px-1.5 bg-emerald-100 text-emerald-800">{pern.clientes} cliente{pern.clientes !== 1 ? "s" : ""}</span>
+              <span className="rounded-full px-1.5 bg-indigo-100 text-indigo-800">{pern.ramais} {pern.ramais !== 1 ? "ramais" : "ramal"}</span>
+              <span className="rounded-full px-1.5 bg-slate-100 text-slate-600">{pern.livres} livre{pern.livres !== 1 ? "s" : ""}</span>
+            </span>
+          </span>
+          <span className="text-[11px] text-indigo-600 font-medium">ver diagrama →</span>
+        </button>
+      )}
+      {!pern && e.tipo !== "olt" && (
+        <button
+          type="button"
+          onClick={onAbrirCaixa}
+          className="w-full text-xs px-3 py-2 rounded-xl border border-dashed border-indigo-300 text-indigo-700 font-medium hover:bg-indigo-50"
+        >
+          {no.caixa ? "Ver diagrama da caixa" : "+ Cadastrar o diagrama desta caixa"}
         </button>
       )}
 
-      <ol className="border-l-2 border-gray-200 space-y-3 pl-4">
-        {caminho.map((n, i) => {
-          const c = corFibra(n.elemento.fibra_entrada, n.elemento.cabo_entrada);
-          return (
-            <li key={n.id} className="relative">
-              <span className="absolute -left-[27px] top-0 bg-white"><IconeElemento tipo={tipoVisual(n.elemento)} tamanho={18} /></span>
-              <p className="text-sm font-semibold text-gray-900 leading-tight">{n.elemento.nome}</p>
-              {i > 0 && (
-                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  {n.elemento.fibra_entrada ? <span className="inline-block w-5 h-2 rounded-full border border-gray-900" style={{ background: c.hex }} /> : null}
-                  <span>
-                    {n.elemento.cabo_entrada ?? "cabo ?"}
-                    {n.elemento.fibra_entrada ? ` · fibra ${n.elemento.fibra_entrada} (${c.nome.toLowerCase()}, ${TF(n.elemento.fibra_entrada, n.elemento.cabo_entrada)})` : ""}
-                    {n.elemento.distancia_m !== undefined ? ` · ${formatMetros(n.elemento.distancia_m)}` : ""}
-                  </span>
-                </p>
-              )}
-              {(() => {
-                // A saída deste elemento, no caminho, é a chegada do próximo (num nó que ramifica, cada ramo sai por um cabo).
-                // No elemento clicado (fim do caminho), usa o ramo seguinte quando só existe um.
-                const prox = caminho[i + 1]?.elemento ?? (n.filhos.length === 1 ? n.filhos[0].elemento : undefined);
-                const ent = n.elemento;
-                if (!prox || !ent.cabo_entrada || !prox.cabo_entrada) return null;
-                if (ent.cabo_entrada === prox.cabo_entrada && ent.fibra_entrada === prox.fibra_entrada) return null;
-                return (
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    Emenda: {ent.cabo_entrada} {TF(ent.fibra_entrada, ent.cabo_entrada)} ↔ {prox.cabo_entrada} {TF(prox.fibra_entrada, prox.cabo_entrada)}
+      {/* Caminho */}
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Caminho desde a OLT</p>
+        <ol>
+          {caminho.map((n, i) => {
+            const el = n.elemento;
+            const c = corFibra(el.fibra_entrada, el.cabo_entrada);
+            const pot = el.potencia_saida ?? el.potencia_entrada;
+            const ultimo = i === caminho.length - 1;
+            // Emenda: cabo/fibra de chegada diferente do próximo trecho
+            const prox = caminho[i + 1]?.elemento ?? (n.filhos.length === 1 ? n.filhos[0].elemento : undefined);
+            const emenda =
+              prox && el.cabo_entrada && prox.cabo_entrada && (el.cabo_entrada !== prox.cabo_entrada || el.fibra_entrada !== prox.fibra_entrada);
+            return (
+              <li key={n.id}>
+                {/* Trecho de cabo que chega neste elemento */}
+                {i > 0 && (
+                  <div className="flex gap-2">
+                    <div className="w-7 flex justify-center">
+                      <span className="w-[7px] rounded-full border-2 border-slate-900 my-0.5" style={{ background: c.hex, minHeight: 34 }} />
+                    </div>
+                    <div className="flex-1 min-w-0 py-1.5 flex items-start gap-1.5">
+                      <IconeCabo tamanho={15} className="shrink-0 mt-px" />
+                      <p className="text-[11px] leading-tight text-slate-500 min-w-0">
+                        <span className="text-slate-700 font-medium">{el.cabo_entrada ?? "cabo ?"}</span>
+                        <br />
+                        {el.fibra_entrada ? `${c.rotulo} ${c.nome.toLowerCase()}` : "fibra ?"}
+                        {el.distancia_m !== undefined ? ` · ${formatMetros(el.distancia_m)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {/* Elemento */}
+                <div className={`flex gap-2 items-center rounded-lg ${ultimo ? "bg-amber-50 ring-1 ring-amber-200" : ""}`}>
+                  <div className="w-7 flex justify-center shrink-0">
+                    <IconeElemento tipo={tipoVisual(el)} tamanho={26} />
+                  </div>
+                  <div className="flex-1 min-w-0 py-1">
+                    <p className={`text-xs leading-tight truncate ${ultimo ? "font-bold text-slate-900" : "font-semibold text-slate-800"}`} title={el.nome}>
+                      {el.nome}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {formatMetros(n.distancia)}
+                      {el.splitter ? ` · splitter ${el.splitter}` : ""}
+                    </p>
+                  </div>
+                  <span className={`text-[11px] font-semibold tabular-nums pr-1.5 ${nivelPotencia(pot).classe}`}>{pot !== undefined ? `${dbm(pot)} dBm` : ""}</span>
+                </div>
+                {emenda && (
+                  <p className="ml-9 mb-0.5 text-[10px] text-amber-800 bg-amber-100 rounded px-1.5 py-0.5 inline-block">
+                    emenda {TF(el.fibra_entrada, el.cabo_entrada)} → {prox!.cabo_entrada?.split(" - ")[0]} {TF(prox!.fibra_entrada, prox!.cabo_entrada)}
                   </p>
-                );
-              })()}
-            </li>
-          );
-        })}
-      </ol>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
       <ListaRotas ids={no.rotas} rotas={rotas} onAbrirRota={onAbrirRota} />
     </div>
