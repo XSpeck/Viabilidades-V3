@@ -658,7 +658,8 @@ function DetalheNo({
 }) {
   const caminho = caminhoAte(no);
   const e = no.elemento;
-  const pot0 = caminho[0].elemento.potencia_saida ?? caminho[0].elemento.potencia_entrada;
+  // Mesma referência do resumo da rota: potência da porta PON (entrada da OLT)
+  const pot0 = caminho[0].elemento.potencia_entrada ?? caminho[0].elemento.potencia_saida;
   const potAqui = e.potencia_saida ?? e.potencia_entrada;
   const perda = pot0 !== undefined && potAqui !== undefined ? pot0 - potAqui : undefined;
   const pern = pernasSplitter(no);
