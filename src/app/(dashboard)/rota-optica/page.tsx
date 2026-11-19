@@ -51,7 +51,6 @@ export default function RotaOpticaPage() {
   const [modo, setModo] = useState<Modo>({ tipo: "ver" });
   /** Rotas abertas em janelas (posição inicial) */
   const [rotasAbertas, setRotasAbertas] = useState<{ id: string; x: number; y: number }[]>([]);
-  const ultimoClique = useRef({ x: 200, y: 160 });
   /** Janela do cadastro de equipamentos (posição inicial) */
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
@@ -134,12 +133,12 @@ export default function RotaOpticaPage() {
     }
   }
 
-  /** Abre a rota numa janela perto do último clique (ou traz para frente) */
+  /** Abre a rota numa janela grande, centralizada no topo (ou traz para frente) */
   function abrirRota(id: string) {
     setRotasAbertas((rs) =>
       rs.some((x) => x.id === id)
         ? [...rs.filter((x) => x.id !== id), rs.find((x) => x.id === id)!]
-        : [...rs, { id, x: Math.max(8, Math.min(ultimoClique.current.x - 120, window.innerWidth - 980)), y: Math.max(8, ultimoClique.current.y - 40) }]
+        : [...rs, { id, x: Math.max(8, (window.innerWidth - 980) / 2) + (rs.length % 4) * 24, y: 48 + (rs.length % 4) * 24 }]
     );
   }
 
@@ -169,7 +168,7 @@ export default function RotaOpticaPage() {
 
   return (
     <JanelasProvider>
-    <div className="space-y-5" onPointerDownCapture={(e) => { ultimoClique.current = { x: e.clientX, y: e.clientY }; }}>
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Route className="w-7 h-7 text-indigo-600" />
