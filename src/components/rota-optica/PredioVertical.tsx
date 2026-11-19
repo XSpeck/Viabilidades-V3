@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
-import { resumoPortas, type CaixaRede } from "@/lib/caixasRede";
+import { resumoPortas, totalPernas, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import {
   andaresDoBloco,
@@ -35,6 +35,14 @@ const TOPO = 44; // telhado + nome do bloco
 const POCO = 26; // largura do poço da prumada
 /** Normalmente cabem no máximo 4 CDOIs por bloco */
 const MAX_POR_BLOCO = 4;
+/** Meta: as portas das CDOIs atendem pelo menos 50% dos apartamentos */
+const META_COBERTURA = 0.5;
+
+function nivelCobertura(pct: number | null) {
+  if (pct === null) return { cor: "#94a3b8", fundo: "bg-slate-50 border-slate-200 text-slate-600", texto: "cadastre os splitters das CDOIs" };
+  if (pct >= META_COBERTURA) return { cor: "#16a34a", fundo: "bg-emerald-50 border-emerald-200 text-emerald-900", texto: "ótimo" };
+  return { cor: "#d97706", fundo: "bg-amber-50 border-amber-300 text-amber-900", texto: "requer atenção" };
+}
 
 interface Props {
   chave: string;
@@ -298,6 +306,27 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
   const totClientes = predio.pontos.reduce((s, o) => s + (portasDe(o)?.clientes ?? 0), 0);
   const totPortas = predio.pontos.reduce((s, o) => s + (portasDe(o)?.total ?? 0), 0);
 
+  // ---------- Cobertura: portas das CDOIs × apartamentos (meta 50%) ----------
+  /** Portas (pernas do splitter) da CDOI: do diagrama da caixa ou, sem ele, do splitter informado na rota */
+  const capacidade = (o: PontoPredio): number | null => {
+    const c = portasDe(o)?.total;
+    if (c) return c;
+    for (const r of rotas) {
+      const e = r.elementos.find((x) => chaveElemento(x) === o.chave);
+      const t = e ? totalPernas(e.splitter) : null;
+      if (t) return t;
+    }
+    return null;
+  };
+  const cobertura = (pontos: PontoPredio[], aptos: number) => {
+    const caps = pontos.map(capacidade);
+    const portas = caps.reduce<number>((a, c) => a + (c ?? 0), 0);
+    const semSplitter = caps.filter((c) => c === null).length;
+    return { portas, aptos, pct: aptos > 0 && portas > 0 ? portas / aptos : null, semSplitter };
+  };
+  const cobGeral = cobertura(predio.pontos, totAptos);
+  const cobBloco = (b: BlocoPredio) => cobertura(predio.pontos.filter((o) => o.bloco === b.id), b.andares * b.aptos);
+
   const campo = "w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none";
   const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
 
@@ -339,6 +368,18 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
             <text x={x0 + lt / 2} y={yTop - 6} fontSize="7.5" textAnchor="middle" fill="#64748b">
               {b.andares} andar{b.andares !== 1 ? "es" : ""}{b.subsolos ? ` · ${b.subsolos} subsolo${b.subsolos !== 1 ? "s" : ""}` : ""}
             </text>
+            {(() => {
+              const cb = cobBloco(b);
+              if (cb.pct === null) return null;
+              const nv = nivelCobertura(cb.pct);
+              return (
+                <g>
+                  <title>{`${b.nome}: ${cb.portas} portas para ${cb.aptos} apartamentos (meta 50%)`}</title>
+                  <rect x={x0 + lt / 2 - 22} y={yTop - 38} width="44" height="11" rx="5.5" fill={nv.cor} />
+                  <text x={x0 + lt / 2} y={yTop - 30} fontSize="7" textAnchor="middle" fill="#fff" fontWeight={800}>{Math.round(cb.pct * 100)}% aptos</text>
+                </g>
+              );
+            })()}
             <rect x={x0 - 3} y={yTop - 3} width={lt + 6} height="4" rx="1" fill="#475569" />
             {/* andares */}
             {andaresDoBloco(b).map((a) => {
@@ -544,6 +585,44 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
           </div>
         ))}
       </div>
+
+      {/* Cobertura (meta: CDOIs para 50% dos apartamentos) */}
+      {(() => {
+        const nv = nivelCobertura(cobGeral.pct);
+        const pct = cobGeral.pct ?? 0;
+        return (
+          <div className={`rounded-xl border px-3 py-2 text-[11px] ${nv.fundo}`}>
+            <div className="flex items-center gap-2">
+              <p className="font-semibold">Cobertura dos apartamentos</p>
+              <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: nv.cor }}>
+                {cobGeral.pct === null ? "sem dados" : `${Math.round(pct * 100)}% · ${nv.texto}`}
+              </span>
+            </div>
+            <div className="relative mt-1.5 h-2.5 rounded-full bg-white/80 ring-1 ring-black/5">
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct * 100)}%`, background: nv.cor }} />
+              <div className="absolute -top-1 h-4.5 w-0.5 bg-slate-700" style={{ left: `${META_COBERTURA * 100}%` }} title="meta 50%" />
+            </div>
+            <p className="mt-1 opacity-90">
+              {cobGeral.portas} porta{cobGeral.portas !== 1 ? "s" : ""} de CDOI para {cobGeral.aptos} apartamentos · meta: atender 50% ou mais
+              {cobGeral.semSplitter > 0 ? ` · ${cobGeral.semSplitter} CDOI${cobGeral.semSplitter > 1 ? "s" : ""} sem splitter informado` : ""}
+            </p>
+            {predio.blocos.length > 1 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {predio.blocos.map((b) => {
+                  const cb = cobBloco(b);
+                  const n2 = nivelCobertura(cb.pct);
+                  return (
+                    <span key={b.id} className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px]">
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ background: n2.cor }} />
+                      {b.nome}: {cb.pct === null ? "—" : `${Math.round(cb.pct * 100)}%`} ({cb.portas}/{cb.aptos})
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Desenho */}
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-inner">{desenho}</div>
