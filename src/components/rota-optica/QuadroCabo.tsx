@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GripHorizontal, Loader2, Pencil, Save, X } from "lucide-react";
-import { corFibra } from "@/lib/rotaOptica";
+import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
 import {
   capacidadeSugerida,
   CAPACIDADES,
@@ -35,9 +35,6 @@ const COR_STATUS: Record<StatusFibra, string> = {
   rompida: "text-red-700",
 };
 
-function TF(f: number) {
-  return `T${Math.ceil(f / 12)} F${String(f).padStart(2, "0")}`;
-}
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
 export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usuario, onSalva, onFechar, onAbrirRota }: Props) {
@@ -60,6 +57,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
 
   const cap = editando ? capacidade : cabo?.capacidade ?? capInicial;
   const fibras = Array.from({ length: Math.max(cap, maiorUsada) }, (_, i) => i + 1);
+  const porTubo = fibrasPorTubo(cap);
 
   function statusDe(n: number): StatusFibra {
     const m = (editando ? manuais : Object.fromEntries((cabo?.fibras ?? []).map((f) => [f.numero, f])))[n];
@@ -143,11 +141,11 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
 
         <ul className="max-h-[45vh] overflow-auto divide-y divide-gray-100 border-y border-gray-100">
           {visiveis.map((n, idx) => {
-            const c = corFibra(n);
+            const c = corFibraPorCapacidade(n, cap);
             const st = statusDe(n);
             const usos = uso.get(n) ?? [];
-            const novoTubo = idx === 0 || Math.ceil(visiveis[idx - 1] / 12) !== Math.ceil(n / 12);
-            const corTubo = corFibra(Math.ceil(n / 12));
+            const novoTubo = idx === 0 || Math.ceil(visiveis[idx - 1] / porTubo) !== Math.ceil(n / porTubo);
+            const corTubo = c.corTubo!;
             return (
               <li
                 key={n}
@@ -157,14 +155,14 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, usua
                 {novoTubo && (
                   <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
                     <span className="inline-block w-3 h-3 rounded-full border border-gray-800" style={{ background: corTubo.hex }} />
-                    Tubo {Math.ceil(n / 12)} ({corTubo.nome.toLowerCase()})
+                    Tubo {c.tubo} ({corTubo.nome.toLowerCase()}){cap > 12 ? ` · ${porTubo} fibras` : ""}
                   </p>
                 )}
                 <div className="flex items-start gap-2">
                   <span className="inline-block w-4 h-4 mt-0.5 rounded-full border border-gray-800 shrink-0" style={{ background: c.hex }} title={c.nome} />
                   <div className="min-w-0 flex-1">
                     <p className={`text-xs ${COR_STATUS[st]}`}>
-                      <b>F{String(n).padStart(2, "0")}</b> {c.nome.toLowerCase()} · {TF(n)} · {STATUS_FIBRA_LABEL[st]}
+                      <b>F{String(n).padStart(2, "0")}</b> {c.nome.toLowerCase()} · {c.rotulo} · {STATUS_FIBRA_LABEL[st]}
                       {!editando && descricaoDe(n) ? ` · ${descricaoDe(n)}` : ""}
                     </p>
                     {usos.map((u) => (

@@ -40,9 +40,8 @@ function nomeCurto(nome: string): string {
   return n;
 }
 
-function TF(fibra?: number) {
-  if (!fibra) return "";
-  return `T${Math.ceil(fibra / 12)} F${String(fibra).padStart(2, "0")}`;
+function TF(fibra?: number, cabo?: string) {
+  return corFibra(fibra, cabo).rotulo;
 }
 
 interface Folha { tipo: "livre" | "cliente"; pai: NoArvore; y: number; rotulo?: string }
@@ -311,7 +310,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSa
                 const x1 = X(p.profundidade), y1 = Y(y.get(p)!), x2 = X(c.profundidade), y2 = Y(y.get(c)!);
                 const mx = x1 + COL / 2;
                 const d = `M${x1} ${y1}H${mx}V${y2}H${x2}`;
-                const cor = corFibra(c.elemento.fibra_entrada).hex;
+                const cor = corFibra(c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
                 const temCabo = !!c.elemento.cabo_entrada;
                 return (
                   <g
@@ -328,7 +327,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, usuario, onCaixaSa
                     {c.elemento.fibra_entrada ? (
                       <text x={(mx + x2) / 2 + 4} y={y2 - 7} fontSize={10} textAnchor="middle" fill="#374151"
                         stroke="#fff" strokeWidth={3} paintOrder="stroke">
-                        {TF(c.elemento.fibra_entrada)}
+                        {TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada)}
                       </text>
                     ) : null}
                   </g>
@@ -588,7 +587,7 @@ function DetalheNo({
 
       <ol className="border-l-2 border-gray-200 space-y-3 pl-4">
         {caminho.map((n, i) => {
-          const c = corFibra(n.elemento.fibra_entrada);
+          const c = corFibra(n.elemento.fibra_entrada, n.elemento.cabo_entrada);
           return (
             <li key={n.id} className="relative">
               <span className="absolute -left-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-gray-900" />
@@ -598,7 +597,7 @@ function DetalheNo({
                   {n.elemento.fibra_entrada ? <span className="inline-block w-5 h-2 rounded-full border border-gray-900" style={{ background: c.hex }} /> : null}
                   <span>
                     {n.elemento.cabo_entrada ?? "cabo ?"}
-                    {n.elemento.fibra_entrada ? ` · fibra ${n.elemento.fibra_entrada} (${c.nome.toLowerCase()}, ${TF(n.elemento.fibra_entrada)})` : ""}
+                    {n.elemento.fibra_entrada ? ` · fibra ${n.elemento.fibra_entrada} (${c.nome.toLowerCase()}, ${TF(n.elemento.fibra_entrada, n.elemento.cabo_entrada)})` : ""}
                     {n.elemento.distancia_m !== undefined ? ` · ${formatMetros(n.elemento.distancia_m)}` : ""}
                   </span>
                 </p>
@@ -612,7 +611,7 @@ function DetalheNo({
                 if (ent.cabo_entrada === prox.cabo_entrada && ent.fibra_entrada === prox.fibra_entrada) return null;
                 return (
                   <p className="text-xs text-amber-700 mt-0.5">
-                    Emenda: {ent.cabo_entrada} {TF(ent.fibra_entrada)} ↔ {prox.cabo_entrada} {TF(prox.fibra_entrada)}
+                    Emenda: {ent.cabo_entrada} {TF(ent.fibra_entrada, ent.cabo_entrada)} ↔ {prox.cabo_entrada} {TF(prox.fibra_entrada, prox.cabo_entrada)}
                   </p>
                 );
               })()}

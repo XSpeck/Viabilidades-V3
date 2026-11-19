@@ -51,7 +51,7 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada }: {
   const LIN = 24;
   const H = Math.max(70, portas.length * LIN + 16);
   const meio = H / 2;
-  const cor = corFibra(fibraEntrada);
+  const cor = corFibra(fibraEntrada, caboEntrada);
   const xSpl = 92;
   const xPorta = 150;
   return (

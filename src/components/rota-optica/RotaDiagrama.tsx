@@ -29,10 +29,8 @@ function Forma({ tipo, ativo }: { tipo: ElementoRota["tipo"]; ativo: boolean }) 
   return <span className={`block w-4 h-4 rounded-full bg-white border-[3px] border-gray-900 ${borda}`} />;
 }
 
-function TF(fibra?: number) {
-  if (!fibra) return "";
-  const c = corFibra(fibra);
-  return `T${c.tubo} F${String(fibra).padStart(2, "0")}`;
+function TF(fibra?: number, cabo?: string) {
+  return corFibra(fibra, cabo).rotulo;
 }
 
 /** Diagrama vertical da rota: elementos em ordem, ligados pela cor real da fibra. */
@@ -48,7 +46,7 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
         const prox = elementos[i + 1];
         const fibraLig = prox?.fibra_entrada ?? e.fibra_saida;
         const caboLig = prox?.cabo_entrada ?? e.cabo_saida;
-        const cor = corFibra(fibraLig);
+        const cor = corFibra(fibraLig, caboLig);
         const ativo = i === selecionado;
         return (
           <li key={i} className="relative">
@@ -89,7 +87,7 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
                 </span>
                 <span className="text-[11px] text-gray-500 py-1.5 leading-tight">
                   {caboLig ? <b className="text-gray-700 font-medium">{caboLig}</b> : "Cabo não informado"}
-                  {fibraLig ? ` · fibra ${fibraLig} ${cor.nome.toLowerCase()} (${TF(fibraLig)})` : ""}
+                  {fibraLig ? ` · fibra ${fibraLig} ${cor.nome.toLowerCase()} (${TF(fibraLig, caboLig)})` : ""}
                   {prox.distancia_m !== undefined ? ` · ${formatMetros(prox.distancia_m)}` : ""}
                 </span>
               </div>
@@ -115,13 +113,13 @@ export function DetalheElemento({ elementos, indice }: { elementos: ElementoRota
 
   const linhaFibra = (cabo?: string, fibra?: number) => {
     if (!cabo && !fibra) return "—";
-    const c = corFibra(fibra);
+    const c = corFibra(fibra, cabo);
     return (
       <span className="inline-flex items-center gap-1.5">
         {fibra ? <span className="inline-block w-5 h-2 rounded-full border border-gray-900" style={{ background: c.hex }} /> : null}
         <span>
           {cabo ?? "cabo ?"}
-          {fibra ? ` · fibra ${fibra} (${c.nome.toLowerCase()}, ${TF(fibra)})` : ""}
+          {fibra ? ` · fibra ${fibra} (${c.nome.toLowerCase()}, ${TF(fibra, cabo)})` : ""}
         </span>
       </span>
     );
@@ -170,7 +168,7 @@ export function DetalheElemento({ elementos, indice }: { elementos: ElementoRota
         </p>
         {trocaCabo && (
           <p className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            <b>Emenda:</b> {e.cabo_entrada} {TF(e.fibra_entrada)} ↔ {e.cabo_saida} {TF(e.fibra_saida)}
+            <b>Emenda:</b> {e.cabo_entrada} {TF(e.fibra_entrada, e.cabo_entrada)} ↔ {e.cabo_saida} {TF(e.fibra_saida, e.cabo_saida)}
           </p>
         )}
         {e.porta && (

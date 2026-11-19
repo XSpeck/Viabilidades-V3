@@ -51,6 +51,17 @@ export function capacidadeSugerida(maiorFibra: number): number {
   return CAPACIDADES.find((c) => c >= maiorFibra) ?? Math.ceil(maiorFibra / 12) * 12;
 }
 
+/** Capacidade de cada cabo: a cadastrada ou, se não houver, estimada pela maior fibra usada nas rotas. */
+export function capacidadesDosCabos(
+  cabos: CaboRede[],
+  uso: Map<string, { nome: string; fibras: Map<number, UsoFibra[]> }>
+): Map<string, number> {
+  const m = new Map<string, number>();
+  uso.forEach((v, k) => m.set(k, capacidadeSugerida(Math.max(1, ...v.fibras.keys()))));
+  cabos.forEach((c) => { if (c.capacidade) m.set(c.chave, c.capacidade); });
+  return m;
+}
+
 /** Uma rota passando por uma fibra de um cabo, entre dois elementos. */
 export interface UsoFibra {
   rotaId: string;

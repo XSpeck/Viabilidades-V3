@@ -21,7 +21,8 @@ import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiag
 import RotaEditor from "@/components/rota-optica/RotaEditor";
 import ArvorePonView from "@/components/rota-optica/ArvorePon";
 import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
-import { listarCabos, type CaboRede } from "@/lib/cabosRede";
+import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
@@ -89,6 +90,10 @@ export default function RotaOpticaPage() {
     if (!t) return rotas;
     return rotas.filter((r) => textoBuscaRota(r).includes(t));
   }, [rotas, busca]);
+
+  // Capacidade de cada cabo (cadastrada ou estimada) define tubos e cores das fibras em todas as telas
+  const capacidades = useMemo(() => capacidadesDosCabos(cabos, usoDasFibras(rotas)), [cabos, rotas]);
+  registrarCapacidadesCabos(capacidades);
 
   if (!permitido) {
     return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a administradores.</div>;

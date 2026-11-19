@@ -64,7 +64,7 @@ export interface RotaOptica {
 export type RotaOpticaInput = Omit<RotaOptica, "id" | "criado_em" | "atualizado_em">;
 
 // =====================
-// Cores de fibra (ABNT, 12 cores por tubo)
+// Cores de fibra (ABNT, sequência de 12 cores)
 // =====================
 const CORES_FIBRA: [string, string][] = [
   ["Verde", "#2e9e4f"],
@@ -81,11 +81,75 @@ const CORES_FIBRA: [string, string][] = [
   ["Aqua", "#20bdc9"],
 ];
 
-export function corFibra(fibra?: number): { nome: string; hex: string; tubo?: number; posicao?: number } {
-  if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90" };
-  const posicao = ((fibra - 1) % 12) + 1;
-  const [nome, hex] = CORES_FIBRA[posicao - 1];
-  return { nome, hex, tubo: Math.ceil(fibra / 12), posicao };
+// =====================
+// Tubos: depende da capacidade do cabo (padrão do GeoGrid)
+//   até 12 fibras → 1 tubo só (cores 1..12)
+//   24 a 72 fibras → tubos de 6 fibras (24 = 4 tubos, 48 = 8, 72 = 12), cores verde→violeta em cada tubo
+//   acima de 72 → tubos de 12 fibras
+// O tubo também segue a sequência de cores (tubo 1 verde, 2 amarelo, 3 branco, 4 azul...).
+// =====================
+export function fibrasPorTubo(capacidade: number): number {
+  if (capacidade <= 12) return 12;
+  if (capacidade <= 72) return 6;
+  return 12;
+}
+
+const CAPACIDADES_PADRAO = [2, 4, 6, 12, 24, 36, 48, 72, 96, 144, 288];
+
+/** Menor capacidade padrão que comporta a fibra. */
+export function capacidadeMinima(fibra: number): number {
+  return CAPACIDADES_PADRAO.find((c) => c >= fibra) ?? Math.ceil(fibra / 12) * 12;
+}
+
+function chaveNomeCabo(nome: string): string {
+  return nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
+
+/** Capacidade conhecida de cada cabo (cadastrada ou estimada pelas rotas); preenchida pela tela. */
+const capacidadesCabos = new Map<string, number>();
+
+export function registrarCapacidadesCabos(capacidades: Map<string, number>): void {
+  capacidadesCabos.clear();
+  capacidades.forEach((v, k) => capacidadesCabos.set(chaveNomeCabo(k), v));
+}
+
+export function capacidadeDoCabo(cabo: string | undefined, fibra: number): number {
+  const c = cabo ? capacidadesCabos.get(chaveNomeCabo(cabo)) : undefined;
+  return c && c >= fibra ? c : capacidadeMinima(fibra);
+}
+
+export interface InfoFibra {
+  nome: string;
+  hex: string;
+  tubo?: number;
+  posicao?: number;
+  corTubo?: { nome: string; hex: string };
+  /** "T6 F33" */
+  rotulo: string;
+}
+
+/** Cor e tubo de uma fibra conhecendo a capacidade do cabo. */
+export function corFibraPorCapacidade(fibra: number | undefined, capacidade: number): InfoFibra {
+  if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90", rotulo: "" };
+  const porTubo = fibrasPorTubo(capacidade);
+  const tubo = Math.ceil(fibra / porTubo);
+  const posicao = ((fibra - 1) % porTubo) + 1;
+  const [nome, hex] = CORES_FIBRA[(posicao - 1) % 12];
+  const [nomeTubo, hexTubo] = CORES_FIBRA[(tubo - 1) % 12];
+  return {
+    nome,
+    hex,
+    tubo,
+    posicao,
+    corTubo: { nome: nomeTubo, hex: hexTubo },
+    rotulo: `T${tubo} F${String(fibra).padStart(2, "0")}`,
+  };
+}
+
+/** Cor e tubo da fibra num cabo (usa a capacidade cadastrada/estimada do cabo). */
+export function corFibra(fibra?: number, cabo?: string): InfoFibra {
+  if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90", rotulo: "" };
+  return corFibraPorCapacidade(fibra, capacidadeDoCabo(cabo, fibra));
 }
 
 /** KML usa aabbggrr; devolve #rrggbb. */
