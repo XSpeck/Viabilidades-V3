@@ -10,6 +10,7 @@ import {
   calcularPotencias,
   capacidadeDoCabo,
   comprimentoTracado,
+  distanciaMetros,
   type CalculoPotencia,
   corFibraPorCapacidade,
   fibrasPorTubo,
@@ -27,6 +28,7 @@ import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento } from "@/lib/arvorePon";
 import { IconeCabo, IconeElemento } from "./IconesRede";
+import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
@@ -148,6 +150,41 @@ function segmentoMaisPerto(pts: Ponto[], p: Ponto): number {
   return melhor;
 }
 
+const normNome = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+
+/** Postes do trecho i (anterior → i) tirados do traçado do KML: pedaço do cabo entre os pontos mais perto das duas caixas. */
+function verticesDoKml(els: ElementoRota[], i: number, kml: TrechoCabo[]): Ponto[] {
+  const a = els[i - 1];
+  const b = els[i];
+  if (!a || !b || a.lat === undefined || a.lon === undefined || b.lat === undefined || b.lon === undefined) return [];
+  const pa = { lat: a.lat, lon: a.lon };
+  const pb = { lat: b.lat, lon: b.lon };
+  const nomeCabo = normNome(b.cabo_entrada ?? "");
+  let melhor: { score: number; pts: Ponto[] } | null = null;
+  for (const t of kml) {
+    if (t.pontos.length < 2) continue;
+    let ia = 0, da = Infinity, ib = 0, db = Infinity;
+    t.pontos.forEach((p, k) => {
+      const d1 = distanciaMetros(pa, p);
+      if (d1 < da) { da = d1; ia = k; }
+      const d2 = distanciaMetros(pb, p);
+      if (d2 < db) { db = d2; ib = k; }
+    });
+    if (da > 80 || db > 80 || ia === ib) continue;
+    const score = da + db - (nomeCabo && normNome(t.nome) === nomeCabo ? 1000 : 0);
+    if (!melhor || score < melhor.score) {
+      const pts = ia < ib ? t.pontos.slice(ia + 1, ib) : t.pontos.slice(ib + 1, ia).reverse();
+      melhor = { score, pts: pts.map((p) => ({ lat: p.lat, lon: p.lon })) };
+    }
+  }
+  return melhor?.pts ?? [];
+}
+
+/** Tipo de elemento que a ferramenta coloca (null = Mover/Poste) */
+function tipoDaFerramenta(f: Ferramenta): TipoElementoRota | null {
+  return f === "selecionar" || f === "poste" || f === "estacao" ? null : f;
+}
+
 const PALETA: { t: TipoElementoRota; rot: string }[] = [
   { t: "olt", rot: "OLT" },
   { t: "dio", rot: "DIO" },
@@ -192,22 +229,24 @@ interface Props {
 }
 
 export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar }: Props) {
-  // Rotas do GeoGrid mantêm o traçado do KML; nas manuais o traçado é o desenhado aqui
-  const trechosFixos = useMemo<TrechoCabo[]>(
-    () => (inicial?.origem === "geogrid" ? inicial.trechos.filter((t) => t.ate === undefined) : []),
-    [inicial]
-  );
+  // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
+  const trechosFixos: TrechoCabo[] = [];
   const [nome, setNome] = useState(inicial?.nome ?? "");
   const [obs, setObs] = useState(inicial?.obs ?? "");
   const [linhas, setLinhas] = useState<Linha[]>(() =>
     inicial?.elementos.length
       ? inicial.elementos.map((e, i) =>
-          paraLinha(e, trechosFixos.length ? [] : inicial.trechos.find((t) => t.ate === i)?.pontos.slice(1, -1) ?? [])
+          paraLinha(
+            e,
+            inicial.trechos.some((t) => t.ate !== undefined)
+              ? inicial.trechos.find((t) => t.ate === i)?.pontos.slice(1, -1) ?? []
+              : verticesDoKml(inicial.elementos, i, inicial.trechos)
+          )
         )
       : []
   );
   const [sel, setSel] = useState<number | null>(null);
-  const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "olt");
+  const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "estacao");
   const [pendentes, setPendentes] = useState<Ponto[]>([]);
   const [tiposCabo, setTiposCabo] = useState<Record<string, string>>(() =>
     Object.fromEntries(cabos.filter((c) => c.tipo_id).map((c) => [c.chave, c.tipo_id!]))
@@ -343,8 +382,35 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       if (sel !== null && !posDe(linhas[sel])) alterar(sel, { coords: fmtCoord(p) });
       return;
     }
-    // Colocar um elemento: entra no fim, ligado ao anterior pelo mesmo cabo/fibra, com os postes marcados
+    if (ferramenta === "estacao") {
+      if (linhas.length) return setAviso("A estação é o começo da rota. Para mudar a OLT ou o DIO, use o cartão Estação ao lado.");
+      montarEstacao(p);
+      return;
+    }
     const tipo = ferramenta;
+    // Com um elemento do meio selecionado, o novo entra logo depois dele
+    if (sel !== null && sel < linhas.length - 1 && tipo !== "olt") {
+      const prox = linhas[sel + 1];
+      const ref = linhas[sel];
+      mudar((ls) => {
+        const c = [...ls];
+        c.splice(sel + 1, 0, {
+          ...linhaVazia(tipo),
+          nome: nomeAuto(tipo, ls),
+          codigo: proximoCodigo(ls),
+          coords: fmtCoord(p),
+          vertices: pendentes,
+          dist_auto: true,
+          cabo_entrada: ref.tipo === "dio" ? prox.cabo_entrada : prox.cabo_entrada,
+          fibra_entrada: prox.fibra_entrada,
+        });
+        return c;
+      });
+      setPendentes([]);
+      setSel(sel + 1);
+      return;
+    }
+    // Colocar um elemento: entra no fim, ligado ao anterior pelo mesmo cabo/fibra, com os postes marcados
     const novoIndice = linhas.length;
     const olt = tipo === "olt" && olts.length === 1 ? olts[0] : undefined;
     mudar((ls) => {
@@ -357,8 +423,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         coords: fmtCoord(p),
         vertices: ls.length ? pendentes : [],
         dist_auto: true,
-        cabo_entrada: ant?.cabo_entrada ?? "",
-        fibra_entrada: ant?.fibra_entrada ?? "",
+        // Depois do DIO sai o cabo da estação: a fibra é a porta do DIO
+        cabo_entrada: ant?.tipo === "dio" ? "" : ant?.cabo_entrada ?? "",
+        fibra_entrada: ant?.tipo === "dio" ? ant.porta.match(/Porta\s*0*(\d+)/i)?.[1] ?? "" : ant?.fibra_entrada ?? "",
         equipamento_id: olt?.id ?? "",
         potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
       };
@@ -370,6 +437,69 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // Depois da OLT normalmente vem o DIO; depois do DIO, a caixa de emenda
     if (tipo === "olt") setFerramenta("dio");
     else if (tipo === "dio") setFerramenta("ceo");
+  }
+
+  /** Cria OLT + DIO no mesmo local, ligados por um cordão */
+  function montarEstacao(p: Ponto) {
+    const olt = olts.length === 1 ? olts[0] : undefined;
+    const dio = dios.length === 1 ? dios[0] : undefined;
+    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`)) ?? tiposDeCabo.find((t) => t.capacidade === 1);
+    const nomeOlt = olt?.nome ?? "OLT";
+    const nomeDio = dio?.nome ?? "DIO 1";
+    const nomeCordao = `Cordão ${nomeOlt} → ${nomeDio}`;
+    if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
+    mudar(() => [
+      {
+        ...linhaVazia("olt"),
+        nome: nomeOlt,
+        coords: fmtCoord(p),
+        equipamento_id: olt?.id ?? "",
+        potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
+      },
+      {
+        ...linhaVazia("dio"),
+        nome: nomeDio,
+        codigo: proximoCodigo([]),
+        coords: fmtCoord(p),
+        equipamento_id: dio?.id ?? "",
+        cabo_entrada: nomeCordao,
+        fibra_entrada: "1",
+        distancia_m: "3",
+        dist_auto: false,
+      },
+    ]);
+    setSel(null);
+    setFerramenta("ceo");
+    setAviso("Estação criada! Escolha a porta PON e a porta do DIO no cartão ao lado e clique onde fica a primeira caixa fora da estação.");
+  }
+
+  /** Mudanças vindas do cartão Estação (elementos 1 = OLT, 2 = DIO e 3 = primeira caixa fora) */
+  function aplicarEstacao(p: Partial<DadosEstacao>) {
+    const l1 = linhas[1];
+    const l2 = linhas[2];
+    const nomeCordao = l1?.cabo_entrada.trim() || `Cordão ${p.oltNome ?? linhas[0]?.nome ?? "OLT"} → ${p.dioNome ?? l1?.nome ?? "DIO"}`;
+    const nomeSaida = p.saidaCabo ?? (l2?.cabo_entrada.trim() || `Saída ${p.dioNome ?? l1?.nome ?? "DIO"}`);
+    if (p.cordaoTipo !== undefined) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: p.cordaoTipo! }));
+    if (p.saidaTipo !== undefined && l2) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeSaida)]: p.saidaTipo! }));
+    mudar((ls) => {
+      const c = ls.map((x) => ({ ...x }));
+      if (!c[0] || !c[1]) return ls;
+      if (p.oltNome !== undefined) c[0].nome = p.oltNome;
+      if (p.oltEquip !== undefined) c[0].equipamento_id = p.oltEquip;
+      if (p.oltPorta !== undefined) c[0].porta = p.oltPorta;
+      if (p.oltPot !== undefined) c[0].potencia_saida = p.oltPot;
+      if (p.dioNome !== undefined) c[1].nome = p.dioNome;
+      if (p.dioEquip !== undefined) c[1].equipamento_id = p.dioEquip;
+      if (p.dioPorta !== undefined) c[1].porta = p.dioPorta;
+      if (p.cordaoMetros !== undefined) { c[1].distancia_m = p.cordaoMetros; c[1].dist_auto = false; }
+      if (p.cordaoTipo !== undefined) { c[1].cabo_entrada = nomeCordao; c[1].fibra_entrada = "1"; }
+      if (c[2]) {
+        if (p.saidaCabo !== undefined) c[2].cabo_entrada = p.saidaCabo;
+        if (p.saidaTipo !== undefined) c[2].cabo_entrada = nomeSaida;
+        if (p.saidaFibra !== undefined) c[2].fibra_entrada = p.saidaFibra;
+      }
+      return c;
+    });
   }
 
   /** Clique numa caixa da rede existente */
@@ -430,7 +560,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   /** Insere um elemento (tipo da ferramenta) no meio do trecho que chega em i, no ponto clicado */
   function inserirElemento(iHint: number, lat: number, lon: number, tipoForcado?: TipoElementoRota) {
-    const tipo = tipoForcado ?? (ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : "ceo");
+    if (ferramenta === "estacao") return clicarMapa(lat, lon);
+    const tipo = tipoForcado ?? tipoDaFerramenta(ferramenta) ?? "ceo";
     const p = { lat, lon };
     let i = iHint;
     if (i < 1) {
@@ -491,7 +622,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   /** Insere um elemento sem local antes de i (pela lista); o próximo clique no mapa posiciona */
   function inserirNaLista(i: number) {
-    const tipo: TipoElementoRota = ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : "ceo";
+    const tipo: TipoElementoRota = tipoDaFerramenta(ferramenta) ?? "ceo";
     const cur = linhas[i];
     mudar((ls) => {
       const c = [...ls];
@@ -522,6 +653,26 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     alterar(i, { vertices: v });
     setSel(i);
   }
+
+  const temEstacao = linhas[0]?.tipo === "olt" && linhas[1]?.tipo === "dio";
+  const estacao: DadosEstacao | null = temEstacao
+    ? {
+        oltNome: linhas[0].nome,
+        oltEquip: linhas[0].equipamento_id,
+        oltPorta: linhas[0].porta,
+        oltPot: linhas[0].potencia_saida,
+        dioNome: linhas[1].nome,
+        dioEquip: linhas[1].equipamento_id,
+        dioPorta: linhas[1].porta,
+        cordaoNome: linhas[1].cabo_entrada,
+        cordaoTipo: linhas[1].cabo_entrada.trim() ? tiposCabo[chaveCabo(linhas[1].cabo_entrada)] ?? "" : "",
+        cordaoMetros: linhas[1].distancia_m,
+        saidaCabo: linhas[2]?.cabo_entrada,
+        saidaTipo: linhas[2]?.cabo_entrada.trim() ? tiposCabo[chaveCabo(linhas[2].cabo_entrada)] ?? "" : linhas[2] ? "" : undefined,
+        saidaFibra: linhas[2]?.fibra_entrada,
+        destino: linhas[2] ? linhas[2].nome : undefined,
+      }
+    : null;
 
   const pontosMapa: PontoEditor[] = linhas.map((l) => {
     const p = posDe(l);
@@ -605,13 +756,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
 
     // Traçado: rotas do GeoGrid mantêm o do KML; manuais usam o desenhado no mapa
-    const trechos: TrechoCabo[] = trechosFixos.length
-      ? inicial!.trechos
-      : linhas.flatMap((l, i) => {
-          const a = i > 0 ? posDe(linhas[i - 1]) : null;
-          const b = posDe(l);
-          return a && b ? [{ nome: l.cabo_entrada.trim() || `Trecho ${i}`, pontos: [a, ...l.vertices, b], ate: i }] : [];
-        });
+    const trechos: TrechoCabo[] = linhas.flatMap((l, i) => {
+      const a = i > 0 ? posDe(linhas[i - 1]) : null;
+      const b = posDe(l);
+      const cor = infoFibra(l.cabo_entrada, l.fibra_entrada)?.c.hex;
+      return a && b ? [{ nome: l.cabo_entrada.trim() || `Trecho ${i}`, pontos: [a, ...l.vertices, b], ate: i, ...(cor ? { cor } : {}) }] : [];
+    });
 
     setSalvando(true);
     try {
@@ -926,9 +1076,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     );
   }
 
-  const nomeFerramenta = ferramenta === "selecionar" ? "" : ferramenta === "poste" ? "poste" : PALETA.find((p) => p.t === ferramenta)?.rot ?? "";
+  const nomeFerramenta =
+    ferramenta === "selecionar" ? "" : ferramenta === "poste" ? "poste" : ferramenta === "estacao" ? "estação" : PALETA.find((p) => p.t === ferramenta)?.rot ?? "";
+  const depoisDe = tipoDaFerramenta(ferramenta) && sel !== null && sel < linhas.length - 1 ? linhas[sel] : null;
   const dica =
-    ferramenta === "selecionar"
+    ferramenta === "estacao"
+      ? "Clique no mapa onde fica a estação: entram a OLT, o DIO e o cordão entre eles."
+      : depoisDe
+        ? `O novo ${nomeFerramenta} entra logo depois de "${depoisDe.nome}" (selecionado).`
+        : ferramenta === "selecionar"
       ? sel !== null && !posDe(linhas[sel])
         ? `Clique no mapa onde fica "${linhas[sel].nome || `elemento ${sel + 1}`}".`
         : sel !== null && sel > 0
@@ -1057,6 +1213,20 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   <span className={`text-[9px] font-semibold mt-0.5 ${ferramenta === b.k ? "text-white" : "text-slate-600"}`}>{b.rot}</span>
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => { setFerramenta("estacao"); setAviso(null); }}
+                disabled={linhas.length > 0}
+                className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 disabled:opacity-30 ${ferramenta === "estacao" ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}
+                title={linhas.length ? "A estação é o começo da rota" : "Montar estação: OLT + DIO + cordão"}
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
+                  <path d="M3 21V9l9-6 9 6v12z" fill={ferramenta === "estacao" ? "#334155" : "#e2e8f0"} stroke="#475569" strokeWidth="1.5" strokeLinejoin="round" />
+                  <rect x="8" y="11" width="8" height="10" rx="1" fill="#0f172a" />
+                  <path d="M9.5 13.5h5M9.5 16h5M9.5 18.5h5" stroke="#4ade80" strokeWidth="1.2" />
+                </svg>
+                <span className={`text-[9px] font-semibold mt-0.5 ${ferramenta === "estacao" ? "text-white" : "text-slate-600"}`}>Estação</span>
+              </button>
               <span className="w-px bg-slate-200 mx-0.5" />
               {PALETA.map((p) => (
                 <button
@@ -1083,13 +1253,16 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 <button type="button" onClick={() => setPendentes([])} className="underline">limpar</button>
               </div>
             )}
-            <p className="rounded-xl bg-slate-900/85 text-white text-xs px-3 py-1.5 shadow text-center">{dica}</p>
-          </div>
-          {trechosFixos.length > 0 && (
-            <p className="absolute top-[86px] left-3 z-[500] rounded-lg bg-white/95 border border-slate-200 text-[11px] text-slate-600 px-2 py-1 shadow">
-              Rota do GeoGrid: o cabo segue o traçado do KML.
+            <p className="rounded-xl bg-slate-900/85 text-white text-xs px-3 py-1.5 shadow text-center pointer-events-auto">
+              {dica}
+              {depoisDe && (
+                <button type="button" onClick={() => setSel(null)} className="ml-2 underline font-semibold text-amber-300">
+                  colocar no fim
+                </button>
+              )}
             </p>
-          )}
+          </div>
+
         </div>
 
         {/* Lista da rota */}
@@ -1129,7 +1302,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             {linhas.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center px-4 py-10 text-slate-500">
                 <IconeElemento tipo="olt" tamanho={44} />
-                <p className="mt-3 font-semibold text-slate-800">Comece pela OLT</p>
+                <p className="mt-3 font-semibold text-slate-800">Comece pela estação</p>
+                <button
+                  type="button"
+                  onClick={() => { setFerramenta("estacao"); setAviso(null); }}
+                  className="mt-2 flex items-center gap-2 rounded-xl bg-slate-900 text-white text-sm font-semibold px-4 py-2 shadow hover:bg-slate-800"
+                >
+                  <IconeElemento tipo="olt" tamanho={20} /> Montar estação (OLT + DIO)
+                </button>
+                <p className="mt-1 text-[11px] text-slate-500">depois clique no mapa onde ela fica</p>
                 {pontosRede.length > 0 && (
                   <p className="mt-2 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 max-w-[280px]">
                     <b>Ramo de uma rota existente?</b> Clique na caixa da rede (ícones claros no mapa) de onde ele sai: o caminho desde a OLT é
@@ -1137,15 +1318,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   </p>
                 )}
                 <ol className="mt-2 text-xs text-left space-y-1.5 max-w-[260px]">
-                  <li><b>1.</b> Com <b>OLT</b> selecionada na paleta, clique no mapa onde ela fica.</li>
+                  <li><b>1.</b> Monte a <b>estação</b> (OLT + DIO) clicando no mapa e escolha as portas no cartão.</li>
                   <li><b>2.</b> Use <b>Poste</b> para marcar o caminho do cabo (opcional).</li>
-                  <li><b>3.</b> Escolha <b>CEO, HUB, CTO…</b> e clique onde cada caixa fica. A distância é calculada sozinha.</li>
+                  <li><b>3.</b> Escolha <b>CEO, HUB, CTO…</b> e clique onde cada caixa fica. Clicando em cima de um cabo, ela entra no meio.</li>
                   <li><b>4.</b> Clique num item da lista para informar cabo, fibra e splitter.</li>
                 </ol>
               </div>
             ) : (
+              <>
+              {estacao && (
+                <div className={`mb-3 ${sel === 0 || sel === 1 ? "ring-2 ring-indigo-300 rounded-2xl" : ""}`}>
+                  <EstacaoOltDio dados={estacao} olts={olts} dios={dios} tiposCabo={tiposDeCabo} onMudar={aplicarEstacao} />
+                  {linhas.length > 2 && <p className="mt-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fora da estação</p>}
+                </div>
+              )}
               <ol>
                 {linhas.map((l, i) => {
+                  if (estacao && i < 2) return null;
                   const ativo = i === sel;
                   const info = i > 0 ? infoFibra(l.cabo_entrada, l.fibra_entrada) : null;
                   const pot = potDe(i);
@@ -1205,6 +1394,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   );
                 })}
               </ol>
+              </>
             )}
           </div>
 
@@ -1212,7 +1402,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             <button
               type="button"
               onClick={() => {
-                const tipo: TipoElementoRota = ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : linhas.length ? "ceo" : "olt";
+                const tipo: TipoElementoRota = tipoDaFerramenta(ferramenta) ?? (linhas.length ? "ceo" : "olt");
                 const ant = linhas[linhas.length - 1];
                 mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
                 setSel(linhas.length);

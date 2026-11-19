@@ -11,7 +11,7 @@ import { Search, X } from "lucide-react";
 import { formatarCoordenada, lerCoordenada, type Coordenada } from "@/lib/coordenadas";
 
 /** Ferramenta ativa: selecionar/mover, marcar poste do cabo, ou colocar um elemento do tipo escolhido */
-export type Ferramenta = "selecionar" | "poste" | TipoElementoRota;
+export type Ferramenta = "selecionar" | "poste" | "estacao" | TipoElementoRota;
 
 type Ponto = { lat: number; lon: number };
 
