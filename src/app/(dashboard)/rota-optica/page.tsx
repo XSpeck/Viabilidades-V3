@@ -230,6 +230,7 @@ export default function RotaOpticaPage() {
           cabos={cabos}
           nomesCabos={nomesCabos}
           centroPadrao={centroPadrao}
+          rede={rotas.filter((r) => r.id !== modo.rota?.id)}
           onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
           onCancelar={() => setModo({ tipo: "ver" })}
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}

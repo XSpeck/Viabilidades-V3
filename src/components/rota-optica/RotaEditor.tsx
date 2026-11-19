@@ -24,7 +24,8 @@ import {
 import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { SPLITTERS } from "@/lib/caixasRede";
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
-import type { Ferramenta, PontoEditor } from "./RotaEditorMapa";
+import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
+import { chaveElemento } from "@/lib/arvorePon";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
@@ -183,12 +184,14 @@ interface Props {
   /** Nomes de cabos já usados nas rotas (sugestões) */
   nomesCabos: string[];
   centroPadrao?: [number, number];
+  /** Outras rotas salvas: formam a rede mostrada ao fundo e podem ser usadas como ponto de partida */
+  rede: RotaOptica[];
   onCaboSalvo: (c: CaboRede) => void;
   onCancelar: () => void;
   onSalvar: (dados: RotaOpticaInput) => Promise<void>;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, onCaboSalvo, onCancelar, onSalvar }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar }: Props) {
   // Rotas do GeoGrid mantêm o traçado do KML; nas manuais o traçado é o desenhado aqui
   const trechosFixos = useMemo<TrechoCabo[]>(
     () => (inicial?.origem === "geogrid" ? inicial.trechos.filter((t) => t.ate === undefined) : []),
@@ -219,6 +222,35 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const [erro, setErro] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Linha[][]>([]);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
+
+  // Rede já cadastrada: uma caixa por chave (código PT ou nome) e os cabos de todas as rotas
+  const redeInfo = useMemo(() => {
+    const vistos = new Map<string, { el: ElementoRota; rota: RotaOptica; i: number }>();
+    const cabosRede: { pts: [number, number][]; cor?: string }[] = [];
+    for (const r of rede) {
+      r.elementos.forEach((e, i) => {
+        if (e.lat === undefined || e.lon === undefined) return;
+        const k = chaveElemento(e);
+        if (!vistos.has(k)) vistos.set(k, { el: e, rota: r, i });
+      });
+      if (r.trechos.length) {
+        r.trechos.forEach((t) => cabosRede.push({ pts: t.pontos.map((p) => [p.lat, p.lon] as [number, number]), cor: t.cor }));
+      } else {
+        const pts = r.elementos.filter((e) => e.lat !== undefined && e.lon !== undefined).map((e) => [e.lat!, e.lon!] as [number, number]);
+        if (pts.length > 1) cabosRede.push({ pts });
+      }
+    }
+    return { itens: [...vistos.values()], cabos: cabosRede };
+  }, [rede]);
+  const chaveLinha = (l: Linha) => chaveElemento({ nome: l.nome, codigo: l.codigo.trim() || undefined, tipo: l.tipo });
+  const chavesNaRota = new Set(linhas.map(chaveLinha));
+  const pontosRede: PontoRede[] = redeInfo.itens.map(({ el }) => ({
+    nome: el.nome,
+    tipo: el.tipo,
+    lat: el.lat!,
+    lon: el.lon!,
+    naRota: chavesNaRota.has(chaveElemento(el)),
+  }));
 
   const tiposDeCabo = catalogo.filter((c) => c.categoria === "cabo");
   const modelosSplitter = catalogo.filter((c) => c.categoria === "splitter");
@@ -325,6 +357,38 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setSel(novoIndice);
     // Depois da OLT, o normal é seguir com caixas de emenda
     if (tipo === "olt") setFerramenta("ceo");
+  }
+
+  /** Clique numa caixa da rede existente */
+  function usarDaRede(k: number) {
+    const it = redeInfo.itens[k];
+    if (!it) return;
+    const e = it.el;
+    const ja = linhas.findIndex((l) => chaveLinha(l) === chaveElemento(e));
+    if (ja >= 0) { setSel(ja); return; }
+    if (ferramenta === "poste") { clicarMapa(e.lat!, e.lon!); return; }
+    if (!linhas.length) {
+      // Rota vazia: começa copiando o caminho da rota existente da OLT até esta caixa (vira um ramo na árvore)
+      const r = it.rota;
+      const manual = r.origem !== "geogrid";
+      const novas = r.elementos.slice(0, it.i + 1).map((x, j) => ({
+        ...paraLinha(x, manual ? r.trechos.find((t) => t.ate === j)?.pontos.slice(1, -1) ?? [] : []),
+        dist_auto: false,
+      }));
+      mudar(() => novas);
+      if (r.calculo_potencia) setCalc(r.calculo_potencia);
+      setSel(it.i);
+      setFerramenta("ceo");
+      setAviso(`Começando pelo caminho da rota "${r.nome}" até ${e.nome} (${it.i + 1} elementos). Agora coloque as próximas caixas.`);
+      return;
+    }
+    // Rota em andamento: usa a caixa existente (mesmo nome/código/local/splitter), ligada pelo mesmo cabo do trecho anterior
+    const ant = linhas[linhas.length - 1];
+    const base: ElementoRota = { ...e, cabo_entrada: undefined, fibra_entrada: undefined, cabo_saida: undefined, fibra_saida: undefined, distancia_m: undefined, potencia_entrada: undefined, potencia_saida: undefined };
+    const novoIndice = linhas.length;
+    mudar((ls) => [...ls, { ...paraLinha(base), vertices: pendentes, dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
+    setPendentes([]);
+    setSel(novoIndice);
   }
 
   function inserirCurva(i: number, lat: number, lon: number) {
@@ -714,7 +778,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       : ferramenta === "poste"
         ? "Clique nos postes do caminho. Depois escolha o tipo da próxima caixa e clique onde ela fica."
         : linhas.length === 0
-          ? `Clique no mapa onde fica a ${nomeFerramenta}. Ela é o início da rota.`
+          ? pontosRede.length
+            ? `Clique numa caixa da rede (ícones claros) para continuar a partir dela, ou no mapa para colocar a ${nomeFerramenta}.`
+            : `Clique no mapa onde fica a ${nomeFerramenta}. Ela é o início da rota.`
           : `Clique no mapa para colocar ${nomeFerramenta}${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
 
   return (
@@ -799,6 +865,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             onRemoverVertice={(i, k) => alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) })}
             onInserirCurva={inserirCurva}
             onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
+            rede={pontosRede}
+            redeCabos={redeInfo.cabos}
+            onClicarRede={usarDaRede}
           />
 
           {/* Paleta de ferramentas */}
@@ -901,6 +970,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <div className="h-full flex flex-col items-center justify-center text-center px-4 py-10 text-slate-500">
                 <IconeElemento tipo="olt" tamanho={44} />
                 <p className="mt-3 font-semibold text-slate-800">Comece pela OLT</p>
+                {pontosRede.length > 0 && (
+                  <p className="mt-2 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 max-w-[280px]">
+                    <b>Ramo de uma rota existente?</b> Clique na caixa da rede (ícones claros no mapa) de onde ele sai: o caminho desde a OLT é
+                    copiado e você só continua.
+                  </p>
+                )}
                 <ol className="mt-2 text-xs text-left space-y-1.5 max-w-[260px]">
                   <li><b>1.</b> Com <b>OLT</b> selecionada na paleta, clique no mapa onde ela fica.</li>
                   <li><b>2.</b> Use <b>Poste</b> para marcar o caminho do cabo (opcional).</li>

@@ -13,6 +13,16 @@ export type Ferramenta = "selecionar" | "poste" | TipoElementoRota;
 
 type Ponto = { lat: number; lon: number };
 
+/** Elemento da rede já cadastrada (outras rotas), mostrado ao fundo */
+export interface PontoRede {
+  nome: string;
+  tipo: TipoElementoRota;
+  lat: number;
+  lon: number;
+  /** Já faz parte da rota em edição */
+  naRota: boolean;
+}
+
 export interface PontoEditor {
   nome: string;
   tipo: TipoElementoRota;
@@ -40,6 +50,10 @@ interface Props {
   onRemoverVertice: (i: number, k: number) => void;
   onInserirCurva: (i: number, lat: number, lon: number) => void;
   onRemoverPendente: (k: number) => void;
+  /** Rede existente (outras rotas): caixas e cabos ao fundo */
+  rede: PontoRede[];
+  redeCabos: { pts: [number, number][]; cor?: string }[];
+  onClicarRede: (k: number) => void;
 }
 
 function marcador(tipo: TipoElementoRota, numero: number, ativo: boolean) {
@@ -49,6 +63,16 @@ function marcador(tipo: TipoElementoRota, numero: number, ativo: boolean) {
     iconSize: [tam, tam],
     iconAnchor: [tam / 2, tam / 2],
     html: `<div style="position:relative;width:${tam}px;height:${tam}px;${ativo ? "filter:drop-shadow(0 0 7px #facc15)" : "filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"}">${iconeSvg(tipo, tam)}<span style="position:absolute;right:-6px;top:-6px;min-width:17px;height:17px;padding:0 3px;border-radius:9999px;background:${ativo ? "#facc15" : "#fff"};color:#0f172a;border:1.5px solid #0f172a;font:700 10px/14px system-ui,sans-serif;text-align:center">${numero}</span></div>`,
+  });
+}
+
+function marcadorRede(tipo: TipoElementoRota, naRota: boolean) {
+  const tam = 26;
+  return L.divIcon({
+    className: "",
+    iconSize: [tam, tam],
+    iconAnchor: [tam / 2, tam / 2],
+    html: `<div style="width:${tam}px;height:${tam}px;opacity:${naRota ? 0.35 : 0.8};filter:grayscale(${naRota ? 1 : 0.35}) drop-shadow(0 1px 1px rgba(0,0,0,.3))">${iconeSvg(tipo, tam)}</div>`,
   });
 }
 
@@ -91,6 +115,7 @@ function Centralizar({ alvo }: { alvo: [number, number] | null }) {
 export default function RotaEditorMapa({
   pontos, trechosFixos, selecionado, ferramenta, pendentes, centroPadrao,
   onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onRemoverPendente,
+  rede, redeCabos, onClicarRede,
 }: Props) {
   const [satelite, setSatelite] = useState(false);
 
@@ -119,7 +144,8 @@ export default function RotaEditorMapa({
 
   const sel = selecionado !== null ? pontos[selecionado] : null;
   const alvo: [number, number] | null = sel?.lat !== undefined && sel?.lon !== undefined ? [sel.lat, sel.lon] : null;
-  const centro: [number, number] = todos[0] ?? centroPadrao ?? [-28.68, -49.37];
+  const pontosRede = useMemo<[number, number][]>(() => rede.map((p) => [p.lat, p.lon] as [number, number]), [rede]);
+  const centro: [number, number] = todos[0] ?? pontosRede[0] ?? centroPadrao ?? [-28.68, -49.37];
   const desenhando = ferramenta !== "selecionar";
   const editavel = trechosFixos.length === 0;
 
@@ -144,8 +170,31 @@ export default function RotaEditorMapa({
         )}
         <ZoomComCtrl />
         <Cliques onClicar={onClicarMapa} />
-        <Enquadrar pontos={todos} />
+        <Enquadrar pontos={todos.length ? todos : pontosRede} />
         <Centralizar alvo={alvo} />
+
+        {/* Rede existente (outras rotas), ao fundo */}
+        {redeCabos.map((c, k) => (
+          <Polyline key={`rc${k}`} positions={c.pts} interactive={false} pathOptions={{ color: "#64748b", weight: 6, opacity: 0.35, lineCap: "round", lineJoin: "round" }} />
+        ))}
+        {redeCabos.map((c, k) => (
+          <Polyline key={`rk${k}`} positions={c.pts} interactive={false} pathOptions={{ color: c.cor ?? "#94a3b8", weight: 2.5, opacity: 0.6, lineCap: "round", lineJoin: "round" }} />
+        ))}
+        {rede.map((p, k) => (
+          <Marker
+            key={`r${k}`}
+            position={[p.lat, p.lon]}
+            icon={marcadorRede(p.tipo, p.naRota)}
+            zIndexOffset={-200}
+            eventHandlers={{ click: () => onClicarRede(k) }}
+          >
+            <Tooltip direction="top" offset={[0, -12]}>
+              <b>{p.nome}</b>
+              <br />
+              {p.naRota ? "já está nesta rota" : pontos.length === 0 ? "clique para começar a rota a partir daqui" : "clique para usar esta caixa na rota"}
+            </Tooltip>
+          </Marker>
+        ))}
 
         {/* Traçado do KML (rotas do GeoGrid) */}
         {trechosFixos.map((t, k) => (
