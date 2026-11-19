@@ -29,6 +29,9 @@ export interface PontoPredio {
   atende_ate: number;
   /** Splitter da CDOI ("1:8", "1:16"…) quando ainda não está no diagrama da caixa nem na rota */
   splitter?: string;
+  /** CDOI ainda sem rota: cabo e fibra planejados (só para o desenho) */
+  cabo?: string;
+  fibra?: number;
 }
 
 export interface PredioRede {
@@ -121,7 +124,7 @@ export async function salvarPredio(p: PredioRede, usuario: string): Promise<Pred
     nome: p.nome.trim(),
     endereco: p.endereco?.trim() ?? "",
     blocos: p.blocos.map((b) => ({ id: b.id, nome: b.nome.trim() || "Bloco", andares: b.andares, subsolos: b.subsolos, aptos: b.aptos })),
-    pontos: p.pontos.map((o) => ({ id: o.id, chave: o.chave, nome: o.nome.trim(), bloco: o.bloco, andar: o.andar, atende_de: o.atende_de, atende_ate: o.atende_ate, ...(o.splitter ? { splitter: o.splitter } : {}) })),
+    pontos: p.pontos.map((o) => ({ id: o.id, chave: o.chave, nome: o.nome.trim(), bloco: o.bloco, andar: o.andar, atende_de: o.atende_de, atende_ate: o.atende_ate, ...(o.splitter ? { splitter: o.splitter } : {}), ...(o.cabo && o.fibra ? { cabo: o.cabo, fibra: o.fibra } : {}) })),
     chaves: [...new Set(p.pontos.map((o) => o.chave).filter(Boolean))],
     obs: p.obs?.trim() ?? "",
     atualizado_por: usuario,

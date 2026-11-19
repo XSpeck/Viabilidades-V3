@@ -973,6 +973,16 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const l = linhas[i];
     const t = tipoDoCabo(l.cabo_entrada);
     const info = infoFibra(l.cabo_entrada, l.fibra_entrada);
+    // fibras deste cabo já usadas nas outras rotas (e para onde vão)
+    const kc = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
+    const emUso = new Map<number, string>();
+    if (kc) {
+      for (const r of rede) {
+        r.elementos.forEach((e) => {
+          if (e.fibra_entrada && e.cabo_entrada && chaveCabo(e.cabo_entrada) === kc && !emUso.has(e.fibra_entrada)) emUso.set(e.fibra_entrada, e.nome);
+        });
+      }
+    }
     return (
       <div>
         <label className={rot}>Fibra</label>
@@ -983,9 +993,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           <select className={`${campo} ${info ? "pl-7" : ""} ${info?.excede ? "border-red-400" : ""}`} value={l.fibra_entrada} onChange={(e) => alterar(i, { fibra_entrada: e.target.value })}>
             <option value="">—</option>
             {Array.from({ length: Math.max(t?.capacidade ?? 144, n(l.fibra_entrada) ?? 0) }, (_, k) => k + 1).map((f) => {
-              if (!t?.capacidade) return <option key={f} value={String(f)}>F{pad2(f)} {corFibraPorCapacidade(f, 12).nome.toLowerCase()}</option>;
+              const uso = emUso.get(f);
+              const sufixo = uso ? ` · em uso → ${uso.split(" - ")[0].split(" / ")[0].slice(0, 22)}` : "";
+              if (!t?.capacidade) return <option key={f} value={String(f)}>F{pad2(f)} {corFibraPorCapacidade(f, 12).nome.toLowerCase()}{sufixo}</option>;
               const c = corFibraPorCapacidade(f, t.capacidade, t.fibras_por_tubo ?? fibrasPorTubo(t.capacidade));
-              return <option key={f} value={String(f)}>F{pad2(f)} {c.nome.toLowerCase()} · T{c.tubo}{f > t.capacidade ? " ⚠" : ""}</option>;
+              return <option key={f} value={String(f)}>F{pad2(f)} {c.nome.toLowerCase()} · T{c.tubo}{f > t.capacidade ? " ⚠" : ""}{sufixo}</option>;
             })}
           </select>
         </div>
@@ -1181,7 +1193,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                           ) : c.livre ? (
                             <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-800">
                               <span className="inline-block h-2 w-2 rounded-full ring-1 ring-black/20" style={{ background: cor?.hex }} />
-                              usar F{c.livre}
+                              F{c.livre} (troque abaixo)
                             </span>
                           ) : (
                             <span className="shrink-0 text-[10px] text-red-600">cheio</span>

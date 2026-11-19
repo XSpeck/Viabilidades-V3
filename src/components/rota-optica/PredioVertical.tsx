@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
-import { corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
+import { capacidadeDoCabo, corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
 import { resumoPortas, totalPernas, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
@@ -50,6 +50,8 @@ interface Props {
   rotas: RotaOptica[];
   caixas: CaixaRede[];
   usuario: string;
+  /** Abre a janela de uma rota (para trocar a fibra que chega numa CDOI) */
+  onAbrirRota?: (id: string) => void;
 }
 
 const curto = (s: string, n = 26) => {
@@ -62,7 +64,7 @@ interface CaboEntrada {
   /** Caixa de onde o cabo vem (ex.: o HUB perto do prédio) */
   de: string;
   /** Uma fibra para cada CDOI */
-  gotas: { ponto: string; fibra?: number }[];
+  gotas: { ponto: string; fibra?: number; planejada?: boolean }[];
 }
 
 /**
@@ -71,7 +73,7 @@ interface CaboEntrada {
  * Cabo diferente entre duas CDOIs do prédio vira ligação interna (entre blocos).
  */
 function chegadas(p: PredioRede, rotas: RotaOptica[]) {
-  const lista: { ponto: string; cabo: string; fibra?: number; kAnt: string; antNome: string }[] = [];
+  const lista: { ponto: string; cabo: string; fibra?: number; kAnt: string; antNome: string; rota: string }[] = [];
   const visto = new Set<string>();
   for (const o of p.pontos) {
     if (!o.chave) continue;
@@ -92,7 +94,7 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
       const id = `${o.id}|${chaveCabo(cabo)}|${e.fibra_entrada}`;
       if (visto.has(id)) continue;
       visto.add(id);
-      lista.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, kAnt: chaveElemento(ant), antNome: ant.nome });
+      lista.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, kAnt: chaveElemento(ant), antNome: ant.nome, rota: r.id });
     }
   }
   const dentro = (k: string) => p.pontos.find((x) => x.chave === k);
@@ -111,12 +113,22 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
       if (!g.gotas.some((x) => x.ponto === l.ponto && x.fibra === l.fibra)) g.gotas.push({ ponto: l.ponto, fibra: l.fibra });
     } else internas.push({ de: dentro(l.kAnt)!.id, para: l.ponto, cabo: l.cabo, fibra: l.fibra });
   }
+  // CDOI sem rota com cabo e fibra planejados: entra como mais uma fibra do cabo (tracejada no desenho)
+  for (const o of p.pontos) {
+    if (lista.some((l) => l.ponto === o.id) || !o.cabo || !o.fibra) continue;
+    const k = chaveCabo(o.cabo);
+    const g = grupos.get(k) ?? { cabo: o.cabo, de: "planejado", gotas: [] };
+    g.gotas.push({ ponto: o.id, fibra: o.fibra, planejada: true });
+    grupos.set(k, g);
+  }
   const cabos = [...grupos.values()];
   cabos.forEach((g) => g.gotas.sort((a, b) => (a.fibra ?? 0) - (b.fibra ?? 0)));
-  return { cabos, internas };
+  /** Rota de cada CDOI (para abrir e trocar a fibra) */
+  const rotaDe = new Map(lista.map((l) => [l.ponto, l.rota]));
+  return { cabos, internas, rotaDe };
 }
 
-export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: Props) {
+export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota }: Props) {
   const [predios, setPredios] = useState<PredioRede[] | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<PredioRede | null>(null);
@@ -286,7 +298,25 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
   predio.blocos.reduce((x, b) => { xs.push(x); return x + largura(b) + GAP; }, ESQ);
   const W = (xs[xs.length - 1] ?? ESQ) + largura(predio.blocos[predio.blocos.length - 1]) + 16;
   const yVala = chao + maxSub * FH + 12; // vala por onde passam os cabos
-  const { cabos, internas } = chegadas(predio, rotas);
+  const { cabos, internas, rotaDe } = chegadas(predio, rotas);
+  /** Fibra de cada CDOI (da rota ou planejada) e as repetidas no mesmo cabo */
+  const fibraDe = (id: string) => {
+    for (const g of cabos) {
+      const gt = g.gotas.find((x) => x.ponto === id);
+      if (gt) return { cabo: g.cabo, fibra: gt.fibra, planejada: !!gt.planejada };
+    }
+    return null;
+  };
+  const repetidas = new Set<string>();
+  cabos.forEach((g) => {
+    const vistos = new Map<number, string>();
+    g.gotas.forEach((gt) => {
+      if (!gt.fibra) return;
+      const outro = vistos.get(gt.fibra);
+      if (outro && outro !== gt.ponto) { repetidas.add(gt.ponto); repetidas.add(outro); }
+      vistos.set(gt.fibra, gt.ponto);
+    });
+  });
   const yInterna = yVala + Math.max(cabos.length, 1) * 10 + 4;
   const H = yInterna + 10 + internas.length * 7;
 
@@ -496,7 +526,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
               const caminho = `M4 ${chao - 2 + d} H${xDesce + d} V${y + d} H${gt.x} V${gt.p.y}`;
               return (
                 <g key={k}>
-                  <path d={caminho} fill="none" stroke={gt.c.hex} strokeWidth="1.3" strokeLinejoin="round" />
+                  <path d={caminho} fill="none" stroke={gt.c.hex} strokeWidth="1.3" strokeLinejoin="round" strokeDasharray={gt.planejada ? "3 2" : undefined} />
                   <circle r="1.6" fill="#fff" opacity=".9">
                     <animateMotion dur={`${3 + k * 0.4}s`} repeatCount="indefinite" path={caminho} />
                   </circle>
@@ -676,7 +706,11 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
                     </p>
                   ))}
                   {vemDe.length > 0 && <p className="text-slate-500">recebe de: {vemDe.join(", ")}</p>}
-                  {!o.chave && <p className="text-amber-700">ainda sem rota</p>}
+                  {!o.chave && !o.fibra && <p className="text-amber-700">ainda sem rota</p>}
+                  {o.fibra && !rotaDe.has(o.id) && o.cabo && (
+                    <p className="text-slate-500">fibra {o.fibra} ({corFibra(o.fibra, o.cabo).nome}) planejada no cabo {curto(o.cabo, 26)} · sem rota</p>
+                  )}
+                  {repetidas.has(o.id) && <p className="font-semibold text-red-600">Fibra repetida: outra CDOI usa a mesma fibra deste cabo</p>}
                 </div>
                 {pr && (
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title={`${pr.livres} livres · ${pr.ramais} ramais`}>
@@ -797,7 +831,51 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
                         </div>
                       );
                     })()}
-                    {o.chave === "" && <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>}
+                    {(() => {
+                      const f = fibraDe(o.id);
+                      const rotaId = rotaDe.get(o.id);
+                      if (rotaId && f) {
+                        const c = corFibra(f.fibra, f.cabo);
+                        return (
+                          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600">
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
+                            <span className="min-w-0 flex-1 truncate">Fibra {f.fibra ?? "?"} ({c.nome.toLowerCase()}) · {curto(f.cabo, 26)} · da rota</span>
+                            {onAbrirRota && (
+                              <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirRota(rotaId); }} className="shrink-0 font-semibold text-sky-700 hover:underline">
+                                trocar na rota
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      // sem rota: escolhe cabo e fibra (planejado)
+                      const nomesCabos = [...new Set([...cabos.filter((g) => g.de !== "planejado").map((g) => g.cabo), ...(o.cabo ? [o.cabo] : [])])];
+                      if (!nomesCabos.length) return <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>;
+                      const caboSel = o.cabo ?? "";
+                      const g = cabos.find((x) => chaveCabo(x.cabo) === chaveCabo(caboSel));
+                      const cap = caboSel ? Math.max(12, capacidadeDoCabo(caboSel, 1)) : 12;
+                      return (
+                        <div className="mt-1 grid grid-cols-[1fr_92px] gap-1">
+                          <select className={campo} value={caboSel} onChange={(e) => mudarPonto(o.id, { cabo: e.target.value || undefined, fibra: undefined })} title="Cabo que leva a fibra até esta CDOI">
+                            <option value="">Fibra que chega: escolha o cabo…</option>
+                            {nomesCabos.map((nm) => <option key={nm} value={nm}>{curto(nm, 40)}</option>)}
+                          </select>
+                          <select className={campo} disabled={!caboSel} value={o.fibra ?? ""} onChange={(e) => mudarPonto(o.id, { fibra: e.target.value ? +e.target.value : undefined })}>
+                            <option value="">fibra…</option>
+                            {Array.from({ length: cap }, (_, k) => k + 1).map((fb) => {
+                              const usada = g?.gotas.find((x) => x.fibra === fb && x.ponto !== o.id);
+                              const dono = usada ? predio.pontos.find((x) => x.id === usada.ponto)?.nome : undefined;
+                              return (
+                                <option key={fb} value={fb} disabled={!!usada}>
+                                  F{fb} {corFibra(fb, caboSel).nome.toLowerCase()}{dono ? ` → ${curto(dono, 12)}` : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <p className="col-span-2 text-[10px] text-amber-700">Sem rota: a fibra fica planejada (tracejada no desenho).</p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

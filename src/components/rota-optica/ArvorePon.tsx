@@ -562,7 +562,7 @@ function JanelaNo({
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
       ) : aba === "predio" ? (
-        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} />
+        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (
