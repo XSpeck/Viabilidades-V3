@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GripHorizontal, Loader2, Pencil, Save, X } from "lucide-react";
+import { GripHorizontal, Loader2, Pencil, Route as RouteIcon, Save, X } from "lucide-react";
 import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
 import {
   capacidadeSugerida,
@@ -33,12 +33,6 @@ interface Props {
   semMoldura?: boolean;
 }
 
-const COR_STATUS: Record<StatusFibra, string> = {
-  livre: "text-gray-400",
-  uso: "text-gray-900",
-  reservada: "text-amber-700",
-  rompida: "text-red-700",
-};
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
@@ -56,6 +50,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const destaqueRef = useRef<HTMLLIElement>(null);
+  const tuboRefs = useRef<(HTMLElement | null)[]>([]);
 
   useEffect(() => {
     destaqueRef.current?.scrollIntoView({ block: "nearest" });
@@ -108,43 +103,66 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
     }
   }
 
-  const visiveis = fibras.filter((n) => !soOcupadas || n === fibraDestaque || statusDe(n) !== "livre" || descricaoDe(n));
+  const visivel = (n: number) => !soOcupadas || n === fibraDestaque || statusDe(n) !== "livre" || !!descricaoDe(n);
+  const nTubos = Math.ceil(fibras.length / porTubo);
+  const tubos = Array.from({ length: nTubos }, (_, t) => fibras.slice(t * porTubo, (t + 1) * porTubo));
+  const nenhumaVisivel = !fibras.some(visivel);
+
+  function irParaTubo(t: number) {
+    tuboRefs.current[t]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 
   return (
     <div className={semMoldura ? "" : "bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden"}>
       {!semMoldura && (
-      <div data-alca className="flex items-start justify-between gap-2 px-3 py-2 bg-indigo-900 text-white cursor-move">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
-          <p className="text-[11px] text-indigo-200 flex items-center gap-1">
-            <GripHorizontal className="w-3 h-3" /> {tipo ? tipo.nome : "Cabo"} · {cap} fibras{!cabo?.capacidade && !editando ? " (estimado)" : ""}
-          </p>
+        <div data-alca className="flex items-start justify-between gap-2 px-3 py-2 bg-indigo-900 text-white cursor-move">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
+            <p className="text-[11px] text-indigo-200 flex items-center gap-1">
+              <GripHorizontal className="w-3 h-3" /> {tipo ? tipo.nome : "Cabo"} · {cap} fibras
+            </p>
+          </div>
+          <button type="button" onClick={onFechar} className="text-indigo-200 hover:text-white shrink-0" aria-label="Fechar cabo">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <button type="button" onClick={onFechar} className="text-indigo-200 hover:text-white shrink-0" aria-label="Fechar cabo">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
       )}
 
-      <div className="p-3 space-y-2">
-        {semMoldura && (
-          <p className="text-[11px] text-gray-500">{tipo ? tipo.nome : "Cabo"} · {cap} fibras{!cabo?.capacidade && !editando ? " (capacidade estimada)" : ""}</p>
-        )}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-          <span><b>{contagem.uso}</b> em uso</span>
-          <span className="text-amber-700"><b>{contagem.reservada}</b> reservadas</span>
-          <span className="text-red-700"><b>{contagem.rompida}</b> rompidas</span>
-          <span className="text-gray-500"><b>{contagem.livre}</b> livres</span>
+      {/* Cabeçalho: corte do cabo + números */}
+      <div className="flex gap-3 items-center p-3 bg-gradient-to-br from-slate-50 to-slate-100 border-b border-slate-200">
+        <CorteCabo cap={fibras.length} porTubo={porTubo} statusDe={statusDe} destaque={fibraDestaque} onTubo={irParaTubo} />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="text-[11px] text-slate-500 leading-tight">
+            <b className="text-slate-800 text-sm">{cap} fibras</b>
+            {nTubos > 1 ? ` · ${nTubos} tubos de ${porTubo}` : " · tubo único"}
+            <br />
+            {tipo ? tipo.nome : !cabo?.capacidade && !editando ? "capacidade estimada pelas rotas" : "sem tipo cadastrado"}
+          </p>
+          <div className="grid grid-cols-2 gap-1">
+            {(["uso", "livre", "reservada", "rompida"] as const).map((k) => (
+              <span key={k} className={`flex items-center justify-between gap-1 rounded-md px-1.5 py-0.5 text-[11px] ${CHIP[k]}`}>
+                {STATUS_FIBRA_LABEL[k]} <b className="tabular-nums">{contagem[k]}</b>
+              </span>
+            ))}
+          </div>
+          {/* barra de ocupação do cabo */}
+          <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-200" aria-hidden>
+            {(["uso", "reservada", "rompida"] as const).map((k) =>
+              contagem[k] ? <span key={k} className={BARRA[k]} style={{ width: `${(contagem[k] / fibras.length) * 100}%` }} /> : null
+            )}
+          </div>
         </div>
+      </div>
 
+      <div className="p-3 space-y-2.5">
         {editando && (
-          <div>
-            <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`tipo-${chave}`}>Tipo de cabo (cadastro)</label>
+          <div className="space-y-1.5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-2">
+            <label className="block text-[11px] text-gray-500" htmlFor={`tipo-${chave}`}>Tipo de cabo (cadastro)</label>
             <select
               id={`tipo-${chave}`}
               value={tipoId}
               onChange={(e) => escolherTipo(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white mb-1.5"
+              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white"
             >
               <option value="">{tipos.length ? "Sem tipo (só capacidade)" : "Nenhum tipo cadastrado"}</option>
               {tipos.map((t) => (
@@ -153,7 +171,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                 </option>
               ))}
             </select>
-            <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`cap-${chave}`}>Capacidade do cabo</label>
+            <label className="block text-[11px] text-gray-500" htmlFor={`cap-${chave}`}>Capacidade do cabo</label>
             <select
               id={`cap-${chave}`}
               value={capacidade}
@@ -168,76 +186,123 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
           </div>
         )}
 
-        <label className="flex items-center gap-1.5 text-[11px] text-gray-600">
-          <input type="checkbox" checked={soOcupadas} onChange={(e) => setSoOcupadas(e.target.checked)} />
-          Mostrar só fibras ocupadas
-        </label>
+        <div className="flex rounded-lg bg-slate-100 p-0.5 text-[11px] font-medium" role="tablist">
+          {([
+            [true, "Só ocupadas"],
+            [false, "Todas as fibras"],
+          ] as const).map(([v, r]) => (
+            <button
+              key={r}
+              type="button"
+              role="tab"
+              aria-selected={soOcupadas === v}
+              onClick={() => setSoOcupadas(v)}
+              className={`flex-1 rounded-md py-1 ${soOcupadas === v ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
 
-        <ul className="max-h-[45vh] overflow-auto divide-y divide-gray-100 border-y border-gray-100">
-          {visiveis.map((n, idx) => {
-            const c = corFibraPorCapacidade(n, cap, porTubo);
-            const st = statusDe(n);
-            const usos = uso.get(n) ?? [];
-            const novoTubo = idx === 0 || Math.ceil(visiveis[idx - 1] / porTubo) !== Math.ceil(n / porTubo);
-            const corTubo = c.corTubo!;
+        <div className="max-h-[48vh] overflow-auto space-y-2 pr-0.5">
+          {tubos.map((lista, t) => {
+            const corTubo = corFibraPorCapacidade(lista[0], cap, porTubo).corTubo!;
+            const ocupadas = lista.filter((n) => statusDe(n) !== "livre").length;
+            const mostrar = lista.filter(visivel);
             return (
-              <li
-                key={n}
-                ref={n === fibraDestaque ? destaqueRef : undefined}
-                className={`py-1.5 px-1 ${n === fibraDestaque ? "bg-yellow-50 ring-1 ring-yellow-300 rounded" : ""}`}
+              <section
+                key={t}
+                ref={(el) => { tuboRefs.current[t] = el; }}
+                className="rounded-lg border border-slate-200 overflow-hidden"
+                style={{ borderLeft: `6px solid ${corTubo.hex}`, boxShadow: corTubo.hex.toLowerCase() === "#ffffff" || corTubo.nome === "Branco" ? "inset 1px 0 0 #94a3b8" : undefined }}
               >
-                {novoTubo && (
-                  <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
-                    <span className="inline-block w-3 h-3 rounded-full border border-gray-800" style={{ background: corTubo.hex }} />
-                    Tubo {c.tubo} ({corTubo.nome.toLowerCase()}){cap > porTubo ? ` · ${porTubo} fibras` : ""}
+                <header className="flex items-center gap-2 px-2 py-1.5 bg-slate-50">
+                  <span className="w-3.5 h-3.5 rounded-full border border-slate-700 shrink-0" style={{ background: corTubo.hex }} />
+                  <p className="text-xs font-semibold text-slate-800 flex-1 min-w-0 truncate">
+                    {nTubos > 1 ? `Tubo ${t + 1}` : "Tubo único"} <span className="font-normal text-slate-500">· {corTubo.nome.toLowerCase()}</span>
                   </p>
-                )}
-                <div className="flex items-start gap-2">
-                  <span className="inline-block w-4 h-4 mt-0.5 rounded-full border border-gray-800 shrink-0" style={{ background: c.hex }} title={c.nome} />
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs ${COR_STATUS[st]}`}>
-                      <b>F{String(n).padStart(2, "0")}</b> {c.nome.toLowerCase()} · {c.rotulo} · {STATUS_FIBRA_LABEL[st]}
-                      {!editando && descricaoDe(n) ? ` · ${descricaoDe(n)}` : ""}
-                    </p>
-                    {usos.map((u) => (
-                      <button
-                        key={u.rotaId}
-                        type="button"
-                        onClick={() => onAbrirRota(u.rotaId)}
-                        className="block text-left text-[11px] text-indigo-600 hover:underline leading-tight"
-                        title="Abrir esta rota"
-                      >
-                        ↳ {u.rotaNome} <span className="text-gray-500">({u.de.split(" - ")[0]} → {u.para.split(" - ")[0]})</span>
-                      </button>
+                  <div className="flex gap-[2px]" aria-label={`${ocupadas} de ${lista.length} ocupadas`} title={`${ocupadas} de ${lista.length} ocupadas`}>
+                    {lista.map((n) => (
+                      <span key={n} className={`w-1.5 h-3 rounded-sm ${statusDe(n) === "livre" ? "bg-slate-200" : BARRA[statusDe(n)]}`} />
                     ))}
-                    {editando && (
-                      <div className="flex gap-1 mt-1">
-                        <select
-                          value={manuais[n]?.status ?? "livre"}
-                          onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: e.target.value as StatusFibra, descricao: m[n]?.descricao } }))}
-                          className="border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white"
-                          aria-label={`Status da fibra ${n}`}
-                        >
-                          <option value="livre">{usos.length ? "Pelas rotas" : "Livre"}</option>
-                          <option value="uso">Em uso</option>
-                          <option value="reservada">Reservada</option>
-                          <option value="rompida">Rompida</option>
-                        </select>
-                        <input
-                          value={manuais[n]?.descricao ?? ""}
-                          onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: m[n]?.status ?? "livre", descricao: e.target.value } }))}
-                          placeholder="O que vai nesta fibra"
-                          className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-0.5 text-[11px]"
-                        />
-                      </div>
-                    )}
                   </div>
-                </div>
-              </li>
+                  <span className="text-[10px] tabular-nums text-slate-500 w-7 text-right">{ocupadas}/{lista.length}</span>
+                </header>
+                {mostrar.length > 0 && (
+                  <ul className="divide-y divide-slate-100">
+                    {mostrar.map((n) => {
+                      const c = corFibraPorCapacidade(n, cap, porTubo);
+                      const st = statusDe(n);
+                      const usos = uso.get(n) ?? [];
+                      const desc = descricaoDe(n);
+                      const ativa = n === fibraDestaque;
+                      return (
+                        <li
+                          key={n}
+                          ref={ativa ? destaqueRef : undefined}
+                          className={`px-2 py-1.5 ${ativa ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : st === "livre" ? "bg-white" : "bg-white"}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Fio hex={c.hex} apagada={st === "livre"} rompida={st === "rompida"} />
+                            <span className={`font-mono text-xs font-bold tabular-nums ${st === "livre" ? "text-slate-400" : "text-slate-900"}`}>
+                              F{String(n).padStart(2, "0")}
+                            </span>
+                            <span className={`text-xs flex-1 min-w-0 truncate ${st === "livre" ? "text-slate-400" : "text-slate-700"}`}>
+                              {c.nome.toLowerCase()}
+                              {!editando && desc ? <span className="text-slate-500"> · {desc}</span> : null}
+                            </span>
+                            <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${CHIP[st]}`}>{STATUS_FIBRA_LABEL[st]}</span>
+                          </div>
+                          {usos.length > 0 && (
+                            <div className="mt-1 ml-[46px] space-y-0.5">
+                              {usos.map((u) => (
+                                <button
+                                  key={u.rotaId}
+                                  type="button"
+                                  onClick={() => onAbrirRota(u.rotaId)}
+                                  className="flex items-start gap-1 text-left text-[11px] leading-tight text-indigo-700 hover:underline"
+                                  title="Abrir esta rota"
+                                >
+                                  <RouteIcon className="w-3 h-3 mt-px shrink-0" />
+                                  <span>
+                                    {u.rotaNome}
+                                    <span className="block text-slate-500 no-underline">{u.de.split(" - ")[0]} → {u.para.split(" - ")[0]}</span>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {editando && (
+                            <div className="flex gap-1 mt-1 ml-[46px]">
+                              <select
+                                value={manuais[n]?.status ?? "livre"}
+                                onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: e.target.value as StatusFibra, descricao: m[n]?.descricao } }))}
+                                className="border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white"
+                                aria-label={`Status da fibra ${n}`}
+                              >
+                                <option value="livre">{usos.length ? "Pelas rotas" : "Livre"}</option>
+                                <option value="uso">Em uso</option>
+                                <option value="reservada">Reservada</option>
+                                <option value="rompida">Rompida</option>
+                              </select>
+                              <input
+                                value={manuais[n]?.descricao ?? ""}
+                                onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: m[n]?.status ?? "livre", descricao: e.target.value } }))}
+                                placeholder="O que vai nesta fibra"
+                                className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-0.5 text-[11px]"
+                              />
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             );
           })}
-          {visiveis.length === 0 && <li className="py-3 text-center text-xs text-gray-400">Nenhuma fibra ocupada.</li>}
-        </ul>
+          {nenhumaVisivel && <p className="py-3 text-center text-xs text-gray-400">Nenhuma fibra ocupada neste cabo.</p>}
+        </div>
 
         {editando ? (
           <>
@@ -270,7 +335,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             <button
               type="button"
               onClick={() => setEditando(true)}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 shrink-0"
+              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-gray-300 hover:bg-gray-50 shrink-0"
             >
               <Pencil className="w-3.5 h-3.5" /> Editar
             </button>
@@ -278,5 +343,95 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
         )}
       </div>
     </div>
+  );
+}
+
+const CHIP: Record<StatusFibra, string> = {
+  livre: "bg-slate-100 text-slate-500",
+  uso: "bg-emerald-100 text-emerald-800",
+  reservada: "bg-amber-100 text-amber-800",
+  rompida: "bg-red-100 text-red-700",
+};
+
+const BARRA: Record<StatusFibra, string> = {
+  livre: "bg-slate-200",
+  uso: "bg-emerald-500",
+  reservada: "bg-amber-400",
+  rompida: "bg-red-500",
+};
+
+/** Fibra desenhada como um fio (com brilho); apagada quando livre, cortada quando rompida. */
+function Fio({ hex, apagada, rompida }: { hex: string; apagada: boolean; rompida: boolean }) {
+  return (
+    <svg width="38" height="12" viewBox="0 0 38 12" className="shrink-0" aria-hidden style={{ opacity: apagada ? 0.45 : 1 }}>
+      {rompida ? (
+        <>
+          <rect x="1" y="3" width="15" height="6" rx="3" fill={hex} stroke="#0f172a" strokeWidth="1" />
+          <rect x="22" y="3" width="15" height="6" rx="3" fill={hex} stroke="#0f172a" strokeWidth="1" />
+          <path d="M17 2l4 8M21 2l-4 8" stroke="#dc2626" strokeWidth="1.6" />
+        </>
+      ) : (
+        <>
+          <rect x="1" y="3" width="36" height="6" rx="3" fill={hex} stroke="#0f172a" strokeWidth="1" />
+          <rect x="4" y="4.2" width="22" height="1.3" rx=".65" fill="#fff" opacity=".55" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** Corte transversal do cabo: capa, tubos coloridos e as fibras dentro (acesas se ocupadas). */
+function CorteCabo({
+  cap, porTubo, statusDe, destaque, onTubo,
+}: {
+  cap: number;
+  porTubo: number;
+  statusDe: (n: number) => StatusFibra;
+  destaque?: number;
+  onTubo: (t: number) => void;
+}) {
+  const nT = Math.max(1, Math.ceil(cap / porTubo));
+  const C = 60;
+  const interno = 52;
+  const s = Math.sin(Math.PI / nT);
+  const rTubo = nT === 1 ? 38 : Math.min(24, ((interno - 3) * s) / (1 + s));
+  const anel = nT === 1 ? 0 : interno - 2 - rTubo;
+  return (
+    <svg width="112" height="112" viewBox="0 0 120 120" className="shrink-0 drop-shadow" role="img" aria-label={`Corte do cabo: ${nT} tubo(s)`}>
+      <circle cx={C} cy={C} r={58} fill="#0f172a" />
+      <circle cx={C} cy={C} r={58} fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="2 3" />
+      <circle cx={C} cy={C} r={interno} fill="#1e293b" />
+      {nT > 2 && <circle cx={C} cy={C} r={Math.max(4, anel - rTubo - 2)} fill="#64748b" stroke="#94a3b8" />}
+      {Array.from({ length: nT }, (_, t) => {
+        const ang = (t / nT) * Math.PI * 2 - Math.PI / 2;
+        const tx = C + anel * Math.cos(ang);
+        const ty = C + anel * Math.sin(ang);
+        const corTubo = corFibraPorCapacidade(t * porTubo + 1, cap, porTubo).corTubo!;
+        const nF = Math.min(porTubo, cap - t * porTubo);
+        const rF = Math.max(1.3, Math.min(rTubo * 0.24, (rTubo * 0.85 * Math.PI) / Math.max(nF, 1) / 1.15));
+        const anelF = nF === 1 ? 0 : rTubo - rF - 2.2;
+        return (
+          <g key={t} className="cursor-pointer" onClick={() => onTubo(t)}>
+            <title>{`Tubo ${t + 1} (${corTubo.nome.toLowerCase()})`}</title>
+            <circle cx={tx} cy={ty} r={rTubo} fill={corTubo.hex} stroke="#0f172a" strokeWidth="1" />
+            <circle cx={tx} cy={ty} r={rTubo - 1.6} fill="#f8fafc" opacity=".22" />
+            {Array.from({ length: nF }, (_, k) => {
+              const n = t * porTubo + k + 1;
+              const a = (k / nF) * Math.PI * 2 - Math.PI / 2;
+              const fx = tx + anelF * Math.cos(a);
+              const fy = ty + anelF * Math.sin(a);
+              const c = corFibraPorCapacidade(n, cap, porTubo);
+              const st = statusDe(n);
+              return (
+                <g key={n}>
+                  {n === destaque && <circle cx={fx} cy={fy} r={rF + 2.2} fill="#facc15" />}
+                  <circle cx={fx} cy={fy} r={rF} fill={c.hex} stroke={st === "livre" ? "#475569" : "#0f172a"} strokeWidth={st === "livre" ? 0.5 : 0.9} opacity={st === "livre" ? 0.4 : 1} />
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+    </svg>
   );
 }

@@ -408,6 +408,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               subtitulo={j.fibra ? `Cabo · fibra ${j.fibra} destacada` : "Cabo"}
               icone={<IconeCabo tamanho={22} />}
               corBarra="bg-indigo-900"
+              largura={380}
               onFechar={() => fecharJanela(j.id)}
             >
               <QuadroCabo
