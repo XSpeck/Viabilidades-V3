@@ -264,11 +264,17 @@ export default function RotaEditorMapa({
                     click: (e) => {
                       if (ferramenta !== "selecionar") return;
                       L.DomEvent.stopPropagation(e);
-                      onInserirCurva(i, e.latlng.lat, e.latlng.lng);
+                      // 1º clique seleciona o trecho (abre o cabo); clique no trecho já selecionado cria um poste
+                      if (i !== selecionado) onSelect(i);
+                      else onInserirCurva(i, e.latlng.lat, e.latlng.lng);
                     },
                   }}
                 >
-                  {ferramenta === "selecionar" && <Tooltip sticky>Clique no cabo para criar um poste e arraste para ajustar</Tooltip>}
+                  {ferramenta === "selecionar" && (
+                    <Tooltip sticky>
+                      {i === selecionado ? "Clique para criar um poste aqui (depois arraste)" : `Cabo até ${pontos[i].nome || `elemento ${i + 1}`} · clique para editar`}
+                    </Tooltip>
+                  )}
                 </Polyline>
               </Fragment>
             );

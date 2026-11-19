@@ -695,9 +695,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         </div>
 
         {i > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+          <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-2.5">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 mb-1.5">
               <IconeCabo tamanho={16} /> Cabo que chega aqui
+              <span className="ml-auto font-normal text-amber-700">em amarelo no mapa</span>
             </p>
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2">
@@ -774,7 +775,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     ferramenta === "selecionar"
       ? sel !== null && !posDe(linhas[sel])
         ? `Clique no mapa onde fica "${linhas[sel].nome || `elemento ${sel + 1}`}".`
-        : "Arraste os ícones para mover · clique no cabo para criar um poste · escolha um tipo acima para adicionar"
+        : sel !== null && sel > 0
+          ? "Cabo selecionado (amarelo): clique nele de novo para criar um poste · arraste postes e caixas para ajustar"
+          : "Clique num cabo para editar · arraste os ícones para mover · escolha um tipo acima para adicionar"
       : ferramenta === "poste"
         ? "Clique nos postes do caminho. Depois escolha o tipo da próxima caixa e clique onde ela fica."
         : linhas.length === 0
