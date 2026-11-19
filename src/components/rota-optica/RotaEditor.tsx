@@ -199,6 +199,16 @@ const PREFIXO: Record<TipoElementoRota, string> = {
   olt: "OLT", dio: "DIO", ceo: "CEO", ct: "CT", hub: "HUB", cto: "CTO", cdoi: "CDOI", onu: "Cliente", outro: "Ponto",
 };
 
+/** Parte curta do nome de um elemento, usada no nome automático do cabo ("24 FO ASO · HUB 1 → CTO 2") */
+function curtoNome(s0: string) {
+  return s0.split(" - ")[0].split(" / ")[0].trim();
+}
+
+/** Depois de um splitter (HUB/CTO/CDOI) a fibra segue num cabo novo: não herda o cabo do trecho anterior */
+function herdaCabo(ant?: Linha): ant is Linha {
+  return !!ant && ant.tipo !== "dio" && ant.tipo !== "hub" && ant.tipo !== "cto" && ant.tipo !== "cdoi";
+}
+
 function nomeAuto(tipo: TipoElementoRota, ls: Linha[]): string {
   const qtd = ls.filter((l) => l.tipo === tipo).length;
   return tipo === "olt" && qtd === 0 ? "OLT" : `${PREFIXO[tipo]} ${qtd + 1}`;
@@ -317,7 +327,28 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setLinhas((ls) => recalcular(fn(ls)));
   }
   function alterar(i: number, mudanca: Partial<Linha>) {
-    mudar((ls) => ls.map((l, j) => (j === i ? { ...l, ...mudanca } : l)));
+    const velho = linhas[i] ? curtoNome(linhas[i].nome) : "";
+    const novo = mudanca.nome !== undefined ? curtoNome(mudanca.nome) : "";
+    const troca = velho && novo && velho !== novo ? (c: string) => c.replace(`· ${velho} →`, `· ${novo} →`).replace(new RegExp(`→ ${velho.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), `→ ${novo}`) : null;
+    if (troca) {
+      // leva junto o tipo cadastrado para o nome novo do cabo
+      setTiposCabo((tc) => {
+        const c = { ...tc };
+        linhas.forEach((l) => {
+          const nv = troca(l.cabo_entrada);
+          if (nv !== l.cabo_entrada && tc[chaveCabo(l.cabo_entrada)]) c[chaveCabo(nv)] = tc[chaveCabo(l.cabo_entrada)];
+        });
+        return c;
+      });
+    }
+    mudar((ls) =>
+      ls.map((l, j) => {
+        const base = j === i ? { ...l, ...mudanca } : l;
+        if (!troca) return base;
+        const nv = troca(base.cabo_entrada);
+        return nv !== base.cabo_entrada ? { ...base, cabo_entrada: nv } : base;
+      }),
+    );
   }
   function desfazer() {
     if (pendentes.length) return setPendentes((p) => p.slice(0, -1));
@@ -434,8 +465,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         vertices: ls.length ? pendentes : [],
         dist_auto: true,
         // Depois do DIO sai o cabo da estação: a fibra é a porta do DIO
-        cabo_entrada: ant?.tipo === "dio" ? "" : ant?.cabo_entrada ?? "",
-        fibra_entrada: ant?.tipo === "dio" ? ant.porta.match(/Porta\s*0*(\d+)/i)?.[1] ?? "" : ant?.fibra_entrada ?? "",
+        cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "",
+        fibra_entrada: ant?.tipo === "dio" ? ant.porta.match(/Porta\s*0*(\d+)/i)?.[1] ?? "" : herdaCabo(ant) ? ant.fibra_entrada : "",
         equipamento_id: olt?.id ?? "",
         potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
         ...extraDio,
@@ -566,7 +597,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const ant = linhas[linhas.length - 1];
     const base: ElementoRota = { ...e, cabo_entrada: undefined, fibra_entrada: undefined, cabo_saida: undefined, fibra_saida: undefined, distancia_m: undefined, potencia_entrada: undefined, potencia_saida: undefined };
     const novoIndice = linhas.length;
-    mudar((ls) => [...ls, { ...paraLinha(base), vertices: pendentes, dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
+    mudar((ls) => [...ls, { ...paraLinha(base), vertices: pendentes, dist_auto: true, cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "", fibra_entrada: herdaCabo(ant) ? ant.fibra_entrada : "" }]);
     setPendentes([]);
     setSel(novoIndice);
   }
@@ -575,15 +606,28 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function usarTipoCabo(i: number, t: ItemCatalogo) {
     const l = linhas[i];
     const ant = linhas[i - 1];
-    const curto = (s0: string) => s0.split(" - ")[0].split(" / ")[0].trim();
-    // Sem nome: cria um nome próprio para este lance (cordões e flats são um por ligação)
-    const nomeCabo = l.cabo_entrada.trim() || `${t.nome} · ${curto(ant?.nome ?? "")} → ${curto(l.nome)}`;
+    const atual = l.cabo_entrada.trim();
+    const kAtual = atual ? chaveCabo(atual) : "";
+    // O tipo vale pelo nome do cabo. Se outro trecho usa esse mesmo nome com outro tipo (ex.: o 72 que chega no HUB),
+    // trocar aqui mudaria os dois: então este trecho vira um cabo novo, com nome próprio.
+    const compartilhado = !!kAtual && linhas.some((x, j) => j !== i && j > 0 && x.cabo_entrada.trim() && chaveCabo(x.cabo_entrada) === kAtual);
+    const separar = compartilhado && tiposCabo[kAtual] !== t.id;
+    const nomeCabo = atual && !separar ? atual : `${t.nome} · ${curtoNome(ant?.nome ?? "")} → ${curtoNome(l.nome)}`;
     setTiposCabo((tc) => ({ ...tc, [chaveCabo(nomeCabo)]: t.id }));
-    const fibraAtual = n(l.fibra_entrada);
-    alterar(i, {
-      cabo_entrada: nomeCabo,
-      fibra_entrada: t.capacidade === 1 || !fibraAtual || (t.capacidade && fibraAtual > t.capacidade) ? "1" : l.fibra_entrada,
-    });
+    const fibraOk = (f: string) => {
+      const v = n(f);
+      return t.capacidade === 1 || !v || (t.capacidade && v > t.capacidade) ? "1" : f;
+    };
+    mudar((ls) =>
+      ls.map((x, j) => {
+        if (j === i) return { ...x, cabo_entrada: nomeCabo, fibra_entrada: fibraOk(x.fibra_entrada) };
+        // os trechos seguintes que continuavam no mesmo cabo seguem junto para o cabo novo
+        if (separar && j > i && ls.slice(i + 1, j + 1).every((y) => chaveCabo(y.cabo_entrada) === kAtual)) {
+          return { ...x, cabo_entrada: nomeCabo, fibra_entrada: fibraOk(x.fibra_entrada) };
+        }
+        return x;
+      }),
+    );
   }
 
   /** Distância (graus², plano local) do ponto ao segmento a–b, para achar o trecho clicado */
@@ -1513,7 +1557,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               onClick={() => {
                 const tipo: TipoElementoRota = tipoDaFerramenta(ferramenta) ?? (linhas.length ? "ceo" : "olt");
                 const ant = linhas[linhas.length - 1];
-                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
+                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "", fibra_entrada: herdaCabo(ant) ? ant.fibra_entrada : "" }]);
                 setSel(linhas.length);
                 setFerramenta("selecionar");
               }}
