@@ -543,6 +543,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   /** Mudanças vindas do cartão Estação (elementos 1 = OLT, 2 = DIO e 3 = primeira caixa fora) */
   function aplicarEstacao(p: Partial<DadosEstacao>) {
+    // Tipo do cabo de saída: mesma regra do painel do elemento (cabo compartilhado com outro trecho vira cabo novo)
+    const tSaida = p.saidaTipo ? tiposDeCabo.find((t) => t.id === p.saidaTipo) : undefined;
+    if (tSaida && linhas[2] && Object.keys(p).length === 1) return usarTipoCabo(2, tSaida);
     const l1 = linhas[1];
     const l2 = linhas[2];
     const nomeCordao = l1?.cabo_entrada.trim() || `Cordão ${p.oltNome ?? linhas[0]?.nome ?? "OLT"} → ${p.dioNome ?? l1?.nome ?? "DIO"}`;
