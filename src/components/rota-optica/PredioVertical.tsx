@@ -33,6 +33,8 @@ const GAP = 44; // espaço entre blocos (rótulos dos andares)
 const ESQ = 96; // rua à esquerda (com o nome do cabo que chega)
 const TOPO = 44; // telhado + nome do bloco
 const POCO = 26; // largura do poço da prumada
+/** Normalmente cabem no máximo 4 CDOIs por bloco */
+const MAX_POR_BLOCO = 4;
 
 interface Props {
   chave: string;
@@ -172,14 +174,28 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
   }
   function addPonto(k: string) {
     if (!rascunho) return;
-    // vai para o primeiro bloco que ainda não tem CDOI
-    const b = rascunho.blocos.find((x) => !rascunho.pontos.some((o) => o.bloco === x.id)) ?? rascunho.blocos[0];
+    const qtd = (id: string) => rascunho.pontos.filter((o) => o.bloco === id).length;
+    // vai para o primeiro bloco sem CDOI; senão, o que tiver menos (até 4 por bloco)
+    const b =
+      rascunho.blocos.find((x) => qtd(x.id) === 0) ??
+      [...rascunho.blocos].filter((x) => qtd(x.id) < MAX_POR_BLOCO).sort((a, c) => qtd(a.id) - qtd(c.id))[0];
+    if (!b) {
+      setErro(`Todos os blocos já têm ${MAX_POR_BLOCO} CDOIs. Crie outro bloco.`);
+      return;
+    }
+    setErro(null);
     const o: PontoPredio = { id: novoId(), chave: k, nome: cdoisRede.get(k) ?? "CDOI", bloco: b.id, andar: 0, atende_de: Math.min(1, b.andares), atende_ate: b.andares };
     mudar((p) => ({ ...p, pontos: [...p.pontos, o] }));
     setSelPonto(o.id);
   }
   function clicarAndar(bloco: string, andar: number) {
-    if (!editando || !selPonto) return;
+    if (!editando || !selPonto || !rascunho) return;
+    const atual = rascunho.pontos.find((o) => o.id === selPonto);
+    if (atual && atual.bloco !== bloco && rascunho.pontos.filter((o) => o.bloco === bloco).length >= MAX_POR_BLOCO) {
+      setErro(`Este bloco já tem ${MAX_POR_BLOCO} CDOIs.`);
+      return;
+    }
+    setErro(null);
     mudarPonto(selPonto, { bloco, andar });
   }
 
@@ -660,7 +676,10 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: 
                           const nb = predio.blocos.find((x) => x.id === e.target.value)!;
                           mudarPonto(o.id, { bloco: nb.id, andar: Math.min(o.andar, nb.andares), atende_de: Math.min(o.atende_de, nb.andares), atende_ate: Math.min(o.atende_ate, nb.andares) });
                         }}>
-                          {predio.blocos.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                          {predio.blocos.map((x) => {
+                            const cheio = x.id !== o.bloco && predio.pontos.filter((y) => y.bloco === x.id).length >= MAX_POR_BLOCO;
+                            return <option key={x.id} value={x.id} disabled={cheio}>{x.nome}{cheio ? " (4 CDOIs)" : ""}</option>;
+                          })}
                         </select>
                       </div>
                       <div>
