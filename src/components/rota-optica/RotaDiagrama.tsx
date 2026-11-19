@@ -1,7 +1,8 @@
 "use client";
 
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
-import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type ElementoRota } from "@/lib/rotaOptica";
+import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type ElementoRota } from "@/lib/rotaOptica";
+import { IconeCabo, IconeElemento } from "./IconesRede";
 
 interface Props {
   elementos: ElementoRota[];
@@ -9,25 +10,12 @@ interface Props {
   onSelect: (i: number) => void;
 }
 
-function Forma({ tipo, ativo }: { tipo: ElementoRota["tipo"]; ativo: boolean }) {
-  const borda = ativo ? "ring-4 ring-indigo-200" : "";
-  if (tipo === "olt")
-    return <span className={`block w-6 h-6 rounded bg-gray-900 ${borda}`} />;
-  if (tipo === "dio")
-    return <span className={`block w-6 h-5 rounded-sm bg-white border-[3px] border-gray-900 ${borda}`} />;
-  if (tipo === "ceo")
-    return <span className={`block w-5 h-5 rotate-45 bg-white border-[3px] border-gray-900 ${borda}`} />;
-  if (tipo === "hub" || tipo === "cto")
-    return (
-      <span
-        className={`flex items-center justify-center rounded-full bg-gray-900 text-white text-[9px] font-bold ${
-          tipo === "hub" ? "w-7 h-7" : "w-6 h-6"
-        } ${borda}`}
-      >
-        {tipo === "hub" ? "HUB" : "CTO"}
-      </span>
-    );
-  return <span className={`block w-4 h-4 rounded-full bg-white border-[3px] border-gray-900 ${borda}`} />;
+function Forma({ e, ativo }: { e: ElementoRota; ativo: boolean }) {
+  return (
+    <span className={`flex rounded-full ${ativo ? "ring-4 ring-amber-300 bg-amber-50" : ""}`}>
+      <IconeElemento tipo={tipoVisual(e)} tamanho={30} />
+    </span>
+  );
 }
 
 function TF(fibra?: number, cabo?: string) {
@@ -59,14 +47,14 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
               }`}
             >
               <span className="w-8 flex justify-center pt-0.5 shrink-0">
-                <Forma tipo={e.tipo} ativo={ativo} />
+                <Forma e={e} ativo={ativo} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className={`block text-sm leading-tight ${ativo ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>
                   {i + 1}. {e.nome}
                 </span>
                 <span className="block text-xs text-gray-500 mt-0.5">
-                  {TIPO_ELEMENTO_LABEL[e.tipo]}
+                  {TIPO_ELEMENTO_LABEL[tipoVisual(e)]}
                   {e.codigo ? ` · ${e.codigo}` : ""}
                   {e.splitter ? ` · splitter ${e.splitter}` : ""}
                   {i > 0 ? ` · ${formatMetros(acumulado)} da OLT` : ""}
@@ -81,15 +69,18 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
               <div className="flex gap-3 items-stretch pl-2">
                 <span className="w-8 flex justify-center shrink-0">
                   <span
-                    className="w-[7px] min-h-[38px] rounded-full border border-gray-900"
+                    className="w-[8px] min-h-[38px] rounded-full border-2 border-slate-900"
                     style={{ background: cor.hex }}
                     title={`Fibra ${fibraLig ?? "?"} (${cor.nome})`}
                   />
                 </span>
-                <span className="text-[11px] text-gray-500 py-1.5 leading-tight">
+                <span className="text-[11px] text-gray-500 py-1.5 leading-tight flex items-start gap-1.5">
+                  {caboLig && <IconeCabo tamanho={15} className="shrink-0 mt-px" />}
+                  <span>
                   {caboLig ? <b className="text-gray-700 font-medium">{caboLig}</b> : "Cabo não informado"}
                   {fibraLig ? ` · fibra ${fibraLig} ${cor.nome.toLowerCase()} (${TF(fibraLig, caboLig)})` : ""}
                   {prox.distancia_m !== undefined ? ` · ${formatMetros(prox.distancia_m)}` : ""}
+                  </span>
                 </span>
               </div>
             )}
@@ -133,7 +124,7 @@ export function DetalheElemento({ elementos, indice, catalogo = [] }: { elemento
       <div>
         <p className="text-lg font-bold text-gray-900 leading-tight">{e.nome}</p>
         <p className="text-sm text-gray-500">
-          {TIPO_ELEMENTO_LABEL[e.tipo]}
+          {TIPO_ELEMENTO_LABEL[tipoVisual(e)]}
           {e.codigo ? ` · ${e.codigo}` : ""} · elemento {indice + 1} de {elementos.length}
         </p>
       </div>

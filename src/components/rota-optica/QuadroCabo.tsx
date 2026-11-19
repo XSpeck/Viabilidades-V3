@@ -29,6 +29,8 @@ interface Props {
   onSalva: (c: CaboRede) => void;
   onFechar: () => void;
   onAbrirRota: (id: string) => void;
+  /** Dentro de uma janela: sem barra de título própria */
+  semMoldura?: boolean;
 }
 
 const COR_STATUS: Record<StatusFibra, string> = {
@@ -40,7 +42,7 @@ const COR_STATUS: Record<StatusFibra, string> = {
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura }: Props) {
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
@@ -109,7 +111,8 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
   const visiveis = fibras.filter((n) => !soOcupadas || n === fibraDestaque || statusDe(n) !== "livre" || descricaoDe(n));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden">
+    <div className={semMoldura ? "" : "bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden"}>
+      {!semMoldura && (
       <div data-alca className="flex items-start justify-between gap-2 px-3 py-2 bg-indigo-900 text-white cursor-move">
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
@@ -121,8 +124,12 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
           <X className="w-4 h-4" />
         </button>
       </div>
+      )}
 
       <div className="p-3 space-y-2">
+        {semMoldura && (
+          <p className="text-[11px] text-gray-500">{tipo ? tipo.nome : "Cabo"} · {cap} fibras{!cabo?.capacidade && !editando ? " (capacidade estimada)" : ""}</p>
+        )}
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
           <span><b>{contagem.uso}</b> em uso</span>
           <span className="text-amber-700"><b>{contagem.reservada}</b> reservadas</span>

@@ -6,6 +6,7 @@ import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMa
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
 import type { TipoElementoRota, TrechoCabo } from "@/lib/rotaOptica";
+import { iconeSvg } from "./IconesRede";
 
 export type ModoMapa = "adicionar" | "posicionar" | "tracar";
 
@@ -32,23 +33,14 @@ interface Props {
   onRemoverVertice: (i: number, k: number) => void;
 }
 
-const COR_TIPO: Record<string, string> = {
-  olt: "#111827",
-  dio: "#374151",
-  ceo: "#d97706",
-  hub: "#4f46e5",
-  cto: "#059669",
-  onu: "#0ea5e9",
-  outro: "#6b7280",
-};
-
-function icone(numero: number, tipo: string, ativo: boolean) {
-  const tam = ativo ? 30 : 24;
+/** Marcador do mapa: ícone do tipo, com número da ordem e destaque quando selecionado. */
+function marcador(tipo: TipoElementoRota, numero: number, ativo: boolean) {
+  const tam = ativo ? 40 : 32;
   return L.divIcon({
     className: "",
     iconSize: [tam, tam],
     iconAnchor: [tam / 2, tam / 2],
-    html: `<div style="width:${tam}px;height:${tam}px;border-radius:9999px;background:${COR_TIPO[tipo] ?? "#6b7280"};color:#fff;font:700 11px/1 system-ui,sans-serif;display:flex;align-items:center;justify-content:center;border:${ativo ? "3px solid #facc15" : "2px solid #fff"};box-shadow:0 1px 4px rgba(0,0,0,.5)">${numero}</div>`,
+    html: `<div style="position:relative;width:${tam}px;height:${tam}px;${ativo ? "filter:drop-shadow(0 0 6px #facc15)" : "filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))"}">${iconeSvg(tipo, tam)}<span style="position:absolute;right:-6px;top:-6px;min-width:16px;height:16px;padding:0 3px;border-radius:9999px;background:${ativo ? "#facc15" : "#fff"};color:#0f172a;border:1.5px solid #0f172a;font:700 10px/13px system-ui,sans-serif;text-align:center">${numero}</span></div>`,
   });
 }
 
@@ -138,6 +130,9 @@ export default function RotaEditorMapa({
         <Centralizar alvo={alvo} />
 
         {trechosFixos.map((t, k) => (
+          <Polyline key={`fc${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: "#0f172a", weight: 8, opacity: 0.7 }} />
+        ))}
+        {trechosFixos.map((t, k) => (
           <Polyline key={`f${k}`} positions={t.pontos.map((q) => [q.lat, q.lon] as [number, number])} pathOptions={{ color: t.cor ?? "#2563eb", weight: 5, opacity: 0.8 }}>
             <Tooltip sticky>{t.nome}</Tooltip>
           </Polyline>
@@ -192,7 +187,7 @@ export default function RotaEditorMapa({
             key={`e${i}`}
             position={[p.lat!, p.lon!]}
             draggable
-            icon={icone(i + 1, p.tipo, i === selecionado)}
+            icon={marcador(p.tipo, i + 1, i === selecionado)}
             zIndexOffset={i === selecionado ? 1000 : 0}
             eventHandlers={{
               click: () => onSelect(i),
@@ -202,7 +197,7 @@ export default function RotaEditorMapa({
               },
             }}
           >
-            <Tooltip direction="top" offset={[0, -12]}>
+            <Tooltip direction="top" offset={[0, -16]}>
               {i + 1}. {p.nome || "(sem nome)"}
             </Tooltip>
           </Marker>

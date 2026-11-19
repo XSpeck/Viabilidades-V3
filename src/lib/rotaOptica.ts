@@ -2,17 +2,26 @@
 // Rota óptica — tipos, leitura do KML do GeoGrid, cálculos e Firestore
 // =====================
 
-export type TipoElementoRota = "olt" | "dio" | "ceo" | "hub" | "cto" | "onu" | "outro";
+export type TipoElementoRota = "olt" | "dio" | "ceo" | "ct" | "hub" | "cto" | "cdoi" | "onu" | "outro";
 
 export const TIPO_ELEMENTO_LABEL: Record<TipoElementoRota, string> = {
   olt: "OLT",
   dio: "DIO",
-  ceo: "Caixa de emenda",
+  ceo: "Caixa de emenda (CEO)",
+  ct: "Caixa de transporte (CT)",
   hub: "Hub splitter",
   cto: "CTO",
+  cdoi: "CDOI (prédio)",
   onu: "Cliente / ONU",
   outro: "Outro",
 };
+
+/** Tipo para exibir: rotas antigas gravaram CDOI como CTO; o nome resolve. */
+export function tipoVisual(e: { tipo: TipoElementoRota; nome: string }): TipoElementoRota {
+  if (e.tipo === "cto" && /^\s*CDOI/i.test(e.nome)) return "cdoi";
+  if ((e.tipo === "outro" || e.tipo === "ceo") && /^\s*CT\b(?!O)|TRANSPORTE/i.test(e.nome)) return "ct";
+  return e.tipo;
+}
 
 /** Um elemento da rota (OLT, caixa, hub, CTO...), na ordem em que o sinal passa. */
 export interface ElementoRota {
@@ -158,7 +167,7 @@ export function calcularPotencias(elementos: EntradaPotencia[], tx: number, p: C
       const spl = perdaSplitter(e.splitter, e.perda_splitter);
       saida -= spl;
       partes.push(`splitter ${e.splitter} ${fmt(spl)} dB`);
-      if (e.tipo === "cto") { saida -= p.conector_db; partes.push(`conector de saída ${fmt(p.conector_db)} dB`); }
+      if (e.tipo === "cto" || e.tipo === "cdoi") { saida -= p.conector_db; partes.push(`conector de saída ${fmt(p.conector_db)} dB`); }
     }
     out.push({ entrada: r2(entrada), saida: r2(saida), detalhe: partes.join(" + ") });
   });
@@ -316,7 +325,9 @@ export function detectarTipoElemento(nome: string): TipoElementoRota {
   if (n.startsWith("OLT")) return "olt";
   if (n.startsWith("DIO")) return "dio";
   if (n.startsWith("HUB")) return "hub";
-  if (n.startsWith("CTO") || n.startsWith("CDOI")) return "cto";
+  if (n.startsWith("CDOI")) return "cdoi";
+  if (n.startsWith("CTO")) return "cto";
+  if (/^CT\b/.test(n) || n.includes("TRANSPORTE")) return "ct";
   if (n.startsWith("CE ") || n.startsWith("CEO") || n.includes("EMENDA")) return "ceo";
   if (n.startsWith("ONU") || n.startsWith("CLIENTE")) return "onu";
   return "outro";
@@ -458,7 +469,7 @@ export function resumoRota(elementos: ElementoRota[]): ResumoRota {
     perda_db,
     emendas: elementos.filter((e) => e.tipo === "ceo").length,
     hubs: elementos.filter((e) => e.tipo === "hub").length,
-    ctos: elementos.filter((e) => e.tipo === "cto" || /\/\s*CTO/i.test(e.nome)).length,
+    ctos: elementos.filter((e) => e.tipo === "cto" || e.tipo === "cdoi" || /\/\s*CTO/i.test(e.nome)).length,
     cabos,
   };
 }

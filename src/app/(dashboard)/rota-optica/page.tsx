@@ -25,6 +25,9 @@ import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
+import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
+import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
+import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
 import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
@@ -36,7 +39,7 @@ const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ),
 });
 
-type Modo = { tipo: "ver" } | { tipo: "cadastro" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
+type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
 
 export default function RotaOpticaPage() {
   const { user } = useAuth();
@@ -50,6 +53,8 @@ export default function RotaOpticaPage() {
   const [selId, setSelId] = useState<string | null>(null);
   const [modo, setModo] = useState<Modo>({ tipo: "ver" });
   const [aba, setAba] = useState<"rotas" | "arvore">("rotas");
+  /** Janela do cadastro de equipamentos (posição inicial) */
+  const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -165,6 +170,7 @@ export default function RotaOpticaPage() {
   const selecionada = rotas.find((r) => r.id === selId) ?? null;
 
   return (
+    <JanelasProvider>
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -196,7 +202,7 @@ export default function RotaOpticaPage() {
             </button>
             <button
               type="button"
-              onClick={() => setModo({ tipo: "cadastro" })}
+              onClick={() => setCadastro({ x: Math.max(8, (window.innerWidth - 800) / 2), y: 72 })}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
             >
               <Boxes className="w-4 h-4" /> Cadastros
@@ -233,13 +239,18 @@ export default function RotaOpticaPage() {
         />
       )}
 
-      {modo.tipo === "cadastro" && (
-        <CadastroEquipamentos
-          itens={catalogo}
-          usuario={user?.nome ?? ""}
-          onMudou={setCatalogo}
-          onFechar={() => setModo({ tipo: "ver" })}
-        />
+      {cadastro && (
+        <Janela
+          inicial={cadastro}
+          largura={800}
+          titulo="Cadastro de equipamentos"
+          subtitulo="Tipos de cabo, splitter, DIO e OLT"
+          icone={<Boxes className="w-5 h-5" />}
+          corBarra="bg-indigo-900"
+          onFechar={() => setCadastro(null)}
+        >
+          <CadastroEquipamentos itens={catalogo} usuario={user?.nome ?? ""} onMudou={setCatalogo} onFechar={() => setCadastro(null)} />
+        </Janela>
       )}
 
       {modo.tipo === "importar" && (
@@ -351,6 +362,7 @@ export default function RotaOpticaPage() {
         </div>
       )}
     </div>
+    </JanelasProvider>
   );
 }
 
@@ -431,10 +443,18 @@ function VisualizarRota({
   onExcluir?: () => void;
 }) {
   const [sel, setSel] = useState<number | null>(null);
+  const [janela, setJanela] = useState<{ x: number; y: number } | null>(null);
+  const ultimoClique = useRef({ x: 300, y: 200 });
   const res = resumoRota(rota.elementos);
 
+  function selecionar(i: number) {
+    setSel(i);
+    setJanela((j) => j ?? { x: ultimoClique.current.x + 30, y: ultimoClique.current.y - 80 });
+  }
+  const elSel = sel !== null ? rota.elementos[sel] : undefined;
+
   return (
-    <section className="space-y-4 min-w-0">
+    <section className="space-y-4 min-w-0" onPointerDownCapture={(e) => { ultimoClique.current = { x: e.clientX, y: e.clientY }; }}>
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
           <div className="min-w-0">
@@ -478,31 +498,45 @@ function VisualizarRota({
         </dl>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-start">
         <div className="bg-white rounded-xl border border-gray-200 p-3">
           <p className="text-xs text-gray-500 px-2 pb-2">
-            A cor da linha é a cor real da fibra (padrão ABNT, 12 cores por tubo). Clique num elemento para ver os detalhes.
+            A cor da linha é a cor real da fibra. Clique num elemento (aqui ou no mapa) para abrir a janela com os detalhes.
           </p>
-          <RotaDiagrama elementos={rota.elementos} selecionado={sel} onSelect={setSel} />
+          <RotaDiagrama elementos={rota.elementos} selecionado={sel} onSelect={selecionar} />
         </div>
-        <aside className="bg-white rounded-xl border border-gray-200 p-4 xl:sticky xl:top-4">
-          {sel !== null ? (
-            <DetalheElemento elementos={rota.elementos} indice={sel} catalogo={catalogo} />
-          ) : (
-            <div className="text-sm text-gray-600 space-y-2">
-              <p className="font-semibold text-gray-900">Cabos desta rota</p>
-              <ol className="list-decimal list-inside space-y-0.5">
-                {res.cabos.map((c) => <li key={c}>{c}</li>)}
-              </ol>
-              <p className="text-gray-500 pt-2">Clique num elemento do diagrama ou do mapa para ver o caminho até ele.</p>
+        <div className="space-y-4 2xl:sticky 2xl:top-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-3">
+            <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} />
+          </div>
+          {res.cabos.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-3">
+              <p className="text-xs font-semibold text-gray-700 mb-2">Cabos desta rota</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {res.cabos.map((c) => (
+                  <li key={c} className="flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full pl-1 pr-2.5 py-0.5">
+                    <IconeCabo tamanho={16} /> {c}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
-        </aside>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-3">
-        <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={setSel} />
-      </div>
+      {janela && elSel && sel !== null && (
+        <Janela
+          inicial={janela}
+          titulo={elSel.nome}
+          subtitulo={`${TIPO_ELEMENTO_LABEL[tipoVisual(elSel)]} · elemento ${sel + 1} de ${rota.elementos.length}`}
+          icone={<IconeElemento tipo={tipoVisual(elSel)} tamanho={22} />}
+          onFechar={() => { setJanela(null); setSel(null); }}
+        >
+          <div className="p-3">
+            <DetalheElemento elementos={rota.elementos} indice={sel} catalogo={catalogo} />
+          </div>
+        </Janela>
+      )}
     </section>
   );
 }

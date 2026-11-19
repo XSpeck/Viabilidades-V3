@@ -23,6 +23,7 @@ import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { SPLITTERS } from "@/lib/caixasRede";
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { ModoMapa, PontoEditor } from "./RotaEditorMapa";
+import { IconeElemento } from "./IconesRede";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
@@ -693,6 +694,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                      <IconeElemento tipo={l.tipo} tamanho={22} />
                       Elemento {i + 1}
                       {posDe(l) ? <MapPin className="w-3.5 h-3.5 text-indigo-500" aria-label="Posicionado no mapa" /> : <span className="text-[11px] font-normal text-gray-400">sem local</span>}
                     </span>

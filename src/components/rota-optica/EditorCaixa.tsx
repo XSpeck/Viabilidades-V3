@@ -32,6 +32,8 @@ interface Props {
   usuario: string;
   onSalva: (c: CaixaRede) => void;
   onFechar: () => void;
+  /** Dentro de uma janela: sem barra de título própria */
+  semMoldura?: boolean;
 }
 
 const COR_STATUS: Record<StatusPorta, string> = {
@@ -115,7 +117,7 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada }: {
 
 /** Quadro da caixa, aberto em cima do elemento na árvore: desenho do splitter e cadastro das portas. */
 export default function EditorCaixa({
-  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar,
+  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar, semMoldura,
 }: Props) {
   const [editando, setEditando] = useState(!caixa);
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
@@ -157,7 +159,8 @@ export default function EditorCaixa({
   const vistas = portasPara(caixa?.splitter, caixa?.portas);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden">
+    <div className={semMoldura ? "" : "bg-white rounded-xl border border-gray-300 shadow-2xl overflow-hidden"}>
+      {!semMoldura && (
       <div data-alca className="flex items-start justify-between gap-2 px-3 py-2 bg-gray-900 text-white cursor-move">
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-tight truncate" title={nome}>{nome}</p>
@@ -169,9 +172,10 @@ export default function EditorCaixa({
           <X className="w-4 h-4" />
         </button>
       </div>
+      )}
 
       {!editando ? (
-        <div className="p-3 space-y-2 max-h-[60vh] overflow-auto">
+        <div className={`p-3 space-y-2 ${semMoldura ? "" : "max-h-[60vh] overflow-auto"}`}>
           {caixa?.splitter ? (
             <DesenhoSplitter splitter={caixa.splitter} portas={vistas} fibraEntrada={fibraEntrada} caboEntrada={caboEntrada} />
           ) : (
@@ -203,7 +207,7 @@ export default function EditorCaixa({
           </div>
         </div>
       ) : (
-        <div className="p-3 space-y-3 max-h-[60vh] overflow-auto">
+        <div className={`p-3 space-y-3 ${semMoldura ? "" : "max-h-[60vh] overflow-auto"}`}>
           <div>
             <label className="block text-[11px] text-gray-500 mb-0.5" htmlFor={`spl-${chave}`}>Splitter</label>
             <select

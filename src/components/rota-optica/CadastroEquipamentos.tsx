@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { CAPACIDADES } from "@/lib/cabosRede";
 import { fibrasPorTubo } from "@/lib/rotaOptica";
 import {
@@ -53,7 +53,7 @@ function numero(v: string): number | undefined {
 }
 
 /** Cadastro dos tipos de cabo, splitter, DIO e OLT usados na rede. */
-export default function CadastroEquipamentos({ itens, usuario, onMudou, onFechar }: Props) {
+export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props) {
   const [cat, setCat] = useState<CategoriaCatalogo>("cabo");
   const [form, setForm] = useState<{ id: string | null; dados: ItemCatalogoInput } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -99,18 +99,10 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou, onFechar
   }
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">Cadastro de equipamentos</h2>
-          <p className="text-xs text-gray-500">
+    <section className="p-4 space-y-4">
+      <p className="text-xs text-gray-500">
             Tipos de cabo, splitter, DIO e OLT da rede. Os cabos e splitters cadastrados aparecem para escolher nos quadros da árvore PON.
           </p>
-        </div>
-        <button type="button" onClick={onFechar} className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">
-          <X className="w-4 h-4" /> Fechar
-        </button>
-      </div>
 
       <div className="flex gap-1 border-b border-gray-200" role="tablist">
         {CATEGORIAS.map((c) => (
