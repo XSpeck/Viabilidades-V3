@@ -504,6 +504,7 @@ function JanelaNo({
           usuario={usuario}
           onSalva={onCaixaSalva}
           onFechar={onFechar}
+          potenciaEntrada={no.elemento.potencia_entrada}
           semMoldura
         />
       ) : (
