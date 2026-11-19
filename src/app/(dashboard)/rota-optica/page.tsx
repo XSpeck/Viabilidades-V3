@@ -110,6 +110,18 @@ export default function RotaOpticaPage() {
   }, [cabos, catalogo]);
   registrarCapacidadesCabos(capacidades, tubos);
 
+  const nomesCabos = useMemo(() => {
+    const m = new Map<string, string>();
+    usoDasFibras(rotas).forEach((v, k) => m.set(k, v.nome));
+    rotas.forEach((r) => r.elementos.forEach((e) => e.cabo_saida && m.set(e.cabo_saida.toUpperCase(), e.cabo_saida)));
+    cabos.forEach((c) => m.set(c.chave, c.nome));
+    return [...new Set(m.values())].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  }, [rotas, cabos]);
+
+  // Mapa de rota nova abre perto da rede já cadastrada
+  const pontoRede = rotas.flatMap((r) => r.elementos).find((e) => e.lat !== undefined && e.lon !== undefined);
+  const centroPadrao: [number, number] | undefined = pontoRede ? [pontoRede.lat!, pontoRede.lon!] : undefined;
+
   if (!permitido) {
     return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a administradores.</div>;
   }
@@ -191,10 +203,10 @@ export default function RotaOpticaPage() {
             </button>
             <button
               type="button"
-              onClick={() => setModo({ tipo: "editar", rota: null })}
+              onClick={() => { setModo({ tipo: "editar", rota: null }); }}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
             >
-              <Plus className="w-4 h-4" /> Cadastrar manualmente
+              <Plus className="w-4 h-4" /> Nova rota (mapa / manual)
             </button>
           </div>
         )}
@@ -211,6 +223,11 @@ export default function RotaOpticaPage() {
         <RotaEditor
           inicial={modo.rota}
           usuario={user?.nome ?? ""}
+          catalogo={catalogo}
+          cabos={cabos}
+          nomesCabos={nomesCabos}
+          centroPadrao={centroPadrao}
+          onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
           onCancelar={() => setModo({ tipo: "ver" })}
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
         />
@@ -320,6 +337,7 @@ export default function RotaOpticaPage() {
             <VisualizarRota
               key={selecionada.id}
               rota={selecionada}
+              catalogo={catalogo}
               onEditar={() => setModo({ tipo: "editar", rota: selecionada })}
               onExcluir={() => excluir(selecionada)}
             />
@@ -403,10 +421,12 @@ function PreviaImportacao({
 // =====================
 function VisualizarRota({
   rota,
+  catalogo = [],
   onEditar,
   onExcluir,
 }: {
   rota: RotaOptica;
+  catalogo?: ItemCatalogo[];
   onEditar?: () => void;
   onExcluir?: () => void;
 }) {
@@ -467,7 +487,7 @@ function VisualizarRota({
         </div>
         <aside className="bg-white rounded-xl border border-gray-200 p-4 xl:sticky xl:top-4">
           {sel !== null ? (
-            <DetalheElemento elementos={rota.elementos} indice={sel} />
+            <DetalheElemento elementos={rota.elementos} indice={sel} catalogo={catalogo} />
           ) : (
             <div className="text-sm text-gray-600 space-y-2">
               <p className="font-semibold text-gray-900">Cabos desta rota</p>

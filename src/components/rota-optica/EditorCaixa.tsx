@@ -21,6 +21,8 @@ interface Props {
   caixa?: CaixaRede;
   /** Splitter informado na rota (sugestão quando a caixa ainda não foi cadastrada) */
   splitterRota?: string;
+  /** Modelo de splitter informado na rota */
+  modeloRota?: string;
   caboEntrada?: string;
   fibraEntrada?: number;
   /** Nomes dos ramos de rota que saem desta caixa na árvore */
@@ -113,13 +115,13 @@ function DesenhoSplitter({ splitter, portas, fibraEntrada, caboEntrada }: {
 
 /** Quadro da caixa, aberto em cima do elemento na árvore: desenho do splitter e cadastro das portas. */
 export default function EditorCaixa({
-  chave, nome, tipo, caixa, splitterRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar,
+  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar,
 }: Props) {
   const [editando, setEditando] = useState(!caixa);
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
   const [portas, setPortas] = useState<PortaCaixa[]>(portasPara(caixa?.splitter ?? splitterRota, caixa?.portas));
   const [obs, setObs] = useState(caixa?.obs ?? "");
-  const [modeloId, setModeloId] = useState(caixa?.splitter_modelo ?? "");
+  const [modeloId, setModeloId] = useState(caixa ? caixa.splitter_modelo ?? "" : modeloRota ?? "");
   const modeloSalvo = modelos.find((m) => m.id === caixa?.splitter_modelo);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

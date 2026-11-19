@@ -32,6 +32,10 @@ export interface ElementoRota {
   porta?: string;
   /** Splitter do elemento, ex.: "1:8" */
   splitter?: string;
+  /** Modelo de splitter do cadastro de equipamentos */
+  splitter_modelo?: string;
+  /** OLT ou DIO do cadastro de equipamentos */
+  equipamento_id?: string;
   /** Metros de cabo desde o elemento anterior */
   distancia_m?: number;
   /** Potência (dBm) na chegada / na saída do elemento */
@@ -45,6 +49,25 @@ export interface TrechoCabo {
   nome: string;
   cor?: string;
   pontos: { lat: number; lon: number }[];
+  /** Rota desenhada no site: índice do elemento onde o trecho chega */
+  ate?: number;
+}
+
+/** Distância em metros entre dois pontos (haversine). */
+export function distanciaMetros(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const R = 6371000;
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** Comprimento de um traçado (soma dos segmentos), em metros. */
+export function comprimentoTracado(pontos: { lat: number; lon: number }[]): number {
+  let t = 0;
+  for (let i = 1; i < pontos.length; i++) t += distanciaMetros(pontos[i - 1], pontos[i]);
+  return t;
 }
 
 export type OrigemRota = "geogrid" | "manual";

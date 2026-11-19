@@ -415,6 +415,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                     tipo={no.elemento.tipo}
                     caixa={no.caixa}
                     splitterRota={no.elemento.splitter}
+                    modeloRota={no.elemento.splitter_modelo}
                     caboEntrada={no.elemento.cabo_entrada}
                     fibraEntrada={no.elemento.fibra_entrada}
                     ramos={no.filhos.map((f) => f.elemento.nome)}

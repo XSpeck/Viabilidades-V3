@@ -1,5 +1,6 @@
 "use client";
 
+import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type ElementoRota } from "@/lib/rotaOptica";
 
 interface Props {
@@ -99,9 +100,11 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
   );
 }
 
-export function DetalheElemento({ elementos, indice }: { elementos: ElementoRota[]; indice: number }) {
+export function DetalheElemento({ elementos, indice, catalogo = [] }: { elementos: ElementoRota[]; indice: number; catalogo?: ItemCatalogo[] }) {
   const e = elementos[indice];
   if (!e) return null;
+  const equipamento = catalogo.find((c) => c.id === e.equipamento_id);
+  const modeloSpl = catalogo.find((c) => c.id === e.splitter_modelo);
   const anterior = elementos[indice - 1];
   const acumulado = elementos.slice(0, indice + 1).reduce((s, x) => s + (x.distancia_m ?? 0), 0);
   const pot0 = elementos[0]?.potencia_entrada ?? elementos[0]?.potencia_saida;
@@ -178,7 +181,12 @@ export function DetalheElemento({ elementos, indice }: { elementos: ElementoRota
         )}
         {e.splitter && (
           <p>
-            <span className="text-gray-500">Splitter:</span> {e.splitter}
+            <span className="text-gray-500">Splitter:</span> {modeloSpl ? `${modeloSpl.nome} · ${resumoItem(modeloSpl)}` : e.splitter}
+          </p>
+        )}
+        {equipamento && (
+          <p>
+            <span className="text-gray-500">Equipamento:</span> {equipamento.nome} · {resumoItem(equipamento)}
           </p>
         )}
         {e.potencia_entrada !== undefined && e.potencia_saida !== undefined && e.potencia_entrada !== e.potencia_saida && (
