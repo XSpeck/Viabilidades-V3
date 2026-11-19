@@ -611,8 +611,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // O tipo vale pelo nome do cabo. Se outro trecho usa esse mesmo nome com outro tipo (ex.: o 72 que chega no HUB),
     // trocar aqui mudaria os dois: então este trecho vira um cabo novo, com nome próprio.
     const compartilhado = !!kAtual && linhas.some((x, j) => j !== i && j > 0 && x.cabo_entrada.trim() && chaveCabo(x.cabo_entrada) === kAtual);
-    const separar = compartilhado && tiposCabo[kAtual] !== t.id;
-    const nomeCabo = atual && !separar ? atual : `${t.nome} · ${curtoNome(ant?.nome ?? "")} → ${curtoNome(l.nome)}`;
+    const trocouTipo = tiposCabo[kAtual] !== t.id;
+    const separar = compartilhado && trocouTipo;
+    // nome criado pelo editor ("72 FO ASO · DIO → CEO 1"): ao trocar o tipo, o nome acompanha
+    const nomeAutomatico = tiposDeCabo.some((c) => atual.startsWith(`${c.nome} · `));
+    const nomeCabo =
+      atual && !separar && !(nomeAutomatico && trocouTipo) ? atual : `${t.nome} · ${curtoNome(ant?.nome ?? "")} → ${curtoNome(l.nome)}`;
     setTiposCabo((tc) => ({ ...tc, [chaveCabo(nomeCabo)]: t.id }));
     const fibraOk = (f: string) => {
       const v = n(f);
@@ -621,8 +625,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     mudar((ls) =>
       ls.map((x, j) => {
         if (j === i) return { ...x, cabo_entrada: nomeCabo, fibra_entrada: fibraOk(x.fibra_entrada) };
-        // os trechos seguintes que continuavam no mesmo cabo seguem junto para o cabo novo
-        if (separar && j > i && ls.slice(i + 1, j + 1).every((y) => chaveCabo(y.cabo_entrada) === kAtual)) {
+        // os trechos seguintes que continuam no mesmo cabo (passando por CEO/CT, sem splitter no meio) seguem junto
+        if (
+          nomeCabo !== atual &&
+          j > i &&
+          ls.slice(i + 1, j + 1).every((y) => chaveCabo(y.cabo_entrada) === kAtual) &&
+          ls.slice(i, j).every((y) => herdaCabo(y))
+        ) {
           return { ...x, cabo_entrada: nomeCabo, fibra_entrada: fibraOk(x.fibra_entrada) };
         }
         return x;
