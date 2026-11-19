@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { CAPACIDADES } from "@/lib/cabosRede";
-import { fibrasPorTubo } from "@/lib/rotaOptica";
+import { CAPACIDADES_CADASTRO } from "@/lib/cabosRede";
+import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
 import {
   CATEGORIA_LABEL,
   CONECTORES,
   CONSTRUCOES_CABO,
+  MODELOS_CABO,
   excluirItemCatalogo,
   PERDA_TIPICA,
   RELACOES_SPLITTER,
@@ -26,7 +27,7 @@ interface Props {
 }
 
 const CATEGORIAS: CategoriaCatalogo[] = ["cabo", "splitter", "dio", "olt"];
-const FIBRAS_POR_TUBO = [2, 4, 6, 8, 12, 24];
+const FIBRAS_POR_TUBO = [1, 2, 4, 6, 8, 12, 24];
 
 function novoItem(categoria: CategoriaCatalogo, usuario: string): ItemCatalogoInput {
   if (categoria === "cabo") return { categoria, nome: "", capacidade: 12, fibras_por_tubo: 12, construcao: "AS80", atualizado_por: usuario };
@@ -173,6 +174,25 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props)
 
             {d.categoria === "cabo" && (
               <>
+                {!form.id && (
+                  <div>
+                    <p className="text-[11px] text-gray-500 mb-1">Modelos prontos (um clique preenche, depois é só salvar):</p>
+                    <div className="flex flex-wrap gap-1">
+                      {MODELOS_CABO.map((m) => (
+                        <button
+                          key={m.rotulo}
+                          type="button"
+                          onClick={() => set({ nome: m.nome, capacidade: m.capacidade, fibras_por_tubo: m.fibras_por_tubo, construcao: m.construcao, obs: m.obs })}
+                          className={`text-[11px] rounded-full border px-2 py-0.5 ${
+                            d.nome === m.nome ? "bg-indigo-600 border-indigo-600 text-white" : "border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
+                          }`}
+                        >
+                          {m.rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Campo rotulo="Capacidade">
                     <select
@@ -180,20 +200,24 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props)
                       value={d.capacidade ?? 12}
                       onChange={(e) => { const c = parseInt(e.target.value, 10); set({ capacidade: c, fibras_por_tubo: Math.min(fibrasPorTubo(c), c) }); }}
                     >
-                      {CAPACIDADES.map((c) => <option key={c} value={c}>{c} fibras</option>)}
+                      {CAPACIDADES_CADASTRO.map((c) => <option key={c} value={c}>{c} fibra{c !== 1 ? "s" : ""}</option>)}
                     </select>
                   </Campo>
-                  <Campo rotulo="Fibras por tubo">
+                  <Campo rotulo="Fibras por tubo / tubete">
                     <select className={campo} value={d.fibras_por_tubo ?? 12} onChange={(e) => set({ fibras_por_tubo: parseInt(e.target.value, 10) })}>
-                      {FIBRAS_POR_TUBO.filter((f) => f <= (d.capacidade ?? 12) || f === d.fibras_por_tubo).map((f) => (
-                        <option key={f} value={f}>{f}{f >= (d.capacidade ?? 12) ? " (tubo único)" : ""}</option>
-                      ))}
+                      {FIBRAS_POR_TUBO.filter((f) => (f <= (d.capacidade ?? 12) && (d.capacidade ?? 12) % f === 0) || f === d.fibras_por_tubo).map((f) => {
+                        const cap = d.capacidade ?? 12;
+                        const nt = Math.ceil(cap / f);
+                        return (
+                          <option key={f} value={f}>
+                            {nt === 1 ? `${f} · tubo único` : `${f} por tubo · ${nt} tubos`}
+                          </option>
+                        );
+                      })}
                     </select>
                   </Campo>
                 </div>
-                <p className="text-[11px] text-gray-500">
-                  {Math.ceil((d.capacidade ?? 12) / (d.fibras_por_tubo ?? 12))} tubo(s). Padrão: até 12 fibras 1 tubo; 24 a 72 tubos de 6; acima, tubos de 12.
-                </p>
+                <PreviaTubos capacidade={d.capacidade ?? 12} porTubo={d.fibras_por_tubo ?? 12} />
                 <Campo rotulo="Construção">
                   <select className={campo} value={d.construcao ?? ""} onChange={(e) => set({ construcao: e.target.value || undefined })}>
                     <option value="">—</option>
@@ -308,5 +332,36 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props)
       </div>
       {!form && erro && <p className="text-sm text-red-600">{erro}</p>}
     </section>
+  );
+}
+
+/** Mostra como ficam os tubos e as cores das fibras do tipo de cabo. */
+function PreviaTubos({ capacidade, porTubo }: { capacidade: number; porTubo: number }) {
+  const nT = Math.ceil(capacidade / porTubo);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2">
+      <p className="text-[10px] text-slate-500 mb-1.5">
+        {capacidade === 1 ? "1 fibra (sem tubo)" : nT === 1 ? `Tubo único com ${capacidade} fibras` : `${nT} tubos/tubetes com ${porTubo} fibra${porTubo !== 1 ? "s" : ""} cada`}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {Array.from({ length: Math.min(nT, 24) }, (_, t) => {
+          const c0 = corFibraPorCapacidade(t * porTubo + 1, capacidade, porTubo);
+          const nF = Math.min(porTubo, capacidade - t * porTubo);
+          return (
+            <span
+              key={t}
+              className="flex items-center gap-0.5 rounded-full border-2 px-1 py-0.5"
+              style={{ borderColor: capacidade === 1 ? "#cbd5e1" : c0.corTubo?.hex }}
+              title={`Tubo ${t + 1} (${c0.corTubo?.nome.toLowerCase()})`}
+            >
+              {Array.from({ length: Math.min(nF, 12) }, (_, k) => {
+                const c = corFibraPorCapacidade(t * porTubo + k + 1, capacidade, porTubo);
+                return <span key={k} className="w-2.5 h-2.5 rounded-full border border-slate-700" style={{ background: c.hex }} />;
+              })}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }

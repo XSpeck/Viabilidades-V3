@@ -41,7 +41,16 @@ export interface ItemCatalogo {
 
 export type ItemCatalogoInput = Omit<ItemCatalogo, "id" | "atualizado_em">;
 
-export const CONSTRUCOES_CABO = ["AS80", "AS120", "AS200", "Drop", "Autossustentado (outro)", "Subterrâneo / duto", "Interno"];
+export const CONSTRUCOES_CABO = ["AS80", "AS120", "AS200", "Drop", "Flat", "Cordão óptico", "Autossustentado (outro)", "Subterrâneo / duto", "Interno"];
+
+/** Cabos comuns para cadastrar com um clique (dá para ajustar antes de salvar). */
+export const MODELOS_CABO: { rotulo: string; nome: string; capacidade: number; fibras_por_tubo: number; construcao: string; obs?: string }[] = [
+  { rotulo: "Flat (drop)", nome: "Cabo Flat 1F", capacidade: 1, fibras_por_tubo: 1, construcao: "Flat" },
+  { rotulo: "Cordão óptico", nome: "Cordão óptico 1F", capacidade: 1, fibras_por_tubo: 1, construcao: "Cordão óptico" },
+  { rotulo: "12F · 6 tubetes de 2", nome: "Cabo 12F 6x2", capacidade: 12, fibras_por_tubo: 2, construcao: "AS80", obs: "6 tubetes com 2 fibras (verde e amarelo)" },
+  { rotulo: "AS80 12F", nome: "Cabo AS80 12F", capacidade: 12, fibras_por_tubo: 12, construcao: "AS80" },
+  { rotulo: "AS80 36F", nome: "Cabo AS80 36F", capacidade: 36, fibras_por_tubo: 6, construcao: "AS80" },
+];
 export const CONECTORES = ["SC/APC", "SC/UPC", "LC/APC", "LC/UPC", "Sem conector (fusão)"];
 export const RELACOES_SPLITTER = ["1:2", "1:4", "1:8", "1:16", "1:32", "1:64"];
 
@@ -59,8 +68,9 @@ export const PERDA_TIPICA: Record<string, number> = {
 export function resumoItem(i: ItemCatalogo): string {
   const partes: string[] = [];
   if (i.categoria === "cabo") {
-    if (i.capacidade) partes.push(`${i.capacidade} fibras`);
-    if (i.fibras_por_tubo) partes.push(i.capacidade && i.fibras_por_tubo >= i.capacidade ? "1 tubo" : `tubos de ${i.fibras_por_tubo}`);
+    if (i.capacidade) partes.push(`${i.capacidade} fibra${i.capacidade !== 1 ? "s" : ""}`);
+    if (i.fibras_por_tubo && i.capacidade !== 1)
+      partes.push(i.capacidade && i.fibras_por_tubo >= i.capacidade ? "1 tubo" : `${Math.ceil((i.capacidade ?? 0) / i.fibras_por_tubo)} tubos de ${i.fibras_por_tubo}`);
     if (i.construcao) partes.push(i.construcao);
   } else if (i.categoria === "splitter") {
     if (i.relacao) partes.push(i.relacao);

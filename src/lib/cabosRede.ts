@@ -35,6 +35,8 @@ export interface CaboRede {
 }
 
 export const CAPACIDADES = [2, 4, 6, 12, 24, 36, 48, 72, 96, 144, 288] as const;
+/** Capacidades que podem ser cadastradas à mão (inclui 1 fibra: flat e cordão). A estimativa automática usa CAPACIDADES. */
+export const CAPACIDADES_CADASTRO = [1, ...CAPACIDADES] as const;
 
 function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();

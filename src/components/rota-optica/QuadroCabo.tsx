@@ -5,7 +5,7 @@ import { GripHorizontal, Loader2, Pencil, Route as RouteIcon, Save, X } from "lu
 import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
 import {
   capacidadeSugerida,
-  CAPACIDADES,
+  CAPACIDADES_CADASTRO,
   salvarCabo,
   STATUS_FIBRA_LABEL,
   type CaboRede,
@@ -179,7 +179,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
               disabled={!!tipoId}
               className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-500"
             >
-              {CAPACIDADES.map((c) => (
+              {CAPACIDADES_CADASTRO.map((c) => (
                 <option key={c} value={c} disabled={c < maiorUsada}>{c} fibras{c < maiorUsada ? " (menor que a fibra usada)" : ""}</option>
               ))}
             </select>
