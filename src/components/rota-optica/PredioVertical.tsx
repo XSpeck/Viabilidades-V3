@@ -1,0 +1,628 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
+import { chaveElemento } from "@/lib/arvorePon";
+import { resumoPortas, type CaixaRede } from "@/lib/caixasRede";
+import {
+  andaresDoBloco,
+  excluirPredio,
+  listarPredios,
+  novoId,
+  predioNovo,
+  rotuloAndar,
+  rotuloAndarCurto,
+  salvarPredio,
+  type BlocoPredio,
+  type PontoPredio,
+  type PredioRede,
+} from "@/lib/prediosRede";
+import { IconeElementoSvg } from "./IconesRede";
+
+/**
+ * Prédio vertical: blocos lado a lado com térreo, andares e subsolos; cada CDOI no seu andar,
+ * a prumada (riser) subindo pelos andares que ela atende, a fibra que chega da rua e os cabos entre blocos.
+ * Tudo ligado às rotas pela chave da CDOI.
+ */
+
+const CORES = ["#0284c7", "#7c3aed", "#db2777", "#059669", "#ea580c", "#0d9488", "#4f46e5", "#ca8a04"];
+const FH = 20; // altura de um andar
+const GAP = 44; // espaço entre blocos (rótulos dos andares)
+const ESQ = 64; // rua à esquerda
+const TOPO = 44; // telhado + nome do bloco
+const POCO = 26; // largura do poço da prumada
+
+interface Props {
+  chave: string;
+  nome: string;
+  rotas: RotaOptica[];
+  caixas: CaixaRede[];
+  usuario: string;
+}
+
+const curto = (s: string, n = 26) => {
+  const t = s.split(" - ")[0].split(" / ")[0].trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+/** De onde chega a fibra de cada CDOI: da rua (rota) ou de outra CDOI do mesmo prédio */
+function chegadas(p: PredioRede, rotas: RotaOptica[]) {
+  const externas: { ponto: string; cabo: string; fibra?: number; de: string }[] = [];
+  const internas: { de: string; para: string; cabo: string; fibra?: number }[] = [];
+  const visto = new Set<string>();
+  for (const o of p.pontos) {
+    if (!o.chave) continue;
+    for (const r of rotas) {
+      const i = r.elementos.findIndex((e) => chaveElemento(e) === o.chave);
+      if (i <= 0) continue;
+      const e = r.elementos[i];
+      const ant = r.elementos[i - 1];
+      const kAnt = chaveElemento(ant);
+      const cabo = e.cabo_entrada ?? "cabo não informado";
+      const id = `${o.id}|${kAnt}|${cabo}|${e.fibra_entrada}`;
+      if (visto.has(id)) continue;
+      visto.add(id);
+      const origem = p.pontos.find((x) => x.chave === kAnt);
+      if (origem) internas.push({ de: origem.id, para: o.id, cabo, fibra: e.fibra_entrada });
+      else externas.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, de: ant.nome });
+    }
+  }
+  return { externas, internas };
+}
+
+export default function PredioVertical({ chave, nome, rotas, caixas, usuario }: Props) {
+  const [predios, setPredios] = useState<PredioRede[] | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState<PredioRede | null>(null);
+  const [selPonto, setSelPonto] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    listarPredios()
+      .then((ps) => vivo && setPredios(ps))
+      .catch((e) => {
+        if (!vivo) return;
+        setPredios([]);
+        setErroCarga(/permission/i.test(String(e)) ? "Sem permissão para ler os prédios: publique a regra predios_rede no Firebase." : "Não foi possível carregar os prédios.");
+      });
+    return () => { vivo = false; };
+  }, []);
+
+  const salvo = predios?.find((p) => p.chaves.includes(chave) || p.pontos.some((o) => o.chave === chave)) ?? null;
+  const predio = rascunho ?? salvo;
+  const editando = !!rascunho;
+
+  // CDOIs da rede (todas as rotas), para colocar no prédio
+  const cdoisRede = new Map<string, string>();
+  rotas.forEach((r) => r.elementos.forEach((e) => { if (tipoVisual(e) === "cdoi") cdoisRede.set(chaveElemento(e), e.nome); }));
+  if (!cdoisRede.has(chave)) cdoisRede.set(chave, nome);
+  const emOutroPredio = new Set((predios ?? []).filter((p) => p.id !== predio?.id).flatMap((p) => p.chaves));
+
+  function mudar(fn: (p: PredioRede) => PredioRede) {
+    setRascunho((r) => (r ? fn(r) : r));
+  }
+  function mudarBloco(id: string, m: Partial<BlocoPredio>) {
+    mudar((p) => {
+      const blocos = p.blocos.map((b) => (b.id === id ? { ...b, ...m } : b));
+      const b = blocos.find((x) => x.id === id)!;
+      // CDOIs do bloco continuam dentro dos andares que existem
+      const pontos = p.pontos.map((o) =>
+        o.bloco !== id
+          ? o
+          : {
+              ...o,
+              andar: Math.max(-b.subsolos, Math.min(b.andares, o.andar)),
+              atende_de: Math.max(-b.subsolos, Math.min(b.andares, o.atende_de)),
+              atende_ate: Math.max(-b.subsolos, Math.min(b.andares, o.atende_ate)),
+            },
+      );
+      return { ...p, blocos, pontos };
+    });
+  }
+  function mudarPonto(id: string, m: Partial<PontoPredio>) {
+    mudar((p) => ({ ...p, pontos: p.pontos.map((o) => (o.id === id ? { ...o, ...m } : o)) }));
+  }
+  function addBloco() {
+    mudar((p) => {
+      const ult = p.blocos[p.blocos.length - 1];
+      const letra = String.fromCharCode(65 + p.blocos.length);
+      return { ...p, blocos: [...p.blocos, { id: novoId(), nome: `Bloco ${letra}`, andares: ult?.andares ?? 10, subsolos: ult?.subsolos ?? 0, aptos: ult?.aptos ?? 4 }] };
+    });
+  }
+  function removerBloco(id: string) {
+    mudar((p) => (p.blocos.length <= 1 ? p : { ...p, blocos: p.blocos.filter((b) => b.id !== id), pontos: p.pontos.filter((o) => o.bloco !== id) }));
+  }
+  function addPonto(k: string) {
+    if (!rascunho) return;
+    // vai para o primeiro bloco que ainda não tem CDOI
+    const b = rascunho.blocos.find((x) => !rascunho.pontos.some((o) => o.bloco === x.id)) ?? rascunho.blocos[0];
+    const o: PontoPredio = { id: novoId(), chave: k, nome: cdoisRede.get(k) ?? "CDOI", bloco: b.id, andar: 0, atende_de: Math.min(1, b.andares), atende_ate: b.andares };
+    mudar((p) => ({ ...p, pontos: [...p.pontos, o] }));
+    setSelPonto(o.id);
+  }
+  function clicarAndar(bloco: string, andar: number) {
+    if (!editando || !selPonto) return;
+    mudarPonto(selPonto, { bloco, andar });
+  }
+
+  async function salvar() {
+    if (!rascunho) return;
+    if (!rascunho.nome.trim()) return setErro("Dê um nome ao prédio.");
+    if (!rascunho.pontos.length) return setErro("Coloque pelo menos uma CDOI.");
+    setSalvando(true);
+    setErro(null);
+    try {
+      const s = await salvarPredio(rascunho, usuario);
+      setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== s.id), s]);
+      setRascunho(null);
+    } catch (e) {
+      setErro(/permission/i.test(String(e)) ? "Sem permissão: publique a regra predios_rede no Firebase." : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+  async function excluir() {
+    if (!salvo || !confirm(`Excluir o prédio "${salvo.nome}"? As CDOIs e rotas continuam.`)) return;
+    await excluirPredio(salvo.id);
+    setPredios((ps) => (ps ?? []).filter((p) => p.id !== salvo.id));
+    setRascunho(null);
+  }
+
+  if (!predios) return <p className="p-4 text-xs text-slate-500">Carregando prédios…</p>;
+
+  // ---------- Sem prédio: montar um ou entrar num existente ----------
+  if (!predio) {
+    const outros = predios.filter((p) => !p.chaves.includes(chave));
+    return (
+      <div className="p-4 space-y-3">
+        {erroCarga && <p className="text-xs text-red-600">{erroCarga}</p>}
+        <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-4 text-center">
+          <Building2 className="mx-auto h-9 w-9 text-sky-600" />
+          <p className="mt-2 text-sm font-semibold text-slate-800">Esta CDOI ainda não está num prédio</p>
+          <p className="text-xs text-slate-500">Monte o prédio com blocos e andares e mostre em que andar fica cada CDOI e quais andares ela atende.</p>
+          <button
+            type="button"
+            onClick={() => { const p = predioNovo(curto(nome.replace(/^\s*CDOI\s*/i, ""), 40) || "Prédio", chave, nome); setRascunho(p); setSelPonto(p.pontos[0].id); }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700"
+          >
+            <Plus className="h-4 w-4" /> Montar prédio
+          </button>
+        </div>
+        {outros.length > 0 && (
+          <div>
+            <label className="text-[11px] font-semibold text-slate-600">Ou colocar esta CDOI num prédio já montado</label>
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+              value=""
+              onChange={(e) => {
+                const p = outros.find((x) => x.id === e.target.value);
+                if (!p) return;
+                const b = p.blocos[0];
+                const o: PontoPredio = { id: novoId(), chave, nome, bloco: b.id, andar: 0, atende_de: Math.min(1, b.andares), atende_ate: b.andares };
+                setRascunho({ ...p, pontos: [...p.pontos, o] });
+                setSelPonto(o.id);
+              }}
+            >
+              <option value="">Escolha o prédio…</option>
+              {outros.map((p) => <option key={p.id} value={p.id}>{p.nome} · {p.blocos.length} bloco{p.blocos.length !== 1 ? "s" : ""}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---------- Desenho ----------
+  const cor = (o: PontoPredio) => CORES[predio.pontos.indexOf(o) % CORES.length];
+  const maxAnd = Math.max(...predio.blocos.map((b) => b.andares), 1);
+  const maxSub = Math.max(...predio.blocos.map((b) => b.subsolos), 0);
+  const chao = TOPO + (maxAnd + 1) * FH;
+  const yAndar = (a: number) => chao - (a + 1) * FH;
+  const larguraJanelas = (b: BlocoPredio) => Math.max(70, 14 + Math.min(b.aptos, 8) * 14);
+  const largura = (b: BlocoPredio) => larguraJanelas(b) + POCO;
+  const xs: number[] = [];
+  predio.blocos.reduce((x, b) => { xs.push(x); return x + largura(b) + GAP; }, ESQ);
+  const W = (xs[xs.length - 1] ?? ESQ) + largura(predio.blocos[predio.blocos.length - 1]) + 16;
+  const yVala = chao + maxSub * FH + 12; // vala por onde passam os cabos
+  const { externas, internas } = chegadas(predio, rotas);
+  const H = yVala + 16 + internas.length * 7;
+
+  const posPonto = (o: PontoPredio) => {
+    const bi = predio.blocos.findIndex((b) => b.id === o.bloco);
+    if (bi < 0) return null;
+    const b = predio.blocos[bi];
+    const doBloco = predio.pontos.filter((x) => x.bloco === o.bloco);
+    const k = doBloco.indexOf(o);
+    const x = xs[bi] + larguraJanelas(b) + POCO / 2 + (doBloco.length > 1 ? (k - (doBloco.length - 1) / 2) * 7 : 0);
+    return { x, y: yAndar(o.andar) + FH / 2, b, bi };
+  };
+  const atendeAndar = (bloco: string, a: number) => predio.pontos.find((o) => o.bloco === bloco && a >= Math.min(o.atende_de, o.atende_ate) && a <= Math.max(o.atende_de, o.atende_ate));
+
+  const portasDe = (o: PontoPredio) => resumoPortas(caixas.find((c) => c.chave === o.chave));
+  const totAptos = predio.blocos.reduce((s, b) => s + b.andares * b.aptos, 0);
+  const totClientes = predio.pontos.reduce((s, o) => s + (portasDe(o)?.clientes ?? 0), 0);
+  const totPortas = predio.pontos.reduce((s, o) => s + (portasDe(o)?.total ?? 0), 0);
+
+  const campo = "w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none";
+  const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
+
+  const desenho = (
+    <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto block w-full h-auto select-none" style={{ minWidth: Math.min(W, 420), maxWidth: W * 1.15 }}>
+      <defs>
+        <linearGradient id="ceuPredio" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#e0f2fe" />
+          <stop offset="1" stopColor="#f8fafc" />
+        </linearGradient>
+        <linearGradient id="paredePredio" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#f1f5f9" />
+          <stop offset="1" stopColor="#e2e8f0" />
+        </linearGradient>
+        <pattern id="terraPredio" width="8" height="8" patternUnits="userSpaceOnUse">
+          <rect width="8" height="8" fill="#d6c3a5" />
+          <circle cx="2" cy="3" r=".8" fill="#b9a07c" />
+          <circle cx="6" cy="6.5" r=".7" fill="#b9a07c" />
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width={W} height={chao} fill="url(#ceuPredio)" />
+      <rect x="0" y={chao} width={W} height={H - chao} fill="url(#terraPredio)" />
+      <rect x="0" y={chao - 1} width={W} height="3" fill="#78716c" />
+      {/* calçada / rua */}
+      <rect x="0" y={chao - 5} width={ESQ - 14} height="5" fill="#94a3b8" />
+      <text x="6" y={chao - 9} fontSize="8" fill="#475569" fontWeight={700}>RUA</text>
+      {externas.length > 0 && <text x="6" y={chao - 19 - externas.length * 8} fontSize="6" fill="#64748b">chega da rua</text>}
+
+      {predio.blocos.map((b, bi) => {
+        const x0 = xs[bi];
+        const lw = larguraJanelas(b);
+        const lt = largura(b);
+        const yTop = yAndar(b.andares);
+        const aptos = Math.min(b.aptos, 8);
+        return (
+          <g key={b.id}>
+            {/* nome e telhado */}
+            <text x={x0 + lt / 2} y={yTop - 16} fontSize="10" fontWeight={800} textAnchor="middle" fill="#0f172a">{b.nome}</text>
+            <text x={x0 + lt / 2} y={yTop - 6} fontSize="7.5" textAnchor="middle" fill="#64748b">
+              {b.andares} andar{b.andares !== 1 ? "es" : ""}{b.subsolos ? ` · ${b.subsolos} subsolo${b.subsolos !== 1 ? "s" : ""}` : ""}
+            </text>
+            <rect x={x0 - 3} y={yTop - 3} width={lt + 6} height="4" rx="1" fill="#475569" />
+            {/* andares */}
+            {andaresDoBloco(b).map((a) => {
+              const y = yAndar(a);
+              const sub = a < 0;
+              const at = atendeAndar(b.id, a);
+              const cAt = at ? cor(at) : null;
+              return (
+                <g key={a} className={editando && selPonto ? "cursor-pointer" : undefined} onClick={() => clicarAndar(b.id, a)}>
+                  <title>{`${b.nome} · ${rotuloAndar(a)}${at ? ` · atendido por ${at.nome}` : ""}`}</title>
+                  <rect x={x0} y={y} width={lt} height={FH} fill={sub ? "#64748b" : a === 0 ? "#cbd5e1" : "url(#paredePredio)"} stroke="#94a3b8" strokeWidth=".6" />
+                  {a === 0 ? (
+                    <>
+                      <rect x={x0 + 8} y={y + 5} width="12" height={FH - 5} rx="1.5" fill="#334155" />
+                      <rect x={x0 + 24} y={y + 5} width={lw - 32} height={FH - 10} rx="1.5" fill="#bae6fd" opacity=".8" />
+                      <text x={x0 + 24 + (lw - 32) / 2} y={y + FH / 2 + 2.5} fontSize="7" textAnchor="middle" fill="#0c4a6e" fontWeight={700}>TÉRREO</text>
+                    </>
+                  ) : sub ? (
+                    <text x={x0 + lw / 2} y={y + FH / 2 + 2.5} fontSize="7" textAnchor="middle" fill="#e2e8f0" fontWeight={700}>GARAGEM {rotuloAndarCurto(a)}</text>
+                  ) : (
+                    Array.from({ length: aptos }, (_, k) => (
+                      <rect
+                        key={k}
+                        x={x0 + 8 + k * ((lw - 12) / aptos)}
+                        y={y + 5}
+                        width={(lw - 12) / aptos - 4}
+                        height={FH - 10}
+                        rx="1.2"
+                        fill={cAt ?? "#cbd5e1"}
+                        opacity={cAt ? 0.35 : 0.9}
+                      />
+                    ))
+                  )}
+                  {/* rótulo do andar */}
+                  <text x={x0 - 4} y={y + FH / 2 + 2.5} fontSize="7" textAnchor="end" fill={sub ? "#f8fafc" : "#475569"}>{rotuloAndarCurto(a)}</text>
+                  {editando && selPonto && <rect x={x0} y={y} width={lt} height={FH} fill="#0ea5e9" opacity="0" className="hover:opacity-20" />}
+                </g>
+              );
+            })}
+            {/* poço da prumada */}
+            <rect x={x0 + lw} y={yTop} width={POCO} height={chao - yTop + b.subsolos * FH} fill="#0f172a" opacity=".1" />
+            <line x1={x0 + lw} y1={yTop} x2={x0 + lw} y2={chao + b.subsolos * FH} stroke="#94a3b8" strokeWidth=".6" />
+          </g>
+        );
+      })}
+
+      {/* prumadas: sobem/descem pelos andares atendidos */}
+      {predio.pontos.map((o) => {
+        const p = posPonto(o);
+        if (!p) return null;
+        const de = Math.min(o.atende_de, o.atende_ate, o.andar);
+        const ate = Math.max(o.atende_de, o.atende_ate, o.andar);
+        const c = cor(o);
+        const lw = larguraJanelas(p.b);
+        const x0 = xs[p.bi];
+        const andares: number[] = [];
+        for (let a = Math.min(o.atende_de, o.atende_ate); a <= Math.max(o.atende_de, o.atende_ate); a++) andares.push(a);
+        return (
+          <g key={`pr${o.id}`}>
+            <line x1={p.x} y1={yAndar(ate) + FH / 2} x2={p.x} y2={yAndar(de) + FH / 2} stroke={c} strokeWidth="2.4" strokeLinecap="round" />
+            {andares.map((a) => (
+              <g key={a}>
+                <line x1={p.x} y1={yAndar(a) + FH / 2} x2={x0 + lw - 1} y2={yAndar(a) + FH / 2} stroke={c} strokeWidth=".8" strokeDasharray="1.5 1.2" opacity=".8" />
+                <rect x={p.x - 2.2} y={yAndar(a) + FH / 2 - 2.2} width="4.4" height="4.4" rx="1" fill="#fff" stroke={c} strokeWidth="1" />
+              </g>
+            ))}
+          </g>
+        );
+      })}
+
+      {/* cabos entre blocos (pela vala) */}
+      {internas.map((l, k) => {
+        const a = predio.pontos.find((o) => o.id === l.de);
+        const b = predio.pontos.find((o) => o.id === l.para);
+        const pa = a && posPonto(a);
+        const pb = b && posPonto(b);
+        if (!pa || !pb) return null;
+        const y = yVala + 6 + k * 7;
+        const c = corFibra(l.fibra, l.cabo).hex;
+        return (
+          <g key={`in${k}`}>
+            <title>{`${l.cabo}${l.fibra ? ` · fibra ${l.fibra}` : ""}: ${a!.nome} → ${b!.nome}`}</title>
+            <path d={`M${pa.x} ${pa.y} V${y} H${pb.x} V${pb.y}`} fill="none" stroke="#1e293b" strokeWidth="4" strokeLinejoin="round" opacity=".85" />
+            <path d={`M${pa.x} ${pa.y} V${y} H${pb.x} V${pb.y}`} fill="none" stroke={c} strokeWidth="1.6" strokeDasharray="4 2" strokeLinejoin="round" />
+          </g>
+        );
+      })}
+
+      {/* fibra que chega da rua */}
+      {externas.map((l, k) => {
+        const o = predio.pontos.find((x) => x.id === l.ponto);
+        const p = o && posPonto(o);
+        if (!p) return null;
+        const y = yVala - k * 5;
+        const c = corFibra(l.fibra, l.cabo);
+        return (
+          <g key={`ex${k}`}>
+            <title>{`${l.cabo}${l.fibra ? ` · fibra ${l.fibra} ${c.nome}` : ""} · vem de ${l.de}`}</title>
+            <path d={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} fill="none" stroke="#0f172a" strokeWidth="5" strokeLinejoin="round" />
+            <path d={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} fill="none" stroke={c.hex} strokeWidth="2" strokeLinejoin="round" />
+            <circle r="2.2" fill="#fff">
+              <animateMotion dur="3.5s" repeatCount="indefinite" path={`M4 ${chao - 2} H${ESQ - 30} V${y} H${p.x} V${p.y}`} />
+            </circle>
+            <text x="6" y={chao - 18 - k * 8} fontSize="6.5" fill="#0f172a" fontWeight={700}>{curto(l.cabo, 14)}{l.fibra ? ` F${l.fibra}` : ""}</text>
+          </g>
+        );
+      })}
+
+      {/* CDOIs */}
+      {predio.pontos.map((o, i) => {
+        const p = posPonto(o);
+        if (!p) return null;
+        const atual = o.chave === chave;
+        const sel = editando && selPonto === o.id;
+        return (
+          <g key={`cd${o.id}`} className={editando ? "cursor-pointer" : undefined} onClick={(e) => { e.stopPropagation(); if (editando) setSelPonto(o.id); }}>
+            <title>{`${o.nome} · ${rotuloAndar(o.andar)}`}</title>
+            {(atual || sel) && (
+              <circle cx={p.x} cy={p.y} r="12" fill="none" stroke={sel ? "#0ea5e9" : "#f59e0b"} strokeWidth="2">
+                <animate attributeName="r" values="10;13;10" dur="1.6s" repeatCount="indefinite" />
+              </circle>
+            )}
+            <IconeElementoSvg tipo="cdoi" x={p.x} y={p.y} tamanho={19} />
+            <circle cx={p.x + 8} cy={p.y - 8} r="5" fill={cor(o)} stroke="#fff" strokeWidth="1" />
+            <text x={p.x + 8} y={p.y - 6.2} fontSize="6.5" textAnchor="middle" fill="#fff" fontWeight={800}>{i + 1}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+
+  return (
+    <div className="p-3 space-y-3">
+      {erroCarga && <p className="text-xs text-red-600">{erroCarga}</p>}
+      {/* Cabeçalho */}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          {editando ? (
+            <input className={`${campo} text-sm font-semibold`} value={predio.nome} onChange={(e) => mudar((p) => ({ ...p, nome: e.target.value }))} placeholder="Nome do prédio / condomínio" />
+          ) : (
+            <p className="truncate text-sm font-bold text-slate-800">{predio.nome}</p>
+          )}
+          {editando ? (
+            <input className={`${campo} mt-1`} value={predio.endereco ?? ""} onChange={(e) => mudar((p) => ({ ...p, endereco: e.target.value }))} placeholder="Endereço (opcional)" />
+          ) : (
+            predio.endereco && <p className="truncate text-[11px] text-slate-500">{predio.endereco}</p>
+          )}
+        </div>
+        {!editando && (
+          <button
+            type="button"
+            onClick={() => { setRascunho(structuredClone(predio)); setSelPonto(predio.pontos.find((o) => o.chave === chave)?.id ?? predio.pontos[0]?.id ?? null); }}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-sky-400"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Editar
+          </button>
+        )}
+      </div>
+
+      {/* Números */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {[
+          ["Blocos", String(predio.blocos.length)],
+          ["Aptos", String(totAptos)],
+          ["CDOIs", String(predio.pontos.length)],
+          ["Clientes", totPortas ? `${totClientes}/${totPortas}` : "—"],
+        ].map(([r, v]) => (
+          <div key={r} className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center">
+            <p className="text-[10px] text-slate-500">{r}</p>
+            <p className="text-sm font-bold text-slate-800">{v}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Desenho */}
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-inner">{desenho}</div>
+      {editando && selPonto && (
+        <p className="text-[11px] text-sky-700">
+          Clique num andar do desenho para mudar a <b>{predio.pontos.find((o) => o.id === selPonto)?.nome}</b> de lugar.
+        </p>
+      )}
+
+      {/* Legenda das CDOIs */}
+      {!editando && (
+        <div className="space-y-1.5">
+          {predio.pontos.map((o, i) => {
+            const b = predio.blocos.find((x) => x.id === o.bloco);
+            const pr = portasDe(o);
+            const chega = externas.filter((l) => l.ponto === o.id);
+            const vemDe = internas.filter((l) => l.para === o.id).map((l) => predio.pontos.find((x) => x.id === l.de)?.nome).filter(Boolean);
+            return (
+              <div key={o.id} className={`flex items-start gap-2 rounded-xl border px-2.5 py-1.5 ${o.chave === chave ? "border-amber-300 bg-amber-50/60" : "border-slate-200 bg-white"}`}>
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: cor(o) }}>{i + 1}</span>
+                <div className="min-w-0 flex-1 text-[11px] leading-snug">
+                  <p className="truncate font-semibold text-slate-800">{o.nome}</p>
+                  <p className="text-slate-600">
+                    {b?.nome} · {rotuloAndar(o.andar)} · atende {rotuloAndarCurto(Math.min(o.atende_de, o.atende_ate))} ao {rotuloAndarCurto(Math.max(o.atende_de, o.atende_ate))}
+                  </p>
+                  {chega.map((l, k) => (
+                    <p key={k} className="flex items-center gap-1 text-slate-500">
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ background: corFibra(l.fibra, l.cabo).hex }} />
+                      chega da rua: {curto(l.cabo, 30)}{l.fibra ? ` · F${l.fibra}` : ""} (de {curto(l.de, 20)})
+                    </p>
+                  ))}
+                  {vemDe.length > 0 && <p className="text-slate-500">recebe de: {vemDe.join(", ")}</p>}
+                  {!o.chave && <p className="text-amber-700">ainda sem rota</p>}
+                </div>
+                {pr && (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title={`${pr.livres} livres · ${pr.ramais} ramais`}>
+                    {pr.clientes}/{pr.total}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {salvo?.atualizado_em && (
+            <p className="text-[10px] text-slate-400">Atualizado em {new Date(salvo.atualizado_em).toLocaleDateString("pt-BR")}{salvo.atualizado_por ? ` por ${salvo.atualizado_por}` : ""}</p>
+          )}
+        </div>
+      )}
+
+      {/* Edição */}
+      {editando && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+            <div className="mb-1.5 flex items-center">
+              <p className="text-[11px] font-bold text-slate-700">Blocos</p>
+              <button type="button" onClick={addBloco} className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 hover:underline">
+                <Plus className="h-3.5 w-3.5" /> Bloco
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {predio.blocos.map((b) => (
+                <div key={b.id} className="grid grid-cols-[1fr_52px_52px_52px_20px] items-end gap-1.5">
+                  <div>
+                    <label className={rot}>Nome</label>
+                    <input className={campo} value={b.nome} onChange={(e) => mudarBloco(b.id, { nome: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={rot}>Andares</label>
+                    <input className={campo} type="number" min={0} max={60} value={b.andares} onChange={(e) => mudarBloco(b.id, { andares: Math.max(0, Math.min(60, +e.target.value || 0)) })} />
+                  </div>
+                  <div>
+                    <label className={rot}>Subsolo</label>
+                    <input className={campo} type="number" min={0} max={6} value={b.subsolos} onChange={(e) => mudarBloco(b.id, { subsolos: Math.max(0, Math.min(6, +e.target.value || 0)) })} />
+                  </div>
+                  <div>
+                    <label className={rot}>Apto/and</label>
+                    <input className={campo} type="number" min={1} max={20} value={b.aptos} onChange={(e) => mudarBloco(b.id, { aptos: Math.max(1, Math.min(20, +e.target.value || 1)) })} />
+                  </div>
+                  <button type="button" disabled={predio.blocos.length <= 1} onClick={() => removerBloco(b.id)} className="mb-1 text-slate-400 hover:text-red-600 disabled:opacity-30" title="Remover bloco">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+            <p className="mb-1.5 text-[11px] font-bold text-slate-700">CDOIs</p>
+            <div className="space-y-1.5">
+              {predio.pontos.map((o, i) => {
+                const b = predio.blocos.find((x) => x.id === o.bloco) ?? predio.blocos[0];
+                const lista = andaresDoBloco(b);
+                return (
+                  <div
+                    key={o.id}
+                    onClick={() => setSelPonto(o.id)}
+                    className={`rounded-lg border bg-white p-2 ${selPonto === o.id ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200"}`}
+                  >
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: cor(o) }}>{i + 1}</span>
+                      <input className={`${campo} flex-1`} value={o.nome} onChange={(e) => mudarPonto(o.id, { nome: e.target.value })} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); mudar((p) => ({ ...p, pontos: p.pontos.filter((x) => x.id !== o.id) })); }} className="text-slate-400 hover:text-red-600" title="Tirar do prédio">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      <div>
+                        <label className={rot}>Bloco</label>
+                        <select className={campo} value={o.bloco} onChange={(e) => {
+                          const nb = predio.blocos.find((x) => x.id === e.target.value)!;
+                          mudarPonto(o.id, { bloco: nb.id, andar: Math.min(o.andar, nb.andares), atende_de: Math.min(o.atende_de, nb.andares), atende_ate: Math.min(o.atende_ate, nb.andares) });
+                        }}>
+                          {predio.blocos.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={rot}>Fica no</label>
+                        <select className={campo} value={o.andar} onChange={(e) => mudarPonto(o.id, { andar: +e.target.value })}>
+                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={rot}>Atende do</label>
+                        <select className={campo} value={o.atende_de} onChange={(e) => mudarPonto(o.id, { atende_de: +e.target.value })}>
+                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={rot}>até o</label>
+                        <select className={campo} value={o.atende_ate} onChange={(e) => mudarPonto(o.id, { atende_ate: +e.target.value })}>
+                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {o.chave === "" && <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <select
+              className={`${campo} mt-2`}
+              value=""
+              onChange={(e) => { if (e.target.value === "__nova") addPonto(""); else if (e.target.value) addPonto(e.target.value); }}
+            >
+              <option value="">+ Colocar outra CDOI…</option>
+              {[...cdoisRede.entries()]
+                .filter(([k]) => !predio.pontos.some((o) => o.chave === k) && !emOutroPredio.has(k))
+                .map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+              <option value="__nova">CDOI ainda sem rota (só desenho)</option>
+            </select>
+          </div>
+
+          {erro && <p className="text-xs text-red-600">{erro}</p>}
+          <div className="flex items-center gap-2">
+            {salvo && (
+              <button type="button" onClick={excluir} className="text-[11px] text-red-600 hover:underline">Excluir prédio</button>
+            )}
+            <button type="button" onClick={() => { setRascunho(null); setErro(null); }} className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
+            <button type="button" disabled={salvando} onClick={salvar} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+              {salvando ? "Salvando…" : "Salvar prédio"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

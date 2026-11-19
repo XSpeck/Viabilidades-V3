@@ -79,6 +79,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Prédios verticais (blocos, andares e CDOIs), editados na árvore PON — só ADM
+    match /predios_rede/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // Bairros de rede
     match /bairros_rede/{id} {
       allow read: if isAuth();

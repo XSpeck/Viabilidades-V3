@@ -8,6 +8,7 @@ import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
+import PredioVertical from "./PredioVertical";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
@@ -473,6 +474,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             <JanelaNo
               no={no}
               rotas={arvore.rotas}
+              todasRotas={rotas}
+              caixas={caixas}
               catalogo={catalogo}
               usuario={usuario}
               onCaixaSalva={onCaixaSalva}
@@ -488,21 +491,25 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar,
+  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar,
 }: {
   no: NoArvore;
   rotas: RotaOptica[];
+  todasRotas: RotaOptica[];
+  caixas: CaixaRede[];
   catalogo: ItemCatalogo[];
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
   onAbrirRota: (id: string) => void;
   onFechar: () => void;
 }) {
-  const [aba, setAba] = useState<"emendas" | "diagrama" | "caminho">(temDiagrama(no) ? "diagrama" : "emendas");
+  const ehCdoi = tipoVisual(no.elemento) === "cdoi";
+  const [aba, setAba] = useState<"predio" | "emendas" | "diagrama" | "caminho">(ehCdoi ? "predio" : temDiagrama(no) ? "diagrama" : "emendas");
   return (
     <div>
       <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
         {([
+          ...(ehCdoi ? ([["predio", "Prédio"]] as const) : []),
           ["emendas", "Emendas"],
           ["diagrama", "Splitter e portas"],
           ["caminho", "Caminho e potência"],
@@ -519,7 +526,9 @@ function JanelaNo({
           </button>
         ))}
       </div>
-      {aba === "emendas" ? (
+      {aba === "predio" ? (
+        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} />
+      ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (
         <EditorCaixa
