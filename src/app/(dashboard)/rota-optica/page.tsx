@@ -272,6 +272,7 @@ export default function RotaOpticaPage() {
             usuario={user?.nome ?? ""}
             onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             onAbrirRota={abrirRota}
+            onRotasMudaram={recarregar}
           />
         )
       )}

@@ -26,6 +26,8 @@ interface Props {
   onCaixaSalva: (c: CaixaRede) => void;
   onCaboSalvo: (c: CaboRede) => void;
   onAbrirRota: (id: string) => void;
+  /** Rotas criadas fora do editor (ex.: CDOI nova no prédio): recarregar */
+  onRotasMudaram?: () => void;
 }
 
 /** Janela aberta sobre a árvore (posição inicial na tela). */
@@ -86,7 +88,7 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram }: Props) {
   const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
   const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
   const [chave, setChave] = useState<string | null>(null);
@@ -510,6 +512,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               rotas={arvore.rotas}
               todasRotas={rotas}
               caixas={caixas}
+              onRotasMudaram={onRotasMudaram}
               onAbrirNo={(id) => abrirJanela({ id: `no:${id}`, tipo: "no", noId: id }, Math.max(20, window.innerWidth - 500), 140)}
               catalogo={catalogo}
               usuario={usuario}
@@ -526,8 +529,9 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo,
+  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram,
 }: {
+  onRotasMudaram?: () => void;
   onAbrirNo: (id: string) => void;
   no: NoArvore;
   rotas: RotaOptica[];
@@ -595,7 +599,7 @@ function JanelaNo({
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
       ) : aba === "predio" ? (
-        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} />
+        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (
