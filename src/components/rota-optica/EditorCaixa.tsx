@@ -14,6 +14,20 @@ import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { corFibra, perdaSplitter, TIPO_ELEMENTO_LABEL, type TipoElementoRota } from "@/lib/rotaOptica";
 import { COR_ELEMENTO } from "./IconesRede";
 
+export interface SaidaRamal {
+  /** Caixa de destino */
+  nome: string;
+  cabo?: string;
+  fibra?: number;
+}
+
+/** Texto gravado na porta: começa pelo destino (é por ele que o Primário da HUB acha o secundário) */
+function textoSaida(s: SaidaRamal): string {
+  const cabo = (s.cabo ?? "").split(" · ")[0].split(" - ")[0].trim();
+  const resto = [cabo, s.fibra ? `F${s.fibra}` : ""].filter(Boolean).join(" ");
+  return resto ? `${s.nome} · ${resto}` : s.nome;
+}
+
 interface Props {
   chave: string;
   nome: string;
@@ -27,6 +41,8 @@ interface Props {
   fibraEntrada?: number;
   /** Nomes dos ramos de rota que saem desta caixa na árvore */
   ramos: string[];
+  /** Fibras que saem desta caixa para a frente (para escolher no Ramal) */
+  saidas?: SaidaRamal[];
   /** Modelos de splitter do cadastro de equipamentos */
   modelos: ItemCatalogo[];
   usuario: string;
@@ -216,8 +232,10 @@ function ResumoPortasChips({ portas }: { portas: PortaCaixa[] }) {
 
 /** Quadro da caixa, aberto em cima do elemento na árvore: desenho do splitter e cadastro das portas. */
 export default function EditorCaixa({
-  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, modelos, usuario, onSalva, onFechar, semMoldura, potenciaEntrada,
+  chave, nome, tipo, caixa, splitterRota, modeloRota, caboEntrada, fibraEntrada, ramos, saidas = [], modelos, usuario, onSalva, onFechar, semMoldura, potenciaEntrada,
 }: Props) {
+  /** Portas com "Outra…" escolhida no Ramal (texto livre) */
+  const [livreTexto, setLivreTexto] = useState<Set<number>>(new Set());
   const [editando, setEditando] = useState(!caixa);
   const [splitter, setSplitter] = useState(caixa?.splitter ?? splitterRota ?? "");
   const [portas, setPortas] = useState<PortaCaixa[]>(portasPara(caixa?.splitter ?? splitterRota, caixa?.portas));
@@ -371,7 +389,15 @@ export default function EditorCaixa({
                           type="button"
                           role="radio"
                           aria-checked={p.status === st}
-                          onClick={() => alterarPorta(p.numero, { status: st })}
+                          onClick={() => {
+                            // Ramal: já sugere a primeira fibra que sai e ainda não tem porta
+                            if (st === "ramal" && !p.descricao && saidas.length) {
+                              const usada = new Set(portas.filter((x) => x.status === "ramal").map((x) => x.descricao));
+                              const s0 = saidas.find((x) => !usada.has(textoSaida(x)));
+                              return alterarPorta(p.numero, { status: st, descricao: s0 ? textoSaida(s0) : "" });
+                            }
+                            alterarPorta(p.numero, { status: st });
+                          }}
                           title={STATUS_PORTA_LABEL[st]}
                           className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.status === st ? COR_STATUS[st] + " shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         >
@@ -379,6 +405,34 @@ export default function EditorCaixa({
                         </button>
                       ))}
                     </div>
+                    {p.status === "ramal" && saidas.length > 0 && !livreTexto.has(p.numero) && (!p.descricao || saidas.some((x) => textoSaida(x) === p.descricao)) ? (
+                      <select
+                        value={p.descricao ?? ""}
+                        onChange={(e) => {
+                          if (e.target.value === "__outra") {
+                            setLivreTexto((t) => new Set(t).add(p.numero));
+                            alterarPorta(p.numero, { descricao: "" });
+                          } else alterarPorta(p.numero, { descricao: e.target.value });
+                        }}
+                        className="flex-1 min-w-0 border border-amber-300 rounded-md px-1.5 py-1 text-xs bg-amber-50/60"
+                        title="Fibra que sai desta porta para a frente"
+                      >
+                        <option value="">Escolha a fibra que segue…</option>
+                        {saidas.map((x) => {
+                          const v = textoSaida(x);
+                          const outra = portas.find((q) => q.numero !== p.numero && q.status === "ramal" && q.descricao === v);
+                          const c = x.fibra ? corFibra(x.fibra, x.cabo) : null;
+                          return (
+                            <option key={v} value={v} disabled={!!outra}>
+                              {x.fibra ? `F${x.fibra}${c ? ` ${c.nome.toLowerCase()}` : ""}` : "fibra ?"} → {curto(x.nome, 26)}
+                              {x.cabo ? ` (${curto(x.cabo.split(" · ")[0], 14)})` : ""}
+                              {outra ? ` · já na porta ${outra.numero}` : ""}
+                            </option>
+                          );
+                        })}
+                        <option value="__outra">Outra (digitar)…</option>
+                      </select>
+                    ) : (
                     <input
                       value={p.descricao ?? ""}
                       onChange={(e) => alterarPorta(p.numero, { descricao: e.target.value })}
@@ -386,6 +440,7 @@ export default function EditorCaixa({
                       placeholder={p.status === "cliente" ? "Cliente / login" : p.status === "ramal" ? "Caixa de destino" : "Livre"}
                       className="flex-1 min-w-0 border border-gray-300 rounded-md px-2 py-1 text-xs bg-white disabled:bg-gray-50 disabled:text-gray-400"
                     />
+                    )}
                   </li>
                 ))}
               </ul>

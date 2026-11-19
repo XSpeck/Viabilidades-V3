@@ -551,6 +551,7 @@ function JanelaNo({
           caboEntrada={no.elemento.cabo_entrada}
           fibraEntrada={no.elemento.fibra_entrada}
           ramos={no.filhos.map((f) => f.elemento.nome)}
+          saidas={no.filhos.map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
           modelos={catalogo.filter((m) => m.categoria === "splitter")}
           usuario={usuario}
           onSalva={onCaixaSalva}

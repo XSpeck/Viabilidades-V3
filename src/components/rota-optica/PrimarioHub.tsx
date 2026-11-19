@@ -82,7 +82,10 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
     if (p.status === "cliente") return { tipo: "cliente", porta: p.numero, descricao: p.descricao };
     if (p.status === "ramal" && p.descricao) {
       const d = norm(p.descricao);
-      const f = no.filhos.find((x) => !usados.has(x.id) && (norm(x.elemento.nome).includes(d) || d.includes(norm(curto(x.elemento.nome, 60)))));
+      const candidatos = no.filhos.filter((x) => !usados.has(x.id) && (norm(x.elemento.nome).includes(d) || d.includes(norm(curto(x.elemento.nome, 60)))));
+      // escolhido pela lista ("CTO X · 24 FO ASO F2"): a fibra desempata quando há dois ramos para o mesmo destino
+      const fib = d.match(/\bf(\d+)$/)?.[1];
+      const f = candidatos.find((x) => fib && String(x.elemento.fibra_entrada) === fib) ?? candidatos[0];
       if (f) {
         usados.add(f.id);
         return { tipo: "ramo", porta: p.numero, filho: f, sec: secundarios(f), sugerida: false };
