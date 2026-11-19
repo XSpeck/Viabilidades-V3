@@ -185,7 +185,7 @@ export default function RotaEditorMapa({
         zoom={todos.length ? 16 : 15}
         scrollWheelZoom={false}
         doubleClickZoom={false}
-        className={`h-full w-full z-0 ${desenhando ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}
+        className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${desenhando ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}
       >
         {satelite ? (
           <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={19} />

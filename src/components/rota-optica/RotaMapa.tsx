@@ -67,7 +67,7 @@ export default function RotaMapa({ elementos, trechos, selecionado, onSelect }: 
   const alvo: [number, number] | null = sel?.lat !== undefined && sel?.lon !== undefined ? [sel.lat, sel.lon] : null;
 
   return (
-    <MapContainer center={todos[0]} zoom={15} scrollWheelZoom={false} className="h-[420px] w-full rounded-xl z-0">
+    <MapContainer center={todos[0]} zoom={15} scrollWheelZoom={false} className="h-[420px] w-full rounded-xl z-0 [&_.leaflet-interactive]:outline-none">
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
