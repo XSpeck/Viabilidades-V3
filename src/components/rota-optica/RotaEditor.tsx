@@ -242,6 +242,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
     return { itens: [...vistos.values()], cabos: cabosRede };
   }, [rede]);
+  /** Próximo código numérico livre (considera a rede toda e esta rota). Séries de 6 dígitos a partir de 100001. */
+  function proximoCodigo(ls: Linha[], extra = 0): string {
+    const usados = [
+      ...rede.flatMap((r) => r.elementos.map((e) => e.codigo ?? "")),
+      ...ls.map((l) => l.codigo),
+    ].filter((c) => /^\d+$/.test(c.trim())).map((c) => parseInt(c, 10));
+    return String(Math.max(100000, ...usados) + 1 + extra);
+  }
+
   const chaveLinha = (l: Linha) => chaveElemento({ nome: l.nome, codigo: l.codigo.trim() || undefined, tipo: l.tipo });
   const chavesNaRota = new Set(linhas.map(chaveLinha));
   const pontosRede: PontoRede[] = redeInfo.itens.map(({ el }) => ({
@@ -343,6 +352,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       const nova: Linha = {
         ...linhaVazia(tipo),
         nome: olt?.nome ?? nomeAuto(tipo, ls),
+        // OLT é a raiz e é reconhecida pelo nome; os demais ganham código único
+        codigo: tipo === "olt" ? "" : proximoCodigo(ls),
         coords: fmtCoord(p),
         vertices: ls.length ? pendentes : [],
         dist_auto: true,
@@ -356,7 +367,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setPendentes([]);
     setSel(novoIndice);
     // Depois da OLT, o normal é seguir com caixas de emenda
-    if (tipo === "olt") setFerramenta("ceo");
+    // Depois da OLT normalmente vem o DIO; depois do DIO, a caixa de emenda
+    if (tipo === "olt") setFerramenta("dio");
+    else if (tipo === "dio") setFerramenta("ceo");
   }
 
   /** Clique numa caixa da rede existente */
@@ -389,6 +402,21 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     mudar((ls) => [...ls, { ...paraLinha(base), vertices: pendentes, dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
     setPendentes([]);
     setSel(novoIndice);
+  }
+
+  /** Escolhe um tipo de cabo do cadastro para o trecho que chega em i */
+  function usarTipoCabo(i: number, t: ItemCatalogo) {
+    const l = linhas[i];
+    const ant = linhas[i - 1];
+    const curto = (s0: string) => s0.split(" - ")[0].split(" / ")[0].trim();
+    // Sem nome: cria um nome próprio para este lance (cordões e flats são um por ligação)
+    const nomeCabo = l.cabo_entrada.trim() || `${t.nome} · ${curto(ant?.nome ?? "")} → ${curto(l.nome)}`;
+    setTiposCabo((tc) => ({ ...tc, [chaveCabo(nomeCabo)]: t.id }));
+    const fibraAtual = n(l.fibra_entrada);
+    alterar(i, {
+      cabo_entrada: nomeCabo,
+      fibra_entrada: t.capacidade === 1 || !fibraAtual || (t.capacidade && fibraAtual > t.capacidade) ? "1" : l.fibra_entrada,
+    });
   }
 
   function inserirCurva(i: number, lat: number, lon: number) {
@@ -682,8 +710,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             </select>
           </div>
           <div>
-            <label className={rot}>Código (PT…)</label>
-            <input className={campo} value={l.codigo} onChange={(e) => alterar(i, { codigo: e.target.value })} />
+            <label className={rot}>Código</label>
+            <div className="flex gap-1">
+              <input className={campo} value={l.codigo} onChange={(e) => alterar(i, { codigo: e.target.value })} placeholder="único" />
+              {!l.codigo.trim() && (
+                <button
+                  type="button"
+                  onClick={() => alterar(i, { codigo: proximoCodigo(linhas) })}
+                  className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-2 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                  title="Gerar código numérico único"
+                >
+                  Gerar
+                </button>
+              )}
+            </div>
+            {l.codigo.trim() && linhas.some((x, j) => j !== i && x.codigo.trim() === l.codigo.trim()) && (
+              <p className="text-[10px] text-red-600 mt-0.5">Código repetido nesta rota</p>
+            )}
           </div>
           {camposEquipamento(i)}
           {i === 0 && (
@@ -700,6 +743,27 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <IconeCabo tamanho={16} /> Cabo que chega aqui
               <span className="ml-auto font-normal text-amber-700">em amarelo no mapa</span>
             </p>
+            {tiposDeCabo.length > 0 && (
+              <div className="mb-2">
+                <p className="text-[10px] text-slate-500 mb-1">Cabo do cadastro (um clique preenche nome, tipo e fibra):</p>
+                <div className="flex flex-wrap gap-1">
+                  {tiposDeCabo.map((t) => {
+                    const ativo = !!kCabo && tiposCabo[kCabo] === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => usarTipoCabo(i, t)}
+                        className={`text-[11px] rounded-full border px-2 py-0.5 ${ativo ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400"}`}
+                        title={resumoItem(t)}
+                      >
+                        {t.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2">
                 <input className={campo} list="cabos-conhecidos" value={l.cabo_entrada} onChange={(e) => alterar(i, { cabo_entrada: e.target.value })} placeholder="Nome do cabo (ex.: 15 - P. CHAMINE)" />
@@ -784,7 +848,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           ? pontosRede.length
             ? `Clique numa caixa da rede (ícones claros) para continuar a partir dela, ou no mapa para colocar a ${nomeFerramenta}.`
             : `Clique no mapa onde fica a ${nomeFerramenta}. Ela é o início da rota.`
-          : `Clique no mapa para colocar ${nomeFerramenta}${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
+          : `Clique no mapa para colocar ${nomeFerramenta} (ou em cima de um ícone da rota para o mesmo local)${pendentes.length ? ` (o cabo passa pelos ${pendentes.length} poste${pendentes.length > 1 ? "s" : ""} marcados)` : ""}. Esc para parar.`;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -1049,7 +1113,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               onClick={() => {
                 const tipo: TipoElementoRota = ferramenta !== "selecionar" && ferramenta !== "poste" ? ferramenta : linhas.length ? "ceo" : "olt";
                 const ant = linhas[linhas.length - 1];
-                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
+                mudar((ls) => [...ls, { ...linhaVazia(tipo), nome: nomeAuto(tipo, ls), codigo: tipo === "olt" ? "" : proximoCodigo(ls), dist_auto: true, cabo_entrada: ant?.cabo_entrada ?? "", fibra_entrada: ant?.fibra_entrada ?? "" }]);
                 setSel(linhas.length);
                 setFerramenta("selecionar");
               }}

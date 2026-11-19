@@ -320,7 +320,8 @@ export default function RotaEditorMapa({
             icon={marcador(p.tipo, i + 1, i === selecionado)}
             zIndexOffset={i === selecionado ? 1000 : 500}
             eventHandlers={{
-              click: () => onSelect(i),
+              // Com um tipo escolhido, clicar num ícone da rota coloca o novo elemento no mesmo local (ex.: DIO no rack da OLT)
+              click: () => (ferramenta !== "selecionar" && ferramenta !== "poste" ? onClicarMapa(p.lat!, p.lon!) : onSelect(i)),
               dragend: (e) => {
                 const ll = (e.target as L.Marker).getLatLng();
                 onMoverElemento(i, ll.lat, ll.lng);
@@ -329,6 +330,7 @@ export default function RotaEditorMapa({
           >
             <Tooltip direction="top" offset={[0, -18]}>
               {i + 1}. {p.nome || "(sem nome)"}
+              {ferramenta !== "selecionar" && ferramenta !== "poste" ? " · clique para colocar no mesmo local" : ""}
             </Tooltip>
           </Marker>
         ))}
