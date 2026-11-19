@@ -13,7 +13,6 @@ import {
   listarRotas,
   parseGeoGridKml,
   resumoRota,
-  textoBuscaRota,
   type RotaOptica,
   type RotaOpticaInput,
 } from "@/lib/rotaOptica";
@@ -28,7 +27,7 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Search, Trash2, X } from "lucide-react";
+import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Trash2, X } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -49,21 +48,21 @@ export default function RotaOpticaPage() {
   const [catalogo, setCatalogo] = useState<ItemCatalogo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [busca, setBusca] = useState("");
-  const [selId, setSelId] = useState<string | null>(null);
   const [modo, setModo] = useState<Modo>({ tipo: "ver" });
-  const [aba, setAba] = useState<"rotas" | "arvore">("rotas");
+  /** Rotas abertas em janelas (posição inicial) */
+  const [rotasAbertas, setRotasAbertas] = useState<{ id: string; x: number; y: number }[]>([]);
+  const ultimoClique = useRef({ x: 200, y: 160 });
   /** Janela do cadastro de equipamentos (posição inicial) */
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
 
-  async function recarregar(selecionar?: string) {
+  async function recarregar() {
     try {
       const lista = await listarRotas();
       setRotas(lista);
-      setSelId((atual) => selecionar ?? (atual && lista.some((r) => r.id === atual) ? atual : lista[0]?.id ?? null));
+      setRotasAbertas((rs) => rs.filter((x) => lista.some((r) => r.id === x.id)));
       setErro(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar rotas.");
@@ -86,21 +85,11 @@ export default function RotaOpticaPage() {
       .then((cx) => { if (ativo) setCaixas(cx); })
       .catch((e) => console.warn("Não foi possível carregar as caixas:", e));
     listarRotas()
-      .then((lista) => {
-        if (!ativo) return;
-        setRotas(lista);
-        setSelId(lista[0]?.id ?? null);
-      })
+      .then((lista) => { if (ativo) setRotas(lista); })
       .catch((e) => ativo && setErro(e instanceof Error ? e.message : "Erro ao carregar rotas."))
       .finally(() => ativo && setCarregando(false));
     return () => { ativo = false; };
   }, [permitido]);
-
-  const filtradas = useMemo(() => {
-    const t = busca.trim().toLowerCase();
-    if (!t) return rotas;
-    return rotas.filter((r) => textoBuscaRota(r).includes(t));
-  }, [rotas, busca]);
 
   // Capacidade de cada cabo (cadastrada ou estimada) define tubos e cores das fibras em todas as telas
   const capacidades = useMemo(() => capacidadesDosCabos(cabos, usoDasFibras(rotas)), [cabos, rotas]);
@@ -145,16 +134,27 @@ export default function RotaOpticaPage() {
     }
   }
 
+  /** Abre a rota numa janela perto do último clique (ou traz para frente) */
+  function abrirRota(id: string) {
+    setRotasAbertas((rs) =>
+      rs.some((x) => x.id === id)
+        ? [...rs.filter((x) => x.id !== id), rs.find((x) => x.id === id)!]
+        : [...rs, { id, x: Math.max(8, Math.min(ultimoClique.current.x - 120, window.innerWidth - 980)), y: Math.max(8, ultimoClique.current.y - 40) }]
+    );
+  }
+
   async function salvarNova(dados: RotaOpticaInput) {
     const id = await criarRota(dados);
     setModo({ tipo: "ver" });
-    await recarregar(id);
+    await recarregar();
+    abrirRota(id);
   }
 
   async function salvarEdicao(id: string, dados: RotaOpticaInput) {
     await atualizarRota(id, dados);
     setModo({ tipo: "ver" });
-    await recarregar(id);
+    await recarregar();
+    abrirRota(id);
   }
 
   async function excluir(r: RotaOptica) {
@@ -167,11 +167,9 @@ export default function RotaOpticaPage() {
     }
   }
 
-  const selecionada = rotas.find((r) => r.id === selId) ?? null;
-
   return (
     <JanelasProvider>
-    <div className="space-y-5">
+    <div className="space-y-5" onPointerDownCapture={(e) => { ultimoClique.current = { x: e.clientX, y: e.clientY }; }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Route className="w-7 h-7 text-indigo-600" />
@@ -262,28 +260,6 @@ export default function RotaOpticaPage() {
       )}
 
       {modo.tipo === "ver" && (
-        <div className="flex gap-1 border-b border-gray-200" role="tablist">
-          {([
-            ["rotas", "Rotas"],
-            ["arvore", "Árvore por porta PON"],
-          ] as const).map(([k, rotulo]) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={aba === k}
-              onClick={() => setAba(k)}
-              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
-                aba === k ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              {rotulo}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {modo.tipo === "ver" && aba === "arvore" && (
         carregando ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
         ) : (
@@ -295,72 +271,38 @@ export default function RotaOpticaPage() {
             onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             usuario={user?.nome ?? ""}
             onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-            onAbrirRota={(id) => { setSelId(id); setBusca(""); setAba("rotas"); }}
+            onAbrirRota={abrirRota}
           />
         )
       )}
 
-      {modo.tipo === "ver" && aba === "rotas" && (
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5 items-start">
-          {/* Lista de rotas */}
-          <aside className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-              <input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar rota, CTO, caixa, cabo…"
-                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+      {rotasAbertas.map((j) => {
+        const r = rotas.find((x) => x.id === j.id);
+        if (!r) return null;
+        const res = resumoRota(r.elementos);
+        return (
+          <Janela
+            key={j.id}
+            inicial={{ x: j.x, y: j.y }}
+            largura={Math.min(980, typeof window !== "undefined" ? window.innerWidth - 16 : 980)}
+            titulo={r.nome}
+            subtitulo={`${r.origem === "geogrid" ? "GeoGrid" : "Manual"} · ${r.elementos.length} elementos · ${formatMetros(res.distancia_m)}`}
+            icone={<Route className="w-5 h-5" />}
+            corBarra="bg-indigo-900"
+            onFechar={() => setRotasAbertas((rs) => rs.filter((x) => x.id !== j.id))}
+          >
+            <div className="p-3 bg-slate-50">
+              <VisualizarRota
+                rota={r}
+                catalogo={catalogo}
+                emJanela
+                onEditar={() => { setRotasAbertas((rs) => rs.filter((x) => x.id !== j.id)); setModo({ tipo: "editar", rota: r }); }}
+                onExcluir={() => excluir(r)}
               />
             </div>
-            {carregando ? (
-              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
-            ) : filtradas.length === 0 ? (
-              <p className="text-sm text-gray-500 py-6 text-center">
-                {rotas.length === 0 ? "Nenhuma rota cadastrada ainda." : "Nenhuma rota encontrada."}
-              </p>
-            ) : (
-              <ul className="space-y-1 max-h-[60vh] overflow-auto">
-                {filtradas.map((r) => {
-                  const res = resumoRota(r.elementos);
-                  return (
-                    <li key={r.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelId(r.id)}
-                        className={`w-full text-left rounded-lg px-3 py-2 ${r.id === selId ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}
-                      >
-                        <span className="block text-sm font-medium text-gray-900 leading-tight">{r.nome}</span>
-                        <span className="block text-xs text-gray-500 mt-0.5">
-                          {r.elementos.length} elementos · {formatMetros(res.distancia_m)} ·{" "}
-                          {r.origem === "geogrid" ? "GeoGrid" : "manual"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </aside>
-
-          {/* Rota selecionada */}
-          {selecionada ? (
-            <VisualizarRota
-              key={selecionada.id}
-              rota={selecionada}
-              catalogo={catalogo}
-              onEditar={() => setModo({ tipo: "editar", rota: selecionada })}
-              onExcluir={() => excluir(selecionada)}
-            />
-          ) : (
-            !carregando && (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 text-sm">
-                Importe o KML &quot;Rota da fibra&quot; exportado do GeoGrid ou cadastre uma rota manualmente.
-              </div>
-            )
-          )}
-        </div>
-      )}
+          </Janela>
+        );
+      })}
     </div>
     </JanelasProvider>
   );
@@ -434,11 +376,14 @@ function PreviaImportacao({
 function VisualizarRota({
   rota,
   catalogo = [],
+  emJanela,
   onEditar,
   onExcluir,
 }: {
   rota: RotaOptica;
   catalogo?: ItemCatalogo[];
+  /** Dentro de uma janela: sem o nome repetido */
+  emJanela?: boolean;
   onEditar?: () => void;
   onExcluir?: () => void;
 }) {
@@ -454,11 +399,11 @@ function VisualizarRota({
   const elSel = sel !== null ? rota.elementos[sel] : undefined;
 
   return (
-    <section className="space-y-4 min-w-0" onPointerDownCapture={(e) => { ultimoClique.current = { x: e.clientX, y: e.clientY }; }}>
+    <section className="@container space-y-4 min-w-0" onPointerDownCapture={(e) => { ultimoClique.current = { x: e.clientX, y: e.clientY }; }}>
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-gray-900 leading-tight">{rota.nome}</h2>
+            {!emJanela && <h2 className="text-lg font-bold text-gray-900 leading-tight">{rota.nome}</h2>}
             <p className="text-xs text-gray-500 mt-0.5">
               {rota.origem === "geogrid" ? "Importada do GeoGrid" : "Cadastro manual"}
               {rota.criado_por ? ` · por ${rota.criado_por}` : ""}
@@ -498,14 +443,14 @@ function VisualizarRota({
         </dl>
       </div>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-start">
         <div className="bg-white rounded-xl border border-gray-200 p-3">
           <p className="text-xs text-gray-500 px-2 pb-2">
             A cor da linha é a cor real da fibra. Clique num elemento (aqui ou no mapa) para abrir a janela com os detalhes.
           </p>
           <RotaDiagrama elementos={rota.elementos} selecionado={sel} onSelect={selecionar} />
         </div>
-        <div className="space-y-4 2xl:sticky 2xl:top-4">
+        <div className="space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-3">
             <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} />
           </div>

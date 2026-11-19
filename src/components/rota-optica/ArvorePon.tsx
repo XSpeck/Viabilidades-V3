@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Info, Maximize2, Minimize2, Route as RouteIcon, ZoomIn, ZoomOut } from "lucide-react";
+import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
@@ -10,6 +10,7 @@ import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
+import BuscaRede from "./BuscaRede";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
 
 interface Props {
@@ -89,6 +90,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [janelas, setJanelas] = useState<JanelaArv[]>([]);
+  /** Elemento escolhido na busca: a área rola até ele */
+  const [foco, setFoco] = useState<{ id: string; vez: number } | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
 
   /** Abre uma janela perto do ponto clicado (ou traz para frente a que já está aberta). */
@@ -102,6 +105,14 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   function fecharJanela(id: string) {
     setJanelas((js) => js.filter((j) => j.id !== id));
   }
+
+  useEffect(() => {
+    if (!foco) return;
+    const t = window.setTimeout(() => {
+      areaRef.current?.querySelector(`[data-no="${foco.id}"]`)?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [foco]);
 
   const arraste = useRef<{ x: number; y: number; sl: number; st: number; id: number } | null>(null);
   const moveu = useRef(false);
@@ -189,6 +200,22 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
   return (
     <div className="space-y-4">
+      <BuscaRede
+        rotas={rotas}
+        arvores={arvores}
+        onRota={(id, ch) => {
+          if (ch && ch !== arvore.chave) { setChave(ch); setSelId("0"); setJanelas([]); }
+          onAbrirRota(id);
+        }}
+        onElemento={(ch, noId) => {
+          if (ch !== arvore.chave) { setChave(ch); setJanelas([]); }
+          setSelId(noId);
+          setFoco((f) => ({ id: noId, vez: (f?.vez ?? 0) + 1 }));
+          abrirJanela({ id: `no:${noId}`, tipo: "no", noId }, Math.max(20, window.innerWidth / 2 - 20), 140);
+        }}
+        onCabo={(nome) => abrirJanela({ id: `cabo:${chaveCabo(nome)}`, tipo: "cabo", cabo: nome }, Math.max(20, window.innerWidth / 2 - 200), 140)}
+      />
+
       {/* Portas PON */}
       <div className="flex flex-wrap gap-2">
         {arvores.map((a) => {
@@ -349,6 +376,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               return (
                 <g
                   key={`n${n.id}`}
+                  data-no={n.id}
                   opacity={estado(n)}
                   className="cursor-pointer"
                   role="button"
@@ -519,39 +547,108 @@ function JanelaNo({
 
 function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (id: string) => void }) {
   const fibra = arvore.nos.reduce((s, n) => s + (n.pai ? n.elemento.distancia_m ?? 0 : 0), 0);
-  const livres = arvore.nos.reduce((s, n) => s + (pernasSplitter(n)?.livres ?? 0), 0);
-  const comSplitter = arvore.nos.filter((n) => pernasSplitter(n)).length;
-  const itens: [string, string][] = [
-    ["Rotas juntadas", String(arvore.rotas.length)],
-    ["Clientes cadastrados", String(arvore.raiz.clientes)],
-    ["Fibra lançada", formatMetros(fibra)],
-    ["Elementos", String(arvore.nos.length)],
-    ["Caixas de emenda", String(arvore.nos.filter((n) => n.elemento.tipo === "ceo").length)],
-    ["Pernas livres", comSplitter ? String(livres) : "—"],
+  const pernas = arvore.nos.map((n) => pernasSplitter(n)).filter((p): p is NonNullable<typeof p> => !!p);
+  const tot = pernas.reduce(
+    (a, p) => ({ total: a.total + p.total, clientes: a.clientes + p.clientes, ramais: a.ramais + p.ramais, livres: a.livres + p.livres }),
+    { total: 0, clientes: 0, ramais: 0, livres: 0 }
+  );
+  const porTipo = new Map<ReturnType<typeof tipoVisual>, number>();
+  arvore.nos.forEach((n) => { if (n.pai) { const t = tipoVisual(n.elemento); porTipo.set(t, (porTipo.get(t) ?? 0) + 1); } });
+  const potPorta = arvore.raiz.elemento.potencia_entrada ?? arvore.raiz.elemento.potencia_saida;
+  const pontas = arvore.nos.filter((n) => n.filhos.length === 0 && n.pai);
+  const comPot = pontas
+    .map((n) => ({ n, p: n.elemento.potencia_saida ?? n.elemento.potencia_entrada }))
+    .filter((x): x is { n: NoArvore; p: number } => x.p !== undefined);
+  const pior = comPot.sort((a, b) => a.p - b.p)[0];
+  const nvPior = nivelPotencia(pior?.p);
+  const maisLonge = pontas.reduce<NoArvore | undefined>((m, n) => (!m || n.distancia > m.distancia ? n : m), undefined);
+  const ORDEM: ReturnType<typeof tipoVisual>[] = ["dio", "ceo", "ct", "hub", "cto", "cdoi", "onu", "outro"];
+  const pct = (v: number) => (tot.total ? (v / tot.total) * 100 : 0);
+
+  const tiles: { icone: React.ReactNode; rotulo: string; valor: string; detalhe?: string; cor?: string }[] = [
+    { icone: <CableIcon className="w-4 h-4" />, rotulo: "Fibra lançada", valor: formatMetros(fibra), detalhe: maisLonge ? `ponta mais longe: ${formatMetros(maisLonge.distancia)}` : undefined },
+    { icone: <Users className="w-4 h-4" />, rotulo: "Clientes", valor: String(arvore.raiz.clientes), detalhe: tot.total ? `${tot.livres} porta${tot.livres !== 1 ? "s" : ""} livre${tot.livres !== 1 ? "s" : ""}` : "cadastre os splitters" },
+    { icone: <Zap className="w-4 h-4" />, rotulo: "Porta PON", valor: potPorta !== undefined ? `${dbm(potPorta)} dBm` : "—", detalhe: "potência de saída" },
+    { icone: <Signal className="w-4 h-4" />, rotulo: "Pior ponta", valor: pior ? `${dbm(pior.p)} dBm` : "—", detalhe: pior ? curtoNome(pior.n.elemento.nome) : "sem medida", cor: pior ? nvPior.cor : undefined },
   ];
+
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-lg font-bold text-gray-900 leading-tight">{arvore.rotulo}</p>
-        <p className="text-sm text-gray-500">Árvore completa da porta, saindo de {arvore.raiz.elemento.nome}.</p>
+      {/* Cabeçalho */}
+      <div className="rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 text-white p-3.5 flex items-center gap-3">
+        <span className="rounded-xl bg-white/10 p-1.5"><IconeElemento tipo="olt" tamanho={40} /></span>
+        <div className="min-w-0">
+          <p className="text-lg font-bold leading-tight truncate">{arvore.rotulo}</p>
+          <p className="text-xs text-slate-300 truncate">saindo de {arvore.raiz.elemento.nome}</p>
+          <div className="flex gap-1.5 mt-1.5 text-[10px] font-semibold">
+            <span className="rounded-full bg-white/15 px-2 py-0.5">{arvore.rotas.length} rota{arvore.rotas.length !== 1 ? "s" : ""}</span>
+            <span className="rounded-full bg-white/15 px-2 py-0.5">{arvore.raiz.pontas} ponta{arvore.raiz.pontas !== 1 ? "s" : ""}</span>
+            <span className="rounded-full bg-white/15 px-2 py-0.5">{arvore.nos.length - 1} elementos</span>
+          </div>
+        </div>
       </div>
-      <dl className="grid grid-cols-2 border-t border-gray-200">
-        {itens.map(([k, v], i) => (
-          <div key={k} className={`py-2 border-b border-gray-200 ${i % 2 === 0 ? "pr-2" : ""}`}>
-            <dt className="text-xs text-gray-500">{k}</dt>
-            <dd className="text-lg font-bold">{v}</dd>
+
+      {/* Números */}
+      <div className="grid grid-cols-2 gap-2">
+        {tiles.map((t) => (
+          <div key={t.rotulo} className="rounded-xl border border-slate-200 bg-white p-2.5">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="text-indigo-500">{t.icone}</span> {t.rotulo}
+            </p>
+            <p className="text-lg font-bold tabular-nums leading-tight mt-0.5" style={t.cor ? { color: t.cor } : undefined}>{t.valor}</p>
+            {t.detalhe && <p className="text-[10px] text-slate-500 truncate" title={t.detalhe}>{t.detalhe}</p>}
           </div>
         ))}
-      </dl>
-      {!comSplitter && (
-        <p className="text-xs text-gray-500">
-          Para ver clientes e pernas livres, clique num HUB ou CTO da árvore e cadastre o splitter e as portas.
-        </p>
+      </div>
+
+      {/* Ocupação dos splitters */}
+      <div className="rounded-xl border border-slate-200 p-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[11px] font-semibold text-slate-700">Ocupação dos splitters</p>
+          <p className="text-[11px] text-slate-500 tabular-nums">{tot.total ? `${Math.round(pct(tot.clientes + tot.ramais))}% · ${tot.total} portas` : ""}</p>
+        </div>
+        {tot.total ? (
+          <>
+            <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
+              <span className="bg-emerald-500" style={{ width: `${pct(tot.clientes)}%` }} />
+              <span className="bg-indigo-500" style={{ width: `${pct(tot.ramais)}%` }} />
+            </div>
+            <div className="flex gap-3 mt-1.5 text-[11px] text-slate-600">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />{tot.clientes} clientes</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />{tot.ramais} ramais</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />{tot.livres} livres</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-slate-500">Clique num HUB ou CTO da árvore e cadastre o splitter para ver clientes e portas livres.</p>
+        )}
+      </div>
+
+      {/* Elementos por tipo */}
+      {porTipo.size > 0 && (
+        <div className="rounded-xl border border-slate-200 p-2.5">
+          <p className="text-[11px] font-semibold text-slate-700 mb-1.5">Elementos na árvore</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ORDEM.filter((t) => porTipo.get(t)).map((t) => (
+              <span key={t} className="flex items-center gap-1.5 rounded-lg bg-slate-50 border border-slate-200 pl-1 pr-2 py-0.5" title={TIPO_ELEMENTO_LABEL[t]}>
+                <IconeElemento tipo={t} tamanho={20} />
+                <span className="text-xs font-bold tabular-nums text-slate-800">{porTipo.get(t)}</span>
+                <span className="text-[10px] text-slate-500">{TIPO_ELEMENTO_LABEL[t].split(" (")[0]}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       )}
+
       <ListaRotas ids={arvore.rotas.map((r) => r.id)} rotas={arvore.rotas} onAbrirRota={onAbrirRota} />
-      <p className="text-sm text-gray-500">Clique num elemento da árvore para ver o caminho até ele.</p>
+      <p className="text-[11px] text-slate-400 text-center">Clique num elemento da árvore para ver o caminho até ele.</p>
     </div>
   );
+}
+
+function curtoNome(nome: string) {
+  const n = nome.split(" - ")[0].split(" / ")[0];
+  return n.length > 26 ? n.slice(0, 25) + "…" : n;
 }
 
 function ListaRotas({ ids, rotas, onAbrirRota }: { ids: string[]; rotas: RotaOptica[]; onAbrirRota: (id: string) => void }) {
