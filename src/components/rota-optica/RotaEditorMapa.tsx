@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import ZoomComCtrl from "./ZoomComCtrl";
 import type { TipoElementoRota, TrechoCabo } from "@/lib/rotaOptica";
 
 export type ModoMapa = "adicionar" | "posicionar" | "tracar";
@@ -112,7 +113,7 @@ export default function RotaEditorMapa({
       <MapContainer
         center={centro}
         zoom={todos.length ? 16 : 14}
-        scrollWheelZoom
+        scrollWheelZoom={false}
         doubleClickZoom={false}
         className={`h-[520px] w-full rounded-xl z-0 ${modo === "tracar" || modo === "adicionar" || selecionado !== null ? "cursor-crosshair" : ""}`}
       >
@@ -131,6 +132,7 @@ export default function RotaEditorMapa({
             maxNativeZoom={19}
           />
         )}
+        <ZoomComCtrl />
         <Cliques onClicar={onClicarMapa} />
         <Enquadrar pontos={todos} />
         <Centralizar alvo={alvo} />

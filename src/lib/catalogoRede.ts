@@ -32,6 +32,8 @@ export interface ItemCatalogo {
   modelo?: string;
   placas?: number;
   portas_por_placa?: number;
+  /** Potência de saída da porta PON (dBm) */
+  potencia_tx?: number;
   local?: string;
   atualizado_por?: string;
   atualizado_em?: string;
@@ -71,6 +73,7 @@ export function resumoItem(i: ItemCatalogo): string {
   } else {
     if (i.modelo) partes.push(i.modelo);
     if (i.placas && i.portas_por_placa) partes.push(`${i.placas} placas × ${i.portas_por_placa} PON = ${i.placas * i.portas_por_placa} portas`);
+    if (i.potencia_tx !== undefined) partes.push(`${String(i.potencia_tx).replace(".", ",")} dBm`);
     if (i.local) partes.push(i.local);
   }
   return partes.join(" · ");

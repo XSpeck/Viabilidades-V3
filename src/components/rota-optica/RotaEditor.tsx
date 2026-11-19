@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ArrowDown, ArrowUp, Crosshair, Loader2, MapPin, Plus, Route, Save, Trash2, Undo2, X } from "lucide-react";
 import {
+  CALCULO_PADRAO,
+  calcularPotencias,
   capacidadeDoCabo,
   comprimentoTracado,
+  type CalculoPotencia,
   corFibraPorCapacidade,
   fibrasPorTubo,
   formatMetros,
@@ -58,6 +61,7 @@ interface Linha {
 
 const s = (v?: number) => (v === undefined ? "" : String(v).replace(".", ","));
 const pad2 = (v: number) => String(v).padStart(2, "0");
+const fmtDbm = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2).replace(".", ",")} dBm`;
 const fmtCoord = (p: Ponto) => `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
 
 function paraLinha(e: ElementoRota, vertices: Ponto[] = []): Linha {
@@ -160,6 +164,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     Object.fromEntries(cabos.filter((c) => c.tipo_id).map((c) => [c.chave, c.tipo_id!]))
   );
   const [aviso, setAviso] = useState<string | null>(null);
+  // Potência: automática por padrão; rotas do GeoGrid já vêm com a potência calculada lá
+  const [calc, setCalc] = useState<CalculoPotencia>(
+    () => inicial?.calculo_potencia ?? (inicial?.origem === "geogrid" ? { ...CALCULO_PADRAO, auto: false } : CALCULO_PADRAO)
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const cardRefs = useRef<(HTMLLIElement | null)[]>([]);
@@ -252,6 +260,21 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const p = posDe(l);
     return { nome: l.nome, tipo: l.tipo, lat: p?.lat, lon: p?.lon, vertices: l.vertices };
   });
+  const tx = linhas[0] ? n(linhas[0].potencia_saida) ?? n(linhas[0].potencia_entrada) : undefined;
+  const pots =
+    calc.auto && tx !== undefined
+      ? calcularPotencias(
+          linhas.map((l) => ({
+            tipo: l.tipo,
+            distancia_m: n(l.distancia_m),
+            splitter: l.splitter || undefined,
+            perda_splitter: modelosSplitter.find((m) => m.id === l.splitter_modelo)?.perda_db,
+          })),
+          tx,
+          calc
+        )
+      : null;
+  const potFinal = pots?.[pots.length - 1]?.saida;
   const totalMapa = linhas.reduce((t, _, i) => t + (distMapa(linhas, i) ?? 0), 0);
   const totalInformado = linhas.reduce((t, l) => t + (n(l.distancia_m) ?? 0), 0);
 
@@ -294,8 +317,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         cabo_saida: l.cabo_saida.trim() || undefined,
         fibra_saida: n(l.fibra_saida),
         distancia_m: n(l.distancia_m),
-        potencia_entrada: n(l.potencia_entrada),
-        potencia_saida: n(l.potencia_saida),
+        potencia_entrada: pots ? pots[i].entrada : n(l.potencia_entrada),
+        potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
         splitter: l.splitter.trim() || undefined,
         splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
         equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
@@ -341,6 +364,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         origem: inicial?.origem ?? "manual",
         elementos,
         trechos,
+        calculo_potencia: calc,
         obs: obs.trim() || undefined,
         criado_por: inicial?.criado_por ?? usuario,
       });
@@ -354,12 +378,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const campo = "w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300";
   const rot = "block text-[11px] text-gray-500 mb-0.5";
 
-  function seletorTipoCabo(nomeCabo: string) {
+  function seletorTipoCabo(nomeCabo: string, rotulo = "Tipo do cabo") {
     if (!tiposDeCabo.length) return null;
     const k = nomeCabo.trim() ? chaveCabo(nomeCabo) : "";
     return (
       <div>
-        <label className={rot}>Tipo do cabo</label>
+        <label className={rot}>{rotulo}</label>
         <select
           className={campo}
           disabled={!k}
@@ -393,21 +417,25 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             </span>
           )}
         </label>
-        {t?.capacidade ? (
-          <select className={campo} value={valor} onChange={(e) => alterarLigacao(i, lado, "fibra", e.target.value)}>
-            <option value="">—</option>
-            {Array.from({ length: Math.max(t.capacidade, n(valor) ?? 0) }, (_, k) => k + 1).map((f) => {
-              const c = corFibraPorCapacidade(f, t.capacidade!, t.fibras_por_tubo ?? fibrasPorTubo(t.capacidade!));
-              return (
-                <option key={f} value={String(f)}>
-                  F{pad2(f)} {c.nome.toLowerCase()} · tubo {c.tubo} ({c.corTubo?.nome.toLowerCase()}){f > t.capacidade! ? " ⚠" : ""}
-                </option>
-              );
-            })}
-          </select>
-        ) : (
-          <input className={campo} inputMode="numeric" value={valor} onChange={(e) => alterarLigacao(i, lado, "fibra", e.target.value)} />
-        )}
+        <select
+          className={campo}
+          value={valor}
+          onChange={(e) => alterarLigacao(i, lado, "fibra", e.target.value)}
+          title={t ? undefined : "Escolha o tipo do cabo para ver o tubo de cada fibra"}
+        >
+          <option value="">—</option>
+          {Array.from({ length: Math.max(t?.capacidade ?? 144, n(valor) ?? 0) }, (_, k) => k + 1).map((f) => {
+            if (!t?.capacidade) {
+              return <option key={f} value={String(f)}>F{pad2(f)} {corFibraPorCapacidade(f, 12).nome.toLowerCase()}</option>;
+            }
+            const c = corFibraPorCapacidade(f, t.capacidade, t.fibras_por_tubo ?? fibrasPorTubo(t.capacidade));
+            return (
+              <option key={f} value={String(f)}>
+                F{pad2(f)} {c.nome.toLowerCase()} · tubo {c.tubo} ({c.corTubo?.nome.toLowerCase()}){f > t.capacidade ? " ⚠" : ""}
+              </option>
+            );
+          })}
+        </select>
       </div>
     );
   }
@@ -431,7 +459,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               value={l.equipamento_id}
               onChange={(e) => {
                 const x = lista.find((o) => o.id === e.target.value);
-                alterar(i, { equipamento_id: e.target.value, nome: l.nome.trim() ? l.nome : x?.nome ?? "" });
+                alterar(i, {
+                  equipamento_id: e.target.value,
+                  nome: l.nome.trim() ? l.nome : x?.nome ?? "",
+                  potencia_saida: x?.potencia_tx !== undefined ? String(x.potencia_tx).replace(".", ",") : l.potencia_saida,
+                });
               }}
             >
               <option value="">— não vinculada —</option>
@@ -607,6 +639,45 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
         {/* Elementos */}
         <div className="xl:order-1 space-y-3">
+          <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
+              <input type="checkbox" checked={calc.auto} onChange={(e) => setCalc((c) => ({ ...c, auto: e.target.checked }))} />
+              Calcular a potência automaticamente
+            </label>
+            {calc.auto && (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ["atenuacao_db_km", "Fibra (dB/km)"],
+                    ["emenda_db", "Fusão (dB)"],
+                    ["conector_db", "Conector (dB)"],
+                  ] as const).map(([k, rotulo]) => (
+                    <div key={k}>
+                      <label className={rot}>{rotulo}</label>
+                      <input
+                        className={campo}
+                        inputMode="decimal"
+                        defaultValue={String(calc[k]).replace(".", ",")}
+                        onChange={(e) => { const v = n(e.target.value); if (v !== undefined) setCalc((c) => ({ ...c, [k]: v })); }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-500">
+                  Parte da potência da porta PON (elemento 1) e desconta a fibra pela distância, uma fusão em cada caixa, conector + fusão no
+                  DIO, a perda do splitter (do modelo cadastrado ou a típica) e o conector de saída da CTO.
+                </p>
+                {tx === undefined ? (
+                  <p className="text-xs text-amber-700">Informe a potência da porta PON no elemento 1 (ou escolha uma OLT cadastrada com potência).</p>
+                ) : potFinal !== undefined && (
+                  <p className={`text-sm font-semibold ${potFinal < -27 ? "text-red-600" : potFinal < -25 ? "text-amber-600" : "text-green-700"}`}>
+                    No fim da rota: {fmtDbm(potFinal)} (perda total {(tx - potFinal).toFixed(2).replace(".", ",")} dB)
+                    {potFinal < -27 ? " · abaixo da sensibilidade típica da ONU (−27 dBm)" : potFinal < -25 ? " · perto do limite" : ""}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
           <p className="text-xs text-gray-500">
             Elementos na ordem em que o sinal passa, da OLT até a ponta. Clique num cartão para selecioná-lo no mapa.
           </p>
@@ -681,24 +752,41 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                         </div>
                       </>
                     )}
-                    <div>
-                      <label className={rot}>Potência na chegada (dBm)</label>
-                      <input className={campo} inputMode="decimal" value={l.potencia_entrada} onChange={(e) => alterar(i, { potencia_entrada: e.target.value })} />
-                    </div>
+                    {i === 0 ? (
+                      <div>
+                        <label className={rot}>Potência da porta PON (dBm)</label>
+                        <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} placeholder="ex.: 5" />
+                      </div>
+                    ) : pots ? (
+                      <div className="col-span-2" title={pots[i].detalhe}>
+                        <label className={rot}>Potência calculada</label>
+                        <p className={`text-sm font-semibold tabular-nums ${pots[i].saida < -27 ? "text-red-600" : pots[i].saida < -25 ? "text-amber-600" : "text-gray-900"}`}>
+                          {fmtDbm(pots[i].entrada)} na chegada{pots[i].saida !== pots[i].entrada ? ` → ${fmtDbm(pots[i].saida)} na saída` : ""}
+                        </p>
+                        <p className="text-[10px] text-gray-500 leading-tight">−{pots[i].detalhe}</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className={rot}>Potência na chegada (dBm)</label>
+                        <input className={campo} inputMode="decimal" value={l.potencia_entrada} onChange={(e) => alterar(i, { potencia_entrada: e.target.value })} />
+                      </div>
+                    )}
                     {i < linhas.length - 1 && (
                       <>
                         <div className="col-span-2 md:col-span-1">
                           <label className={rot}>Cabo de saída</label>
                           <input className={campo} list="cabos-conhecidos" value={l.cabo_saida} onChange={(e) => alterarLigacao(i, "saida", "cabo", e.target.value)} />
                         </div>
-                        {i === 0 && seletorTipoCabo(l.cabo_saida)}
+                        {seletorTipoCabo(l.cabo_saida, "Tipo do cabo de saída")}
                         {campoFibra(i, "saida")}
                       </>
                     )}
-                    <div>
-                      <label className={rot}>Potência na saída (dBm)</label>
-                      <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} />
-                    </div>
+                    {i > 0 && !pots && (
+                      <div>
+                        <label className={rot}>Potência na saída (dBm)</label>
+                        <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} />
+                      </div>
+                    )}
                     {campoSplitter(i)}
                     <div className="col-span-2">
                       <label className={rot}>Porta</label>

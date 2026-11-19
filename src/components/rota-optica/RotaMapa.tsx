@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import L from "leaflet";
 import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import ZoomComCtrl from "./ZoomComCtrl";
 import type { ElementoRota, TrechoCabo } from "@/lib/rotaOptica";
 
 interface Props {
@@ -64,12 +65,13 @@ export default function RotaMapa({ elementos, trechos, selecionado, onSelect }: 
   const alvo: [number, number] | null = sel?.lat !== undefined && sel?.lon !== undefined ? [sel.lat, sel.lon] : null;
 
   return (
-    <MapContainer center={todos[0]} zoom={15} scrollWheelZoom className="h-[420px] w-full rounded-xl z-0">
+    <MapContainer center={todos[0]} zoom={15} scrollWheelZoom={false} className="h-[420px] w-full rounded-xl z-0">
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
         maxZoom={19}
       />
+      <ZoomComCtrl />
       <AjustarZoom pontos={todos} />
       <Centralizar alvo={alvo} />
 

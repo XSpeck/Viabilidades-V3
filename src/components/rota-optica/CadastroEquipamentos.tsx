@@ -33,7 +33,7 @@ function novoItem(categoria: CategoriaCatalogo, usuario: string): ItemCatalogoIn
   if (categoria === "splitter")
     return { categoria, nome: "", relacao: "1:8", balanceamento: "balanceado", conector: "SC/APC", perda_db: PERDA_TIPICA["1:8"], atualizado_por: usuario };
   if (categoria === "dio") return { categoria, nome: "", portas: 24, conector: "SC/APC", atualizado_por: usuario };
-  return { categoria, nome: "", modelo: "", placas: 1, portas_por_placa: 16, atualizado_por: usuario };
+  return { categoria, nome: "", modelo: "", placas: 1, portas_por_placa: 16, potencia_tx: 5, atualizado_por: usuario };
 }
 
 const campo = "w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300";
@@ -275,6 +275,15 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou, onFechar
                     <input className={campo} inputMode="numeric" value={d.portas_por_placa ?? ""} onChange={(e) => set({ portas_por_placa: numero(e.target.value) })} />
                   </Campo>
                 </div>
+                <Campo rotulo="Potência de saída da porta PON (dBm)">
+                  <input
+                    className={campo}
+                    inputMode="decimal"
+                    value={d.potencia_tx !== undefined ? String(d.potencia_tx).replace(".", ",") : ""}
+                    onChange={(e) => set({ potencia_tx: numero(e.target.value) })}
+                    placeholder="ex.: 5 (módulo C+)"
+                  />
+                </Campo>
                 <Campo rotulo="Local">
                   <input className={campo} value={d.local ?? ""} onChange={(e) => set({ local: e.target.value })} placeholder="ex.: POP Centro" />
                 </Campo>

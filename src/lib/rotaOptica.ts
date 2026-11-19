@@ -78,6 +78,8 @@ export interface RotaOptica {
   origem: OrigemRota;
   elementos: ElementoRota[];
   trechos: TrechoCabo[];
+  /** Cálculo automático de potência (parâmetros usados no editor) */
+  calculo_potencia?: CalculoPotencia;
   obs?: string;
   criado_por?: string;
   criado_em?: string;
@@ -85,6 +87,83 @@ export interface RotaOptica {
 }
 
 export type RotaOpticaInput = Omit<RotaOptica, "id" | "criado_em" | "atualizado_em">;
+
+// =====================
+// Cálculo de potência ao longo da rota
+// =====================
+export interface CalculoPotencia {
+  auto: boolean;
+  /** Atenuação da fibra (dB/km) */
+  atenuacao_db_km: number;
+  /** Perda por fusão (dB) */
+  emenda_db: number;
+  /** Perda por conector (dB) */
+  conector_db: number;
+}
+
+export const CALCULO_PADRAO: CalculoPotencia = { auto: true, atenuacao_db_km: 0.35, emenda_db: 0.1, conector_db: 0.5 };
+
+/** Perda típica de splitter balanceado (dB) */
+export const PERDA_SPLITTER: Record<string, number> = { "1:2": 3.7, "1:4": 7.3, "1:8": 10.5, "1:16": 13.7, "1:32": 17.1, "1:64": 20.5 };
+
+export function perdaSplitter(relacao?: string, perdaModelo?: number): number {
+  if (perdaModelo !== undefined) return perdaModelo;
+  const m = relacao?.match(/1\s*:\s*(\d+)/);
+  if (!m) return 0;
+  return PERDA_SPLITTER[`1:${m[1]}`] ?? Math.round(10 * Math.log10(+m[1]) * 1.1 * 10) / 10;
+}
+
+export interface EntradaPotencia {
+  tipo: TipoElementoRota;
+  distancia_m?: number;
+  splitter?: string;
+  /** Perda do modelo de splitter cadastrado, se houver */
+  perda_splitter?: number;
+}
+
+export interface PotenciaCalculada {
+  entrada: number;
+  saida: number;
+  /** Explicação das perdas neste elemento */
+  detalhe: string;
+}
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const fmt = (v: number) => v.toFixed(2).replace(".", ",");
+
+/**
+ * Potência em cada elemento, a partir da potência de saída da porta PON (tx):
+ * chegada = saída do anterior − fibra (km × dB/km) − fusões/conectores do elemento;
+ * saída = chegada − splitter (− conector de saída da CTO).
+ * DIO: conector + fusão do pigtail; caixa de emenda/HUB/CTO: 1 fusão; cliente: 1 conector.
+ */
+export function calcularPotencias(elementos: EntradaPotencia[], tx: number, p: CalculoPotencia): PotenciaCalculada[] {
+  const out: PotenciaCalculada[] = [];
+  elementos.forEach((e, i) => {
+    if (i === 0) {
+      const spl = e.splitter ? perdaSplitter(e.splitter, e.perda_splitter) : 0;
+      out.push({ entrada: r2(tx), saida: r2(tx - spl), detalhe: `porta PON ${fmt(tx)} dBm` });
+      return;
+    }
+    const ant = out[i - 1].saida;
+    const fibra = ((e.distancia_m ?? 0) / 1000) * p.atenuacao_db_km;
+    let local = 0;
+    const partes = [`fibra ${fmt(fibra)} dB`];
+    if (e.tipo === "dio") { local = p.conector_db + p.emenda_db; partes.push(`conector + fusão ${fmt(local)} dB`); }
+    else if (e.tipo === "onu") { local = p.conector_db; partes.push(`conector ${fmt(local)} dB`); }
+    else { local = p.emenda_db; partes.push(`fusão ${fmt(local)} dB`); }
+    const entrada = ant - fibra - local;
+    let saida = entrada;
+    if (e.splitter) {
+      const spl = perdaSplitter(e.splitter, e.perda_splitter);
+      saida -= spl;
+      partes.push(`splitter ${e.splitter} ${fmt(spl)} dB`);
+      if (e.tipo === "cto") { saida -= p.conector_db; partes.push(`conector de saída ${fmt(p.conector_db)} dB`); }
+    }
+    out.push({ entrada: r2(entrada), saida: r2(saida), detalhe: partes.join(" + ") });
+  });
+  return out;
+}
 
 // =====================
 // Cores de fibra (ABNT, sequência de 12 cores)
@@ -439,6 +518,7 @@ export async function listarRotas(): Promise<RotaOptica[]> {
       origem: data.origem ?? "manual",
       elementos: data.elementos ?? [],
       trechos: data.trechos ?? [],
+      calculo_potencia: data.calculo_potencia,
       obs: data.obs,
       criado_por: data.criado_por,
       criado_em: isoDe(data.criado_em),
