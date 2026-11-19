@@ -8,6 +8,7 @@ import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
+import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
 import BuscaRede from "./BuscaRede";
@@ -466,7 +467,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             titulo={no.elemento.nome}
             subtitulo={`${TIPO_ELEMENTO_LABEL[t]}${no.elemento.codigo ? ` · ${no.elemento.codigo}` : ""}`}
             icone={<IconeElemento tipo={t} tamanho={22} />}
-            largura={420}
+            largura={460}
             onFechar={() => fecharJanela(j.id)}
           >
             <JanelaNo
@@ -497,12 +498,13 @@ function JanelaNo({
   onAbrirRota: (id: string) => void;
   onFechar: () => void;
 }) {
-  const [aba, setAba] = useState<"diagrama" | "caminho">(temDiagrama(no) ? "diagrama" : "caminho");
+  const [aba, setAba] = useState<"emendas" | "diagrama" | "caminho">(temDiagrama(no) ? "diagrama" : "emendas");
   return (
     <div>
       <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
         {([
-          ["diagrama", "Diagrama da caixa"],
+          ["emendas", "Emendas"],
+          ["diagrama", "Splitter e portas"],
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -517,7 +519,9 @@ function JanelaNo({
           </button>
         ))}
       </div>
-      {aba === "diagrama" ? (
+      {aba === "emendas" ? (
+        <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
+      ) : aba === "diagrama" ? (
         <EditorCaixa
           key={chaveElemento(no.elemento)}
           chave={chaveElemento(no.elemento)}
