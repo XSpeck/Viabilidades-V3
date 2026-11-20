@@ -1885,10 +1885,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <label className={rot}>Coordenadas (lat, lon)</label>
               <input className={campo} value={l.coords} onChange={(e) => alterar(i, { coords: e.target.value })} placeholder="clique no mapa ou -28.69170, -49.34236" />
             </div>
-            <div className="col-span-2">
-              <label className={rot}>Porta (texto)</label>
-              <input className={campo} value={l.porta} onChange={(e) => alterar(i, { porta: e.target.value })} placeholder="Ex.: PL 04 - Porta 13" />
-            </div>
+            {/* Porta em texto: só aparece em caixa que já veio com ela (importação do GeoGrid); OLT e DIO usam a estação */}
+            {l.tipo !== "olt" && l.tipo !== "dio" && l.porta.trim() !== "" && (
+              <div className="col-span-2">
+                <label className={rot}>Porta (veio da importação)</label>
+                <input className={campo} value={l.porta} onChange={(e) => alterar(i, { porta: e.target.value })} />
+              </div>
+            )}
             {!pots && i > 0 && (
               <>
                 <div>
