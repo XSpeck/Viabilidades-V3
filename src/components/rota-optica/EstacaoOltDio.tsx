@@ -92,7 +92,8 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
     ? corFibraPorCapacidade(portaDio, tipoSaida.capacidade, tipoSaida.fibras_por_tubo ?? fibrasPorTubo(tipoSaida.capacidade))
     : portaDio ? corFibraPorCapacidade(portaDio, Math.max(12, portaDio)) : null;
 
-  const cordoes = tiposCabo.filter((t) => t.capacidade === 1);
+  // OLT → DIO é sempre por cordão óptico (o do cadastro)
+  const cordao = tiposCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`));
   const sugestoesSaida = tiposCabo.filter((t) => (t.capacidade ?? 0) > 1);
   const caboIgual = sugestoesSaida.find((t) => t.capacidade === portasDio);
 
@@ -267,20 +268,17 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
             <input className={campo} inputMode="decimal" value={dados.cordaoMetros} onChange={(e) => onMudar({ cordaoMetros: e.target.value })} placeholder="ex.: 3" />
           </div>
         </div>
-        {cordoes.length === 0 && <p className="text-[11px] text-red-600">Nenhum cordão cadastrado (cabo de 1 fibra). Cadastre em Cadastros → Cabos.</p>}
-        {cordoes.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className={`text-[10px] ${dados.cordaoTipo ? "text-slate-500" : "text-red-600 font-semibold"}`}>Cordão:</span>
-            {cordoes.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onMudar({ cordaoTipo: t.id })}
-                className={`text-[11px] rounded-full border px-2 py-0.5 ${dados.cordaoTipo === t.id ? "bg-amber-400 border-amber-500 text-amber-950 font-semibold" : "bg-white border-slate-300 hover:border-amber-400"}`}
-              >
-                {t.nome}
+        {!cordao ? (
+          <p className="text-[11px] text-red-600">Nenhum cordão óptico cadastrado. Cadastre em Cadastros → Cabos (construção “Cordão óptico”).</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="text-slate-500">Ligação OLT → DIO:</span>
+            <span className="rounded-full border border-amber-500 bg-amber-400 px-2 py-0.5 font-semibold text-amber-950">{cordao.nome}</span>
+            {dados.cordaoTipo !== cordao.id && (
+              <button type="button" onClick={() => onMudar({ cordaoTipo: cordao.id })} className="text-[10px] font-semibold text-red-600 underline">
+                usar o cordão
               </button>
-            ))}
+            )}
           </div>
         )}
 

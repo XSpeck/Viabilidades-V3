@@ -678,7 +678,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
    * que já sai para fora (porta N = fibra N) e o DIO sugerido é o do mesmo tamanho desse cabo.
    */
   function dioDepoisDaOlt(olt: Linha, nomeDio: string, saida?: Linha): Partial<Linha> {
-    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`)) ?? tiposDeCabo.find((t) => t.capacidade === 1);
+    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`));
     const fibra = saida ? n(saida.fibra_entrada) : undefined;
     const cap = saida ? tipoDoCabo(saida.cabo_entrada)?.capacidade : undefined;
     const dio =
@@ -703,7 +703,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function montarEstacao(p: Ponto) {
     const olt = olts.length === 1 ? olts[0] : undefined;
     const dio = dios.length === 1 ? dios[0] : undefined;
-    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`)) ?? tiposDeCabo.find((t) => t.capacidade === 1);
+    const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`));
     const nomeOlt = olt?.nome ?? "OLT";
     const nomeDio = dio?.nome ?? "DIO 1";
     const nomeCordao = `Cordão ${nomeOlt} → ${nomeDio}`;
