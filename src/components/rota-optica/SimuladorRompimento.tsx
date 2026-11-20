@@ -132,8 +132,10 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
       while (j + 1 < xs.length && xs[j + 1] - xs[j] < PASSO) j++;
       if (j > i) {
         const nGrupo = j - i + 1;
-        const centro = (xs[i] + xs[j]) / 2;
-        for (let k = i; k <= j; k++) out[k] = Math.max(x0, Math.min(x1, centro + (k - i - (nGrupo - 1) / 2) * PASSO));
+        const largura = (nGrupo - 1) * PASSO;
+        // o grupo inteiro desliza para dentro da régua (sem amassar contra a borda)
+        const ini = Math.max(x0, Math.min(x1 - largura, (xs[i] + xs[j]) / 2 - largura / 2));
+        for (let k = i; k <= j; k++) out[k] = ini + (k - i) * PASSO;
       }
       i = j + 1;
     }
@@ -278,7 +280,7 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
         <div className="flex min-h-[420px] flex-col gap-3">
           <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
             <svg viewBox={`0 0 ${RW} ${RH}`} className="block w-full h-auto select-none">
-              <text x="10" y="14" fontSize="9" fill="#94a3b8" fontWeight={800} letterSpacing=".08em">RÉGUA DA ROTA · {formatMetros(total)}</text>
+              <text x={RW - 10} y="14" fontSize="9" fill="#94a3b8" fontWeight={800} letterSpacing=".08em" textAnchor="end">RÉGUA DA ROTA · {formatMetros(total)}</text>
               {/* cabo: com sinal até o corte, vermelho depois */}
               <line x1={x0} y1={yR} x2={corte !== null ? X(corte) : x1} y2={yR} stroke="#22c55e" strokeWidth="5" strokeLinecap="round" />
               {corte !== null && <line x1={X(corte)} y1={yR} x2={x1} y2={yR} stroke="#dc2626" strokeWidth="4" strokeDasharray="6 5" strokeLinecap="round" />}
