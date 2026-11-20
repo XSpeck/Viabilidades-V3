@@ -299,6 +299,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** Pede ao mapa para enquadrar um trecho (ex.: cabo curto que sai da estação) */
   const [focoTrecho, setFocoTrecho] = useState<{ i: number; vez: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Cabo sendo renomeado (lápis no quadro do cabo) */
+  const [renomear, setRenomear] = useState<{ i: number; antigo: string } | null>(null);
   /** Prédios cadastrados (a ferramenta Prédio coloca a CDOI num deles ou cria um novo) */
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
@@ -1412,7 +1414,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             })()}
             {tiposDeCabo.length > 0 && (
               <div className="mb-2">
-                <p className="text-[10px] text-slate-500 mb-1">Ou um cabo novo do cadastro (um clique preenche nome, tipo e fibra):</p>
+                <p className="text-[10px] text-slate-500 mb-1">{cabosSaindoDe(i).length ? "Ou um cabo novo do cadastro:" : "Cabo do cadastro:"}</p>
                 <div className="flex flex-wrap gap-1">
                   {tiposDeCabo.map((t) => {
                     const ativo = !!kCabo && tiposCabo[kCabo] === t.id;
@@ -1432,21 +1434,33 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               </div>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2">
-                <input className={campo} list="cabos-conhecidos" value={l.cabo_entrada} onChange={(e) => alterar(i, { cabo_entrada: e.target.value })} placeholder="Nome do cabo (ex.: 15 - P. CHAMINE)" />
-              </div>
-              {tiposDeCabo.length > 0 && (
-                <div className="col-span-2">
-                  <select
-                    className={campo}
-                    disabled={!kCabo}
-                    value={kCabo ? tiposCabo[kCabo] ?? "" : ""}
-                    onChange={(e) => setTiposCabo((t) => ({ ...t, [kCabo]: e.target.value }))}
-                    title="Vale para este cabo em todas as rotas"
-                  >
-                    <option value="">{kCabo ? "Tipo do cabo: não definido" : "Informe o cabo para escolher o tipo"}</option>
-                    {tiposDeCabo.map((t) => <option key={t.id} value={t.id}>{t.nome} · {resumoItem(t)}</option>)}
-                  </select>
+              {/* Nome do cabo: criado sozinho ao escolher o cabo; o lápis permite renomear */}
+              {(l.cabo_entrada.trim() || renomear?.i === i) && (
+                <div className="col-span-2 flex items-center gap-1 text-[10px] text-slate-500">
+                  {renomear?.i === i ? (
+                    <input
+                      autoFocus
+                      className={campo}
+                      list="cabos-conhecidos"
+                      value={l.cabo_entrada}
+                      onChange={(e) => alterar(i, { cabo_entrada: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      onBlur={() => {
+                        // o tipo do cabo vai junto para o nome novo
+                        const tipoAntigo = tiposCabo[chaveCabo(renomear.antigo)];
+                        if (tipoAntigo && l.cabo_entrada.trim()) setTiposCabo((t) => ({ ...t, [chaveCabo(l.cabo_entrada)]: t[chaveCabo(l.cabo_entrada)] ?? tipoAntigo }));
+                        setRenomear(null);
+                      }}
+                      placeholder="Nome do cabo"
+                    />
+                  ) : (
+                    <>
+                      <span className="min-w-0 truncate">Cabo: <span className="font-medium text-slate-700">{l.cabo_entrada}</span></span>
+                      <button type="button" onClick={() => setRenomear({ i, antigo: l.cabo_entrada })} className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600" title="Renomear o cabo">
+                        ✎
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
               {campoFibra(i)}
