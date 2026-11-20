@@ -318,6 +318,11 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
                 <p className="text-base font-bold">{tituloResultado}</p>
                 <p className="ml-auto text-[11px] opacity-90">{visitar.length ? `${visitar.length} ponto${visitar.length > 1 ? "s" : ""} para verificar` : "nenhum ponto para verificar"}</p>
               </div>
+              {sTotal && sTotal !== "ok" && (
+                <p className="bg-white px-3 py-1.5 text-[11px] text-slate-700">
+                  Perda total lida {db(tMed)} dB acima do máximo de {db(limiteTotal)} dB{visitar.length ? ": os pontos abaixo explicam parte da diferença." : ": confira conectores e limpeza nas pontas."}
+                </p>
+              )}
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">

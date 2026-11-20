@@ -4,7 +4,7 @@
 // Padrões: fusão ≤ 0,10 dB · conector ≤ 0,50 dB · splitter até +0,5 dB do nominal · distância ±2%.
 // =====================
 import { CALCULO_PADRAO, type ElementoRota, type RotaOptica } from "./rotaOptica";
-import { acumuladoDaRota } from "./rompimento";
+import { acumuladoDaRota, trechosDaRota } from "./rompimento";
 import { entradaPotencia } from "./subRotas";
 import type { ResultadoRompimento, Sentido } from "./rompimento";
 
@@ -172,7 +172,13 @@ export function analisarLeitura(
   const nome = (i?: number) => (i !== undefined ? nomeCurto(els[i]?.nome ?? "") : "?");
   const descreverLocal = (l: ResultadoRompimento): string => {
     if (l.tipo === "reserva") return `Na reserva técnica da ${nome(l.reservaDe)}`;
-    if (l.tipo === "tracado") return `No cabo entre ${nome(l.depoisDe)} e ${nome(l.antesDe)}, ≈ ${Math.round(l.metrosDepois ?? 0)} m depois da ${nome(l.depoisDe)}`;
+    if (l.tipo === "tracado") {
+      // metros de cabo na rua, sem o rolo de reserva da caixa de onde se conta
+      const t = trechosDaRota(rota).find((x) => x.i === l.trecho);
+      const res = t ? (l.depoisDe === t.i - 1 ? t.resIni : t.resFim) : 0;
+      const rua = Math.max(0, Math.round((l.metrosDepois ?? 0) - res));
+      return `No cabo entre ${nome(l.depoisDe)} e ${nome(l.antesDe)}, ≈ ${rua} m depois da ${nome(l.depoisDe)}${res ? ` (fora a reserva de ${res} m)` : ""}`;
+    }
     if (l.tipo === "alem") return `Depois do fim da rota (${Math.round(l.sobra ?? 0)} m além da ${nome(l.depoisDe)})`;
     return "Antes do início da rota";
   };
