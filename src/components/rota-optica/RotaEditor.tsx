@@ -24,6 +24,7 @@ import {
   reservaTrecho,
 } from "@/lib/rotaOptica";
 import type { PaiRota } from "@/lib/rotaOptica";
+import { atualizarRota, criarRota } from "@/lib/rotaOptica";
 import { donoDoElemento, entradaPotencia, paraGravar, subRotasDe } from "@/lib/subRotas";
 import EtiquetaCabo from "./EtiquetaCabo";
 import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
@@ -316,6 +317,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const paiEf = troncoEf ? pai : inicial?.pai && !inicial.tronco ? inicial.pai : undefined;
   const nomeMae = paiEf ? (todas ?? rede).find((x) => x.id === paiEf.rota_id)?.nome ?? "rota-mãe" : "";
   const travada = (i: number) => i < troncoEf;
+  /** Separar: ao salvar, a rota termina na caixa k e o que vem depois vira sub-rota dela */
+  const [separar, setSeparar] = useState<{ k: number; nome: string } | null>(null);
+  const sepEf = separar && inicial?.id && separar.k >= Math.max(troncoEf, 1) && separar.k < linhas.length - 1 ? separar : null;
+  const nomeSubPadrao = () => `${nome.match(/^\d+\/\d+\/\d+/)?.[0] ?? ""} ${linhas[linhas.length - 1]?.nome ?? ""}`.trim();
   const [itemSalvo, setItemSalvo] = useState<number | null>(null);
   const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "estacao");
   const [pendentes, setPendentes] = useState<Ponto[]>([]);
@@ -1359,8 +1364,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       return a && b ? [{ nome: l.cabo_entrada.trim() || `Trecho ${i}`, pontos: [a, ...l.vertices, b], ate: i, ...(cor ? { cor } : {}) }] : [];
     });
 
+    // Separar: esta rota termina na caixa k; o resto vira sub-rota (e as sub-rotas que saíam do resto passam para ela)
+    let elementosGravar = elementos;
+    let trechosGravar = trechos;
+    const passarParaNova: RotaOptica[] = [];
+    if (sepEf && inicial?.id) {
+      const k = sepEf.k;
+      const ficam = new Set(elementos.slice(0, k + 1).map(chaveElemento));
+      const vao = new Set(elementos.slice(k + 1).map(chaveElemento));
+      passarParaNova.push(...subRotasDe(inicial.id, todas ?? []).filter((x) => vao.has(x.pai!.chave) && !ficam.has(x.pai!.chave)));
+      elementosGravar = elementos.slice(0, k + 1).map((e, j) => (j === k ? { ...e, cabo_saida: undefined, fibra_saida: undefined } : e));
+      trechosGravar = trechos.filter((t) => (t.ate ?? 0) <= k);
+    }
+
     if (inicial?.id && todas) {
-      const perdidas = subRotasDe(inicial.id, todas).filter((x) => !elementos.some((e) => chaveElemento(e) === x.pai!.chave));
+      const perdidas = subRotasDe(inicial.id, todas).filter(
+        (x) => !passarParaNova.includes(x) && !elementosGravar.some((e) => chaveElemento(e) === x.pai!.chave)
+      );
       if (perdidas.length) {
         return setErro(
           `${perdidas.length > 1 ? "As sub-rotas" : "A sub-rota"} ${perdidas.map((x) => `"${x.nome}"`).join(", ")} sai${perdidas.length > 1 ? "em" : ""} de uma caixa que foi tirada desta rota. Volte a caixa ou exclua a sub-rota antes.`
@@ -1372,11 +1392,28 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     try {
       await gravarCabos(ls.slice(Math.max(0, troncoEf - 1)), tc);
       if (linhas.some((l) => l.predio)) await gravarPredios(elementos);
+      if (sepEf && inicial?.id) {
+        const k = sepEf.k;
+        const idNova = await criarRota(paraGravar({ pai: { rota_id: inicial.id, chave: chaveElemento(elementos[k]) }, tronco: k + 1 }, {
+          nome: sepEf.nome.trim() || nomeSubPadrao(),
+          origem: "manual",
+          elementos,
+          trechos,
+          calculo_potencia: calc,
+          criado_por: usuario,
+        }));
+        for (const x of passarParaNova) {
+          await atualizarRota(x.id, paraGravar({ pai: { ...x.pai!, rota_id: idNova }, tronco: x.tronco }, {
+            nome: x.nome, origem: x.origem, elementos: x.elementos, trechos: x.trechos,
+            calculo_potencia: x.calculo_potencia, obs: x.obs, criado_por: x.criado_por,
+          }));
+        }
+      }
       await onSalvar(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: nome.trim(),
         origem: inicial?.origem ?? "manual",
-        elementos,
-        trechos,
+        elementos: elementosGravar,
+        trechos: trechosGravar,
         calculo_potencia: calc,
         obs: obs.trim() || undefined,
         criado_por: inicial?.criado_por ?? usuario,
@@ -2001,6 +2038,16 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         </details>
         {pots && pots[i] && i > 0 && <p className="text-[10px] text-slate-500 leading-tight">Potência: −{pots[i].detalhe}</p>}
+        {inicial?.id && i >= Math.max(troncoEf, 1) && i < linhas.length - 1 && (
+          <button
+            type="button"
+            onClick={() => setSeparar(sepEf?.k === i ? null : { k: i, nome: separar?.nome || nomeSubPadrao() })}
+            className={`w-full rounded-lg border-2 border-dashed py-1.5 text-[11px] font-semibold ${sepEf?.k === i ? "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100" : "border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"}`}
+            title="A rota termina nesta caixa e as caixas seguintes viram uma sub-rota que sai daqui"
+          >
+            {sepEf?.k === i ? "Não separar" : "✂ Separar daqui: o que vem depois vira sub-rota"}
+          </button>
+        )}
       </div>
     );
   }
@@ -2322,6 +2369,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   {linhas.length > 2 && <p className="mt-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fora da estação</p>}
                 </div>
               )}
+              {sepEf && (
+                <div className="mb-2 space-y-1.5 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
+                  <p>
+                    ✂ Ao salvar, esta rota termina em <b>{linhas[sepEf.k]?.nome}</b> e {linhas.length - 1 - sepEf.k === 1 ? "a caixa seguinte vira" : `as ${linhas.length - 1 - sepEf.k} caixas seguintes viram`} uma sub-rota que sai dali.
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs"
+                      value={sepEf.nome}
+                      onChange={(e) => setSeparar({ ...sepEf, nome: e.target.value })}
+                      placeholder="Nome da sub-rota"
+                    />
+                    <button type="button" onClick={() => setSeparar(null)} className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50">
+                      desfazer
+                    </button>
+                  </div>
+                </div>
+              )}
               {paiEf && (
                 <p className="mb-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
                   <b>Sub-rota</b> de <b>{nomeMae}</b>
@@ -2373,7 +2438,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                             {pendentesDe.has(i) && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white" title="Tem pendência" />}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{travada(i) ? "🔒 " : ""}{l.nome || "sem nome"}</p>
+                            <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{travada(i) ? "🔒 " : sepEf && i > sepEf.k ? "✂ " : ""}{l.nome || "sem nome"}</p>
                             <p className="text-[10.5px] text-slate-500 truncate flex items-center gap-1">
                               {TIPO_ELEMENTO_LABEL[l.tipo].split(" (")[0]}
                               {i > 0 && <span className="rounded bg-slate-100 px-1 tabular-nums text-slate-600" title="Metragem desde a OLT (para o OTDR)">{formatMetros(acumulado[i])}</span>}
