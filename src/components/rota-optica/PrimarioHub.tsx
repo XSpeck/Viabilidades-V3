@@ -119,7 +119,7 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
     // splitter marcado só no diagrama da caixa (a rota não tem): a saída da rota não descontou ele
     if (ps && !e.splitter) return e.potencia_entrada - perdaSplitter(ps.splitter) - conector;
     if (e.potencia_saida !== undefined) return e.potencia_saida;
-    return s.elemento.potencia_entrada - (ps ? perdaSplitter(ps.splitter) + conector : 0);
+    return e.potencia_entrada - (ps ? perdaSplitter(ps.splitter) + conector : 0);
   };
   const pontas = secs.map(potPonta).filter((v): v is number => v !== undefined);
   const pior = pontas.length ? Math.min(...pontas) : undefined;
