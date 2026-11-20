@@ -995,6 +995,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
     if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
+    if (l.tipo === "hub" && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter primário da HUB` });
     if (l.predio && !l.predio.id && !l.predio.nome.trim()) pendencias.push({ i, msg: `${nome}: dê o nome do prédio` });
     if (i > 0) {
       if (!l.cabo_entrada.trim()) pendencias.push({ i, msg: `${nome}: informe o cabo que chega` });
@@ -1295,9 +1296,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const l = linhas[i];
     const valor = l.splitter_modelo && modelosSplitter.some((m) => m.id === l.splitter_modelo) ? `m:${l.splitter_modelo}` : l.splitter;
     const naoCadastrado = !!l.splitter && !valor.startsWith("m:");
+    // HUB sempre tem splitter (o primário)
+    const exige = l.tipo === "hub";
     return (
       <div>
-        <label className={rot}>Splitter</label>
+        <label className={rot}>{exige ? "Splitter primário" : "Splitter"}</label>
         <select
           className={campo}
           value={valor}
@@ -1307,11 +1310,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             alterar(i, { splitter: m ? m.relacao ?? "" : v, splitter_modelo: m?.id ?? "" });
           }}
         >
-          <option value="">Sem splitter</option>
+          {exige ? <option value="" disabled>Escolha o splitter primário…</option> : <option value="">Sem splitter</option>}
           {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>)}
           {naoCadastrado && <option value={l.splitter}>{l.splitter} (não cadastrado)</option>}
         </select>
         {naoCadastrado && <p className="text-[10px] text-red-600 mt-0.5">Troque por um splitter do cadastro.</p>}
+        {exige && !l.splitter && <p className="text-[10px] text-red-600 mt-0.5">A HUB sempre tem splitter: escolha o primário.</p>}
         {!modelosSplitter.length && <p className="text-[10px] text-slate-500 mt-0.5">Nenhum splitter cadastrado (Cadastros → Splitters).</p>}
       </div>
     );
