@@ -71,6 +71,8 @@ interface Linha {
   obs: string;
   /** CDOI colocada com a ferramenta Prédio: em que prédio, bloco e andar ela fica (gravado no prédio ao salvar) */
   predio?: VinculoPredio;
+  /** Posição deste elemento na rota salva (para salvar só ele) */
+  orig?: number;
 }
 
 /** id vazio = prédio novo (criado ao salvar com este nome) */
@@ -267,9 +269,11 @@ interface Props {
   onCaboSalvo: (c: CaboRede) => void;
   onCancelar: () => void;
   onSalvar: (dados: RotaOpticaInput) => Promise<void>;
+  /** Grava a rota sem fechar o editor (salvar só um elemento) */
+  onSalvarParcial?: (dados: RotaOpticaInput) => Promise<void>;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial }: Props) {
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
   const trechosFixos: TrechoCabo[] = [];
   const [nome, setNome] = useState(inicial?.nome ?? "");
@@ -289,9 +293,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           const m = catalogo.find((x) => x.categoria === "splitter" && x.relacao === l.splitter);
           return m ? { ...l, splitter_modelo: m.id } : l;
         })
+          .map((l, i) => ({ ...l, orig: i }))
       : []
   );
   const [sel, setSel] = useState<number | null>(null);
+  /** Como a rota está gravada agora (muda quando salva só um elemento) */
+  const [salvos, setSalvos] = useState<ElementoRota[]>(() => inicial?.elementos ?? []);
+  const [trechosSalvos, setTrechosSalvos] = useState<TrechoCabo[]>(() => inicial?.trechos ?? []);
+  const [salvandoItem, setSalvandoItem] = useState<number | null>(null);
+  const [itemSalvo, setItemSalvo] = useState<number | null>(null);
   const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "estacao");
   const [pendentes, setPendentes] = useState<Ponto[]>([]);
   const [tiposCabo, setTiposCabo] = useState<Record<string, string>>(() =>
@@ -1188,6 +1198,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const todos = [
       ...rede.flatMap((r) => r.elementos.flatMap((e) => [e.cabo_entrada ?? "", e.cabo_saida ?? ""])),
       ...linhas.map((l) => l.cabo_entrada),
+      ...salvos.map((e) => e.cabo_entrada ?? ""),
       ...cabos.map((c) => c.chave),
     ];
     const porNome = new Map<string, string>();
@@ -1196,6 +1207,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       if (c && nm) porNome.set(normalizar(semCodigo(nm)), c);
     };
     rede.forEach((r) => r.elementos.forEach((e) => anotar(e.cabo_entrada)));
+    salvos.forEach((e) => anotar(e.cabo_entrada));
     linhas.forEach((l) => anotar(l.cabo_entrada));
     let extra = 0;
     const tc = { ...tiposCabo };
@@ -1216,6 +1228,68 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return { ls, tc };
   }
 
+  /** Erro que impede gravar a linha i (null = ok) */
+  function erroDaLinha(ls: Linha[], i: number): string | null {
+    const l = ls[i];
+    if (!l.nome.trim()) return `Elemento ${i + 1} está sem nome.`;
+    if (parseCoords(l.coords).erro) return `Elemento ${i + 1}: coordenadas inválidas. Use "-28.6917, -49.3423".`;
+    if (infoFibra(linhas[i].cabo_entrada, l.fibra_entrada)?.excede) return `Elemento ${i + 1}: a fibra ${l.fibra_entrada} não existe no cabo "${l.cabo_entrada}".`;
+    return null;
+  }
+
+  function montarElemento(ls: Linha[], i: number): ElementoRota {
+    const l = ls[i];
+    const c = parseCoords(l.coords);
+    // Saída de um elemento = chegada do próximo (quando informada)
+    const prox = ls[i + 1];
+    const caboSaida = prox?.cabo_entrada.trim() || l.cabo_saida.trim();
+    const fibraSaida = prox && n(prox.fibra_entrada) !== undefined ? n(prox.fibra_entrada) : n(l.fibra_saida);
+    return {
+      nome: l.nome.trim(),
+      tipo: l.tipo,
+      codigo: l.codigo.trim() || undefined,
+      cabo_entrada: i > 0 ? l.cabo_entrada.trim() || undefined : undefined,
+      fibra_entrada: i > 0 ? n(l.fibra_entrada) : undefined,
+      cabo_saida: prox ? caboSaida || undefined : undefined,
+      fibra_saida: prox ? fibraSaida : undefined,
+      distancia_m: i > 0 ? n(l.distancia_m) : undefined,
+      potencia_entrada: pots ? pots[i].entrada : n(l.potencia_entrada),
+      potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
+      splitter: l.splitter.trim() || undefined,
+      splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
+      passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
+      mesmo_poste: i > 0 && l.mesmoPoste ? true : undefined,
+      equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
+      porta: l.porta.trim() || undefined,
+      lat: c.lat,
+      lon: c.lon,
+      obs: l.obs.trim() || undefined,
+    };
+  }
+
+  /** Tipo de cabo escolhido aqui vai para o cadastro do cabo (vale para todas as rotas) */
+  async function gravarCabos(ls: Linha[], tc: Record<string, string>) {
+    const nomesUsados = new Map<string, string>();
+    ls.forEach((l) => l.cabo_entrada.trim() && nomesUsados.set(chaveCabo(l.cabo_entrada), l.cabo_entrada.trim()));
+    for (const [chave, nomeCabo] of nomesUsados) {
+      const novo = tc[chave] ?? "";
+      // cadastro antigo (pelo nome) passa para o código
+      const atual = cabos.find((c) => c.chave === chave) ?? cabos.find((c) => c.chave === normalizar(semCodigo(nomeCabo)));
+      if (novo === (atual?.tipo_id ?? "") && (!atual || atual.chave === chave)) continue;
+      const t = tiposDeCabo.find((x) => x.id === novo);
+      const salvo = await salvarCabo({
+        chave,
+        nome: atual?.chave === chave ? atual.nome : nomeCabo,
+        capacidade: t?.capacidade ?? atual?.capacidade,
+        tipo_id: novo || undefined,
+        fibras: atual?.fibras ?? [],
+        obs: atual?.obs,
+        atualizado_por: usuario,
+      });
+      onCaboSalvo(salvo);
+    }
+  }
+
   async function salvar() {
     setErro(null);
     if (!nome.trim()) return setErro("Dê um nome para a rota (campo no topo).");
@@ -1228,42 +1302,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const { ls, tc } = garantirCodigos();
     const elementos: ElementoRota[] = [];
     for (let i = 0; i < ls.length; i++) {
-      const l = ls[i];
-      if (!l.nome.trim()) {
+      const e = erroDaLinha(ls, i);
+      if (e) {
         setSel(i);
-        return setErro(`Elemento ${i + 1} está sem nome.`);
+        return setErro(e);
       }
-      const c = parseCoords(l.coords);
-      if (c.erro) { setSel(i); return setErro(`Elemento ${i + 1}: coordenadas inválidas. Use "-28.6917, -49.3423".`); }
-      if (infoFibra(linhas[i].cabo_entrada, l.fibra_entrada)?.excede) {
-        setSel(i);
-        return setErro(`Elemento ${i + 1}: a fibra ${l.fibra_entrada} não existe no cabo "${l.cabo_entrada}".`);
-      }
-      // Saída de um elemento = chegada do próximo (quando informada)
-      const prox = ls[i + 1];
-      const caboSaida = prox?.cabo_entrada.trim() || l.cabo_saida.trim();
-      const fibraSaida = prox && n(prox.fibra_entrada) !== undefined ? n(prox.fibra_entrada) : n(l.fibra_saida);
-      elementos.push({
-        nome: l.nome.trim(),
-        tipo: l.tipo,
-        codigo: l.codigo.trim() || undefined,
-        cabo_entrada: i > 0 ? l.cabo_entrada.trim() || undefined : undefined,
-        fibra_entrada: i > 0 ? n(l.fibra_entrada) : undefined,
-        cabo_saida: prox ? caboSaida || undefined : undefined,
-        fibra_saida: prox ? fibraSaida : undefined,
-        distancia_m: i > 0 ? n(l.distancia_m) : undefined,
-        potencia_entrada: pots ? pots[i].entrada : n(l.potencia_entrada),
-        potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
-        splitter: l.splitter.trim() || undefined,
-        splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
-        passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
-        mesmo_poste: i > 0 && l.mesmoPoste ? true : undefined,
-        equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
-        porta: l.porta.trim() || undefined,
-        lat: c.lat,
-        lon: c.lon,
-        obs: l.obs.trim() || undefined,
-      });
+      elementos.push(montarElemento(ls, i));
     }
 
     // Traçado: rotas do GeoGrid mantêm o do KML; manuais usam o desenhado no mapa
@@ -1276,26 +1320,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
     setSalvando(true);
     try {
-      // Tipo de cabo escolhido aqui vai para o cadastro do cabo (vale para todas as rotas)
-      const nomesUsados = new Map<string, string>();
-      ls.forEach((l) => l.cabo_entrada.trim() && nomesUsados.set(chaveCabo(l.cabo_entrada), l.cabo_entrada.trim()));
-      for (const [chave, nomeCabo] of nomesUsados) {
-        const novo = tc[chave] ?? "";
-        // cadastro antigo (pelo nome) passa para o código
-        const atual = cabos.find((c) => c.chave === chave) ?? cabos.find((c) => c.chave === normalizar(semCodigo(nomeCabo)));
-        if (novo === (atual?.tipo_id ?? "") && (!atual || atual.chave === chave)) continue;
-        const t = tiposDeCabo.find((x) => x.id === novo);
-        const salvo = await salvarCabo({
-          chave,
-          nome: atual?.chave === chave ? atual.nome : nomeCabo,
-          capacidade: t?.capacidade ?? atual?.capacidade,
-          tipo_id: novo || undefined,
-          fibras: atual?.fibras ?? [],
-          obs: atual?.obs,
-          atualizado_por: usuario,
-        });
-        onCaboSalvo(salvo);
-      }
+      await gravarCabos(ls, tc);
       if (linhas.some((l) => l.predio)) await gravarPredios(elementos);
       await onSalvar({
         nome: nome.trim(),
@@ -1311,6 +1336,134 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     } finally {
       setSalvando(false);
     }
+  }
+
+  // ---------- Salvar só um elemento ----------
+  /** Texto comparável de um elemento (sem o que depende dos vizinhos ou da potência) */
+  function comparavel(e?: ElementoRota): string {
+    if (!e) return "";
+    const { cabo_saida, fibra_saida, potencia_entrada, potencia_saida, ...resto } = e;
+    void cabo_saida; void fibra_saida; void potencia_entrada; void potencia_saida;
+    return JSON.stringify(Object.entries(resto).filter(([, v]) => v !== undefined && v !== "").sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  /** Os vizinhos no editor são os mesmos da rota gravada (dá para gravar só este elemento) */
+  function vizinhosIguais(i: number): boolean {
+    const o = linhas[i].orig;
+    if (o === undefined) return false;
+    const antOk = i === 0 ? o === 0 : linhas[i - 1].orig === o - 1;
+    const proxOk = i === linhas.length - 1 ? o === salvos.length - 1 : linhas[i + 1].orig === o + 1;
+    return antOk && proxOk;
+  }
+
+  /** O elemento mudou desde a última gravação */
+  function mudouDesdeSalvo(i: number): boolean {
+    const l = linhas[i];
+    if (!inicial?.id || l.orig === undefined || !salvos[l.orig]) return false;
+    if (comparavel(montarElemento(linhas, i)) !== comparavel(salvos[l.orig])) return true;
+    const t = trechosSalvos.find((x) => x.ate === l.orig);
+    return !!t && JSON.stringify(t.pontos.slice(1, -1)) !== JSON.stringify(l.vertices);
+  }
+
+  async function salvarElemento(i: number) {
+    const o = linhas[i].orig;
+    if (!onSalvarParcial || o === undefined || !salvos[o]) return;
+    setErro(null);
+    const e0 = erroDaLinha(linhas, i);
+    if (e0) return setErro(e0);
+    const { ls, tc } = garantirCodigos();
+    const el = montarElemento(ls, i);
+    const novos = salvos.map((e) => ({ ...e }));
+    // continua ligado aos vizinhos como estão gravados
+    const proxS = novos[o + 1];
+    el.cabo_saida = proxS?.cabo_entrada;
+    el.fibra_saida = proxS?.fibra_entrada;
+    novos[o] = el;
+    if (o > 0) novos[o - 1] = { ...novos[o - 1], cabo_saida: el.cabo_entrada, fibra_saida: el.fibra_entrada };
+    // potência da rota gravada recalculada (um splitter trocado muda tudo dali para frente)
+    const txS = novos[0]?.potencia_saida ?? novos[0]?.potencia_entrada;
+    if (calc.auto && txS !== undefined) {
+      const ps = calcularPotencias(
+        novos.map((e) => ({
+          tipo: e.tipo,
+          distancia_m: e.distancia_m,
+          splitter: e.splitter,
+          perda_splitter: modelosSplitter.find((m) => m.id === e.splitter_modelo)?.perda_db,
+        })),
+        txS,
+        calc
+      );
+      ps.forEach((p, k) => { novos[k] = { ...novos[k], potencia_entrada: p.entrada, potencia_saida: p.saida }; });
+    }
+    // traçado: o trecho que chega neste elemento e o começo do próximo
+    let trs = trechosSalvos.map((t) => ({ ...t, pontos: [...t.pontos] }));
+    const pos = posDe(ls[i]);
+    if (pos && trs.some((t) => t.ate !== undefined)) {
+      const ant = o > 0 && novos[o - 1].lat !== undefined && novos[o - 1].lon !== undefined ? { lat: novos[o - 1].lat!, lon: novos[o - 1].lon! } : null;
+      trs = trs.filter((t) => t.ate !== o);
+      if (ant) {
+        const cor = infoFibra(linhas[i].cabo_entrada, ls[i].fibra_entrada)?.c.hex;
+        trs.push({ nome: el.cabo_entrada || `Trecho ${o}`, pontos: [ant, ...ls[i].vertices, pos], ate: o, ...(cor ? { cor } : {}) });
+      }
+      trs = trs.map((t) => (t.ate === o + 1 && t.pontos.length ? { ...t, pontos: [pos, ...t.pontos.slice(1)] } : t));
+      trs.sort((a, b) => (a.ate ?? 0) - (b.ate ?? 0));
+    }
+    setSalvandoItem(i);
+    try {
+      await gravarCabos([ls[i]], tc);
+      await onSalvarParcial({
+        nome: inicial?.nome ?? nome.trim(),
+        origem: inicial?.origem ?? "manual",
+        elementos: novos,
+        trechos: trs,
+        calculo_potencia: calc,
+        obs: inicial?.obs,
+        criado_por: inicial?.criado_por ?? usuario,
+      });
+      setSalvos(novos);
+      setTrechosSalvos(trs);
+      // o cabo ganhou código: todos os trechos dele no editor passam a usar o mesmo nome
+      const kVelho = linhas[i].cabo_entrada.trim() ? chaveCabo(linhas[i].cabo_entrada) : "";
+      if (kVelho && ls[i].cabo_entrada !== linhas[i].cabo_entrada) {
+        const nomeNovo = ls[i].cabo_entrada;
+        setTiposCabo(tc);
+        setLinhas((lls) => lls.map((x) => (x.cabo_entrada.trim() && chaveCabo(x.cabo_entrada) === kVelho ? { ...x, cabo_entrada: nomeNovo } : x)));
+      }
+      setItemSalvo(i);
+      setTimeout(() => setItemSalvo((v) => (v === i ? null : v)), 2500);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar o elemento.");
+    } finally {
+      setSalvandoItem(null);
+    }
+  }
+
+  /** Faixa no topo do painel do elemento: salvar só ele */
+  function barraSalvarItem(i: number) {
+    if (!onSalvarParcial || !inicial?.id) return null;
+    if (itemSalvo === i && !mudouDesdeSalvo(i)) {
+      return <p className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">✓ Elemento salvo</p>;
+    }
+    if (!mudouDesdeSalvo(i)) return null;
+    const pend = pendencias.filter((p) => p.i === i);
+    const erroL = erroDaLinha(linhas, i);
+    const bloqueio = pend.length ? pend[0].msg : erroL ? erroL : !vizinhosIguais(i) ? "a sequência da rota mudou: use Salvar rota" : null;
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+        <span className="min-w-0 flex-1 text-xs text-amber-800">
+          {bloqueio ? <>Alterado · <span className="text-amber-700">{bloqueio}</span></> : "Este elemento foi alterado"}
+        </span>
+        <button
+          type="button"
+          disabled={!!bloqueio || salvandoItem !== null || salvando}
+          onClick={() => salvarElemento(i)}
+          className="flex shrink-0 items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Grava só a alteração deste elemento (o resto da rota continua como está gravado)"
+        >
+          {salvandoItem === i ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar só este
+        </button>
+      </div>
+    );
   }
 
   // ---------- Campos do painel ----------
@@ -1509,6 +1662,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const kCabo = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
+        {barraSalvarItem(i)}
         <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
             <label className={rot}>Nome</label>

@@ -17,8 +17,8 @@ function completoDe(alvo: EventTarget | null): string | null {
     if (el instanceof HTMLElement && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).textOverflow === "ellipsis") {
       return expandir(texto) ?? texto;
     }
-    // encurtado pelo programa ("AND 3_Majestoso_C…")
-    if (texto.includes("…")) {
+    // encurtado pelo programa ("AND 3_Majestoso_C…"): só o próprio rótulo, nunca o contêiner inteiro
+    if (k <= 1 && texto.length <= 80 && texto.includes("…")) {
       const c = expandir(texto);
       if (c) return c;
     }
