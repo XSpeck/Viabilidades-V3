@@ -5,7 +5,7 @@ import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, dentroDePredio, ehVolta, filhosReais, voltaDe, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
-import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import { chaveCabo, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
@@ -522,7 +522,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             <Janela
               key={j.id}
               inicial={{ x: j.x, y: j.y }}
-              titulo={j.cabo}
+              titulo={semCodigo(j.cabo)}
               subtitulo={j.fibra ? `Cabo · fibra ${j.fibra} destacada` : "Cabo"}
               icone={<IconeCabo tamanho={22} />}
               corBarra="bg-indigo-900"
@@ -1077,7 +1077,7 @@ function DetalheNo({
             // Emenda: cabo/fibra de chegada diferente do próximo trecho
             const prox = caminho[i + 1]?.elemento ?? (n.filhos.length === 1 ? n.filhos[0].elemento : undefined);
             const emenda =
-              prox && el.cabo_entrada && prox.cabo_entrada && (el.cabo_entrada !== prox.cabo_entrada || el.fibra_entrada !== prox.fibra_entrada);
+              prox && el.cabo_entrada && prox.cabo_entrada && (chaveCabo(el.cabo_entrada) !== chaveCabo(prox.cabo_entrada) || el.fibra_entrada !== prox.fibra_entrada);
             return (
               <li key={n.id}>
                 {/* Trecho de cabo que chega neste elemento */}

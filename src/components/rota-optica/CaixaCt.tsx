@@ -14,6 +14,7 @@ import {
   type StatusPorta,
 } from "@/lib/caixasRede";
 import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
+import { chaveCabo } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
@@ -67,7 +68,7 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
   const usadas = new Map<number, { pot?: number; rota: string }>();
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
-      if (i > 0 && chaveElemento(e) === chave && e.fibra_entrada && e.cabo_entrada === cabo && !usadas.has(e.fibra_entrada)) usadas.set(e.fibra_entrada, { pot: e.potencia_entrada, rota: r.nome });
+      if (i > 0 && chaveElemento(e) === chave && e.fibra_entrada && e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(cabo) && !usadas.has(e.fibra_entrada)) usadas.set(e.fibra_entrada, { pot: e.potencia_entrada, rota: r.nome });
     });
   }
   const maior = Math.max(1, ...usadas.keys());
@@ -83,7 +84,7 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
   if (cto) {
     const kc = chaveElemento(cto.elemento);
     for (const r of rotas) r.elementos.forEach((e, i) => {
-      if (i > 0 && chaveElemento(e) === kc && e.cabo_entrada && e.fibra_entrada && !entradasCto.some((x) => x.cabo === e.cabo_entrada && x.fibra === e.fibra_entrada)) entradasCto.push({ cabo: e.cabo_entrada, fibra: e.fibra_entrada, pot: e.potencia_entrada });
+      if (i > 0 && chaveElemento(e) === kc && e.cabo_entrada && e.fibra_entrada && !entradasCto.some((x) => chaveCabo(x.cabo) === chaveCabo(e.cabo_entrada!) && x.fibra === e.fibra_entrada)) entradasCto.push({ cabo: e.cabo_entrada, fibra: e.fibra_entrada, pot: e.potencia_entrada });
     });
   }
   const potCto = potenciaPortasFinais(splsCto, entradasCto, (id) => modelos.find((m) => m.id === id)?.perda_db, cto?.elemento.potencia_entrada);

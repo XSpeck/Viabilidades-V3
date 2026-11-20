@@ -2,6 +2,7 @@
 
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type ElementoRota } from "@/lib/rotaOptica";
+import { chaveCabo } from "@/lib/cabosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 
 interface Props {
@@ -102,7 +103,7 @@ export function DetalheElemento({ elementos, indice, catalogo = [] }: { elemento
   const potAqui = e.potencia_saida ?? e.potencia_entrada;
   const perda = pot0 !== undefined && potAqui !== undefined && indice > 0 ? pot0 - potAqui : undefined;
   const trocaCabo =
-    e.cabo_entrada && e.cabo_saida && (e.cabo_entrada !== e.cabo_saida || e.fibra_entrada !== e.fibra_saida);
+    e.cabo_entrada && e.cabo_saida && (chaveCabo(e.cabo_entrada) !== chaveCabo(e.cabo_saida) || e.fibra_entrada !== e.fibra_saida);
   const restantes = elementos.length - 1 - indice;
 
   const linhaFibra = (cabo?: string, fibra?: number) => {

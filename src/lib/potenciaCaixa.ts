@@ -3,6 +3,7 @@
 // =====================
 import { CALCULO_PADRAO, perdaSplitter } from "./rotaOptica";
 import { portasFinais, type SplitterCaixa } from "./caixasRede";
+import { chaveCabo } from "./cabosRede";
 
 export interface FibraQueChega {
   cabo: string;
@@ -22,7 +23,7 @@ export function potenciaPortasFinais(
     if (prof > 8) return undefined;
     if (s.entrada.fibra) {
       const f = s.entrada.fibra;
-      return entradas.find((x) => x.cabo === f.cabo && x.fibra === f.fibra)?.pot ?? potPadrao;
+      return entradas.find((x) => chaveCabo(x.cabo) === chaveCabo(f.cabo) && x.fibra === f.fibra)?.pot ?? potPadrao;
     }
     if (s.entrada.splitter) {
       const pai = spls.find((x) => x.id === s.entrada.splitter!.id);

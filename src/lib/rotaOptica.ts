@@ -238,6 +238,8 @@ export function capacidadeMinima(fibra: number): number {
 }
 
 function chaveNomeCabo(nome: string): string {
+  const cod = nome.match(/\[(CB-\d{6})\]/) ?? nome.trim().match(/^(CB-\d{6})$/);
+  if (cod) return cod[1];
   return nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
 }
 

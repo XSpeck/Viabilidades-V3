@@ -38,12 +38,36 @@ export const CAPACIDADES = [2, 4, 6, 12, 24, 36, 48, 72, 96, 144, 288] as const;
 /** Capacidades que podem ser cadastradas à mão (inclui 1 fibra: flat e cordão). A estimativa automática usa CAPACIDADES. */
 export const CAPACIDADES_CADASTRO = [1, ...CAPACIDADES] as const;
 
-function normalizar(s: string): string {
+export function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
 }
 
+/** Código fixo do cabo, gravado no fim do nome: "72 FO ASO · DIO → HUB [CB-000123]" */
+export function codigoDoCabo(nome?: string): string | null {
+  if (!nome) return null;
+  const m = nome.match(/\[(CB-\d{6})\]/) ?? nome.trim().match(/^(CB-\d{6})$/);
+  return m ? m[1] : null;
+}
+
+/** Nome do cabo sem o código */
+export function semCodigo(nome: string): string {
+  return nome.replace(/\s*\[CB-\d{6}\]\s*$/, "").trim();
+}
+
+/** Nome com o código no fim */
+export function comCodigo(rotulo: string, codigo: string): string {
+  return `${semCodigo(rotulo)} [${codigo}]`;
+}
+
+/** Próximo código livre (CB-000001, CB-000002…) olhando os nomes de cabo já usados */
+export function proximoCodigoCabo(nomes: string[], extra = 0): string {
+  const usados = nomes.map((n0) => codigoDoCabo(n0)).filter((c): c is string => !!c).map((c) => parseInt(c.slice(3), 10));
+  return `CB-${String(Math.max(0, ...usados) + 1 + extra).padStart(6, "0")}`;
+}
+
+/** Identidade do cabo: o código, quando tem; senão o nome (cabos antigos e importados) */
 export function chaveCabo(nome: string): string {
-  return normalizar(nome);
+  return codigoDoCabo(nome) ?? normalizar(nome);
 }
 
 export function idCabo(chave: string): string {

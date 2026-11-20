@@ -14,6 +14,8 @@ import {
   type UsoFibra,
 } from "@/lib/cabosRede";
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
+import { codigoDoCabo } from "@/lib/cabosRede";
+import EtiquetaCabo from "./EtiquetaCabo";
 
 interface Props {
   chave: string;
@@ -129,6 +131,13 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
           <button type="button" onClick={onFechar} className="text-indigo-200 hover:text-white shrink-0" aria-label="Fechar cabo">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {codigoDoCabo(nome) && (
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-yellow-50 px-3 py-1.5">
+          <EtiquetaCabo codigo={codigoDoCabo(nome)!} grande />
+          <span className="text-[11px] leading-tight text-slate-600">etiqueta do cabo em campo · vale em todas as rotas</span>
         </div>
       )}
 

@@ -1,3 +1,4 @@
+import { chaveCabo } from "./cabosRede";
 // =====================
 // Diagrama interno das caixas (HUB, CTO, caixa de emenda), preenchido à mão na árvore PON.
 // Uma caixa é identificada pela mesma chave usada para juntar rotas (código PT ou nome),
@@ -128,8 +129,7 @@ export function splittersDaCaixa(
  * vêm de portas deles (2º nível). Numa HUB com splitters de várias portas, separa o de cada PON.
  */
 export function splittersDaFibra(spls: SplitterCaixa[], cabo?: string, fibra?: number): SplitterCaixa[] {
-  const norm = (c: string) => c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
-  const raizes = spls.filter((x) => x.entrada.fibra && cabo && x.entrada.fibra.fibra === fibra && norm(x.entrada.fibra.cabo) === norm(cabo));
+  const raizes = spls.filter((x) => x.entrada.fibra && cabo && x.entrada.fibra.fibra === fibra && chaveCabo(x.entrada.fibra.cabo) === chaveCabo(cabo));
   const out = [...raizes];
   for (let k = 0; k < out.length; k++) spls.forEach((x) => { if (x.entrada.splitter?.id === out[k].id && !out.includes(x)) out.push(x); });
   return out;

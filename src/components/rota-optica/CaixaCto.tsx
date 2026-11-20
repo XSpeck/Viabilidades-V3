@@ -18,6 +18,7 @@ import {
 } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
+import { chaveCabo } from "@/lib/cabosRede";
 import { cortar } from "@/lib/textoCompleto";
 
 /**
@@ -80,7 +81,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
       if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada || !e.fibra_entrada) return;
-      if (entradas.some((x) => x.cabo === e.cabo_entrada && x.fibra === e.fibra_entrada)) return;
+      if (entradas.some((x) => chaveCabo(x.cabo) === chaveCabo(e.cabo_entrada!) && x.fibra === e.fibra_entrada)) return;
       entradas.push({ cabo: e.cabo_entrada, fibra: e.fibra_entrada, pot: e.potencia_entrada, rota: r.nome });
     });
   }
@@ -92,7 +93,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
     if (prof > 8) return undefined;
     if (s.entrada.fibra) {
       const f = s.entrada.fibra;
-      return entradas.find((x) => x.cabo === f.cabo && x.fibra === f.fibra)?.pot ?? el.potencia_entrada;
+      return entradas.find((x) => chaveCabo(x.cabo) === chaveCabo(f.cabo) && x.fibra === f.fibra)?.pot ?? el.potencia_entrada;
     }
     if (s.entrada.splitter) {
       const pai = spls.find((x) => x.id === s.entrada.splitter!.id);
@@ -179,7 +180,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
     if (!m?.relacao) return setErro("Cadastre um splitter primeiro (Cadastros → Splitters).");
     // novo splitter: entra na primeira porta livre de um splitter existente (2º nível), ou numa fibra que chega
     const livre = finais.find((f) => f.porta.status === "livre");
-    const fibraLivre = entradas.find((e) => !spls.some((s) => s.entrada.fibra?.cabo === e.cabo && s.entrada.fibra.fibra === e.fibra));
+    const fibraLivre = entradas.find((e) => !spls.some((s) => !!s.entrada.fibra && chaveCabo(s.entrada.fibra.cabo) === chaveCabo(e.cabo) && s.entrada.fibra.fibra === e.fibra));
     const entrada = fibraLivre ? { fibra: { cabo: fibraLivre.cabo, fibra: fibraLivre.fibra } } : livre ? { splitter: { id: livre.spl.id, porta: livre.porta.numero } } : {};
     setSpls((l) => [...l, { id: novoId(), relacao: m.relacao!, modelo_id: m.id, entrada, portas: portasPara(m.relacao, []) }]);
   }
@@ -359,7 +360,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
         <div className="flex flex-wrap gap-1">
           {entradas.map((e) => {
             const c = corFibra(e.fibra, e.cabo);
-            const usa = spls.filter((s) => s.entrada.fibra?.cabo === e.cabo && s.entrada.fibra.fibra === e.fibra).map(nomeSpl);
+            const usa = spls.filter((s) => !!s.entrada.fibra && chaveCabo(s.entrada.fibra.cabo) === chaveCabo(e.cabo) && s.entrada.fibra.fibra === e.fibra).map(nomeSpl);
             return (
               <span key={`${e.cabo}${e.fibra}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600" title={e.rota}>
                 <span className="inline-block h-2 w-2 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />

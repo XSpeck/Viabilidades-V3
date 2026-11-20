@@ -23,7 +23,8 @@ import {
   type TrechoCabo,
   reservaTrecho,
 } from "@/lib/rotaOptica";
-import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
+import EtiquetaCabo from "./EtiquetaCabo";
+import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
@@ -412,7 +413,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const novo = curtoNome(nomeNovo);
     if (!velho || !novo || velho === novo) return;
     const esc = velho.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const troca = (c: string) => c.replace(`· ${velho} →`, `· ${novo} →`).replace(new RegExp(`→ ${esc}(?=( \\(mesmo poste\\))?$)`), `→ ${novo}`).replace(new RegExp(`^Cordão ${esc} →`), `Cordão ${novo} →`);
+    const troca = (c: string) => c.replace(`· ${velho} →`, `· ${novo} →`).replace(new RegExp(`→ ${esc}(?=( \\(mesmo poste\\))?( \\[CB-\\d{6}\\])?$)`), `→ ${novo}`).replace(new RegExp(`^Cordão ${esc} →`), `Cordão ${novo} →`);
     setTiposCabo((tc) => {
       const c = { ...tc };
       linhas.forEach((l) => {
@@ -1179,6 +1180,42 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return { c: corFibraPorCapacidade(f, Math.max(cap, f), t?.fibras_por_tubo), excede: !!t?.capacidade && f > t.capacidade };
   }
 
+  /**
+   * Todo cabo ganha um código fixo (CB-000123) no fim do nome: é a etiqueta que o técnico põe no cabo real.
+   * Cabo com o mesmo nome já codificado em outra rota reaproveita o código.
+   */
+  function garantirCodigos(): { ls: Linha[]; tc: Record<string, string> } {
+    const todos = [
+      ...rede.flatMap((r) => r.elementos.flatMap((e) => [e.cabo_entrada ?? "", e.cabo_saida ?? ""])),
+      ...linhas.map((l) => l.cabo_entrada),
+      ...cabos.map((c) => c.chave),
+    ];
+    const porNome = new Map<string, string>();
+    const anotar = (nm?: string) => {
+      const c = codigoDoCabo(nm);
+      if (c && nm) porNome.set(normalizar(semCodigo(nm)), c);
+    };
+    rede.forEach((r) => r.elementos.forEach((e) => anotar(e.cabo_entrada)));
+    linhas.forEach((l) => anotar(l.cabo_entrada));
+    let extra = 0;
+    const tc = { ...tiposCabo };
+    const ls = linhas.map((l, i) => {
+      const nm = l.cabo_entrada.trim();
+      // a OLT não tem cabo de chegada; cordão da estação não leva etiqueta de cabo
+      if (i === 0 || !nm || codigoDoCabo(nm) || /^Cordão /i.test(nm)) return l;
+      const base = normalizar(nm);
+      let cod = porNome.get(base);
+      if (!cod) {
+        cod = proximoCodigoCabo(todos, extra++);
+        porNome.set(base, cod);
+      }
+      const tAnt = tiposCabo[chaveCabo(nm)];
+      if (tAnt && !tc[cod]) tc[cod] = tAnt;
+      return { ...l, cabo_entrada: comCodigo(nm, cod) };
+    });
+    return { ls, tc };
+  }
+
   async function salvar() {
     setErro(null);
     if (!nome.trim()) return setErro("Dê um nome para a rota (campo no topo).");
@@ -1188,21 +1225,22 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       setSel(pendencias[0].i);
       return setErro(`Há ${pendencias.length} pendência${pendencias.length > 1 ? "s" : ""}: só são aceitos equipamentos e cabos do cadastro.`);
     }
+    const { ls, tc } = garantirCodigos();
     const elementos: ElementoRota[] = [];
-    for (let i = 0; i < linhas.length; i++) {
-      const l = linhas[i];
+    for (let i = 0; i < ls.length; i++) {
+      const l = ls[i];
       if (!l.nome.trim()) {
         setSel(i);
         return setErro(`Elemento ${i + 1} está sem nome.`);
       }
       const c = parseCoords(l.coords);
       if (c.erro) { setSel(i); return setErro(`Elemento ${i + 1}: coordenadas inválidas. Use "-28.6917, -49.3423".`); }
-      if (infoFibra(l.cabo_entrada, l.fibra_entrada)?.excede) {
+      if (infoFibra(linhas[i].cabo_entrada, l.fibra_entrada)?.excede) {
         setSel(i);
         return setErro(`Elemento ${i + 1}: a fibra ${l.fibra_entrada} não existe no cabo "${l.cabo_entrada}".`);
       }
       // Saída de um elemento = chegada do próximo (quando informada)
-      const prox = linhas[i + 1];
+      const prox = ls[i + 1];
       const caboSaida = prox?.cabo_entrada.trim() || l.cabo_saida.trim();
       const fibraSaida = prox && n(prox.fibra_entrada) !== undefined ? n(prox.fibra_entrada) : n(l.fibra_saida);
       elementos.push({
@@ -1229,10 +1267,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
 
     // Traçado: rotas do GeoGrid mantêm o do KML; manuais usam o desenhado no mapa
-    const trechos: TrechoCabo[] = linhas.flatMap((l, i) => {
-      const a = i > 0 ? posDe(linhas[i - 1]) : null;
+    const trechos: TrechoCabo[] = ls.flatMap((l, i) => {
+      const a = i > 0 ? posDe(ls[i - 1]) : null;
       const b = posDe(l);
-      const cor = infoFibra(l.cabo_entrada, l.fibra_entrada)?.c.hex;
+      const cor = infoFibra(linhas[i].cabo_entrada, l.fibra_entrada)?.c.hex;
       return a && b ? [{ nome: l.cabo_entrada.trim() || `Trecho ${i}`, pontos: [a, ...l.vertices, b], ate: i, ...(cor ? { cor } : {}) }] : [];
     });
 
@@ -1240,15 +1278,16 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     try {
       // Tipo de cabo escolhido aqui vai para o cadastro do cabo (vale para todas as rotas)
       const nomesUsados = new Map<string, string>();
-      linhas.forEach((l) => l.cabo_entrada.trim() && nomesUsados.set(chaveCabo(l.cabo_entrada), l.cabo_entrada.trim()));
+      ls.forEach((l) => l.cabo_entrada.trim() && nomesUsados.set(chaveCabo(l.cabo_entrada), l.cabo_entrada.trim()));
       for (const [chave, nomeCabo] of nomesUsados) {
-        const novo = tiposCabo[chave] ?? "";
-        const atual = cabos.find((c) => c.chave === chave);
-        if (novo === (atual?.tipo_id ?? "")) continue;
+        const novo = tc[chave] ?? "";
+        // cadastro antigo (pelo nome) passa para o código
+        const atual = cabos.find((c) => c.chave === chave) ?? cabos.find((c) => c.chave === normalizar(semCodigo(nomeCabo)));
+        if (novo === (atual?.tipo_id ?? "") && (!atual || atual.chave === chave)) continue;
         const t = tiposDeCabo.find((x) => x.id === novo);
         const salvo = await salvarCabo({
           chave,
-          nome: atual?.nome ?? nomeCabo,
+          nome: atual?.chave === chave ? atual.nome : nomeCabo,
           capacidade: t?.capacidade ?? atual?.capacidade,
           tipo_id: novo || undefined,
           fibras: atual?.fibras ?? [],
@@ -1489,9 +1528,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             </select>
           </div>
           <div>
-            <label className={rot}>Código</label>
+            <label className={rot}>Código 🔒</label>
             <div className="flex gap-1">
-              <input className={campo} value={l.codigo} onChange={(e) => alterar(i, { codigo: e.target.value })} placeholder="único" />
+              <input
+                className={`${campo} cursor-not-allowed bg-slate-50 font-mono text-slate-600`}
+                value={l.codigo}
+                readOnly
+                placeholder="sem código"
+                title="Código fixo da caixa: identifica o elemento em todas as rotas e não pode ser alterado"
+              />
               {!l.codigo.trim() && (
                 <button
                   type="button"
@@ -1615,10 +1660,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                       autoFocus
                       className={campo}
                       list="cabos-conhecidos"
-                      value={l.cabo_entrada}
-                      onChange={(e) => alterar(i, { cabo_entrada: e.target.value })}
+                      value={l.cabo_entrada.replace(/ \[CB-\d{6}\]$/, "")}
+                      onChange={(e) => {
+                        const cod = codigoDoCabo(l.cabo_entrada);
+                        if (!cod) return alterar(i, { cabo_entrada: e.target.value });
+                        // cabo com código: o nome muda em todos os trechos dele, o código fica
+                        const v = `${e.target.value} [${cod}]`;
+                        mudar((ls) => ls.map((x) => (codigoDoCabo(x.cabo_entrada) === cod ? { ...x, cabo_entrada: v } : x)));
+                      }}
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                       onBlur={() => {
+                        const cod = codigoDoCabo(l.cabo_entrada);
+                        if (cod) {
+                          const v = comCodigo(l.cabo_entrada, cod);
+                          mudar((ls) => ls.map((x) => (codigoDoCabo(x.cabo_entrada) === cod ? { ...x, cabo_entrada: v } : x)));
+                          setRenomear(null);
+                          return;
+                        }
                         // o tipo do cabo vai junto para o nome novo
                         const tipoAntigo = tiposCabo[chaveCabo(renomear.antigo)];
                         if (tipoAntigo && l.cabo_entrada.trim()) setTiposCabo((t) => ({ ...t, [chaveCabo(l.cabo_entrada)]: t[chaveCabo(l.cabo_entrada)] ?? tipoAntigo }));
@@ -1628,7 +1686,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     />
                   ) : (
                     <>
-                      <span className="min-w-0 truncate">Cabo: <span className="font-medium text-slate-700">{l.cabo_entrada}</span></span>
+                      <span className="min-w-0 truncate">Cabo: <span className="font-medium text-slate-700">{semCodigo(l.cabo_entrada)}</span></span>
+                      {codigoDoCabo(l.cabo_entrada) ? (
+                        <EtiquetaCabo codigo={codigoDoCabo(l.cabo_entrada)!} />
+                      ) : !/^Cordão /i.test(l.cabo_entrada) && (
+                        <span className="shrink-0 rounded border border-dashed border-slate-300 px-1 text-[10px] text-slate-400" title="O código do cabo é gerado ao salvar a rota">código ao salvar</span>
+                      )}
                       <button type="button" onClick={() => setRenomear({ i, antigo: l.cabo_entrada })} className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600" title="Renomear o cabo">
                         ✎
                       </button>

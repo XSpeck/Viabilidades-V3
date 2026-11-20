@@ -4,6 +4,7 @@
 // onde elas se separam, a árvore ramifica.
 // =====================
 import type { ElementoRota, RotaOptica } from "./rotaOptica";
+import { chaveCabo } from "./cabosRede";
 import { portasFinais, rotuloSplitters, splittersDaFibra, totalPernas, type CaixaRede, type SplitterCaixa } from "./caixasRede";
 
 export interface NoArvore {
@@ -162,8 +163,7 @@ export function filhosReais(n: NoArvore): NoArvore[] {
 export function ehVolta(n: NoArvore): boolean {
   const c = n.pai, avo = c?.pai;
   if (!c || !avo || !n.elemento.cabo_entrada || !c.elemento.cabo_entrada) return false;
-  const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
-  return chaveElemento(n.elemento) === chaveElemento(avo.elemento) && norm(n.elemento.cabo_entrada) === norm(c.elemento.cabo_entrada);
+  return chaveElemento(n.elemento) === chaveElemento(avo.elemento) && chaveCabo(n.elemento.cabo_entrada) === chaveCabo(c.elemento.cabo_entrada);
 }
 
 /** Filho que é a volta deste nó (mesmo cabo, de volta para a caixa anterior) */

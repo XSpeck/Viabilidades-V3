@@ -71,7 +71,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
     const f = x.entrada.fibra;
     if (!f) return undefined;
     const k = chaveElemento(el);
-    const r0 = rotas.find((r) => r.elementos.some((e) => chaveElemento(e) === k && e.fibra_entrada === f.fibra && e.cabo_entrada === f.cabo));
+    const r0 = rotas.find((r) => r.elementos.some((e) => chaveElemento(e) === k && e.fibra_entrada === f.fibra && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(f.cabo)));
     return r0 ? portaPonDaRota(r0).rotulo : undefined;
   };
   const listaOutros = outros.length > 0 && (
