@@ -227,8 +227,8 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
   const campo = "w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px]";
   const COR_ST: Record<StatusPorta, string> = { livre: "bg-white text-slate-500", cliente: "bg-sky-600 text-white", ramal: "bg-amber-500 text-white" };
 
-  // Só passagem nesta porta e nenhum splitter cadastrado: não há o que configurar, só mostra a fibra atravessando
-  if (no.elemento.passagem && !editando && spls.length === 0) {
+  // Só passagem nesta porta: não há o que configurar aqui (splitters, se houver, são da porta que usa); só mostra a fibra atravessando
+  if (no.elemento.passagem && !editando) {
     const cEnt = corFibra(el.fibra_entrada, el.cabo_entrada);
     return (
       <div className="p-3 space-y-2.5">
@@ -253,9 +253,9 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
             );
           })}
         </ul>
-        <button type="button" onClick={() => setEditando(true)} className="text-[11px] text-slate-400 hover:text-indigo-600 hover:underline">
-          Esta {tipoCaixa} atende outra porta? Cadastrar os splitters dela
-        </button>
+        {spls.length > 0 && (
+          <p className="text-[10px] text-slate-400">Os splitters desta {tipoCaixa} são de outra porta: veja e edite na árvore da porta que usa.</p>
+        )}
       </div>
     );
   }
