@@ -30,12 +30,21 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Trash2, X, Zap } from "lucide-react";
+import { Boxes, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, X, Zap } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
   loading: () => (
     <div className="h-[420px] bg-gray-100 rounded-xl flex items-center justify-center">
+      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+    </div>
+  ),
+});
+
+const MapaRede = dynamic(() => import("@/components/rota-optica/MapaRede"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[520px] bg-gray-100 rounded-xl flex items-center justify-center">
       <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
     </div>
   ),
@@ -60,6 +69,8 @@ export default function RotaOpticaPage() {
   const [limpeza, setLimpeza] = useState<{ x: number; y: number } | null>(null);
   /** Janela do simulador de rompimento (OTDR) */
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
+  /** Tela principal: árvore das portas PON ou mapa da rede */
+  const [vista, setVista] = useState<"arvore" | "mapa">("arvore");
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -323,6 +334,24 @@ export default function RotaOpticaPage() {
         carregando ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
         ) : (
+          <div className="space-y-3">
+          <div className="inline-flex rounded-xl bg-slate-100 p-1" role="tablist">
+            {([["arvore", "Árvore", GitBranch], ["mapa", "Mapa da rede", MapIcon]] as const).map(([k, rot, Ic]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={vista === k}
+                onClick={() => setVista(k)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${vista === k ? "bg-white text-indigo-700 shadow" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                <Ic className="h-4 w-4" /> {rot}
+              </button>
+            ))}
+          </div>
+          {vista === "mapa" ? (
+            <MapaRede rotas={rotas} onAbrirRota={abrirRota} />
+          ) : (
           <ArvorePonView
             rotas={rotas}
             caixas={caixas}
@@ -334,6 +363,8 @@ export default function RotaOpticaPage() {
             onAbrirRota={abrirRota}
             onRotasMudaram={recarregar}
           />
+          )}
+          </div>
         )
       )}
 
