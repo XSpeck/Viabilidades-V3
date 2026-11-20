@@ -13,6 +13,7 @@ import { listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRe
 import PrimarioHub from "./PrimarioHub";
 import CaixaCto from "./CaixaCto";
 import CaixaCeo from "./CaixaCeo";
+import CaixaCt from "./CaixaCt";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
@@ -566,8 +567,9 @@ function JanelaNo({
   const ehHub = tipoVisual(no.elemento) === "hub";
   const ehCto = tipoVisual(no.elemento) === "cto";
   const ehCeo = tipoVisual(no.elemento) === "ceo";
-  const [aba, setAba] = useState<"primario" | "cto" | "ceo" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+  const ehCt = tipoVisual(no.elemento) === "ct";
+  const [aba, setAba] = useState<"primario" | "cto" | "ceo" | "ct" | "predio" | "emendas" | "diagrama" | "caminho">(
+    ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCt ? "ct" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
   /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
   const [editandoHub, setEditandoHub] = useState(false);
@@ -578,9 +580,10 @@ function JanelaNo({
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
           ...(ehCto ? ([["cto", "CTO"]] as const) : []),
           ...(ehCeo ? ([["ceo", "Emendas (CEO)"]] as const) : []),
+          ...(ehCt ? ([["ct", "CT"]] as const) : []),
           ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
           ...(ehPredio || ehCeo ? [] : ([["emendas", "Emendas"]] as const)),
-          ...(ehHub || ehPredio || ehCto ? [] : ([["diagrama", "Splitter e portas"]] as const)),
+          ...(ehHub || ehPredio || ehCto || ehCt ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -621,6 +624,8 @@ function JanelaNo({
         ) : (
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
+      ) : aba === "ct" ? (
+        <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} usuario={usuario} onSalva={onCaixaSalva} />
       ) : aba === "ceo" ? (
         <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} usuario={usuario} onSalva={onCaixaSalva} />
       ) : aba === "cto" ? (

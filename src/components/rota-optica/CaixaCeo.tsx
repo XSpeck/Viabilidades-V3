@@ -32,7 +32,7 @@ const W = 440;
 /** Nome curto do cabo que ainda diferencia um do outro: "12 FO · HUB → CE 9786" */
 const curto = (s: string, n = 20) => {
   const [tipo, ...resto] = s.split(" · ");
-  const t = (resto.length ? `${tipo.replace(/\s*ASO/i, "")} · ${resto.join(" · ")}` : tipo.split(" - ")[0]).trim();
+  const t = (resto.length ? `${tipo.replace(/\s*ASO\b/i, "")} · ${resto.join(" · ")}` : tipo.split(" - ")[0]).trim();
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 const k = (p: PontaFibra) => `${chaveCabo(p.cabo)}|${p.fibra}`;
@@ -145,6 +145,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
         obs: c?.obs,
         regras_emenda: regras,
         emendas: avulsas,
+        atendimento: c?.atendimento,
         atualizado_por: usuario,
       });
       onSalva(salva);

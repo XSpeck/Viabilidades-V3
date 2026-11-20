@@ -194,6 +194,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
         splitters: spls,
         regras_emenda: no.caixa?.regras_emenda,
         emendas: no.caixa?.emendas,
+        atendimento: no.caixa?.atendimento,
         splitter: spls[0]?.relacao,
         splitter_modelo: spls[0]?.modelo_id,
         portas: spls[0]?.portas ?? [],

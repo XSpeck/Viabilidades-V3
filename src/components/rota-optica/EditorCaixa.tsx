@@ -281,7 +281,7 @@ export default function EditorCaixa({
     setErro(null);
     try {
       // mantém o que esta tela não mexe (mapa de emendas da CEO)
-      const salva = await salvarCaixa({ chave, nome, splitter: splitter || undefined, splitter_modelo: modeloId || undefined, portas, obs, atualizado_por: usuario, regras_emenda: caixa?.regras_emenda, emendas: caixa?.emendas });
+      const salva = await salvarCaixa({ chave, nome, splitter: splitter || undefined, splitter_modelo: modeloId || undefined, portas, obs, atualizado_por: usuario, regras_emenda: caixa?.regras_emenda, emendas: caixa?.emendas, atendimento: caixa?.atendimento });
       onSalva(salva);
       if (soEdicao) onFechar();
       else setEditando(false);

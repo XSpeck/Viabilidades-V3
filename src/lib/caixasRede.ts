@@ -66,6 +66,8 @@ export interface CaixaRede {
   regras_emenda?: RegraEmenda[];
   /** CEO: emendas avulsas (exceções à regra, ou cabos sem regra) */
   emendas?: EmendaCaixa[];
+  /** CT: atendimento sem splitter — cada fibra que chega é uma porta (numero = fibra) */
+  atendimento?: PortaCaixa[];
   /** "1:8", "1:16"... vazio quando a caixa não tem splitter */
   splitter?: string;
   /** Modelo de splitter do cadastro de equipamentos */
@@ -185,6 +187,7 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       splitters: Array.isArray(data.splitters) && data.splitters.length ? data.splitters : undefined,
       regras_emenda: Array.isArray(data.regras_emenda) && data.regras_emenda.length ? data.regras_emenda : undefined,
       emendas: Array.isArray(data.emendas) && data.emendas.length ? data.emendas : undefined,
+      atendimento: Array.isArray(data.atendimento) && data.atendimento.length ? data.atendimento : undefined,
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
@@ -213,6 +216,9 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     splitters,
     regras_emenda: (dados.regras_emenda ?? []).map((x) => ({ de: x.de, para: x.para })),
     emendas: (dados.emendas ?? []).map((x) => ({ de: { cabo: x.de.cabo, fibra: x.de.fibra }, para: { cabo: x.para.cabo, fibra: x.para.fibra } })),
+    atendimento: (dados.atendimento ?? [])
+      .filter((p) => p.status !== "livre" || p.descricao?.trim())
+      .map((p) => (p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status })),
     splitter: dados.splitter ?? "",
     splitter_modelo: dados.splitter ? dados.splitter_modelo ?? "" : "",
     portas,
@@ -222,5 +228,6 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
   await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
   return { id, ...registro, splitters: splitters.length ? splitters : undefined,
     regras_emenda: registro.regras_emenda.length ? registro.regras_emenda : undefined,
-    emendas: registro.emendas.length ? registro.emendas : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+    emendas: registro.emendas.length ? registro.emendas : undefined,
+    atendimento: registro.atendimento.length ? registro.atendimento : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
 }
