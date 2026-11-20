@@ -117,9 +117,28 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
   const clientes = impacto?.no.clientes ?? 0;
 
   // ---------- Régua da rota ----------
-  const RW = 620, RH = 104, x0 = 24, x1 = RW - 24;
+  const RW = 620, RH = 112, x0 = 24, x1 = RW - 24;
   const X = (m: number) => x0 + (total ? (Math.max(0, Math.min(total, m)) / total) * (x1 - x0) : 0);
-  const yR = 58;
+  const yR = 70; // linha do cabo
+  const yIc = 47; // ícones das caixas, acima da linha
+  // caixas muito próximas (ex.: OLT e DIO na mesma estação) se abrem lado a lado, com uma perninha até o ponto real
+  const xsEl = (() => {
+    const xs = rota.elementos.map((_, i) => X(acc[i]));
+    const out = [...xs];
+    const PASSO = 22;
+    let i = 0;
+    while (i < xs.length) {
+      let j = i;
+      while (j + 1 < xs.length && xs[j + 1] - xs[j] < PASSO) j++;
+      if (j > i) {
+        const nGrupo = j - i + 1;
+        const centro = (xs[i] + xs[j]) / 2;
+        for (let k = i; k <= j; k++) out[k] = Math.max(x0, Math.min(x1, centro + (k - i - (nGrupo - 1) / 2) * PASSO));
+      }
+      i = j + 1;
+    }
+    return out;
+  })();
   const xRef = X(acc[refOk]);
   const xQ = res?.desdeOlt !== undefined ? X(res.desdeOlt) : null;
   const corte = res && res.tipo !== "alem" && res.tipo !== "antes" ? res.desdeOlt! : null;
@@ -259,7 +278,7 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
         <div className="flex min-h-[420px] flex-col gap-3">
           <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
             <svg viewBox={`0 0 ${RW} ${RH}`} className="block w-full h-auto select-none">
-              <text x="10" y="16" fontSize="9" fill="#94a3b8" fontWeight={800} letterSpacing=".08em">RÉGUA DA ROTA · {formatMetros(total)}</text>
+              <text x="10" y="14" fontSize="9" fill="#94a3b8" fontWeight={800} letterSpacing=".08em">RÉGUA DA ROTA · {formatMetros(total)}</text>
               {/* cabo: com sinal até o corte, vermelho depois */}
               <line x1={x0} y1={yR} x2={corte !== null ? X(corte) : x1} y2={yR} stroke="#22c55e" strokeWidth="5" strokeLinecap="round" />
               {corte !== null && <line x1={X(corte)} y1={yR} x2={x1} y2={yR} stroke="#dc2626" strokeWidth="4" strokeDasharray="6 5" strokeLinecap="round" />}
@@ -270,24 +289,26 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
                   {t.resFim > 0 && <rect x={X(acc[t.i] - t.resFim)} y={yR - 4} width={Math.max(1.5, X(acc[t.i]) - X(acc[t.i] - t.resFim))} height="8" fill="#fbbf24" opacity=".85" />}
                 </g>
               ))}
-              {/* caixas */}
+              {/* caixas: ícone acima da linha, número e metragem embaixo */}
               {rota.elementos.map((e, i) => (
                 <g key={i}>
-                  <IconeElementoSvg tipo={tipoVisual(e)} x={X(acc[i])} y={yR} tamanho={18} />
-                  <text x={X(acc[i])} y={yR + 22} fontSize="7.5" fill="#cbd5e1" textAnchor="middle">{i + 1}</text>
-                  <text x={X(acc[i])} y={yR + 32} fontSize="6.5" fill="#64748b" textAnchor="middle">{formatMetros(acc[i])}</text>
+                  <line x1={xsEl[i]} y1={yIc + 9} x2={X(acc[i])} y2={yR - 2} stroke="#475569" strokeWidth="1" />
+                  <circle cx={X(acc[i])} cy={yR} r="2.4" fill="#e2e8f0" />
+                  <IconeElementoSvg tipo={tipoVisual(e)} x={xsEl[i]} y={yIc} tamanho={18} />
+                  <text x={xsEl[i]} y={yR + 15} fontSize="7.5" fill="#cbd5e1" textAnchor="middle" fontWeight={700}>{i + 1}</text>
+                  <text x={xsEl[i]} y={yR + 25} fontSize="6.5" fill="#64748b" textAnchor="middle">{formatMetros(acc[i])}</text>
                 </g>
               ))}
               {/* OTDR e a medida */}
               <g>
-                <rect x={xRef - 13} y={18} width="26" height="16" rx="3" fill="#1e293b" stroke="#5eead4" />
-                <path d={`M${xRef - 9} ${30} l3 -6 l3 2 l3 -1 l2 4 l2 0 l1 -6 l1 6 l3 1`} stroke="#5eead4" fill="none" strokeWidth="1" />
-                <line x1={xRef} y1={34} x2={xRef} y2={yR - 10} stroke="#5eead4" strokeDasharray="2 2" />
+                <rect x={xRef - 13} y={4} width="26" height="16" rx="3" fill="#1e293b" stroke="#5eead4" />
+                <path d={`M${xRef - 9} ${16} l3 -6 l3 2 l3 -1 l2 4 l2 0 l1 -6 l1 6 l3 1`} stroke="#5eead4" fill="none" strokeWidth="1" />
+                <line x1={xRef} y1={20} x2={xRef} y2={yR - 3} stroke="#5eead4" strokeDasharray="2 2" />
               </g>
               {xQ !== null && res && (
                 <g>
-                  <line x1={xRef} y1={42} x2={xQ} y2={42} stroke="#f87171" strokeWidth="1.5" markerEnd="url(#seta)" />
-                  <text x={(xRef + xQ) / 2} y={39} fontSize="8.5" fill="#fecaca" textAnchor="middle" fontWeight={800}>{m0(d)}</text>
+                  <line x1={xRef} y1={29} x2={xQ} y2={29} stroke="#f87171" strokeWidth="1.5" markerEnd="url(#seta)" />
+                  <text x={(xRef + xQ) / 2} y={26} fontSize="8.5" fill="#fecaca" textAnchor="middle" fontWeight={800}>{m0(d)}</text>
                   {corte !== null && (
                     <g>
                       <circle cx={xQ} cy={yR} r="9" fill="#ef4444" opacity=".35">

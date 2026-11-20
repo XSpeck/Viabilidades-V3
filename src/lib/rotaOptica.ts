@@ -525,9 +525,9 @@ export function resumoRota(elementos: ElementoRota[]): ResumoRota {
   };
 }
 
+/** Medidas da Rota Óptica sempre em metros (o técnico mede em metros): "1.131 m" */
 export function formatMetros(m: number): string {
-  if (m < 1000) return `${Math.round(m)} m`;
-  return `${(m / 1000).toFixed(2).replace(".", ",")} km`;
+  return `${Math.round(m).toLocaleString("pt-BR")} m`;
 }
 
 export function formatDbm(v?: number): string {

@@ -127,7 +127,8 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   const campo = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none";
   const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
   const mini = "w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-right text-xs tabular-nums focus:border-indigo-400 focus:outline-none";
-  const fmtD = (m: number) => (unidade === "km" ? `${(m / 1000).toFixed(3).replace(".", ",")} km` : `${Math.round(m).toLocaleString("pt-BR")} m`);
+  // na tela tudo em metros; o km é só para digitar como o aparelho mostra
+  const fmtD = (m: number) => `${Math.round(m).toLocaleString("pt-BR")} m`;
 
   // ---------- Laudo em PDF ----------
   function exportar() {
@@ -290,7 +291,7 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
             <div className="grid grid-cols-2 gap-1.5 pt-1">
               <div>
                 <label className={rot}>Fim da fibra · Len ({unidade})</label>
-                <input className={mini} inputMode="decimal" value={fimTxt} onChange={(e) => setFimTxt(e.target.value)} placeholder={unidade === "km" ? fmtD(fimEsp?.distancia ?? 0).replace(" km", "") : String(fimEsp?.distancia ?? "")} />
+                <input className={mini} inputMode="decimal" value={fimTxt} onChange={(e) => setFimTxt(e.target.value)} placeholder={unidade === "km" ? ((fimEsp?.distancia ?? 0) / 1000).toFixed(3).replace(".", ",") : String(fimEsp?.distancia ?? "")} />
               </div>
               <div>
                 <label className={rot}>Perda total · Loss (dB)</label>
