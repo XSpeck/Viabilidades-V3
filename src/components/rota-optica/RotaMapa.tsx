@@ -5,6 +5,7 @@ import L from "leaflet";
 import { MapContainer, TileLayer, Polyline, Marker, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
+import { chaveElemento } from "@/lib/arvorePon";
 import { tipoVisual, type ElementoRota, type TipoElementoRota, type TrechoCabo } from "@/lib/rotaOptica";
 import { iconeSvg } from "./IconesRede";
 
@@ -13,6 +14,8 @@ interface Props {
   trechos: TrechoCabo[];
   selecionado: number | null;
   onSelect: (i: number) => void;
+  /** CDOIs que estão dentro de um prédio: aparecem com o ícone de prédio */
+  chavesPredio?: Set<string>;
 }
 
 /** Marcador do mapa: ícone do tipo, com número da ordem e destaque quando selecionado. */
@@ -46,7 +49,7 @@ function Centralizar({ alvo }: { alvo: [number, number] | null }) {
   return null;
 }
 
-export default function RotaMapa({ elementos, trechos, selecionado, onSelect }: Props) {
+export default function RotaMapa({ elementos, trechos, selecionado, onSelect, chavesPredio }: Props) {
   const pontosEl = elementos
     .map((e, i) => ({ e, i }))
     .filter(({ e }) => e.lat !== undefined && e.lon !== undefined);
@@ -107,7 +110,7 @@ export default function RotaMapa({ elementos, trechos, selecionado, onSelect }: 
         <Marker
           key={`e${i}`}
           position={[e.lat!, e.lon!]}
-          icon={marcador(tipoVisual(e), i + 1, i === selecionado)}
+          icon={marcador(chavesPredio?.has(chaveElemento(e)) ? "predio" : tipoVisual(e), i + 1, i === selecionado)}
           zIndexOffset={i === selecionado ? 1000 : 0}
           eventHandlers={{ click: () => onSelect(i) }}
         >

@@ -334,13 +334,37 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   const chaveLinha = (l: Linha) => chaveElemento({ nome: l.nome, codigo: l.codigo.trim() || undefined, tipo: l.tipo });
   const chavesNaRota = new Set(linhas.map(chaveLinha));
-  const pontosRede: PontoRede[] = redeInfo.itens.map(({ el }) => ({
-    nome: el.nome,
-    tipo: el.tipo,
-    lat: el.lat!,
-    lon: el.lon!,
-    naRota: chavesNaRota.has(chaveElemento(el)),
-  }));
+  // CDOIs de um mesmo prédio viram um marcador só (o prédio), na posição da primeira CDOI
+  const predioDaChave = new Map<string, PredioRede>();
+  predios.forEach((p) => p.chaves.forEach((k) => predioDaChave.set(k, p)));
+  const pontosRede: PontoRede[] = [];
+  /** Para cada marcador da rede: o item (caixa) que ele representa */
+  const itemDoPonto: number[] = [];
+  const prediosNoMapa = new Set<string>();
+  redeInfo.itens.forEach(({ el }, k) => {
+    const pr = predioDaChave.get(chaveElemento(el));
+    if (pr) {
+      if (prediosNoMapa.has(pr.id)) return;
+      prediosNoMapa.add(pr.id);
+      pontosRede.push({
+        nome: `${pr.nome} · ${pr.pontos.length} CDOI${pr.pontos.length !== 1 ? "s" : ""}`,
+        tipo: "predio",
+        lat: el.lat!,
+        lon: el.lon!,
+        naRota: pr.chaves.some((c) => chavesNaRota.has(c)),
+      });
+      itemDoPonto.push(k);
+      return;
+    }
+    pontosRede.push({ nome: el.nome, tipo: el.tipo, lat: el.lat!, lon: el.lon!, naRota: chavesNaRota.has(chaveElemento(el)) });
+    itemDoPonto.push(k);
+  });
+  /** Clique num marcador da rede: no prédio com a ferramenta Prédio, a CDOI nova entra nele */
+  function clicarRede(k: number) {
+    const p = pontosRede[k];
+    if (p?.tipo === "predio" && ferramenta === "predio") return clicarMapa(p.lat, p.lon);
+    usarDaRede(itemDoPonto[k]);
+  }
 
   const tiposDeCabo = catalogo.filter((c) => c.categoria === "cabo");
   /** Nomes das caixas da rede (para o nome automático não repetir) */
@@ -979,12 +1003,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   const pontosMapa: PontoEditor[] = linhas.map((l) => {
     const p = posDe(l);
+    const emPredio = l.tipo === "cdoi" && (!!l.predio || predioDaChave.has(chaveLinha(l)));
     const f = n(l.fibra_entrada);
     const info = f ? infoFibra(l.cabo_entrada, l.fibra_entrada) : null;
     const d = n(l.distancia_m);
     return {
-      nome: l.nome,
-      tipo: l.tipo,
+      nome: emPredio ? `${l.nome} · ${l.predio?.nome || predioDaChave.get(chaveLinha(l))?.nome || "prédio"}` : l.nome,
+      tipo: emPredio ? "predio" : l.tipo,
       lat: p?.lat,
       lon: p?.lon,
       vertices: l.vertices,
@@ -1571,7 +1596,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
             rede={pontosRede}
             redeCabos={redeInfo.cabos}
-            onClicarRede={usarDaRede}
+            onClicarRede={clicarRede}
           />
 
           {/* Paleta de ferramentas */}

@@ -23,6 +23,7 @@ import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
+import { listarPredios } from "@/lib/prediosRede";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
@@ -390,6 +391,13 @@ function VisualizarRota({
 }) {
   const [sel, setSel] = useState<number | null>(null);
   const [janela, setJanela] = useState<{ x: number; y: number } | null>(null);
+  /** CDOIs que estão em prédios (no mapa aparecem como prédio) */
+  const [chavesPredio, setChavesPredio] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let vivo = true;
+    listarPredios().then((ps) => vivo && setChavesPredio(new Set(ps.flatMap((p) => p.chaves)))).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   const ultimoClique = useRef({ x: 300, y: 200 });
   const res = resumoRota(rota.elementos);
 
@@ -453,7 +461,7 @@ function VisualizarRota({
         </div>
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-3">
-            <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} />
+            <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} chavesPredio={chavesPredio} />
           </div>
           {res.cabos.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 p-3">
