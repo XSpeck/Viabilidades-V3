@@ -809,11 +809,6 @@ function curtoNome(nome: string) {
   return cortar(nome.split(" - ")[0].split(" / ")[0], 26, nome);
 }
 
-/** Pontas (fins) abaixo de um nó */
-function pontasAbaixo(n: NoArvore): NoArvore[] {
-  return n.filhos.length ? n.filhos.flatMap(pontasAbaixo) : [n];
-}
-
 /** Nome da rota sem o prefixo da porta PON ("0/6/0 AND 9" → "AND 9") */
 function nomeRotaCurto(nome: string) {
   return nome.replace(/^\s*\d+\/\d+\/\d+\s+/, "");
@@ -824,21 +819,64 @@ function nomeRotaCurto(nome: string) {
  * quantas rotas e pontas ele leva, a pior potência e a ponta mais longe. Embaixo, as rotas de cada ramo.
  */
 function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica[]; onAbrirRota: (id: string) => void }) {
-  const terminam = rotas.filter((r) => no.fimDe.includes(r.id));
-  if (!no.filhos.length && !terminam.length) return null;
-  const totalRotas = new Set([...no.filhos.flatMap((f) => f.rotas), ...no.fimDe]).size;
-  const botaoRota = (r: RotaOptica) => (
-    <button
-      key={r.id}
-      type="button"
-      onClick={() => onAbrirRota(r.id)}
-      className="inline-flex max-w-full items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-50"
-      title={r.nome}
-    >
-      <RouteIcon className="h-3 w-3 shrink-0" />
-      <span className="truncate">{nomeRotaCurto(r.nome)}</span>
-    </button>
-  );
+  const ids = new Set([...no.filhos.flatMap((f) => f.rotas), ...no.fimDe]);
+  if (!ids.size) return null;
+  const doNo = rotas.filter((r) => ids.has(r.id));
+  // hierarquia: rota principal (tronco) em cima; sub-rotas embaixo, indentadas
+  const filhasDe = (id: string) => doNo.filter((r) => r.pai?.rota_id === id);
+  const raizes = doNo.filter((r) => !r.pai || !ids.has(r.pai.rota_id));
+  const linha = (r: RotaOptica, nivel: number): React.ReactNode => {
+    const els = r.elementos;
+    const proprio = r.tronco ? els[r.tronco] : els[1];
+    const fim = els[els.length - 1];
+    const pot = fim?.potencia_saida ?? fim?.potencia_entrada;
+    const nv = nivelPotencia(pot);
+    const metros = els.reduce((acc, e, i) => acc + (i > 0 ? e.distancia_m ?? 0 : 0), 0);
+    const c = proprio ? corFibra(proprio.fibra_entrada, proprio.cabo_entrada) : null;
+    const ehTronco = !r.pai;
+    const ancora = r.tronco ? els[r.tronco - 1] : undefined;
+    return (
+      <li key={r.id}>
+        <button
+          type="button"
+          onClick={() => onAbrirRota(r.id)}
+          className="flex w-full items-center gap-2 py-1.5 pr-2.5 text-left hover:bg-indigo-50/60"
+          style={{ paddingLeft: 10 + nivel * 18 }}
+          title={r.nome}
+        >
+          {nivel > 0 && <span className="shrink-0 text-slate-300">└</span>}
+          {ehTronco ? <RouteIcon className="h-4 w-4 shrink-0 text-indigo-600" /> : <IconeElemento tipo={tipoVisual(fim)} tamanho={18} />}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-slate-800">
+              {ehTronco && <span className="mr-1 rounded bg-indigo-100 px-1 text-[9px] font-bold uppercase text-indigo-700">tronco</span>}
+              {nomeRotaCurto(r.nome)}
+            </p>
+            <p className="flex items-center gap-1 truncate text-[10px] text-slate-500">
+              {ehTronco ? (
+                <>{curtoNome(els[0]?.nome ?? "")} → {curtoNome(fim?.nome ?? "")}</>
+              ) : (
+                <>
+                  {c && proprio?.fibra_entrada ? (
+                    <>
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
+                      {TF(proprio.fibra_entrada, proprio.cabo_entrada)}
+                      <span className="text-slate-300">·</span>
+                    </>
+                  ) : null}
+                  {r.pai?.meia_porta ? "meia porta · " : ""}sai de {curtoNome(ancora?.nome ?? "?")}
+                </>
+              )}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-bold tabular-nums" style={{ color: nv.cor }}>{pot !== undefined ? `${dbm(pot)} dBm` : "—"}</p>
+            <p className="text-[10px] text-slate-400">{formatMetros(metros)}</p>
+          </div>
+        </button>
+        {filhasDe(r.id).length > 0 && <ul>{filhasDe(r.id).map((x) => linha(x, nivel + 1))}</ul>}
+      </li>
+    );
+  };
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center gap-2 border-b border-slate-100 px-2.5 py-1.5">
@@ -846,55 +884,10 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
           {no.filhos.length ? "Ramificações a partir daqui" : "Rotas que terminam aqui"}
         </p>
         <span className="ml-auto text-[10px] text-slate-400">
-          {no.filhos.length ? `${no.filhos.length} ramo${no.filhos.length !== 1 ? "s" : ""} · ` : ""}{totalRotas} rota{totalRotas !== 1 ? "s" : ""}
+          {ids.size} rota{ids.size !== 1 ? "s" : ""}
         </span>
       </div>
-      <ul className="divide-y divide-slate-100">
-        {no.filhos.map((f) => {
-          const t = tipoVisual(f.elemento);
-          const c = corFibra(f.elemento.fibra_entrada, f.elemento.cabo_entrada);
-          const pontas = pontasAbaixo(f);
-          const pots = pontas.map((x) => x.elemento.potencia_saida ?? x.elemento.potencia_entrada).filter((v): v is number => v !== undefined);
-          const pior = pots.length ? Math.min(...pots) : undefined;
-          const nv = nivelPotencia(pior);
-          const longe = Math.max(...pontas.map((x) => x.distancia));
-          const rs = rotas.filter((r) => f.rotas.includes(r.id));
-          const agrupa = t === "predio";
-          return (
-            <li key={f.id} className="px-2.5 py-2">
-              <div className="flex items-center gap-2">
-                <IconeElemento tipo={t} tamanho={22} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-slate-800">{curtoNome(f.elemento.nome)}</p>
-                  <p className="flex items-center gap-1 text-[10px] text-slate-500">
-                    {f.elemento.fibra_entrada ? (
-                      <>
-                        <span className="inline-block h-2 w-2 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                        {agrupa ? `${new Set(filhosReais(f).map((x) => x.elemento.fibra_entrada)).size} fibras` : TF(f.elemento.fibra_entrada, f.elemento.cabo_entrada)}
-                        <span className="text-slate-300">·</span>
-                      </>
-                    ) : null}
-                    {curtoNome(f.elemento.cabo_entrada ?? "cabo ?")}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-xs font-bold tabular-nums" style={{ color: nv.cor }}>{pior !== undefined ? `${dbm(pior)} dBm` : "—"}</p>
-                  <p className="text-[10px] text-slate-400">
-                    {pontas.length} ponta{pontas.length !== 1 ? "s" : ""} · até {formatMetros(longe)}
-                  </p>
-                </div>
-              </div>
-              {rs.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1 pl-7">{rs.map(botaoRota)}</div>}
-            </li>
-          );
-        })}
-        {terminam.length > 0 && (
-          <li className="px-2.5 py-2">
-            {no.filhos.length > 0 && <p className="mb-1 text-[10px] font-semibold text-slate-500">Terminam nesta caixa</p>}
-            <div className="flex flex-wrap gap-1">{terminam.map(botaoRota)}</div>
-          </li>
-        )}
-      </ul>
+      <ul className="py-0.5">{raizes.map((r) => linha(r, 0))}</ul>
     </div>
   );
 }

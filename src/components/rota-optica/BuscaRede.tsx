@@ -73,16 +73,31 @@ export default function BuscaRede({ rotas, arvores, onRota, onElemento, onCabo }
   const indice = useMemo(() => {
     const arvoreDaRota = new Map<string, ArvorePon>();
     arvores.forEach((a) => a.rotas.forEach((r) => arvoreDaRota.set(r.id, a)));
-    const rs: (Resultado & { busca: string })[] = rotas.map((r) => {
+    // Rota principal de cada rota (sobe pelas mães)
+    const porId = new Map(rotas.map((r) => [r.id, r]));
+    const principalDe = (r: RotaOptica) => {
+      let x = r;
+      for (let g = 0; x.pai && porId.has(x.pai.rota_id) && g < 20; g++) x = porId.get(x.pai.rota_id)!;
+      return x;
+    };
+    const familia = new Map<string, RotaOptica[]>();
+    rotas.forEach((r) => {
+      const p = principalDe(r);
+      familia.set(p.id, [...(familia.get(p.id) ?? []), r]);
+    });
+    const rs: (Resultado & { busca: string })[] = [...familia.entries()].map(([id, membros]) => {
+      const r = porId.get(id)!;
       const res = resumoRota(r.elementos);
       const a = arvoreDaRota.get(r.id);
+      const subs = membros.length - 1;
       return {
         tipo: "rota",
         id: `r:${r.id}`,
         titulo: r.nome,
-        sub: `${a ? a.rotulo + " · " : ""}${r.elementos.length} elementos · ${formatMetros(res.distancia_m)} · ${r.origem === "geogrid" ? "GeoGrid" : "manual"}`,
+        sub: `${a ? a.rotulo + " · " : ""}tronco ${r.elementos.length} elementos · ${formatMetros(res.distancia_m)}${subs ? ` · ${subs} sub-rota${subs > 1 ? "s" : ""}` : ""}`,
         arvore: a?.chave,
-        busca: norm(textoBuscaRota(r)),
+        // acha a principal também pelo nome/caixas das sub-rotas dela
+        busca: norm(membros.map(textoBuscaRota).join(" ")),
       };
     });
     const es: (Resultado & { busca: string })[] = [];
