@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Building2, Cable as CableIcon, Loader2, Package, Trash2 } from "lucide-react";
-import type { RotaOptica } from "@/lib/rotaOptica";
+import { Building2, Cable as CableIcon, GitBranch, Loader2, Package, Trash2 } from "lucide-react";
+import { atualizarRota, type RotaOptica } from "@/lib/rotaOptica";
+import { candidatasSubRota, paraGravar, type CandidataSubRota } from "@/lib/subRotas";
 import { chaveElemento } from "@/lib/arvorePon";
 import { excluirCaixa, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, excluirCabo, type CaboRede } from "@/lib/cabosRede";
@@ -22,9 +23,11 @@ interface Props {
   onCabos: (c: CaboRede[]) => void;
   /** Prédios mudaram (a árvore relê) */
   onPredios: () => void;
+  /** Rotas mudaram (relê) */
+  onRotas?: () => void;
 }
 
-export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, onCabos, onPredios }: Props) {
+export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, onCabos, onPredios, onRotas }: Props) {
   const [predios, setPredios] = useState<PredioRede[] | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -51,16 +54,41 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
   const cabosSobra = cabos.filter((c) => !cabosRotas.has(c.chave));
   const total = prediosSobra.length + caixasSobra.length + cabosSobra.length;
 
-  async function rodar(id: string, fn: () => Promise<void>) {
+  async function rodar(id: string, fn: () => Promise<void>, acao = "apagar") {
     setOcupado(id);
     setErro(null);
     try {
       await fn();
     } catch (e) {
-      setErro(/permission/i.test(String(e)) ? "Sem permissão para apagar." : "Não foi possível apagar.");
+      setErro(/permission/i.test(String(e)) ? `Sem permissão para ${acao}.` : `Não foi possível ${acao}.`);
     } finally {
       setOcupado(null);
     }
+  }
+
+  // Rotas completas antigas que começam igual a outra: viram sub-rota (o tronco fica só na rota dona)
+  const candidatas = candidatasSubRota(rotas, chaveCabo);
+  async function converterUma(c: CandidataSubRota) {
+    const r = c.rota;
+    await atualizarRota(
+      r.id,
+      paraGravar(
+        { pai: { rota_id: c.dona.id, chave: chaveElemento(r.elementos[c.k]) }, tronco: c.k + 1 },
+        { nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por }
+      )
+    );
+  }
+  const converter = (c: CandidataSubRota) =>
+    rodar(`s${c.rota.id}`, async () => {
+      await converterUma(c);
+      onRotas?.();
+    }, "converter");
+  async function converterTodas() {
+    if (!confirm(`Converter ${candidatas.length} rota${candidatas.length > 1 ? "s" : ""} em sub-rota? O caminho continua igual; o tronco passa a ficar só na rota dona.`)) return;
+    await rodar("todas-sub", async () => {
+      for (const c of candidatas) await converterUma(c);
+      onRotas?.();
+    }, "converter");
   }
   const apagarPredio = (p: PredioRede) =>
     rodar(`p${p.id}`, async () => {
@@ -124,6 +152,32 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
         )}
       </div>
       {erro && <p className="text-xs text-red-600">{erro}</p>}
+
+      <section className="space-y-1.5">
+        <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+          <GitBranch className="h-4 w-4 text-slate-500" /> Virar sub-rota
+          <span className={`rounded-full px-1.5 text-[10px] ${candidatas.length ? "bg-indigo-100 text-indigo-800" : "bg-emerald-100 text-emerald-700"}`}>{candidatas.length}</span>
+          <span className="ml-1 font-normal text-[10px] text-slate-400">rotas que copiam o tronco de outra</span>
+          {candidatas.length > 1 && (
+            <button type="button" disabled={!!ocupado} onClick={converterTodas} className={`${btn} ml-auto border-indigo-300 bg-indigo-600 text-white hover:bg-indigo-700`}>
+              {ocupado === "todas-sub" ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Converter todas
+            </button>
+          )}
+        </p>
+        {candidatas.map((c) => (
+          <div key={c.rota.id} className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-2 py-1.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-slate-800">{c.rota.nome}</p>
+              <p className="truncate text-[10px] text-slate-500">
+                sub-rota de <b>{c.dona.nome}</b>, saindo de <b>{c.rota.elementos[c.k].nome}</b> · {c.k + 1} elementos de tronco
+              </p>
+            </div>
+            <button type="button" disabled={!!ocupado} onClick={() => converter(c)} className={`${btn} border-indigo-300 bg-indigo-50 text-indigo-700`}>
+              {ocupado === `s${c.rota.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitBranch className="h-3 w-3" />} Converter
+            </button>
+          </div>
+        ))}
+      </section>
 
       <section className="space-y-1.5">
         {secao(<Building2 className="h-4 w-4 text-slate-500" />, "Prédios", prediosSobra.length, "prédio sem rota, ou CDOIs dele sem rota")}

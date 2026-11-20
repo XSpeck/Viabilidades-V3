@@ -139,3 +139,55 @@ export function paraGravar(r: Pick<RotaOptica, "pai" | "tronco">, dados: RotaOpt
 export function subRotasDe(id: string, todas: RotaOptica[]): RotaOptica[] {
   return todas.filter((x) => x.pai?.rota_id === id);
 }
+
+/** Ancestrais de uma rota (ids), da mãe para cima */
+function ancestrais(r: RotaOptica, todas: RotaOptica[]): Set<string> {
+  const ids = new Set<string>();
+  let atual: RotaOptica | undefined = r;
+  for (let guarda = 0; atual?.pai && guarda < 20; guarda++) {
+    ids.add(atual.pai.rota_id);
+    atual = todas.find((x) => x.id === atual!.pai!.rota_id);
+  }
+  return ids;
+}
+
+export interface CandidataSubRota {
+  rota: RotaOptica;
+  /** rota que fica com o tronco */
+  dona: RotaOptica;
+  /** índice da caixa onde ramifica */
+  k: number;
+}
+
+/**
+ * Rotas completas (antigas) que começam igual a outra rota: dá para virarem sub-rota.
+ * Mesmo caminho = mesmas caixas, mesmo cabo e mesma fibra em cada trecho. A mais nova vira sub-rota da mais antiga.
+ */
+export function candidatasSubRota(todas: RotaOptica[], chaveCabo: (c: string) => string): CandidataSubRota[] {
+  const mesmoTrecho = (a: ElementoRota, b: ElementoRota, j: number) =>
+    chaveElemento(a) === chaveElemento(b) &&
+    (j === 0 || ((a.cabo_entrada ? chaveCabo(a.cabo_entrada) : "") === (b.cabo_entrada ? chaveCabo(b.cabo_entrada) : "") && a.fibra_entrada === b.fibra_entrada));
+  const maisAntiga = (a: RotaOptica, b: RotaOptica) => {
+    const ta = a.criado_em ?? "", tb = b.criado_em ?? "";
+    return ta !== tb ? ta < tb : a.id < b.id;
+  };
+  const saida: CandidataSubRota[] = [];
+  for (const r of todas) {
+    if (r.pai || r.elementos.length < 3) continue;
+    let melhor: { m: RotaOptica; L: number } | null = null;
+    for (const m of todas) {
+      if (m.id === r.id || !maisAntiga(m, r)) continue;
+      let L = 0;
+      while (L < r.elementos.length && L < m.elementos.length && mesmoTrecho(r.elementos[L], m.elementos[L], L)) L++;
+      // precisa ramificar depois da OLT e ter caixas próprias depois da ramificação
+      if (L < 2 || L >= r.elementos.length) continue;
+      if (!melhor || L > melhor.L || (L === melhor.L && maisAntiga(m, melhor.m))) melhor = { m, L };
+    }
+    if (!melhor) continue;
+    const k = melhor.L - 1;
+    const dona = donoDoElemento(melhor.m, k, todas);
+    if (dona.id === r.id || ancestrais(dona, todas).has(r.id)) continue;
+    saida.push({ rota: r, dona, k });
+  }
+  return saida;
+}

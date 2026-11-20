@@ -327,7 +327,7 @@ export default function RotaOpticaPage() {
           inicial={limpeza}
           largura={520}
           titulo="Limpeza"
-          subtitulo="Prédios, caixas e cabos que nenhuma rota usa"
+          subtitulo="Sub-rotas a converter e prédios, caixas e cabos que nenhuma rota usa"
           icone={<Trash2 className="w-5 h-5" />}
           corBarra="bg-slate-800"
           onFechar={() => setLimpeza(null)}
@@ -340,6 +340,7 @@ export default function RotaOpticaPage() {
             onCaixas={setCaixas}
             onCabos={setCabos}
             onPredios={recarregar}
+            onRotas={recarregar}
           />
         </Janela>
       )}
