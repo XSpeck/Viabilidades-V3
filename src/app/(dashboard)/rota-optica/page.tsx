@@ -20,7 +20,8 @@ import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiag
 import RotaEditor from "@/components/rota-optica/RotaEditor";
 import ArvorePonView from "@/components/rota-optica/ArvorePon";
 import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
-import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import { listarPredios } from "@/lib/prediosRede";
@@ -531,48 +532,54 @@ function VisualizarRota({
             </div>
           )}
         </div>
-        <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            ["Distância total", formatMetros(res.distancia_m)],
-            ["Potência na OLT", formatDbm(res.potencia_inicial)],
-            ["Potência no fim", formatDbm(res.potencia_final)],
-            ["Perda total", res.perda_db !== undefined ? `${res.perda_db.toFixed(2).replace(".", ",")} dB` : "—"],
-            ["Caixas de emenda", String(res.emendas)],
-            ["Cabos percorridos", String(res.cabos.length)],
-          ].map(([k, v]) => (
-            <div key={k} className="bg-gray-50 rounded-lg px-3 py-2">
-              <dt className="text-[11px] text-gray-500">{k}</dt>
-              <dd className="text-base font-bold text-gray-900 tabular-nums">{v}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* Números da rota numa linha só */}
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-gray-600">
+          <span><b className="text-gray-900 tabular-nums">{formatMetros(res.distancia_m)}</b></span>
+          <span className="text-gray-300">·</span>
+          <span className="tabular-nums">
+            <b className="text-gray-900">{formatDbm(res.potencia_inicial)}</b> → <b className="text-gray-900">{formatDbm(res.potencia_final)}</b>
+            {res.perda_db !== undefined && <span className="text-gray-500"> (perda {res.perda_db.toFixed(2).replace(".", ",")} dB)</span>}
+          </span>
+          {res.emendas > 0 && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span>{res.emendas} emenda{res.emendas > 1 ? "s" : ""}</span>
+            </>
+          )}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-start">
+      <div className="bg-white rounded-xl border border-gray-200 p-3">
+        <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} chavesPredio={chavesPredio} />
+      </div>
+
+      {res.cabos.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-3">
-          <p className="text-xs text-gray-500 px-2 pb-2">
-            A cor da linha é a cor real da fibra. Clique num elemento (aqui ou no mapa) para abrir a janela com os detalhes.
-          </p>
+          <p className="text-xs font-semibold text-gray-700 mb-1.5">Cabos ({res.cabos.length})</p>
+          <ul className="divide-y divide-gray-100">
+            {res.cabos.map((c) => {
+              const cod = codigoDoCabo(c);
+              return (
+                <li key={c} className="flex min-w-0 items-center gap-2 py-1 text-xs text-gray-700">
+                  {cod ? <EtiquetaCabo codigo={cod} /> : <IconeCabo tamanho={16} />}
+                  <span className="min-w-0 truncate">{semCodigo(c)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Lista escrita: recolhida (a árvore e o mapa já mostram o caminho) */}
+      <details className="group bg-white rounded-xl border border-gray-200 px-3 py-2">
+        <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-xs font-semibold text-gray-500">
+          Rota escrita (elemento por elemento)
+          <span className="ml-auto text-gray-400 transition group-open:rotate-180">▾</span>
+        </summary>
+        <div className="mt-2">
           <RotaDiagrama elementos={rota.elementos} selecionado={sel} onSelect={selecionar} />
         </div>
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-3">
-            <RotaMapa elementos={rota.elementos} trechos={rota.trechos} selecionado={sel} onSelect={selecionar} chavesPredio={chavesPredio} />
-          </div>
-          {res.cabos.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-3">
-              <p className="text-xs font-semibold text-gray-700 mb-2">Cabos desta rota</p>
-              <ul className="flex flex-wrap gap-1.5">
-                {res.cabos.map((c) => (
-                  <li key={c} className="flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full pl-1 pr-2.5 py-0.5">
-                    <IconeCabo tamanho={16} /> {c}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
+      </details>
 
       {janela && elSel && sel !== null && (
         <Janela
