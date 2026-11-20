@@ -158,6 +158,19 @@ export function filhosReais(n: NoArvore): NoArvore[] {
   return n.filhos.flatMap((f) => (f.elemento.tipo === "predio" ? filhosReais(f) : [f]));
 }
 
+/** O nó é a volta pela mesma caixa, pelo mesmo cabo (ex.: HUB → CTO → HUB no mesmo poste) */
+export function ehVolta(n: NoArvore): boolean {
+  const c = n.pai, avo = c?.pai;
+  if (!c || !avo || !n.elemento.cabo_entrada || !c.elemento.cabo_entrada) return false;
+  const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  return chaveElemento(n.elemento) === chaveElemento(avo.elemento) && norm(n.elemento.cabo_entrada) === norm(c.elemento.cabo_entrada);
+}
+
+/** Filho que é a volta deste nó (mesmo cabo, de volta para a caixa anterior) */
+export function voltaDe(c: NoArvore): NoArvore | undefined {
+  return c.filhos.find(ehVolta);
+}
+
 /** O nó está dentro de um prédio (CDOI agrupada)? Na árvore ele não é desenhado; o prédio aparece no lugar. */
 export function dentroDePredio(n: NoArvore): boolean {
   for (let p = n.pai; p; p = p.pai) if (p.elemento.tipo === "predio") return true;

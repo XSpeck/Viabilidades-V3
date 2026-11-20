@@ -89,7 +89,8 @@ export default function MapaRede({ rotas, onAbrirRota }: Props) {
         ? t.pontos.map((p) => [p.lat, p.lon])
         : a.lat !== undefined && a.lon !== undefined && e.lat !== undefined && e.lon !== undefined ? [[a.lat, a.lon], [e.lat, e.lon]] : [];
       if (pts.length < 2) return;
-      const k = `${chaveCabo(e.cabo_entrada ?? `trecho${i}`)}|${chaveElemento(a)}|${chaveElemento(e)}`;
+      // ida e volta pelo mesmo cabo entre as mesmas caixas: um traçado só (as fibras se somam)
+      const k = `${chaveCabo(e.cabo_entrada ?? `trecho${i}`)}|${[chaveElemento(a), chaveElemento(e)].sort().join("|")}`;
       const c = cabos.get(k) ?? { nome: e.cabo_entrada ?? "cabo", cor: t?.cor ?? "#3b82f6", pts, rotas: [], fibras: new Set<number>(), metros: e.distancia_m };
       if (!c.rotas.includes(r)) c.rotas.push(r);
       if (e.fibra_entrada) c.fibras.add(e.fibra_entrada);

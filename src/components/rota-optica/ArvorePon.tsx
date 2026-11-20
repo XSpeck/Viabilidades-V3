@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
-import { caminhoAte, chaveElemento, dentroDePredio, filhosReais, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import { caminhoAte, chaveElemento, dentroDePredio, ehVolta, filhosReais, voltaDe, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
@@ -361,7 +361,15 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const cor = corFibra(c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
               const temCabo = !!c.elemento.cabo_entrada;
               const nFibrasPredio = c.elemento.tipo === "predio" ? new Set(filhosReais(c).map((x) => x.elemento.fibra_entrada)).size : 0;
-              const rot = nFibrasPredio > 1 ? `${nFibrasPredio} fibras` : c.elemento.fibra_entrada ? TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada) : "cabo";
+              // cabo de ida e volta (HUB → CTO → HUB): as duas fibras no mesmo trecho
+              const volta = voltaDe(c);
+              const corVolta = volta ? corFibra(volta.elemento.fibra_entrada, volta.elemento.cabo_entrada).hex : null;
+              const eVolta = ehVolta(c);
+              const rot = eVolta
+                ? `↩ volta F${c.elemento.fibra_entrada ?? "?"}`
+                : volta
+                  ? `F${c.elemento.fibra_entrada ?? "?"} ⇄ F${volta.elemento.fibra_entrada ?? "?"}`
+                  : nFibrasPredio > 1 ? `${nFibrasPredio} fibras` : c.elemento.fibra_entrada ? TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada) : "cabo";
               const lw = 36 + rot.length * 6;
               // Reta: etiqueta no meio do trecho; ramo: no trecho horizontal final, longe do ícone
               const ex = y1 === y2 ? (x1 + x2) / 2 : (mx + x2 - 16) / 2;
@@ -374,13 +382,32 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 >
                   {temCabo && <title>{`${c.elemento.cabo_entrada} · fibra ${c.elemento.fibra_entrada ?? "?"} — clique para ver as fibras do cabo`}</title>}
                   <path d={d} fill="none" stroke="transparent" strokeWidth={16} strokeLinejoin="round" />
-                  <path d={d} fill="none" stroke="#0f172a" strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />
-                  <path d={d} fill="none" stroke={cor} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" />
+                  {eVolta ? (
+                    <path d={d} fill="none" stroke={cor} strokeWidth={2.2} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />
+                  ) : corVolta ? (
+                    <>
+                      <path d={d} fill="none" stroke="#0f172a" strokeWidth={10} strokeLinejoin="round" strokeLinecap="round" />
+                      <path d={d} transform="translate(0 -1.8)" fill="none" stroke={cor} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />
+                      <path d={d} transform="translate(0 1.8)" fill="none" stroke={corVolta} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />
+                    </>
+                  ) : (
+                    <>
+                      <path d={d} fill="none" stroke="#0f172a" strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />
+                      <path d={d} fill="none" stroke={cor} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" />
+                    </>
+                  )}
                   {temCabo && (
                     <g transform={`translate(${ex - lw / 2} ${y2 - 9})`}>
                       <rect width={lw} height={18} rx={9} fill="#fff" stroke="#0f172a" strokeWidth={1.3} />
                       <svg x={2} y={2} width={14} height={14} viewBox="0 0 32 32" dangerouslySetInnerHTML={{ __html: DESENHO_CABO }} />
-                      <circle cx={lw - 9} cy={9} r={4} fill={cor} stroke="#0f172a" strokeWidth={1} />
+                      {corVolta ? (
+                        <>
+                          <path d={`M${lw - 9} 5 A4 4 0 0 0 ${lw - 9} 13 Z`} fill={cor} stroke="#0f172a" strokeWidth={0.8} />
+                          <path d={`M${lw - 9} 5 A4 4 0 0 1 ${lw - 9} 13 Z`} fill={corVolta} stroke="#0f172a" strokeWidth={0.8} />
+                        </>
+                      ) : (
+                        <circle cx={lw - 9} cy={9} r={4} fill={cor} stroke="#0f172a" strokeWidth={1} />
+                      )}
                       <text x={19} y={12.6} fontSize={9.5} fontWeight={600} fill="#0f172a">{rot}</text>
                     </g>
                   )}
@@ -456,7 +483,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                   )}
                   <text x={x} y={yy - tam / 2 - 6} fontSize={11} textAnchor="middle" fontWeight={ativo ? 700 : 600} fill="#0f172a"
                     stroke="#fff" strokeWidth={3.5} paintOrder="stroke">
-                    {nomeCurto(n.elemento.nome)}
+                    {ehVolta(n) ? `↩ ${nomeCurto(n.elemento.nome)}` : nomeCurto(n.elemento.nome)}
                   </text>
                 </g>
               );
