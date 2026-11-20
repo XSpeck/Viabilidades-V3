@@ -20,6 +20,8 @@ import {
   DollarSign,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { canAccess, getCargo, CARGO_LABEL } from "@/lib/access";
 import type { UserCargo, PapelFinanceiro } from "@/types";
@@ -63,6 +65,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  /** No computador o menu pode ficar recolhido (só ícones); a escolha fica guardada neste navegador */
+  const [recolhido, setRecolhido] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem("menu_recolhido") === "1";
+    } catch {
+      return false;
+    }
+  });
+  function alternarRecolhido() {
+    setRecolhido((v) => {
+      try { window.localStorage.setItem("menu_recolhido", v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  }
+  /** Some no computador quando recolhido (no celular o menu abre inteiro) */
+  const soAberto = recolhido ? "md:hidden" : "";
 
   useEffect(() => { setOpen(false); }, [pathname]);
 
@@ -97,16 +115,17 @@ export default function Sidebar() {
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-72 md:w-64 min-h-screen bg-gray-900 text-white flex flex-col transform transition-transform duration-200 ease-in-out md:translate-x-0 ${
+        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 w-72 ${recolhido ? "md:w-16" : "md:w-64"} min-h-screen bg-gray-900 text-white flex flex-col shrink-0 transform transition-[transform,width] duration-200 ease-in-out md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <div>
+        <div className={`flex items-center justify-between border-b border-gray-700 ${recolhido ? "p-6 md:justify-center md:px-2 md:py-5" : "p-6"}`}>
+          <div className={soAberto}>
             <h1 className="text-lg font-bold text-white">🔍 Validador V3</h1>
             <p className="text-xs text-gray-400 mt-0.5">Sistema de Viabilização</p>
           </div>
+          {recolhido && <span className="hidden md:block text-xl" title="Validador V3">🔍</span>}
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"
@@ -117,12 +136,12 @@ export default function Sidebar() {
         </div>
 
         {/* User info */}
-        <div className="px-4 py-4 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
+        <div className={`py-4 border-b border-gray-700 ${recolhido ? "px-4 md:px-0" : "px-4"}`}>
+          <div className={`flex items-center gap-3 ${recolhido ? "md:justify-center" : ""}`}>
+            <div className="w-9 h-9 shrink-0 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold" title={user?.nome}>
               {user?.nome?.charAt(0).toUpperCase() ?? "U"}
             </div>
-            <div className="min-w-0">
+            <div className={`min-w-0 ${soAberto}`}>
               <p className="text-sm font-medium text-white truncate">{user?.nome}</p>
               {user && (
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -141,35 +160,45 @@ export default function Sidebar() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Navegação</p>
+        <nav className={`flex-1 space-y-1 overflow-y-auto ${recolhido ? "p-3 md:px-2" : "p-3"}`}>
+          <p className={`text-xs text-gray-500 uppercase tracking-wider px-3 py-2 ${soAberto}`}>Navegação</p>
           {visibleItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                title={recolhido ? item.label : undefined}
+                className={`flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-colors ${recolhido ? "md:justify-center md:px-0" : ""} ${
                   active
                     ? "bg-indigo-600 text-white"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
               >
                 {item.icon}
-                {item.label}
+                <span className={soAberto}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-gray-700">
+        <div className={`border-t border-gray-700 space-y-1 ${recolhido ? "p-3 md:px-2" : "p-3"}`}>
+          <button
+            onClick={alternarRecolhido}
+            title={recolhido ? "Abrir o menu" : "Recolher o menu"}
+            className={`hidden md:flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors ${recolhido ? "justify-center px-0" : ""}`}
+          >
+            {recolhido ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            <span className={soAberto}>Recolher menu</span>
+          </button>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-red-900/50 hover:text-red-400 transition-colors"
+            title={recolhido ? "Sair" : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-red-900/50 hover:text-red-400 transition-colors ${recolhido ? "md:justify-center md:px-0" : ""}`}
           >
             <LogOut className="w-4 h-4" />
-            Sair
+            <span className={soAberto}>Sair</span>
           </button>
         </div>
       </aside>
