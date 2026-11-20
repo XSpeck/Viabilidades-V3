@@ -33,6 +33,11 @@ interface Props {
   onSalva: (c: CaixaRede) => void;
   /** Fibras que seguem para a frente (porta Ramal) */
   saidas: { nome: string; cabo?: string; fibra?: number }[];
+  /** "CTO" (padrão) ou "HUB" — muda só os textos */
+  tipoCaixa?: "CTO" | "HUB";
+  /** Abre direto na edição; Salvar/Cancelar chamam onFechar */
+  soEdicao?: boolean;
+  onFechar?: () => void;
 }
 
 const ROW = 22;
@@ -59,10 +64,10 @@ const textoSaida = (s: { nome: string; cabo?: string; fibra?: number }) => {
   return resto ? `${s.nome} · ${resto}` : s.nome;
 };
 
-export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas }: Props) {
+export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas, tipoCaixa = "CTO", soEdicao, onFechar }: Props) {
   const el = no.elemento;
   const chave = chaveElemento(el);
-  const [editando, setEditando] = useState(false);
+  const [editando, setEditando] = useState(!!soEdicao);
   const [spls, setSpls] = useState<SplitterCaixa[]>(() =>
     splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada }),
   );
@@ -203,6 +208,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
       });
       onSalva(salva);
       setEditando(false);
+      onFechar?.();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
@@ -213,6 +219,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
     setSpls(splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada }));
     setEditando(false);
     setErro(null);
+    onFechar?.();
   }
 
   const campo = "w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px]";
@@ -221,7 +228,9 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <p className="text-[11px] text-slate-500">Splitters de atendimento da CTO e os clientes em cada porta.</p>
+        <p className="text-[11px] text-slate-500">
+          {tipoCaixa === "HUB" ? "Splitters primários da HUB: um para cada porta PON (fibra que chega)." : "Splitters de atendimento da CTO e os clientes em cada porta."}
+        </p>
         {!editando && (
           <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-emerald-400">
             ✎ Editar splitters e portas
@@ -229,6 +238,11 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
         )}
       </div>
 
+      {no.elemento.passagem && !editando && (
+        <p className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600">
+          Nesta porta PON a {tipoCaixa} é <b>só passagem</b>: a fibra atravessa a caixa sem usar os splitters abaixo.
+        </p>
+      )}
       {/* Números */}
       <div className="grid grid-cols-4 gap-1.5">
         {[
@@ -454,7 +468,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={cancelar} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
             <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar CTO
+              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar {tipoCaixa}
             </button>
           </div>
         </div>

@@ -58,6 +58,8 @@ interface Linha {
   potencia_saida: string;
   splitter: string;
   splitter_modelo: string;
+  /** HUB só de passagem nesta rota (splitter de outra porta) */
+  passagem: boolean;
   equipamento_id: string;
   porta: string;
   coords: string;
@@ -97,6 +99,7 @@ function paraLinha(e: ElementoRota, vertices: Ponto[] = []): Linha {
     potencia_saida: s(e.potencia_saida),
     splitter: e.splitter ?? "",
     splitter_modelo: e.splitter_modelo ?? "",
+    passagem: !!e.passagem,
     equipamento_id: e.equipamento_id ?? "",
     porta: e.porta ?? "",
     coords: e.lat !== undefined && e.lon !== undefined ? `${e.lat}, ${e.lon}` : "",
@@ -226,7 +229,7 @@ function curtoNome(s0: string) {
 
 /** Depois de um splitter (HUB/CTO/CDOI) a fibra segue num cabo novo: não herda o cabo do trecho anterior */
 function herdaCabo(ant?: Linha): ant is Linha {
-  return !!ant && ant.tipo !== "dio" && ant.tipo !== "hub" && ant.tipo !== "cto" && ant.tipo !== "cdoi";
+  return !!ant && ant.tipo !== "dio" && ((ant.tipo !== "hub" && ant.tipo !== "cto") || ant.passagem) && ant.tipo !== "cdoi";
 }
 
 /** Nome automático ("CDOI 3"): pula os nomes que já existem nesta rota e na rede */
@@ -995,7 +998,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
     if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
-    if (l.tipo === "hub" && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter primário da HUB` });
+    if (l.tipo === "hub" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter primário da HUB (ou marque "Só passa")` });
+    if (l.tipo === "cto" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter da CTO (ou marque "Só passa")` });
     if (l.predio && !l.predio.id && !l.predio.nome.trim()) pendencias.push({ i, msg: `${nome}: dê o nome do prédio` });
     if (i > 0) {
       if (!l.cabo_entrada.trim()) pendencias.push({ i, msg: `${nome}: informe o cabo que chega` });
@@ -1118,6 +1122,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
         splitter: l.splitter.trim() || undefined,
         splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
+        passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
         equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
         porta: l.porta.trim() || undefined,
         lat: c.lat,
@@ -1296,11 +1301,39 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const l = linhas[i];
     const valor = l.splitter_modelo && modelosSplitter.some((m) => m.id === l.splitter_modelo) ? `m:${l.splitter_modelo}` : l.splitter;
     const naoCadastrado = !!l.splitter && !valor.startsWith("m:");
-    // HUB sempre tem splitter (o primário)
-    const exige = l.tipo === "hub";
+    // HUB/CTO: nesta rota usa o splitter (obrigatório) ou só passa (a fibra atravessa a caixa)
+    const ehHub = l.tipo === "hub" || l.tipo === "cto";
+    const exige = ehHub && !l.passagem;
+    const opcoes = l.tipo === "hub"
+      ? ([[false, "Usa o splitter desta porta"], [true, "Só passa (HUB de outra porta)"]] as const)
+      : ([[false, "Atende aqui (usa o splitter)"], [true, "Só passa (segue para frente)"]] as const);
+    const escolhaHub = ehHub && (
+      <div className="col-span-2 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+        {opcoes.map(([v, r0]) => (
+          <button
+            key={String(v)}
+            type="button"
+            onClick={() => alterar(i, v ? { passagem: true, splitter: "", splitter_modelo: "" } : { passagem: false })}
+            className={`rounded-md px-2 py-1 text-[11px] font-semibold ${l.passagem === v ? "bg-white text-indigo-700 shadow" : "text-slate-500"}`}
+          >
+            {r0}
+          </button>
+        ))}
+      </div>
+    );
+    if (ehHub && l.passagem) {
+      return (
+        <>
+          {escolhaHub}
+          <p className="col-span-2 text-[10px] text-slate-500">Nesta rota a fibra só atravessa a {l.tipo === "hub" ? "HUB" : "CTO"}, sem dividir. O cabo e a fibra seguem como numa CEO.</p>
+        </>
+      );
+    }
     return (
+      <>
+      {escolhaHub}
       <div>
-        <label className={rot}>{exige ? "Splitter primário" : "Splitter"}</label>
+        <label className={rot}>{exige && l.tipo === "hub" ? "Splitter primário" : "Splitter"}</label>
         <select
           className={campo}
           value={valor}
@@ -1310,14 +1343,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             alterar(i, { splitter: m ? m.relacao ?? "" : v, splitter_modelo: m?.id ?? "" });
           }}
         >
-          {exige ? <option value="" disabled>Escolha o splitter primário…</option> : <option value="">Sem splitter</option>}
+          {exige ? <option value="" disabled>{l.tipo === "hub" ? "Escolha o splitter primário…" : "Escolha o splitter…"}</option> : <option value="">Sem splitter</option>}
           {modelosSplitter.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.nome} · {resumoItem(m)}</option>)}
           {naoCadastrado && <option value={l.splitter}>{l.splitter} (não cadastrado)</option>}
         </select>
         {naoCadastrado && <p className="text-[10px] text-red-600 mt-0.5">Troque por um splitter do cadastro.</p>}
-        {exige && !l.splitter && <p className="text-[10px] text-red-600 mt-0.5">A HUB sempre tem splitter: escolha o primário.</p>}
+        {exige && !l.splitter && <p className="text-[10px] text-red-600 mt-0.5">{l.tipo === "hub" ? "Escolha o splitter primário (ou marque Só passa)." : "Escolha o splitter da CTO (ou marque Só passa)."}</p>}
         {!modelosSplitter.length && <p className="text-[10px] text-slate-500 mt-0.5">Nenhum splitter cadastrado (Cadastros → Splitters).</p>}
       </div>
+      </>
     );
   }
 
@@ -1891,6 +1925,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                               {TIPO_ELEMENTO_LABEL[l.tipo].split(" (")[0]}
                               {i > 0 && <span className="rounded bg-slate-100 px-1 tabular-nums text-slate-600" title="Metragem desde a OLT (para o OTDR)">{formatMetros(acumulado[i])}</span>}
                               {l.splitter ? ` · ${l.splitter}` : ""}
+                              {(l.tipo === "hub" || l.tipo === "cto") && l.passagem && <span className="rounded bg-slate-200 px-1 text-slate-600">passagem</span>}
                               {!posDe(l) && <span className="text-amber-600 flex items-center gap-0.5"><MapPin className="w-3 h-3" />sem local</span>}
                               {emenda && <span className="rounded bg-amber-100 text-amber-800 px-1">emenda</span>}
                             </p>

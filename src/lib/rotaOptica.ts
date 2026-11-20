@@ -45,6 +45,8 @@ export interface ElementoRota {
   splitter?: string;
   /** Modelo de splitter do cadastro de equipamentos */
   splitter_modelo?: string;
+  /** HUB/CTO que, nesta rota, é só passagem (o splitter é de outra porta ou de outra fibra): a fibra segue sem dividir */
+  passagem?: boolean;
   /** OLT ou DIO do cadastro de equipamentos */
   equipamento_id?: string;
   /** Metros de cabo desde o elemento anterior */

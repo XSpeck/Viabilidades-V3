@@ -123,6 +123,18 @@ export function splittersDaCaixa(
   }];
 }
 
+/**
+ * Splitters de uma porta PON dentro da caixa: os que entram pela fibra que chega (cabo + fibra) e os que
+ * vêm de portas deles (2º nível). Numa HUB com splitters de várias portas, separa o de cada PON.
+ */
+export function splittersDaFibra(spls: SplitterCaixa[], cabo?: string, fibra?: number): SplitterCaixa[] {
+  const norm = (c: string) => c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  const raizes = spls.filter((x) => x.entrada.fibra && cabo && x.entrada.fibra.fibra === fibra && norm(x.entrada.fibra.cabo) === norm(cabo));
+  const out = [...raizes];
+  for (let k = 0; k < out.length; k++) spls.forEach((x) => { if (x.entrada.splitter?.id === out[k].id && !out.includes(x)) out.push(x); });
+  return out;
+}
+
 /** Portas de atendimento: as que não alimentam outro splitter da caixa */
 export function portasFinais(spls: SplitterCaixa[]): { spl: SplitterCaixa; porta: PortaCaixa }[] {
   const usadas = new Set(spls.map((x) => (x.entrada.splitter ? `${x.entrada.splitter.id}|${x.entrada.splitter.porta}` : "")));

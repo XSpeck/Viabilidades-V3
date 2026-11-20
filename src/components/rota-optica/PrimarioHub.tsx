@@ -1,8 +1,8 @@
 "use client";
 
-import { corFibra, perdaSplitter, tipoVisual, CALCULO_PADRAO } from "@/lib/rotaOptica";
-import { filhosReais, pernasSplitter, type NoArvore } from "@/lib/arvorePon";
-import { totalPernas, portasPara } from "@/lib/caixasRede";
+import { corFibra, perdaSplitter, tipoVisual, CALCULO_PADRAO, type RotaOptica } from "@/lib/rotaOptica";
+import { chaveElemento, filhosReais, pernasSplitter, portaPonDaRota, type NoArvore } from "@/lib/arvorePon";
+import { totalPernas, portasPara, splittersDaCaixa, splittersDaFibra, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import { IconeElementoSvg } from "./IconesRede";
@@ -15,6 +15,8 @@ import { IconeElementoSvg } from "./IconesRede";
 
 interface Props {
   no: NoArvore;
+  /** Todas as rotas (para saber de que porta PON é cada splitter da caixa) */
+  rotas?: RotaOptica[];
   catalogo: ItemCatalogo[];
   /** Abre a janela de um nó da árvore (secundário) */
   onAbrirNo?: (id: string) => void;
@@ -54,13 +56,75 @@ type Saida =
   | { tipo: "cliente"; porta: number; descricao?: string }
   | { tipo: "livre"; porta: number };
 
-export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }: Props) {
+export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEditarPortas }: Props) {
   const el = no.elemento;
   // um prédio ligado na HUB conta pelas CDOIs de dentro (cada uma numa porta)
   const filhos = filhosReais(no);
-  const relacao = no.caixa?.splitter ?? el.splitter;
+  // A caixa pode ter um splitter para cada porta PON: o desta porta é o que recebe a fibra que chega aqui
+  const splsCaixa = splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada });
+  const raizes = splsCaixa.filter((x) => !x.entrada.splitter);
+  const meu: SplitterCaixa | undefined = el.passagem ? undefined : splittersDaFibra(splsCaixa, el.cabo_entrada, el.fibra_entrada)[0] ?? (raizes.length === 1 ? raizes[0] : undefined);
+  const outros = raizes.filter((x) => x !== meu);
+  /** Porta PON de um splitter da caixa: a rota que leva a fibra de entrada dele até esta caixa */
+  const ponDe = (x: SplitterCaixa) => {
+    const f = x.entrada.fibra;
+    if (!f) return undefined;
+    const k = chaveElemento(el);
+    const r0 = rotas.find((r) => r.elementos.some((e) => chaveElemento(e) === k && e.fibra_entrada === f.fibra && e.cabo_entrada === f.cabo));
+    return r0 ? portaPonDaRota(r0).rotulo : undefined;
+  };
+  const listaOutros = outros.length > 0 && (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+      <p className="mb-1 font-semibold text-slate-700">{el.passagem ? "Splitters desta HUB (de outras portas)" : "Esta HUB também tem splitters de outras portas"}</p>
+      {outros.map((x) => (
+        <p key={x.id} className="flex items-center gap-1.5">
+          <span className="rounded bg-indigo-100 px-1 font-bold text-indigo-800">{x.relacao}</span>
+          {x.entrada.fibra ? <>F{x.entrada.fibra.fibra} · {curto(x.entrada.fibra.cabo, 26)}</> : "sem entrada"}
+          {ponDe(x) && <span className="ml-auto text-slate-400">{ponDe(x)}</span>}
+        </p>
+      ))}
+    </div>
+  );
+
+  // ---------- HUB só de passagem nesta porta ----------
+  if (el.passagem) {
+    const cIn = corFibra(el.fibra_entrada, el.cabo_entrada);
+    return (
+      <div className="p-3 space-y-3">
+        <div className="rounded-2xl border border-slate-300 bg-gradient-to-b from-slate-50 to-white p-3">
+          <p className="text-sm font-bold text-slate-800">Nesta porta PON, a HUB é só passagem</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">A fibra atravessa a caixa (emenda) sem dividir; o splitter desta HUB é de outra porta.</p>
+          <div className="mt-2 space-y-1 text-[11px]">
+            <p className="flex items-center gap-1.5">
+              <span className="w-12 text-slate-500">Chega</span>
+              <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/20" style={{ background: cIn.hex }} />
+              {el.fibra_entrada ? `F${el.fibra_entrada} ${cIn.nome.toLowerCase()}` : "fibra ?"} · {curto(el.cabo_entrada ?? "cabo ?", 30)}
+            </p>
+            {filhos.map((f) => {
+              const c = corFibra(f.elemento.fibra_entrada, f.elemento.cabo_entrada);
+              return (
+                <p key={f.id} className="flex items-center gap-1.5">
+                  <span className="w-12 text-slate-500">Segue</span>
+                  <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
+                  {f.elemento.fibra_entrada ? `F${f.elemento.fibra_entrada} ${c.nome.toLowerCase()}` : "fibra ?"} · {curto(f.elemento.cabo_entrada ?? "cabo ?", 26)} → {curto(f.elemento.nome, 20)}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+        {listaOutros}
+        {onEditarPortas && (
+          <button type="button" onClick={onEditarPortas} className="w-full rounded-lg border border-slate-300 bg-white py-1.5 text-xs font-medium text-slate-700 hover:border-indigo-400">
+            ✎ Editar os splitters da HUB
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const relacao = meu?.relacao ?? (splsCaixa.length ? undefined : el.splitter);
   const total = totalPernas(relacao);
-  const modelo = catalogo.find((m) => m.id === (no.caixa?.splitter_modelo ?? el.splitter_modelo));
+  const modelo = catalogo.find((m) => m.id === (meu?.modelo_id ?? no.caixa?.splitter_modelo ?? el.splitter_modelo));
   const perda = perdaSplitter(relacao, modelo?.perda_db);
   const conector = CALCULO_PADRAO.conector_db;
   const potIn = el.potencia_entrada;
@@ -69,8 +133,13 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
   if (!total || !relacao) {
     return (
       <div className="p-4 text-center">
-        <p className="text-sm font-semibold text-slate-800">Esta HUB ainda não tem o splitter primário</p>
-        <p className="mt-1 text-xs text-slate-500">Escolha o splitter (ex.: 1:8) do cadastro para ver as saídas até os secundários.</p>
+        <p className="text-sm font-semibold text-slate-800">{outros.length ? "Esta HUB não tem splitter para esta porta PON" : "Esta HUB ainda não tem o splitter primário"}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {outros.length
+            ? `Adicione um splitter na fibra que chega (F${el.fibra_entrada ?? "?"}) — ou, se nesta porta a HUB só é atravessada, marque "Só passa" na rota.`
+            : "Escolha o splitter (ex.: 1:8) do cadastro para ver as saídas até os secundários."}
+        </p>
+        {outros.length > 0 && <div className="mt-2 text-left">{listaOutros}</div>}
         {onEditarPortas && (
           <button type="button" onClick={onEditarPortas} className="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
             Escolher o splitter primário
@@ -81,7 +150,7 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
   }
 
   // ---------- Saídas: porta marcada → ramo da árvore; o que sobrar ocupa as portas livres (sugerida) ----------
-  const portas = portasPara(relacao, no.caixa?.portas ?? []);
+  const portas = portasPara(relacao, meu ? meu.portas : no.caixa?.portas ?? []);
   const usados = new Set<string>();
   const saidas: Saida[] = portas.map((p) => {
     if (p.status === "cliente") return { tipo: "cliente", porta: p.numero, descricao: p.descricao };
@@ -357,6 +426,8 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
           ))}
         </div>
       )}
+
+      {listaOutros}
 
       {/* Cascata */}
       <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-900">

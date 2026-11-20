@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
-import { caminhoAte, chaveElemento, dentroDePredio, filhosReais, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import { caminhoAte, chaveElemento, dentroDePredio, filhosReais, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
@@ -417,7 +417,11 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const x = X(n.profundidade), yy = Y(y.get(n)!);
               const t = tipoVisual(n.elemento);
               const ativo = n === sel;
-              const spl = n.caixa?.splitters?.length ? rotuloSplitters(n.caixa.splitters) : n.caixa?.splitter ?? n.elemento.splitter;
+              const spl = n.elemento.passagem
+                ? "passagem"
+                : n.caixa?.splitters?.length
+                  ? rotuloSplitters(splittersDoNo(n)) || undefined
+                  : n.caixa?.splitter ?? n.elemento.splitter;
               const tam = t === "olt" || t === "predio" ? 36 : t === "onu" || t === "outro" ? 24 : 30;
               return (
                 <g
@@ -600,29 +604,20 @@ function JanelaNo({
       </div>
       {aba === "primario" ? (
         editandoHub ? (
-          <EditorCaixa
-            key={`ed-${chaveElemento(no.elemento)}`}
-            chave={chaveElemento(no.elemento)}
-            nome={no.elemento.nome}
-            tipo={no.elemento.tipo}
-            caixa={no.caixa}
-            splitterRota={no.elemento.splitter}
-            modeloRota={no.elemento.splitter_modelo}
-            caboEntrada={no.elemento.cabo_entrada}
-            fibraEntrada={no.elemento.fibra_entrada}
-            ramos={filhosReais(no).map((f) => f.elemento.nome)}
-            saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+          <CaixaCto
+            key={`edhub-${chaveElemento(no.elemento)}`}
+            no={no}
+            rotas={todasRotas}
             modelos={catalogo.filter((m) => m.categoria === "splitter")}
             usuario={usuario}
             onSalva={onCaixaSalva}
-            onFechar={() => setEditandoHub(false)}
-            potenciaEntrada={no.elemento.potencia_entrada}
-            exigeSplitter
+            saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+            tipoCaixa="HUB"
             soEdicao
-            semMoldura
+            onFechar={() => setEditandoHub(false)}
           />
         ) : (
-          <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
+          <PrimarioHub no={no} rotas={todasRotas} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
       ) : aba === "ct" ? (
         <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} usuario={usuario} onSalva={onCaixaSalva} />

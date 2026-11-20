@@ -4,7 +4,7 @@
 // onde elas se separam, a árvore ramifica.
 // =====================
 import type { ElementoRota, RotaOptica } from "./rotaOptica";
-import { portasFinais, rotuloSplitters, totalPernas, type CaixaRede } from "./caixasRede";
+import { portasFinais, rotuloSplitters, splittersDaFibra, totalPernas, type CaixaRede, type SplitterCaixa } from "./caixasRede";
 
 export interface NoArvore {
   id: string;
@@ -184,10 +184,23 @@ export interface PernasNo {
 }
 
 /** Pernas do splitter do nó: usa o diagrama cadastrado da caixa ou o splitter informado na rota. */
+/** Splitters da caixa que valem para esta porta PON (os da fibra que chega aqui); caixa de um PON só: todos */
+export function splittersDoNo(n: NoArvore): SplitterCaixa[] {
+  const spls = n.caixa?.splitters ?? [];
+  if (!spls.length) return [];
+  const doPon = splittersDaFibra(spls, n.elemento.cabo_entrada, n.elemento.fibra_entrada);
+  if (doPon.length) return doPon;
+  return spls.filter((x) => !x.entrada.splitter).length <= 1 ? spls : [];
+}
+
 export function pernasSplitter(n: NoArvore): PernasNo | null {
-  // CTO com vários splitters: contam as portas de atendimento (as que não alimentam outro splitter)
+  // HUB só de passagem nesta porta: não divide aqui
+  if (n.elemento.passagem) return null;
+  // Caixa com vários splitters: contam as portas de atendimento dos splitters desta porta PON
   if (n.caixa?.splitters?.length) {
-    const fin = portasFinais(n.caixa.splitters);
+    const spls = splittersDoNo(n);
+    if (!spls.length) return null;
+    const fin = portasFinais(spls);
     const nome = (id: string) => `S${n.caixa!.splitters!.findIndex((x) => x.id === id) + 1}`;
     const portasCliente = fin
       .filter((f) => f.porta.status === "cliente")
@@ -195,7 +208,7 @@ export function pernasSplitter(n: NoArvore): PernasNo | null {
     const ramaisMarcados = fin.filter((f) => f.porta.status === "ramal").length;
     const ramais = Math.max(ramaisMarcados, n.filhos.length);
     const total = fin.length;
-    return { splitter: rotuloSplitters(n.caixa.splitters), total, clientes: portasCliente.length, ramais, livres: Math.max(0, total - portasCliente.length - ramais), portasCliente };
+    return { splitter: rotuloSplitters(spls), total, clientes: portasCliente.length, ramais, livres: Math.max(0, total - portasCliente.length - ramais), portasCliente };
   }
   const splitter = n.caixa?.splitter ?? n.elemento.splitter;
   const total = totalPernas(splitter);
