@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { GripHorizontal, Minus, PanelRightClose, PanelRightOpen, Square, X } from "lucide-react";
 
 // =====================
-// Janelas flutuantes: abrem onde se clicou, arrastam pela barra de título, ficam
+// Janelas flutuantes: abrem no topo da tela (na coluna do clique), cabem sempre dentro da tela, arrastam pela barra de título, ficam
 // várias abertas ao mesmo tempo e só vão para a lateral quando o usuário pede (fixar).
 // =====================
 
@@ -50,7 +50,8 @@ function limitar(x: number, y: number, largura: number) {
 
 export function Janela({ titulo, subtitulo, icone, inicial, largura = 340, corBarra = "bg-slate-900", onFechar, children }: Props) {
   const dock = useContext(DockCtx);
-  const [pos, setPos] = useState(() => limitar(inicial.x, inicial.y, largura));
+  // Abre colada no topo da tela (com um pequeno degrau quando há várias), na altura de x do clique
+  const [pos, setPos] = useState(() => limitar(inicial.x, 12 + ((zGlobal - 100) % 5) * 22, largura));
   const [z, setZ] = useState(() => ++zGlobal);
   const [minimizada, setMinimizada] = useState(false);
   const [fixada, setFixada] = useState(false);
@@ -82,7 +83,7 @@ export function Janela({ titulo, subtitulo, icone, inicial, largura = 340, corBa
       aria-label={typeof titulo === "string" ? titulo : undefined}
       onPointerDownCapture={fixada ? undefined : frente}
       className={`bg-white rounded-xl border border-slate-300 shadow-2xl overflow-hidden flex flex-col ${fixada ? "w-full" : "fixed"}`}
-      style={fixada ? undefined : { left: pos.x, top: pos.y, width: largura, zIndex: z, maxHeight: "calc(100vh - 16px)" }}
+      style={fixada ? undefined : { left: pos.x, top: pos.y, width: largura, zIndex: z, maxHeight: `calc(100vh - ${pos.y + 8}px)` }}
     >
       <div
         onPointerDown={iniciar}

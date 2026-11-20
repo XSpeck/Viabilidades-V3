@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  atualizarRota,
   CALCULO_PADRAO,
   capacidadeRegistrada,
   corFibra,
@@ -276,6 +277,31 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     try {
       const s = await salvarPredio(rascunho, usuario);
       setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== s.id), s]);
+      // O nome dado à CDOI no prédio passa a valer também nas rotas (a ligação é pelo código, que não muda)
+      const pendentes: Promise<void>[] = [];
+      for (const rt of rotas) {
+        let mudou = false;
+        const elementos = rt.elementos.map((e) => {
+          const o = s.pontos.find((x) => x.chave && x.chave === chaveElemento(e));
+          if (!o || !e.codigo || !o.nome.trim() || o.nome.trim() === e.nome) return e;
+          mudou = true;
+          return { ...e, nome: o.nome.trim() };
+        });
+        if (!mudou) continue;
+        const ult = rt.elementos[rt.elementos.length - 1];
+        const novoUlt = elementos[elementos.length - 1];
+        const nomeRota = ult.nome !== novoUlt.nome && rt.nome.endsWith(ult.nome) ? rt.nome.slice(0, -ult.nome.length) + novoUlt.nome : rt.nome;
+        pendentes.push(
+          atualizarRota(rt.id, {
+            nome: nomeRota, origem: rt.origem, elementos, trechos: rt.trechos,
+            calculo_potencia: rt.calculo_potencia, obs: rt.obs, criado_por: rt.criado_por,
+          }),
+        );
+      }
+      if (pendentes.length) {
+        await Promise.all(pendentes);
+        onRotasMudaram?.();
+      }
       setRascunho(null);
     } catch (e) {
       setErro(/permission/i.test(String(e)) ? "Sem permissão: publique a regra predios_rede no Firebase." : "Não foi possível salvar.");
@@ -928,7 +954,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                   >
                     <div className="mb-1 flex items-center gap-1.5">
                       <span className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: cor(o) }}>{i + 1}</span>
-                      <input className={`${campo} flex-1`} value={o.nome} onChange={(e) => mudarPonto(o.id, { nome: e.target.value })} />
+                      <input className={`${campo} flex-1`} value={o.nome} onChange={(e) => mudarPonto(o.id, { nome: e.target.value })} title={o.chave ? "Ao salvar o prédio, este nome também vale na rota" : undefined} />
                       <button type="button" onClick={(e) => { e.stopPropagation(); mudar((p) => ({ ...p, pontos: p.pontos.filter((x) => x.id !== o.id) })); }} className="text-slate-400 hover:text-red-600" title="Tirar do prédio">
                         <X className="h-4 w-4" />
                       </button>

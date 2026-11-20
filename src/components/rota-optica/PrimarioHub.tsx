@@ -88,7 +88,14 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
       const candidatos = no.filhos.filter((x) => !usados.has(x.id) && (norm(x.elemento.nome).includes(d) || d.includes(norm(curto(x.elemento.nome, 60)))));
       // escolhido pela lista ("CTO X · 24 FO ASO F2"): a fibra desempata quando há dois ramos para o mesmo destino
       const fib = d.match(/\bf(\d+)$/)?.[1];
-      const f = candidatos.find((x) => fib && String(x.elemento.fibra_entrada) === fib) ?? candidatos[0];
+      // destino renomeado depois de marcar a porta: reconhece pelo cabo + fibra ("06 FO ASO F1")
+      const porCaboFibra = () =>
+        no.filhos.find((x) => {
+          if (usados.has(x.id) || !x.elemento.fibra_entrada) return false;
+          const cabo = (x.elemento.cabo_entrada ?? "").split(" · ")[0].split(" - ")[0].trim();
+          return !!cabo && d.endsWith(norm(`${cabo} F${x.elemento.fibra_entrada}`));
+        });
+      const f = candidatos.find((x) => fib && String(x.elemento.fibra_entrada) === fib) ?? candidatos[0] ?? porCaboFibra();
       if (f) {
         usados.add(f.id);
         return { tipo: "ramo", porta: p.numero, filho: f, sec: secundarios(f), sugerida: false };
