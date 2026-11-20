@@ -363,7 +363,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function clicarRede(k: number) {
     const p = pontosRede[k];
     if (p?.tipo === "predio" && ferramenta === "predio") return clicarMapa(p.lat, p.lon);
-    usarDaRede(itemDoPonto[k]);
+    usarDaRede(itemDoPonto[k], p?.tipo === "predio" ? p.nome.split(" · ")[0] : undefined);
   }
 
   const tiposDeCabo = catalogo.filter((c) => c.categoria === "cabo");
@@ -757,9 +757,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   /** Clique numa caixa da rede existente */
-  function usarDaRede(k: number) {
+  function usarDaRede(k: number, predioNome?: string) {
     const it = redeInfo.itens[k];
     if (!it) return;
+    // Rota vazia e clique num prédio: copia o caminho até a caixa de onde o cabo sai (ex.: a HUB) e já fica com a ferramenta Prédio
+    if (predioNome && !linhas.length && it.i > 0) {
+      const r = it.rota;
+      const manual = r.origem !== "geogrid";
+      const novas = r.elementos.slice(0, it.i).map((x, j) => ({
+        ...paraLinha(x, manual ? r.trechos.find((t) => t.ate === j)?.pontos.slice(1, -1) ?? [] : []),
+        dist_auto: false,
+      }));
+      mudar(() => novas);
+      if (r.calculo_potencia) setCalc(r.calculo_potencia);
+      setSel(it.i - 1);
+      setFerramenta("predio");
+      setAviso(`Começando pelo caminho até ${r.elementos[it.i - 1].nome}. Agora clique no prédio ${predioNome} para colocar a nova CDOI.`);
+      return;
+    }
     const e = it.el;
     const ja = linhas.findIndex((l) => chaveLinha(l) === chaveElemento(e));
     if (ja >= 0) { setSel(ja); return; }
