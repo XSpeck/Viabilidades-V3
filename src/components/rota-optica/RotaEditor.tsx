@@ -21,6 +21,7 @@ import {
   type RotaOpticaInput,
   type TipoElementoRota,
   type TrechoCabo,
+  reservaTrecho,
 } from "@/lib/rotaOptica";
 import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
@@ -138,10 +139,16 @@ function distMapa(ls: Linha[], i: number): number | null {
   return Math.round(comprimentoTracado([a, ...ls[i].vertices, b]));
 }
 
-function recalcular(ls: Linha[]): Linha[] {
+/** Distância do trecho para o OTDR: traçado no mapa + reservas técnicas das duas caixas */
+function distTotal(ls: Linha[], i: number, c: Partial<CalculoPotencia>): number | null {
+  const d = distMapa(ls, i);
+  return d === null ? null : d + reservaTrecho(ls[i - 1]?.tipo, ls[i].tipo, c);
+}
+
+function recalcular(ls: Linha[], c: Partial<CalculoPotencia> = CALCULO_PADRAO): Linha[] {
   return ls.map((l, i) => {
     if (!l.dist_auto) return l;
-    const d = distMapa(ls, i);
+    const d = distTotal(ls, i, c);
     return d === null ? l : { ...l, distancia_m: String(d) };
   });
 }
@@ -380,7 +387,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   // ---------- Alterações (com histórico para desfazer) ----------
   function mudar(fn: (ls: Linha[]) => Linha[]) {
     setHistorico((h) => [...h.slice(-49), linhas]);
-    setLinhas((ls) => recalcular(fn(ls)));
+    setLinhas((ls) => recalcular(fn(ls), calc));
   }
   function alterar(i: number, mudanca: Partial<Linha>) {
     const velho = linhas[i] ? curtoNome(linhas[i].nome) : "";
@@ -1016,6 +1023,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       }
     : null;
 
+  /** Metragem desde a OLT em cada elemento (soma dos trechos, já com as reservas) — é a que o OTDR mostra */
+  const acumulado = linhas.reduce<number[]>((acc, l, i) => [...acc, (acc[i - 1] ?? 0) + (i > 0 ? n(l.distancia_m) ?? 0 : 0)], []);
+
   const pontosMapa: PontoEditor[] = linhas.map((l) => {
     const p = posDe(l);
     const emPredio = l.tipo === "cdoi" && (!!l.predio || predioDaChave.has(chaveLinha(l)));
@@ -1443,9 +1453,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <div>
                 <label className={rot}>Distância (m){l.dist_auto && dm !== null ? " · pelo mapa" : ""}</label>
                 <input className={campo} inputMode="decimal" value={l.distancia_m} onChange={(e) => alterar(i, { distancia_m: e.target.value, dist_auto: false })} />
+                {dm !== null && (
+                  <p className="text-[10px] text-slate-500">
+                    traçado {formatMetros(dm)} + reserva {reservaTrecho(linhas[i - 1]?.tipo, l.tipo, calc)} m
+                  </p>
+                )}
                 {!l.dist_auto && dm !== null && (
                   <button type="button" onClick={() => alterar(i, { dist_auto: true })} className="text-[11px] text-indigo-600 hover:underline">
-                    usar o mapa ({formatMetros(dm)})
+                    usar o mapa ({formatMetros(dm + reservaTrecho(linhas[i - 1]?.tipo, l.tipo, calc))})
                   </button>
                 )}
               </div>
@@ -1736,6 +1751,31 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   ))}
                 </div>
               )}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {([
+                  ["reserva_caixa_m", "Reserva CTO/CEO/CT/HUB (m por lado)", 15],
+                  ["reserva_cdoi_m", "Reserva CDOI (m)", 2],
+                ] as const).map(([k, r0, padrao]) => (
+                  <div key={k}>
+                    <label className={rot}>{r0}</label>
+                    <input
+                      className={campo}
+                      inputMode="decimal"
+                      defaultValue={String(calc[k] ?? padrao).replace(".", ",")}
+                      onChange={(e) => {
+                        const v = n(e.target.value);
+                        if (v === undefined) return;
+                        const novo = { ...calc, [k]: v };
+                        setCalc(novo);
+                        setLinhas((ls) => recalcular(ls, novo));
+                      }}
+                    />
+                  </div>
+                ))}
+                <p className="col-span-2 text-[10px] text-slate-500">
+                  A metragem de cada trecho soma o traçado e as reservas: caixa no meio fica com 2 × {calc.reserva_caixa_m ?? 15} m, a ponta só com {calc.reserva_caixa_m ?? 15} m. É o que o OTDR mede.
+                </p>
+              </div>
               {calc.auto && tx === undefined && linhas.length > 0 && (
                 <p className="text-xs text-amber-700">Informe a potência da porta PON no elemento 1 (OLT).</p>
               )}
@@ -1789,6 +1829,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   const ativo = i === sel;
                   const info = i > 0 ? infoFibra(l.cabo_entrada, l.fibra_entrada) : null;
                   const pot = potDe(i);
+                  const res = i > 0 ? reservaTrecho(linhas[i - 1].tipo, l.tipo, calc) : 0;
                   const emenda = i > 0 && linhas[i + 1] && l.cabo_entrada.trim() && linhas[i + 1].cabo_entrada.trim() && chaveCabo(l.cabo_entrada) !== chaveCabo(linhas[i + 1].cabo_entrada);
                   return (
                     <li key={i} ref={(el) => { itemRefs.current[i] = el; }}>
@@ -1807,7 +1848,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                           <p className="text-[10.5px] text-slate-500 py-1 leading-tight truncate">
                             {l.cabo_entrada ? <span className="text-slate-700 font-medium">{l.cabo_entrada.split(" - ")[0]}</span> : <span className="text-amber-600">cabo não informado</span>}
                             {info ? ` · ${info.c.rotulo} ${info.c.nome.toLowerCase()}` : ""}
-                            {l.distancia_m ? ` · ${formatMetros(n(l.distancia_m) ?? 0)}` : ""}
+                            {l.distancia_m ? ` · ${formatMetros(n(l.distancia_m) ?? 0)}${l.dist_auto && res ? ` (c/ ${res} m reserva)` : ""}` : ""}
                             {l.vertices.length ? ` · ${l.vertices.length} poste${l.vertices.length > 1 ? "s" : ""}` : ""}
                           </p>
                         </div>
@@ -1830,6 +1871,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                             <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{l.nome || "sem nome"}</p>
                             <p className="text-[10.5px] text-slate-500 truncate flex items-center gap-1">
                               {TIPO_ELEMENTO_LABEL[l.tipo].split(" (")[0]}
+                              {i > 0 && <span className="rounded bg-slate-100 px-1 tabular-nums text-slate-600" title="Metragem desde a OLT (para o OTDR)">{formatMetros(acumulado[i])}</span>}
                               {l.splitter ? ` · ${l.splitter}` : ""}
                               {!posDe(l) && <span className="text-amber-600 flex items-center gap-0.5"><MapPin className="w-3 h-3" />sem local</span>}
                               {emenda && <span className="rounded bg-amber-100 text-amber-800 px-1">emenda</span>}

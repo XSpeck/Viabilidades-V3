@@ -110,9 +110,28 @@ export interface CalculoPotencia {
   emenda_db: number;
   /** Perda por conector (dB) */
   conector_db: number;
+  /** Reserva técnica de cabo em cada lado de CTO/CEO/CT/HUB (m) */
+  reserva_caixa_m?: number;
+  /** Reserva técnica de cabo na CDOI (m) — local pequeno */
+  reserva_cdoi_m?: number;
 }
 
-export const CALCULO_PADRAO: CalculoPotencia = { auto: true, atenuacao_db_km: 0.35, emenda_db: 0.1, conector_db: 0.5 };
+export const CALCULO_PADRAO: CalculoPotencia = { auto: true, atenuacao_db_km: 0.35, emenda_db: 0.1, conector_db: 0.5, reserva_caixa_m: 15, reserva_cdoi_m: 2 };
+
+/** Reserva técnica de cabo que fica numa caixa, de um lado (o cabo que chega ou o que sai) */
+export function reservaTecnica(tipo: TipoElementoRota, c: Partial<CalculoPotencia> = CALCULO_PADRAO): number {
+  if (tipo === "cto" || tipo === "ceo" || tipo === "ct" || tipo === "hub") return c.reserva_caixa_m ?? 15;
+  if (tipo === "cdoi") return c.reserva_cdoi_m ?? 2;
+  return 0;
+}
+
+/**
+ * Reserva de um trecho de cabo (da caixa anterior até esta): a sobra na saída da anterior + a sobra na chegada desta.
+ * Assim uma caixa no meio fica com 15 + 15 = 30 m e a caixa da ponta só com os 15 m do cabo que chega.
+ */
+export function reservaTrecho(tipoAnterior: TipoElementoRota | undefined, tipo: TipoElementoRota, c: Partial<CalculoPotencia> = CALCULO_PADRAO): number {
+  return (tipoAnterior ? reservaTecnica(tipoAnterior, c) : 0) + reservaTecnica(tipo, c);
+}
 
 /** Perda típica de splitter balanceado (dB) */
 export const PERDA_SPLITTER: Record<string, number> = { "1:2": 3.7, "1:4": 7.3, "1:8": 10.5, "1:16": 13.7, "1:32": 17.1, "1:64": 20.5 };
