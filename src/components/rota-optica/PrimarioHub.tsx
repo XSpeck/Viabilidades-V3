@@ -114,8 +114,11 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
   const maxSec = Math.max(0, ...pernasSec.map((p) => p.total));
   const potPonta = (s: NoArvore) => {
     const ps = pernasSplitter(s);
-    if (s.elemento.potencia_saida !== undefined) return s.elemento.potencia_saida;
-    if (s.elemento.potencia_entrada === undefined) return undefined;
+    const e = s.elemento;
+    if (e.potencia_entrada === undefined) return e.potencia_saida;
+    // splitter marcado só no diagrama da caixa (a rota não tem): a saída da rota não descontou ele
+    if (ps && !e.splitter) return e.potencia_entrada - perdaSplitter(ps.splitter) - conector;
+    if (e.potencia_saida !== undefined) return e.potencia_saida;
     return s.elemento.potencia_entrada - (ps ? perdaSplitter(ps.splitter) + conector : 0);
   };
   const pontas = secs.map(potPonta).filter((v): v is number => v !== undefined);
