@@ -19,6 +19,24 @@ export interface PortaCaixa {
   descricao?: string;
 }
 
+/** Uma fibra de um cabo */
+export interface PontaFibra {
+  cabo: string;
+  fibra: number;
+}
+
+/** Emenda (fusão) de uma fibra que chega com uma fibra que sai */
+export interface EmendaCaixa {
+  de: PontaFibra;
+  para: PontaFibra;
+}
+
+/** Regra "cor com cor": fibra N do cabo de entrada emenda na fibra N do cabo de saída */
+export interface RegraEmenda {
+  de: string;
+  para: string;
+}
+
 /** De onde vem a fibra que entra num splitter da caixa */
 export interface EntradaSplitter {
   /** Uma fibra que chega na caixa (de uma rota) */
@@ -44,6 +62,10 @@ export interface CaixaRede {
   nome: string;
   /** Vários splitters (CTO com níveis). Quando existe, vale no lugar de splitter/portas. */
   splitters?: SplitterCaixa[];
+  /** CEO: cabos emendados cor com cor */
+  regras_emenda?: RegraEmenda[];
+  /** CEO: emendas avulsas (exceções à regra, ou cabos sem regra) */
+  emendas?: EmendaCaixa[];
   /** "1:8", "1:16"... vazio quando a caixa não tem splitter */
   splitter?: string;
   /** Modelo de splitter do cadastro de equipamentos */
@@ -161,6 +183,8 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       splitter_modelo: data.splitter_modelo || undefined,
       portas: Array.isArray(data.portas) ? data.portas : [],
       splitters: Array.isArray(data.splitters) && data.splitters.length ? data.splitters : undefined,
+      regras_emenda: Array.isArray(data.regras_emenda) && data.regras_emenda.length ? data.regras_emenda : undefined,
+      emendas: Array.isArray(data.emendas) && data.emendas.length ? data.emendas : undefined,
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
@@ -187,6 +211,8 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     chave: dados.chave,
     nome: dados.nome,
     splitters,
+    regras_emenda: (dados.regras_emenda ?? []).map((x) => ({ de: x.de, para: x.para })),
+    emendas: (dados.emendas ?? []).map((x) => ({ de: { cabo: x.de.cabo, fibra: x.de.fibra }, para: { cabo: x.para.cabo, fibra: x.para.fibra } })),
     splitter: dados.splitter ?? "",
     splitter_modelo: dados.splitter ? dados.splitter_modelo ?? "" : "",
     portas,
@@ -194,5 +220,7 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     atualizado_por: dados.atualizado_por ?? "",
   };
   await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
-  return { id, ...registro, splitters: splitters.length ? splitters : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+  return { id, ...registro, splitters: splitters.length ? splitters : undefined,
+    regras_emenda: registro.regras_emenda.length ? registro.regras_emenda : undefined,
+    emendas: registro.emendas.length ? registro.emendas : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
 }

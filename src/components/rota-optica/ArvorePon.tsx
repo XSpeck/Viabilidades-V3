@@ -12,6 +12,7 @@ import PredioVertical from "./PredioVertical";
 import { listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
 import CaixaCto from "./CaixaCto";
+import CaixaCeo from "./CaixaCeo";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
@@ -564,8 +565,9 @@ function JanelaNo({
   const ehCdoi = tipoVisual(no.elemento) === "cdoi";
   const ehHub = tipoVisual(no.elemento) === "hub";
   const ehCto = tipoVisual(no.elemento) === "cto";
-  const [aba, setAba] = useState<"primario" | "cto" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehHub ? "primario" : ehCto ? "cto" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+  const ehCeo = tipoVisual(no.elemento) === "ceo";
+  const [aba, setAba] = useState<"primario" | "cto" | "ceo" | "predio" | "emendas" | "diagrama" | "caminho">(
+    ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
   /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
   const [editandoHub, setEditandoHub] = useState(false);
@@ -575,8 +577,9 @@ function JanelaNo({
         {([
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
           ...(ehCto ? ([["cto", "CTO"]] as const) : []),
+          ...(ehCeo ? ([["ceo", "Emendas (CEO)"]] as const) : []),
           ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
-          ...(ehPredio ? [] : ([["emendas", "Emendas"]] as const)),
+          ...(ehPredio || ehCeo ? [] : ([["emendas", "Emendas"]] as const)),
           ...(ehHub || ehPredio || ehCto ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
@@ -618,6 +621,8 @@ function JanelaNo({
         ) : (
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
+      ) : aba === "ceo" ? (
+        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} usuario={usuario} onSalva={onCaixaSalva} />
       ) : aba === "cto" ? (
         <CaixaCto
           key={`cto-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
