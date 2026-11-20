@@ -32,6 +32,7 @@ import {
 } from "@/lib/prediosRede";
 import { IconeElementoSvg } from "./IconesRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * Prédio vertical: blocos lado a lado com térreo, andares e subsolos; cada CDOI no seu andar,
@@ -86,7 +87,7 @@ interface NovaCdoi {
 
 const curto = (s: string, n = 26) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 
 interface CaboEntrada {

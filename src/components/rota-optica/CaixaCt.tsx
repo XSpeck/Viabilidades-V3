@@ -16,6 +16,7 @@ import {
 import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * CT (caixa de transporte): extensão de uma CTO. Portas da CTO seguem por um cabo até a CT,
@@ -36,7 +37,7 @@ const TOPO = 40;
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 const curto = (s: string, n = 22) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 const caboCurto = (c: string) => c.split(" · ")[0].split(" - ")[0].trim();
 const dbm = (v?: number) => (v === undefined || Number.isNaN(v) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`);

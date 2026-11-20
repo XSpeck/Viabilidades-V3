@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Sidebar from "@/components/layout/Sidebar";
+import TextoCompletoAoPassar from "@/components/layout/TextoCompletoAoPassar";
 import { Loader2 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-auto">
         <div className="p-4 sm:p-6 max-w-7xl mx-auto">{children}</div>
       </main>
+      <TextoCompletoAoPassar />
     </div>
   );
 }

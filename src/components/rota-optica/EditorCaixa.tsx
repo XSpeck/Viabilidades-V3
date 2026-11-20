@@ -13,6 +13,7 @@ import {
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { corFibra, perdaSplitter, TIPO_ELEMENTO_LABEL, type TipoElementoRota } from "@/lib/rotaOptica";
 import { COR_ELEMENTO } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 export interface SaidaRamal {
   /** Caixa de destino */
@@ -74,7 +75,7 @@ const CHIP: Record<StatusPorta, string> = {
 const TRACO: Record<StatusPorta, string> = { livre: "#94a3b8", cliente: "#059669", ramal: "#4f46e5" };
 
 function curto(t: string, n: number) {
-  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+  return cortar(t, n);
 }
 
 const fmtDbm = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")} dBm`;

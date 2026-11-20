@@ -3,6 +3,7 @@
 import { corFibraPorCapacidade, fibrasPorTubo } from "@/lib/rotaOptica";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /** Dados da estação (elementos 1 = OLT e 2 = DIO da rota, e o cabo que sai do DIO) */
 export interface DadosEstacao {
@@ -339,7 +340,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
 }
 
 function curto(t: string, n0: number) {
-  return t.length > n0 ? t.slice(0, n0 - 1) + "…" : t;
+  return cortar(t, n0);
 }
 
 function n(v?: string): number | undefined {

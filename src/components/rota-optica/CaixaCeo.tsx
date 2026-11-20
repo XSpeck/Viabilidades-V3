@@ -6,6 +6,7 @@ import { capacidadeDoCabo, capacidadeRegistrada, corFibra, type RotaOptica } fro
 import { chaveElemento, type NoArvore } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
 import { salvarCaixa, type CaixaRede, type EmendaCaixa, type PontaFibra, type RegraEmenda } from "@/lib/caixasRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * CEO (caixa de emenda) por dentro: o mapa de emendas. O normal é emendar cor com cor (fibra N do cabo
@@ -33,7 +34,7 @@ const W = 440;
 const curto = (s: string, n = 20) => {
   const [tipo, ...resto] = s.split(" · ");
   const t = (resto.length ? `${tipo.replace(/\s*ASO\b/i, "")} · ${resto.join(" · ")}` : tipo.split(" - ")[0]).trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 const k = (p: PontaFibra) => `${chaveCabo(p.cabo)}|${p.fibra}`;
 

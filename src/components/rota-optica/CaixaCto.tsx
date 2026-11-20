@@ -18,6 +18,7 @@ import {
 } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * CTO por dentro: um ou mais splitters (1:8, 1:2 + 1:8, dois 1:8 em dois níveis…), cada um alimentado
@@ -48,7 +49,7 @@ const conector = CALCULO_PADRAO.conector_db;
 const novoId = () => Math.random().toString(36).slice(2, 8);
 const curto = (s: string, n = 22) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 const dbm = (v?: number) => (v === undefined || Number.isNaN(v) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`);
 function nivel(v?: number) {

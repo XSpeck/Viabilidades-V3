@@ -11,6 +11,7 @@ import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
 import { listarPredios, type PredioRede } from "@/lib/prediosRede";
 import { iconeSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * Mapa da rede inteira: todas as rotas salvas (cabo na cor da fibra), as caixas com o ícone do tipo
@@ -43,7 +44,7 @@ function Enquadrar({ pts, vez }: { pts: [number, number][]; vez: string }) {
 
 const curto = (s: string, n = 26) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 
 export default function MapaRede({ rotas, onAbrirRota }: Props) {

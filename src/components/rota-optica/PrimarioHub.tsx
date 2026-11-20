@@ -6,6 +6,7 @@ import { totalPernas, portasPara, splittersDaCaixa, splittersDaFibra, type Split
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import { IconeElementoSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * HUB visto como splitter PRIMÁRIO: a fibra da OLT entra, o PLC divide e cada porta de saída
@@ -32,7 +33,7 @@ const TOPO = 58;
 
 const curto = (s: string, n = 24) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 const dbm = (v?: number) => (v === undefined || Number.isNaN(v) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`);
 function nivel(v?: number) {

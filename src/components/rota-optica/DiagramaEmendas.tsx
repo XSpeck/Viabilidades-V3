@@ -3,6 +3,7 @@
 import { corFibra, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
+import { cortar } from "@/lib/textoCompleto";
 
 /**
  * Diagrama de emendas de uma caixa: cabos que chegam (esquerda) e que saem (direita), com tubo e fibra,
@@ -60,7 +61,7 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
   return { simples: lista, splitters: [...splitters.values()] };
 }
 
-const curto = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+const curto = (t: string, n: number) => cortar(t, n);
 const nomeCabo = (t: string) => t.split(" - ")[0].trim() || t;
 
 export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string; nome: string; rotas: RotaOptica[] }) {

@@ -19,6 +19,7 @@ import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
 import BuscaRede from "./BuscaRede";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 interface Props {
   rotas: RotaOptica[];
@@ -48,9 +49,7 @@ const PADY = 44;
 
 /** Nome curto para o diagrama: "CE 9786 - TERRENO..." → "CE 9786"; "HUB 0/4/7 OLT1_ST / CTO..." → "HUB 0/4/7 OLT1_ST". */
 function nomeCurto(nome: string): string {
-  let n = nome.split(" - ")[0].split(" / ")[0].trim();
-  if (n.length > 20) n = n.slice(0, 19) + "…";
-  return n;
+  return cortar(nome.split(" - ")[0].split(" / ")[0].trim(), 20, nome);
 }
 
 function TF(fibra?: number, cabo?: string) {
@@ -393,7 +392,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const mx = x1 + COL / 2;
               const vis = estado(p) === 1 || sub.has(p) ? 1 : 0.3;
               if (l.tipo === "cliente") {
-                const rot = l.rotulo && l.rotulo.length > 22 ? l.rotulo.slice(0, 21) + "…" : l.rotulo;
+                const rot = l.rotulo ? cortar(l.rotulo, 22) : l.rotulo;
                 return (
                   <g key={`f${i}`} opacity={vis}>
                     <title>{l.rotulo}</title>
@@ -770,8 +769,7 @@ function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (i
 }
 
 function curtoNome(nome: string) {
-  const n = nome.split(" - ")[0].split(" / ")[0];
-  return n.length > 26 ? n.slice(0, 25) + "…" : n;
+  return cortar(nome.split(" - ")[0].split(" / ")[0], 26, nome);
 }
 
 /** Pontas (fins) abaixo de um nó */

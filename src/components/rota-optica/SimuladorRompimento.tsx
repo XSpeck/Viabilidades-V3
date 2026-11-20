@@ -9,6 +9,7 @@ import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import { acumuladoDaRota, localizarRompimento, trechosDaRota, type Sentido } from "@/lib/rompimento";
 import { IconeElemento, IconeElementoSvg } from "./IconesRede";
+import { cortar } from "@/lib/textoCompleto";
 
 const MapaRompimento = dynamic(() => import("./MapaRompimento"), {
   ssr: false,
@@ -35,7 +36,7 @@ interface Props {
 
 const curto = (s: string, n = 24) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  return cortar(t, n, s);
 };
 const m0 = (v: number) => `${Math.round(v).toLocaleString("pt-BR")} m`;
 
