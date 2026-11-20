@@ -106,7 +106,16 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   const pontosMapa: PontoVisita[] = visitar.flatMap((a, k) => {
     const el = a.esperado ? rota.elementos[a.esperado.i] : undefined;
     const pos = el?.lat !== undefined && el.lon !== undefined ? { lat: el.lat, lon: el.lon } : a.local?.ponto;
-    return pos ? [{ n: k + 1, lat: pos.lat, lon: pos.lon, cor: COR[a.situacao], titulo: a.onde }] : [];
+    // rótulo curto no mapa (o texto completo fica no cartão)
+    const nm = (i?: number) => (i !== undefined ? nomeSimples(rota.elementos[i]?.nome ?? "") : "?");
+    const titulo = a.esperado
+      ? nm(a.esperado.i)
+      : a.local?.tipo === "reserva"
+        ? `Reserva da ${nm(a.local.reservaDe)}`
+        : a.local?.tipo === "tracado"
+          ? `Cabo depois da ${nm(a.local.depoisDe)}`
+          : a.onde;
+    return pos ? [{ n: k + 1, lat: pos.lat, lon: pos.lon, cor: COR[a.situacao], titulo: cortar(titulo, 30) }] : [];
   });
   const situacoes = [...analise.map((a) => a.situacao), ...(sTotal ? [sTotal] : [])];
   const resultado: Situacao | null = !situacoes.length ? null : situacoes.includes("fora") ? "fora" : situacoes.includes("atencao") ? "atencao" : "ok";
