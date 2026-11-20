@@ -11,6 +11,7 @@ import { acumuladoDaRota, localizarRompimento, trechosDaRota, type Sentido } fro
 import { IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 import CertificacaoRota from "./CertificacaoRota";
+import EnviarTecnico from "./EnviarTecnico";
 
 const MapaRompimento = dynamic(() => import("./MapaRompimento"), {
   ssr: false,
@@ -227,6 +228,22 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
                 <div className="flex flex-wrap gap-1 pt-1">
                   <span className="rounded-full bg-slate-100 px-2 py-0.5">{m0(res.desdeOlt ?? 0)} desde a OLT</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5">cabo {curto(caboRompido ?? "?", 26)}</span>
+                </div>
+                <div className="border-t border-slate-100 pt-2">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mandar para o técnico</p>
+                  <EnviarTecnico
+                    texto={(() => {
+                      const nm = (i?: number) => (i !== undefined ? rota.elementos[i]?.nome.split(" - ")[0].split(" / ")[0] ?? "" : "");
+                      const t = tr.find((x) => x.i === res.trecho);
+                      const resSaida = t ? (sentido === "ponta" ? t.resIni : t.resFim) : 0;
+                      const onde = res.tipo === "reserva"
+                        ? `na reserva técnica da ${nm(res.reservaDe)}`
+                        : `entre ${nm(res.depoisDe)} e ${nm(res.antesDe)}, ≈ ${Math.round(Math.max(0, (res.metrosDepois ?? 0) - resSaida))} m de cabo depois da ${nm(res.depoisDe)}`;
+                      return `⚡ Rompimento — ${rota.nome}\nProvável ${onde}.\nOTDR na ${nm(refOk)}: ${m0(d)} · ${m0(res.desdeOlt ?? 0)} desde a OLT · cabo ${caboRompido ?? "?"}`;
+                    })()}
+                    lat={res.ponto?.lat}
+                    lon={res.ponto?.lon}
+                  />
                 </div>
               </div>
             </div>

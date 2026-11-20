@@ -19,6 +19,7 @@ import {
 import { IconeElemento } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 import type { PontoVisita } from "./MapaCertificacao";
+import EnviarTecnico, { linkMaps } from "./EnviarTecnico";
 
 const MapaCertificacao = dynamic(() => import("./MapaCertificacao"), {
   ssr: false,
@@ -234,6 +235,14 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
             {a.leitura.fim ? <span className="rounded-full bg-slate-100 px-2 py-0.5">fim da fibra</span> : a.leitura.perda !== undefined && <span className="rounded-full bg-slate-100 px-2 py-0.5 tabular-nums">{db(a.leitura.perda)} dB</span>}
             {a.local?.desdeOlt !== undefined && <span className="rounded-full bg-slate-100 px-2 py-0.5 tabular-nums"><MapPin className="mr-0.5 inline h-3 w-3" />{formatMetros(a.local.desdeOlt)} da OLT</span>}
           </p>
+          {n && (() => {
+            const pt = pontosMapa.find((x) => x.n === n);
+            return (
+              <div className="mt-1.5">
+                <EnviarTecnico compacto texto={`🔧 Verificar — ${rota.nome}\n${n}. ${a.onde}\n${a.detalhe}`} lat={pt?.lat} lon={pt?.lon} />
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
@@ -371,7 +380,23 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
 
           {visitar.length > 0 && (
             <section className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Onde enviar o técnico</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Onde enviar o técnico</p>
+                {visitar.length > 1 && (
+                  <span className="ml-auto flex items-center gap-1 text-[10px] text-slate-500">
+                    todos:
+                    <EnviarTecnico
+                      compacto
+                      texto={`🔧 Certificação — ${rota.nome}\n${visitar
+                        .map((a, k) => {
+                          const pt = pontosMapa.find((x) => x.n === k + 1);
+                          return `${k + 1}. ${a.onde}\n   ${a.detalhe}${pt ? `\n   📍 ${linkMaps(pt.lat, pt.lon)}` : ""}`;
+                        })
+                        .join("\n")}`}
+                    />
+                  </span>
+                )}
+              </div>
               {visitar.map((a, k) => cartao(a, k, k + 1))}
             </section>
           )}
