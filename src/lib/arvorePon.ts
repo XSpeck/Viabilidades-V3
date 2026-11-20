@@ -153,6 +153,17 @@ export function montarArvoresPon(rotas: RotaOptica[], caixas: CaixaRede[] = []):
     .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true }));
 }
 
+/** Filhos de verdade de um nó: o nó agrupador de prédio é atravessado (as CDOIs dele contam como filhas). */
+export function filhosReais(n: NoArvore): NoArvore[] {
+  return n.filhos.flatMap((f) => (f.elemento.tipo === "predio" ? filhosReais(f) : [f]));
+}
+
+/** O nó está dentro de um prédio (CDOI agrupada)? Na árvore ele não é desenhado; o prédio aparece no lugar. */
+export function dentroDePredio(n: NoArvore): boolean {
+  for (let p = n.pai; p; p = p.pai) if (p.elemento.tipo === "predio") return true;
+  return false;
+}
+
 /** Caminho da raiz até o nó. */
 export function caminhoAte(n: NoArvore): NoArvore[] {
   const p: NoArvore[] = [];

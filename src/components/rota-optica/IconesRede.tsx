@@ -13,6 +13,7 @@ export const COR_ELEMENTO: Record<TipoElementoRota, string> = {
   hub: "#4f46e5",
   cto: "#059669",
   cdoi: "#0284c7",
+  predio: "#334155",
   onu: "#64748b",
   outro: "#6b7280",
 };
@@ -59,6 +60,13 @@ const DESENHO: Record<TipoElementoRota, (cor: string) => string> = {
     <path d="M7 27V7.5L17 3.5l8 3V27z" fill="${c}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
     ${[0, 1, 2].map((r) => [0, 1].map((k) => `<rect x="${10.5 + k * 6}" y="${9 + r * 5}" width="3.4" height="2.8" rx=".5" fill="#e0f2fe"/>`).join("")).join("")}
     <rect x="14" y="23" width="4" height="4" fill="#bae6fd"/>`,
+  // Prédio (agrupador de CDOIs): duas torres
+  predio: (c) => `${SOMBRA}
+    <rect x="3.5" y="9" width="11" height="18.5" rx="1.2" fill="${c}" stroke="#fff" stroke-width="1.4"/>
+    <rect x="13.5" y="3.5" width="15" height="24" rx="1.2" fill="${c}" stroke="#fff" stroke-width="1.4"/>
+    ${[0, 1, 2].map((r) => `<rect x="6.2" y="${12 + r * 4.6}" width="2.4" height="2.2" rx=".4" fill="#fde68a"/><rect x="9.6" y="${12 + r * 4.6}" width="2.4" height="2.2" rx=".4" fill="#fde68a"/>`).join("")}
+    ${[0, 1, 2, 3].map((r) => [0, 1, 2].map((k) => `<rect x="${16 + k * 3.8}" y="${6.5 + r * 4.4}" width="2.4" height="2.4" rx=".4" fill="#bae6fd"/>`).join("")).join("")}
+    <rect x="19" y="23.5" width="4" height="4" fill="#94a3b8"/>`,
   // Cliente: casinha
   onu: (c) => `${SOMBRA}
     <path d="M4.5 15L16 5l11.5 10" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>

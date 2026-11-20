@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
-import { caminhoAte, chaveElemento, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import { caminhoAte, chaveElemento, dentroDePredio, filhosReais, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
 import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
-import { listarPredios, type PredioRede } from "@/lib/prediosRede";
+import { listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
@@ -67,6 +67,10 @@ function layout(a: ArvorePon) {
   const livres: Folha[] = [];
   let linha = 0;
   const f = (n: NoArvore) => {
+    if (n.elemento.tipo === "predio") {
+      y.set(n, linha++);
+      return;
+    }
     const pern = pernasSplitter(n);
     const nLivres = pern?.livres ?? 0;
     const clientes = pern?.portasCliente ?? [];
@@ -84,25 +88,25 @@ function layout(a: ArvorePon) {
     y.set(n, (ys[0] + ys[ys.length - 1]) / 2);
   };
   f(a.raiz);
-  const maxD = Math.max(...a.nos.map((n) => n.profundidade)) + (livres.length ? 1 : 0);
+  const maxD = Math.max(...a.nos.filter((n) => !dentroDePredio(n)).map((n) => n.profundidade)) + (livres.length ? 1 : 0);
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
 export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram }: Props) {
-  const arvores = useMemo(() => montarArvoresPon(rotas, caixas), [rotas, caixas]);
-  const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
-  const [chave, setChave] = useState<string | null>(null);
-  const [selId, setSelId] = useState<string>("0");
-  const [cheia, setCheia] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [janelas, setJanelas] = useState<JanelaArv[]>([]);
-  /** Prédios (para oferecer as CDOIs como destino das fibras de um cabo) */
+  /** Prédios: agrupam as CDOIs na árvore e entram como destino das fibras de um cabo */
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
     let vivo = true;
     listarPredios().then((ps) => vivo && setPredios(ps)).catch(() => {});
     return () => { vivo = false; };
   }, []);
+  const arvores = useMemo(() => montarArvoresPon(rotasComPredios(rotas, predios), caixas), [rotas, caixas, predios]);
+  const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
+  const [chave, setChave] = useState<string | null>(null);
+  const [selId, setSelId] = useState<string>("0");
+  const [cheia, setCheia] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [janelas, setJanelas] = useState<JanelaArv[]>([]);
   /** Elemento escolhido na busca: a área rola até ele */
   const [foco, setFoco] = useState<{ id: string; vez: number } | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -345,14 +349,15 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             className="block"
           >
             {/* Ligações (cabos) */}
-            {arvore.nos.filter((n) => n.pai).map((c) => {
+            {arvore.nos.filter((n) => n.pai && !dentroDePredio(n)).map((c) => {
               const p = c.pai!;
               const x1 = X(p.profundidade), y1 = Y(y.get(p)!), x2 = X(c.profundidade), y2 = Y(y.get(c)!);
               const mx = x1 + COL / 2;
               const d = `M${x1} ${y1}H${mx}V${y2}H${x2}`;
               const cor = corFibra(c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
               const temCabo = !!c.elemento.cabo_entrada;
-              const rot = c.elemento.fibra_entrada ? TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada) : "cabo";
+              const nFibrasPredio = c.elemento.tipo === "predio" ? new Set(filhosReais(c).map((x) => x.elemento.fibra_entrada)).size : 0;
+              const rot = nFibrasPredio > 1 ? `${nFibrasPredio} fibras` : c.elemento.fibra_entrada ? TF(c.elemento.fibra_entrada, c.elemento.cabo_entrada) : "cabo";
               const lw = 36 + rot.length * 6;
               // Reta: etiqueta no meio do trecho; ramo: no trecho horizontal final, longe do ícone
               const ex = y1 === y2 ? (x1 + x2) / 2 : (mx + x2 - 16) / 2;
@@ -404,12 +409,12 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             })}
 
             {/* Elementos */}
-            {arvore.nos.map((n) => {
+            {arvore.nos.filter((n) => !dentroDePredio(n)).map((n) => {
               const x = X(n.profundidade), yy = Y(y.get(n)!);
               const t = tipoVisual(n.elemento);
               const ativo = n === sel;
               const spl = n.caixa?.splitter ?? n.elemento.splitter;
-              const tam = t === "olt" ? 34 : t === "onu" || t === "outro" ? 24 : 30;
+              const tam = t === "olt" || t === "predio" ? 36 : t === "onu" || t === "outro" ? 24 : 30;
               return (
                 <g
                   key={`n${n.id}`}
@@ -425,6 +430,16 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                   <title>{n.elemento.nome}</title>
                   {ativo && <circle cx={x} cy={yy} r={tam / 2 + 7} fill="#fef9c3" stroke="#ca8a04" strokeWidth={2} />}
                   <IconeElementoSvg tipo={t} x={x} y={yy} tamanho={tam} />
+                  {t === "predio" && (() => {
+                    const q = filhosReais(n).length;
+                    const txt = `${q} CDOI${q !== 1 ? "s" : ""}`;
+                    return (
+                      <g transform={`translate(${x + 8} ${yy + 6})`}>
+                        <rect width={txt.length * 5.6 + 10} height={14} rx={7} fill="#0284c7" stroke="#fff" strokeWidth={1.2} />
+                        <text x={(txt.length * 5.6 + 10) / 2} y={10.2} fontSize={9} fontWeight={700} fill="#fff" textAnchor="middle">{txt}</text>
+                      </g>
+                    );
+                  })()}
                   {spl && (
                     <g transform={`translate(${x + 7} ${yy + 6})`}>
                       <rect width={spl.length * 6 + 8} height={14} rx={7} fill="#0f172a" stroke="#fff" strokeWidth={1.2} />
@@ -502,7 +517,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             key={j.id}
             inicial={{ x: j.x, y: j.y }}
             titulo={no.elemento.nome}
-            subtitulo={`${TIPO_ELEMENTO_LABEL[t]}${no.elemento.codigo ? ` · ${no.elemento.codigo}` : ""}`}
+            subtitulo={t === "predio" ? `Prédio · ${filhosReais(no).length} CDOI${filhosReais(no).length !== 1 ? "s" : ""}` : `${TIPO_ELEMENTO_LABEL[t]}${no.elemento.codigo ? ` · ${no.elemento.codigo}` : ""}`}
             icone={<IconeElemento tipo={t} tamanho={22} />}
             largura={460}
             onFechar={() => fecharJanela(j.id)}
@@ -543,10 +558,11 @@ function JanelaNo({
   onAbrirRota: (id: string) => void;
   onFechar: () => void;
 }) {
+  const ehPredio = no.elemento.tipo === "predio";
   const ehCdoi = tipoVisual(no.elemento) === "cdoi";
   const ehHub = tipoVisual(no.elemento) === "hub";
   const [aba, setAba] = useState<"primario" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehHub ? "primario" : ehCdoi ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+    ehHub ? "primario" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
   /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
   const [editandoHub, setEditandoHub] = useState(false);
@@ -555,9 +571,9 @@ function JanelaNo({
       <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
         {([
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
-          ...(ehCdoi ? ([["predio", "Prédio"]] as const) : []),
-          ["emendas", "Emendas"],
-          ...(ehHub ? [] : ([["diagrama", "Splitter e portas"]] as const)),
+          ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
+          ...(ehPredio ? [] : ([["emendas", "Emendas"]] as const)),
+          ...(ehHub || ehPredio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -584,8 +600,8 @@ function JanelaNo({
             modeloRota={no.elemento.splitter_modelo}
             caboEntrada={no.elemento.cabo_entrada}
             fibraEntrada={no.elemento.fibra_entrada}
-            ramos={no.filhos.map((f) => f.elemento.nome)}
-            saidas={no.filhos.map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+            ramos={filhosReais(no).map((f) => f.elemento.nome)}
+            saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
             modelos={catalogo.filter((m) => m.categoria === "splitter")}
             usuario={usuario}
             onSalva={onCaixaSalva}
@@ -599,7 +615,9 @@ function JanelaNo({
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
       ) : aba === "predio" ? (
-        <PredioVertical chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
+        <PredioVertical
+          chave={ehPredio ? chaveElemento((filhosReais(no)[0] ?? no).elemento) : chaveElemento(no.elemento)}
+          nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (
@@ -613,8 +631,8 @@ function JanelaNo({
           modeloRota={no.elemento.splitter_modelo}
           caboEntrada={no.elemento.cabo_entrada}
           fibraEntrada={no.elemento.fibra_entrada}
-          ramos={no.filhos.map((f) => f.elemento.nome)}
-          saidas={no.filhos.map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+          ramos={filhosReais(no).map((f) => f.elemento.nome)}
+          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
           modelos={catalogo.filter((m) => m.categoria === "splitter")}
           usuario={usuario}
           onSalva={onCaixaSalva}

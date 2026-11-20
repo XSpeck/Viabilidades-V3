@@ -1,3 +1,6 @@
+import type { ElementoRota, RotaOptica } from "./rotaOptica";
+import { chaveElemento } from "./arvorePon";
+
 // =====================
 // Prédios verticais da rede (FTTA): blocos, andares e onde ficam as CDOIs.
 // Cada CDOI é ligada pela mesma chave das rotas (código PT ou nome), então o prédio
@@ -140,4 +143,52 @@ export async function excluirPredio(id: string): Promise<void> {
   const { db } = await import("./firebase");
   await deleteDoc(doc(db, COLECAO, id));
   cache = cache ? cache.filter((x) => x.id !== id) : null;
+}
+
+// =====================
+// Agrupador na árvore: as CDOIs de um prédio ficam "dentro" de um nó Prédio
+// =====================
+export const CODIGO_PREDIO = "PREDIO-";
+
+/** O elemento é o nó agrupador de um prédio (criado só para exibir a árvore)? */
+export function idPredioDoElemento(e: { tipo: string; codigo?: string }): string | null {
+  return e.tipo === "predio" && e.codigo?.startsWith(CODIGO_PREDIO) ? e.codigo.slice(CODIGO_PREDIO.length) : null;
+}
+
+/**
+ * Para a árvore: antes da primeira CDOI de um prédio em cada rota entra o nó do prédio (mesmo cabo, mesma distância),
+ * e a CDOI fica logo depois dele, a 0 m. Assim todas as rotas que chegam no prédio se juntam num nó só.
+ * Não altera a potência (o prédio é neutro) nem os dados salvos.
+ */
+export function rotasComPredios(rotas: RotaOptica[], predios: PredioRede[]): RotaOptica[] {
+  if (!predios.length) return rotas;
+  const doPredio = new Map<string, PredioRede>();
+  predios.forEach((p) => p.chaves.forEach((k) => doPredio.set(k, p)));
+  return rotas.map((r) => {
+    let mudou = false;
+    const els: ElementoRota[] = [];
+    r.elementos.forEach((e, i) => {
+      const p = i > 0 ? doPredio.get(chaveElemento(e)) : undefined;
+      const jaDentro = els.some((x) => x.codigo === `${CODIGO_PREDIO}${p?.id}`);
+      if (p && !jaDentro) {
+        mudou = true;
+        els.push({
+          nome: p.nome,
+          tipo: "predio",
+          codigo: `${CODIGO_PREDIO}${p.id}`,
+          lat: e.lat,
+          lon: e.lon,
+          cabo_entrada: e.cabo_entrada,
+          fibra_entrada: e.fibra_entrada,
+          distancia_m: e.distancia_m,
+          potencia_entrada: e.potencia_entrada,
+          potencia_saida: e.potencia_entrada,
+        });
+        els.push({ ...e, distancia_m: 0 });
+        return;
+      }
+      els.push(e);
+    });
+    return mudou ? { ...r, elementos: els } : r;
+  });
 }

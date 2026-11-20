@@ -1,7 +1,7 @@
 "use client";
 
 import { corFibra, perdaSplitter, tipoVisual, CALCULO_PADRAO } from "@/lib/rotaOptica";
-import { pernasSplitter, type NoArvore } from "@/lib/arvorePon";
+import { filhosReais, pernasSplitter, type NoArvore } from "@/lib/arvorePon";
 import { totalPernas, portasPara } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { chaveCabo } from "@/lib/cabosRede";
@@ -56,6 +56,8 @@ type Saida =
 
 export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }: Props) {
   const el = no.elemento;
+  // um prédio ligado na HUB conta pelas CDOIs de dentro (cada uma numa porta)
+  const filhos = filhosReais(no);
   const relacao = no.caixa?.splitter ?? el.splitter;
   const total = totalPernas(relacao);
   const modelo = catalogo.find((m) => m.id === (no.caixa?.splitter_modelo ?? el.splitter_modelo));
@@ -85,12 +87,12 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
     if (p.status === "cliente") return { tipo: "cliente", porta: p.numero, descricao: p.descricao };
     if (p.status === "ramal" && p.descricao) {
       const d = norm(p.descricao);
-      const candidatos = no.filhos.filter((x) => !usados.has(x.id) && (norm(x.elemento.nome).includes(d) || d.includes(norm(curto(x.elemento.nome, 60)))));
+      const candidatos = filhos.filter((x) => !usados.has(x.id) && (norm(x.elemento.nome).includes(d) || d.includes(norm(curto(x.elemento.nome, 60)))));
       // escolhido pela lista ("CTO X · 24 FO ASO F2"): a fibra desempata quando há dois ramos para o mesmo destino
       const fib = d.match(/\bf(\d+)$/)?.[1];
       // destino renomeado depois de marcar a porta: reconhece pelo cabo + fibra ("06 FO ASO F1")
       const porCaboFibra = () =>
-        no.filhos.find((x) => {
+        filhos.find((x) => {
           if (usados.has(x.id) || !x.elemento.fibra_entrada) return false;
           const cabo = (x.elemento.cabo_entrada ?? "").split(" · ")[0].split(" - ")[0].trim();
           return !!cabo && d.endsWith(norm(`${cabo} F${x.elemento.fibra_entrada}`));
@@ -103,7 +105,7 @@ export default function PrimarioHub({ no, catalogo, onAbrirNo, onEditarPortas }:
     }
     return { tipo: "livre", porta: p.numero };
   });
-  const semPorta = no.filhos.filter((f) => !usados.has(f.id));
+  const semPorta = filhos.filter((f) => !usados.has(f.id));
   for (const f of semPorta) {
     const k = saidas.findIndex((s) => s.tipo === "livre");
     if (k < 0) break;

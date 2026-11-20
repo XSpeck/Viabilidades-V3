@@ -2,7 +2,8 @@
 // Rota óptica — tipos, leitura do KML do GeoGrid, cálculos e Firestore
 // =====================
 
-export type TipoElementoRota = "olt" | "dio" | "ceo" | "ct" | "hub" | "cto" | "cdoi" | "onu" | "outro";
+/** "predio" é um agrupador (como a estação): junta as CDOIs de um prédio; não entra na potência */
+export type TipoElementoRota = "olt" | "dio" | "ceo" | "ct" | "hub" | "cto" | "cdoi" | "predio" | "onu" | "outro";
 
 export const TIPO_ELEMENTO_LABEL: Record<TipoElementoRota, string> = {
   olt: "OLT",
@@ -12,6 +13,7 @@ export const TIPO_ELEMENTO_LABEL: Record<TipoElementoRota, string> = {
   hub: "Hub splitter",
   cto: "CTO",
   cdoi: "CDOI (prédio)",
+  predio: "Prédio",
   onu: "Cliente / ONU",
   outro: "Outro",
 };

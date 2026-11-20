@@ -196,7 +196,7 @@ const PALETA: { t: TipoElementoRota; rot: string }[] = [
 ];
 
 const PREFIXO: Record<TipoElementoRota, string> = {
-  olt: "OLT", dio: "DIO", ceo: "CEO", ct: "CT", hub: "HUB", cto: "CTO", cdoi: "CDOI", onu: "Cliente", outro: "Ponto",
+  olt: "OLT", dio: "DIO", ceo: "CEO", ct: "CT", hub: "HUB", cto: "CTO", cdoi: "CDOI", predio: "Prédio", onu: "Cliente", outro: "Ponto",
 };
 
 /** Parte curta do nome de um elemento, usada no nome automático do cabo ("24 FO ASO · HUB 1 → CTO 2") */
@@ -1131,7 +1131,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           <div>
             <label className={rot}>Tipo</label>
             <select className={campo} value={l.tipo} onChange={(e) => alterar(i, { tipo: e.target.value as TipoElementoRota })}>
-              {Object.entries(TIPO_ELEMENTO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.entries(TIPO_ELEMENTO_LABEL).filter(([k]) => k !== "predio").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>
