@@ -60,6 +60,8 @@ interface Linha {
   splitter_modelo: string;
   /** HUB só de passagem nesta rota (splitter de outra porta) */
   passagem: boolean;
+  /** Trecho que chega é um link no mesmo poste (sem traçado e sem reserva) */
+  mesmoPoste: boolean;
   equipamento_id: string;
   porta: string;
   coords: string;
@@ -100,6 +102,7 @@ function paraLinha(e: ElementoRota, vertices: Ponto[] = []): Linha {
     splitter: e.splitter ?? "",
     splitter_modelo: e.splitter_modelo ?? "",
     passagem: !!e.passagem,
+    mesmoPoste: !!e.mesmo_poste,
     equipamento_id: e.equipamento_id ?? "",
     porta: e.porta ?? "",
     coords: e.lat !== undefined && e.lon !== undefined ? `${e.lat}, ${e.lon}` : "",
@@ -490,6 +493,82 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const perto = prediosPerto(p)[0];
     if (perto && perto.d <= 60) return { id: perto.pr.id, nome: perto.pr.nome, bloco: perto.pr.blocos[0]?.id ?? "", andar: 0 };
     return { id: "", nome: "", bloco: "Bloco A", andar: 0 };
+  }
+
+  /** HUB logo antes desta CTO no mesmo poste (para o transporte voltar por ela) */
+  function hubAntes(i: number): number | null {
+    for (let j = i - 1; j >= 0; j--) {
+      if (linhas[j].tipo === "hub") return linhas[i].mesmoPoste || j === i - 1 ? j : null;
+      if (!linhas[j + 1]?.mesmoPoste) return null;
+    }
+    return null;
+  }
+
+  /** Link curto entre caixas no mesmo poste: menor cabo do cadastro com mais de uma fibra (leva o link e a volta) */
+  function tipoLinkPoste() {
+    return [...tiposDeCabo].filter((t) => (t.capacidade ?? 0) >= 2).sort((a, b) => (a.capacidade ?? 0) - (b.capacidade ?? 0))[0];
+  }
+
+  /** ＋ CTO no mesmo poste: entra logo depois da HUB, no mesmo ponto, ligada por cabo curto (3 m, sem reserva) */
+  function ctoNoMesmoPoste(i: number) {
+    const hub = linhas[i];
+    const p = posDe(hub);
+    const nomeCto = nomeAuto("cto", linhas, nomesRede);
+    const t = tipoLinkPoste();
+    const nomeCabo = `${t ? t.nome : "Cabo"} · ${curtoNome(hub.nome)} → ${nomeCto} (mesmo poste)`;
+    if (t) setTiposCabo((tc) => ({ ...tc, [chaveCabo(nomeCabo)]: t.id }));
+    const nova: Linha = {
+      ...linhaVazia("cto"),
+      nome: nomeCto,
+      codigo: proximoCodigo(linhas),
+      coords: p ? fmtCoord({ lat: p.lat + 0.00001, lon: p.lon + 0.00001 }) : "",
+      vertices: [],
+      dist_auto: false,
+      distancia_m: "3",
+      mesmoPoste: true,
+      cabo_entrada: nomeCabo,
+      fibra_entrada: "1",
+    };
+    mudar((ls) => {
+      const c = [...ls];
+      c.splice(i + 1, 0, nova);
+      return c;
+    });
+    setSel(i + 1);
+    setAviso(`${nomeCto} criada no mesmo poste da ${curtoNome(hub.nome)}, ligada por ${nomeCabo.split(" · ")[0]} (3 m, sem reserva). Escolha o splitter dela.`);
+  }
+
+  /** ↩ Voltar para a HUB: a fibra de uma porta da CTO volta pelo mesmo cabo, em outra fibra, e atravessa a HUB */
+  function voltarParaHub(i: number) {
+    const h = hubAntes(i);
+    if (h === null) return;
+    const hub = linhas[h];
+    const cto = linhas[i];
+    const cabo = cto.cabo_entrada;
+    const usadas = new Set(linhas.filter((l) => l.cabo_entrada && chaveCabo(l.cabo_entrada) === chaveCabo(cabo)).map((l) => n(l.fibra_entrada)));
+    let f = 2;
+    while (usadas.has(f)) f++;
+    const volta: Linha = {
+      ...hub,
+      vertices: [],
+      dist_auto: false,
+      distancia_m: cto.distancia_m || "3",
+      mesmoPoste: true,
+      passagem: true,
+      splitter: "",
+      splitter_modelo: "",
+      cabo_entrada: cabo,
+      fibra_entrada: String(f),
+      potencia_entrada: "",
+      potencia_saida: "",
+    };
+    mudar((ls) => {
+      const c = [...ls];
+      c.splice(i + 1, 0, volta);
+      return c;
+    });
+    setSel(i + 1);
+    setAviso(`Transporte: a fibra F${f} volta da ${curtoNome(cto.nome)} para a ${curtoNome(hub.nome)} (passagem). Agora coloque as próximas caixas (ex.: a CT).`);
   }
 
   /** Cartão "Prédio" da CDOI: escolhe o prédio (ou cria um), o bloco e o andar */
@@ -1123,6 +1202,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         splitter: l.splitter.trim() || undefined,
         splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
         passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
+        mesmo_poste: i > 0 && l.mesmoPoste ? true : undefined,
         equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
         porta: l.porta.trim() || undefined,
         lat: c.lat,
@@ -1388,11 +1468,31 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 </button>
               )}
             </div>
-            {l.codigo.trim() && linhas.some((x, j) => j !== i && x.codigo.trim() === l.codigo.trim()) && (
+            {l.codigo.trim() && linhas.some((x, j) => j !== i && x.codigo.trim() === l.codigo.trim() && !(x.nome === l.nome && x.tipo === l.tipo)) && (
               <p className="text-[10px] text-red-600 mt-0.5">Código repetido nesta rota</p>
             )}
           </div>
           {camposEquipamento(i)}
+          {l.tipo === "hub" && !l.passagem && (
+            <button
+              type="button"
+              onClick={() => ctoNoMesmoPoste(i)}
+              className="col-span-2 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50 py-1.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100"
+              title="Cria uma CTO logo depois desta HUB, no mesmo poste, ligada por um cabo curto sem reserva"
+            >
+              ＋ CTO no mesmo poste
+            </button>
+          )}
+          {l.tipo === "cto" && hubAntes(i) !== null && (
+            <button
+              type="button"
+              onClick={() => voltarParaHub(i)}
+              className="col-span-2 rounded-lg border-2 border-dashed border-indigo-300 bg-indigo-50 py-1.5 text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100"
+              title="Uma porta desta CTO volta pelo mesmo cabo, em outra fibra, até a HUB (passagem) e segue para outra rota (ex.: alimentar uma CT)"
+            >
+              ↩ Voltar para a HUB (transporte em outra fibra)
+            </button>
+          )}
           {l.tipo === "cdoi" && <div className="col-span-2">{campoPredio(i)}</div>}
           {i === 0 && (
             <div className="col-span-2">
@@ -1505,12 +1605,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <div>
                 <label className={rot}>Distância (m){l.dist_auto && dm !== null ? " · pelo mapa" : ""}</label>
                 <input className={campo} inputMode="decimal" value={l.distancia_m} onChange={(e) => alterar(i, { distancia_m: e.target.value, dist_auto: false })} />
-                {dm !== null && (
+                {l.mesmoPoste ? (
+                  <p className="text-[10px] text-slate-500">link no mesmo poste · sem reserva</p>
+                ) : dm !== null && (
                   <p className="text-[10px] text-slate-500">
                     traçado {formatMetros(dm)} + reserva {reservaTrecho(linhas[i - 1]?.tipo, l.tipo, calc)} m
                   </p>
                 )}
-                {!l.dist_auto && dm !== null && (
+                {!l.dist_auto && !l.mesmoPoste && dm !== null && (
                   <button type="button" onClick={() => alterar(i, { dist_auto: true })} className="text-[11px] text-indigo-600 hover:underline">
                     usar o mapa ({formatMetros(dm + reservaTrecho(linhas[i - 1]?.tipo, l.tipo, calc))})
                   </button>

@@ -33,8 +33,9 @@ export function trechosDaRota(r: RotaOptica): TrechoRota[] {
     const a = pos(i - 1), b = pos(i);
     const pts = t?.pontos?.length ? t.pontos : a && b ? [a, b] : [];
     const tracado = pts.length > 1 ? pts.slice(1).reduce((s, p, k) => s + distanciaMetros(pts[k], p), 0) : 0;
-    const resIni = reservaTecnica(r.elementos[i - 1].tipo, c);
-    const resFim = reservaTecnica(e.tipo, c);
+    // link no mesmo poste (HUB → CTO ao lado): não tem rolo de reserva
+    const resIni = e.mesmo_poste ? 0 : reservaTecnica(r.elementos[i - 1].tipo, c);
+    const resFim = e.mesmo_poste ? 0 : reservaTecnica(e.tipo, c);
     const metros = e.distancia_m ?? Math.round(tracado + resIni + resFim);
     out.push({ i, metros, resIni, resFim, pts });
   }
