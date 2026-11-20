@@ -26,7 +26,7 @@ import {
 import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
-import { chaveElemento } from "@/lib/arvorePon";
+import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { andaresDoBloco, listarPredios, novoId, predioNovo, rotuloAndarCurto, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
@@ -1080,6 +1080,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   // Só equipamentos do cadastro: o que faltar vira pendência e impede salvar
+  /** Porta PON desta rota (pela OLT do elemento 1) */
+  const ponDestaRota = linhas[0] ? portaPonDaRota({ elementos: [{ nome: linhas[0].nome, tipo: linhas[0].tipo, porta: linhas[0].porta }] } as unknown as RotaOptica).chave : "";
   const pendencias: { i: number; msg: string }[] = [];
   if (linhas.length && linhas[0].tipo !== "olt") pendencias.push({ i: 0, msg: "A rota precisa começar numa OLT" });
   linhas.forEach((l, i) => {
@@ -1087,6 +1089,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
     if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
+    // fibra já usada por OUTRA porta PON no mesmo cabo (mesma porta pode dividir a fibra no tronco)
+    if (i > 0 && l.cabo_entrada.trim() && n(l.fibra_entrada)) {
+      const conflito = usoOutraPorta(l.cabo_entrada, n(l.fibra_entrada)!);
+      if (conflito) pendencias.push({ i, msg: `${nome}: a fibra F${l.fibra_entrada} do cabo "${curtoNome(l.cabo_entrada)}" já é usada pela ${conflito.pon} (rota ${conflito.rota})` });
+    }
     if (l.tipo === "hub" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter primário da HUB (ou marque "Só passa")` });
     if (l.tipo === "cto" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter da CTO (ou marque "Só passa")` });
     if (l.predio && !l.predio.id && !l.predio.nome.trim()) pendencias.push({ i, msg: `${nome}: dê o nome do prédio` });
@@ -1270,6 +1277,17 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   // ---------- Campos do painel ----------
   const campo = "w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400";
   const rot = "block text-[11px] font-medium text-slate-500 mb-0.5";
+
+  /** Outra porta PON que já usa esta fibra deste cabo */
+  function usoOutraPorta(cabo: string, fibra: number): { pon: string; rota: string } | null {
+    const k = chaveCabo(cabo);
+    for (const r of rede) {
+      const p = portaPonDaRota(r);
+      if (p.chave === ponDestaRota) continue;
+      if (r.elementos.some((e) => e.cabo_entrada && e.fibra_entrada === fibra && chaveCabo(e.cabo_entrada) === k)) return { pon: p.rotulo, rota: r.nome };
+    }
+    return null;
+  }
 
   function campoFibra(i: number) {
     const l = linhas[i];
