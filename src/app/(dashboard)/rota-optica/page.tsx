@@ -312,13 +312,13 @@ export default function RotaOpticaPage() {
         <Janela
           inicial={rompimento}
           largura={Math.min(1000, typeof window !== "undefined" ? window.innerWidth - 16 : 1000)}
-          titulo="Simulador de rompimento"
-          subtitulo="OTDR: onde rompeu e o que fica sem sinal"
+          titulo="Simulador OTDR"
+          subtitulo="Onde rompeu, o que fica sem sinal e a certificação da rota"
           icone={<Zap className="w-5 h-5 text-yellow-300" />}
           corBarra="bg-red-900"
           onFechar={() => setRompimento(null)}
         >
-          <SimuladorRompimento rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} />
+          <SimuladorRompimento rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} usuario={user?.nome ?? ""} />
         </Janela>
       )}
 

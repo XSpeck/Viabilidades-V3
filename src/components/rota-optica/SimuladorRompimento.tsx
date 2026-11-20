@@ -10,6 +10,7 @@ import { chaveCabo } from "@/lib/cabosRede";
 import { acumuladoDaRota, localizarRompimento, trechosDaRota, type Sentido } from "@/lib/rompimento";
 import { IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
+import CertificacaoRota from "./CertificacaoRota";
 
 const MapaRompimento = dynamic(() => import("./MapaRompimento"), {
   ssr: false,
@@ -32,6 +33,8 @@ interface Props {
   onAbrirRota: (id: string) => void;
   /** Começar já com esta rota / caixa */
   inicio?: { rotaId: string; ref?: number };
+  /** Nome que vai no laudo da certificação */
+  usuario?: string;
 }
 
 const curto = (s: string, n = 24) => {
@@ -44,7 +47,35 @@ function subarvore(n: NoArvore): NoArvore[] {
   return [n, ...n.filhos.flatMap(subarvore)];
 }
 
-export default function SimuladorRompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
+/** Abas do OTDR: rompimento e certificação */
+function AbasOtdr({ aba, onAba }: { aba: "rompimento" | "certificacao"; onAba: (a: "rompimento" | "certificacao") => void }) {
+  return (
+    <div className="flex border-b border-slate-200 bg-white px-3">
+      {([["rompimento", "Rompimento"], ["certificacao", "Certificação de rota"]] as const).map(([k, r]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onAba(k)}
+          className={`-mb-px border-b-2 px-3 py-2 text-xs font-semibold ${aba === k ? "border-red-600 text-red-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function SimuladorRompimento(props: Props) {
+  const [aba, setAba] = useState<"rompimento" | "certificacao">("rompimento");
+  return (
+    <div>
+      <AbasOtdr aba={aba} onAba={setAba} />
+      {aba === "rompimento" ? <Rompimento {...props} /> : <CertificacaoRota rotas={props.rotas} usuario={props.usuario} />}
+    </div>
+  );
+}
+
+function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
   const [rotaId, setRotaId] = useState(inicio?.rotaId ?? rotas[0]?.id ?? "");
   const rota = rotas.find((r) => r.id === rotaId) ?? rotas[0];
   const idxDio = rota ? rota.elementos.findIndex((e) => e.tipo === "dio") : -1;
