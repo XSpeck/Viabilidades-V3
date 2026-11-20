@@ -24,6 +24,7 @@ import { capacidadesDosCabos, listarCabos, usoDasFibras, type CaboRede } from "@
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import { listarPredios } from "@/lib/prediosRede";
+import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
@@ -54,6 +55,8 @@ export default function RotaOpticaPage() {
   const [rotasAbertas, setRotasAbertas] = useState<{ id: string; x: number; y: number }[]>([]);
   /** Janela do cadastro de equipamentos (posição inicial) */
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
+  /** Janela de limpeza (resíduos de rotas apagadas) */
+  const [limpeza, setLimpeza] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -207,6 +210,14 @@ export default function RotaOpticaPage() {
             </button>
             <button
               type="button"
+              onClick={() => setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 })}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
+              title="O que sobrou de rotas apagadas: prédios, caixas e cabos sem rota"
+            >
+              <Trash2 className="w-4 h-4" /> Limpeza
+            </button>
+            <button
+              type="button"
               onClick={() => { setModo({ tipo: "editar", rota: null }); }}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
             >
@@ -249,6 +260,28 @@ export default function RotaOpticaPage() {
           onFechar={() => setCadastro(null)}
         >
           <CadastroEquipamentos itens={catalogo} usuario={user?.nome ?? ""} onMudou={setCatalogo} onFechar={() => setCadastro(null)} />
+        </Janela>
+      )}
+
+      {limpeza && (
+        <Janela
+          inicial={limpeza}
+          largura={520}
+          titulo="Limpeza"
+          subtitulo="Prédios, caixas e cabos que nenhuma rota usa"
+          icone={<Trash2 className="w-5 h-5" />}
+          corBarra="bg-slate-800"
+          onFechar={() => setLimpeza(null)}
+        >
+          <LimpezaRede
+            rotas={rotas}
+            caixas={caixas}
+            cabos={cabos}
+            usuario={user?.nome ?? ""}
+            onCaixas={setCaixas}
+            onCabos={setCabos}
+            onPredios={recarregar}
+          />
         </Janela>
       )}
 

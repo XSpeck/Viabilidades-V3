@@ -231,3 +231,9 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     emendas: registro.emendas.length ? registro.emendas : undefined,
     atendimento: registro.atendimento.length ? registro.atendimento : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
 }
+
+export async function excluirCaixa(id: string): Promise<void> {
+  const { doc, deleteDoc } = await import("firebase/firestore");
+  const { db } = await import("./firebase");
+  await deleteDoc(doc(db, COLECAO, id));
+}

@@ -157,3 +157,9 @@ export async function salvarCabo(dados: Omit<CaboRede, "id" | "atualizado_em">):
     atualizado_em: new Date().toISOString(),
   };
 }
+
+export async function excluirCabo(id: string): Promise<void> {
+  const { doc, deleteDoc } = await import("firebase/firestore");
+  const { db } = await import("./firebase");
+  await deleteDoc(doc(db, COLECAO, id));
+}
