@@ -1051,7 +1051,7 @@ function DetalheNo({
           <span className="text-[11px] text-indigo-600 font-medium">ver diagrama →</span>
         </button>
       )}
-      {!pern && e.tipo !== "olt" && (
+      {!pern && e.tipo !== "olt" && !e.passagem && (
         <button
           type="button"
           onClick={onAbrirCaixa}

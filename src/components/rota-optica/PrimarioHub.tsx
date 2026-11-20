@@ -114,11 +114,6 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           </div>
         </div>
         {listaOutros}
-        {onEditarPortas && (
-          <button type="button" onClick={onEditarPortas} className="w-full rounded-lg border border-slate-300 bg-white py-1.5 text-xs font-medium text-slate-700 hover:border-indigo-400">
-            ✎ Editar os splitters da HUB
-          </button>
-        )}
       </div>
     );
   }
