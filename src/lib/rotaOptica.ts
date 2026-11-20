@@ -49,6 +49,10 @@ export interface ElementoRota {
   mesmo_poste?: boolean;
   /** HUB/CTO que, nesta rota, é só passagem (o splitter é de outra porta ou de outra fibra): a fibra segue sem dividir */
   passagem?: boolean;
+  /** HUB com meia porta: um 1:2 antes do primário (uma perna no primário, a outra segue para a HUB da outra metade) */
+  meia_porta?: boolean;
+  /** Montado (não gravado): a fibra sai desta HUB pela outra perna do 1:2, sem passar no primário */
+  via_meia_porta?: boolean;
   /** OLT ou DIO do cadastro de equipamentos */
   equipamento_id?: string;
   /** Metros de cabo desde o elemento anterior */
@@ -87,9 +91,24 @@ export function comprimentoTracado(pontos: { lat: number; lon: number }[]): numb
 
 export type OrigemRota = "geogrid" | "manual";
 
+/** Sub-rota: de qual rota e de qual caixa ela sai */
+export interface PaiRota {
+  rota_id: string;
+  /** chaveElemento da caixa onde ramifica (ex.: "PT:100002") */
+  chave: string;
+  /** sai pela outra perna do 1:2 da meia porta (e não pelo primário da HUB) */
+  meia_porta?: boolean;
+}
+
 export interface RotaOptica {
   id: string;
   nome: string;
+  /** Sub-rota: sai de outra rota (o tronco vem de lá) */
+  pai?: PaiRota;
+  /** Montado: quantos elementos vêm da rota-mãe (incluindo a caixa onde ramifica) */
+  tronco?: number;
+  /** Montado: a caixa de onde a sub-rota sai não existe mais na rota-mãe */
+  orfa?: boolean;
   origem: OrigemRota;
   elementos: ElementoRota[];
   trechos: TrechoCabo[];
@@ -101,7 +120,7 @@ export interface RotaOptica {
   atualizado_em?: string;
 }
 
-export type RotaOpticaInput = Omit<RotaOptica, "id" | "criado_em" | "atualizado_em">;
+export type RotaOpticaInput = Omit<RotaOptica, "id" | "criado_em" | "atualizado_em" | "tronco" | "orfa">;
 
 // =====================
 // Cálculo de potência ao longo da rota
@@ -562,6 +581,7 @@ export async function listarRotas(): Promise<RotaOptica[]> {
       elementos: data.elementos ?? [],
       trechos: data.trechos ?? [],
       calculo_potencia: data.calculo_potencia,
+      ...(data.pai ? { pai: data.pai } : {}),
       obs: data.obs,
       criado_por: data.criado_por,
       criado_em: isoDe(data.criado_em),
@@ -583,11 +603,11 @@ export async function criarRota(rota: RotaOpticaInput): Promise<string> {
 }
 
 export async function atualizarRota(id: string, rota: RotaOpticaInput): Promise<void> {
-  const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
+  const { doc, updateDoc, serverTimestamp, deleteField } = await import("firebase/firestore");
   const { db } = await import("./firebase");
-  const { criado_por, ...resto } = rota;
-  void criado_por;
-  await updateDoc(doc(db, COLECAO, id), { ...semUndefined(resto), atualizado_em: serverTimestamp() });
+  const { criado_por, tronco, orfa, ...resto } = rota as RotaOptica;
+  void criado_por; void tronco; void orfa;
+  await updateDoc(doc(db, COLECAO, id), { ...semUndefined(resto), ...(resto.pai ? {} : { pai: deleteField() }), atualizado_em: serverTimestamp() });
 }
 
 export async function excluirRota(id: string): Promise<void> {

@@ -25,6 +25,7 @@ import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import { listarPredios } from "@/lib/prediosRede";
+import { montarRotas, subRotasDe } from "@/lib/subRotas";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
@@ -55,7 +56,8 @@ type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { ti
 
 export default function RotaOpticaPage() {
   const { user } = useAuth();
-  const [rotas, setRotas] = useState<RotaOptica[]>([]);
+  /** Rotas como estão no banco (sub-rotas só com o trecho delas) */
+  const [rotasCruas, setRotas] = useState<RotaOptica[]>([]);
   const [caixas, setCaixas] = useState<CaixaRede[]>([]);
   const [cabos, setCabos] = useState<CaboRede[]>([]);
   const [catalogo, setCatalogo] = useState<ItemCatalogo[]>([]);
@@ -73,6 +75,11 @@ export default function RotaOpticaPage() {
   /** Tela principal: árvore das portas PON ou mapa da rede */
   const [vista, setVista] = useState<"arvore" | "mapa">("arvore");
   const inputKml = useRef<HTMLInputElement>(null);
+  // Sub-rotas montadas com o tronco da rota-mãe: todas as telas usam o caminho completo
+  const rotas = useMemo(
+    () => montarRotas(rotasCruas, (id) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined)),
+    [rotasCruas, catalogo]
+  );
 
   const permitido = canAccess(user ?? null, "rota-optica");
 
@@ -176,6 +183,12 @@ export default function RotaOpticaPage() {
   }
 
   async function excluir(r: RotaOptica) {
+    const filhas = subRotasDe(r.id, rotas);
+    if (filhas.length) {
+      const lista = filhas.map((x) => `• ${x.nome}`).join("\n");
+      alert(`A rota "${r.nome}" tem ${filhas.length} sub-rota${filhas.length > 1 ? "s" : ""} saindo dela:\n\n${lista}\n\nExclua as sub-rotas antes.`);
+      return;
+    }
     if (!confirm(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.`)) return;
     try {
       await excluirRota(r.id);
@@ -273,6 +286,7 @@ export default function RotaOpticaPage() {
           nomesCabos={nomesCabos}
           centroPadrao={centroPadrao}
           rede={rotas.filter((r) => r.id !== modo.rota?.id)}
+          todas={rotas}
           onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
           onCancelar={() => setModo({ tipo: "ver" })}
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}

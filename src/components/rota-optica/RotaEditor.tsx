@@ -23,6 +23,8 @@ import {
   type TrechoCabo,
   reservaTrecho,
 } from "@/lib/rotaOptica";
+import type { PaiRota } from "@/lib/rotaOptica";
+import { donoDoElemento, entradaPotencia, paraGravar, subRotasDe } from "@/lib/subRotas";
 import EtiquetaCabo from "./EtiquetaCabo";
 import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
@@ -73,6 +75,8 @@ interface Linha {
   predio?: VinculoPredio;
   /** Posição deste elemento na rota salva (para salvar só ele) */
   orig?: number;
+  /** HUB com meia porta (1:2 antes do primário) */
+  meiaPorta?: boolean;
 }
 
 /** id vazio = prédio novo (criado ao salvar com este nome) */
@@ -105,6 +109,7 @@ function paraLinha(e: ElementoRota, vertices: Ponto[] = []): Linha {
     splitter: e.splitter ?? "",
     splitter_modelo: e.splitter_modelo ?? "",
     passagem: !!e.passagem,
+    meiaPorta: !!e.meia_porta,
     mesmoPoste: !!e.mesmo_poste,
     equipamento_id: e.equipamento_id ?? "",
     porta: e.porta ?? "",
@@ -271,9 +276,11 @@ interface Props {
   onSalvar: (dados: RotaOpticaInput) => Promise<void>;
   /** Grava a rota sem fechar o editor (salvar só um elemento) */
   onSalvarParcial?: (dados: RotaOpticaInput) => Promise<void>;
+  /** Todas as rotas montadas (inclui esta): para achar a rota-mãe de uma sub-rota */
+  todas?: RotaOptica[];
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas }: Props) {
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
   const trechosFixos: TrechoCabo[] = [];
   const [nome, setNome] = useState(inicial?.nome ?? "");
@@ -301,6 +308,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const [salvos, setSalvos] = useState<ElementoRota[]>(() => inicial?.elementos ?? []);
   const [trechosSalvos, setTrechosSalvos] = useState<TrechoCabo[]>(() => inicial?.trechos ?? []);
   const [salvandoItem, setSalvandoItem] = useState<number | null>(null);
+  /** Sub-rota: de onde sai e quantos elementos (do começo) são o tronco da rota-mãe, travados aqui */
+  const [pai, setPai] = useState<PaiRota | undefined>(inicial?.pai);
+  const [tronco, setTronco] = useState<number>(inicial?.tronco ?? 0);
+  // desfazer pode voltar a uma lista menor que o tronco: aí não há tronco
+  const troncoEf = tronco && linhas.length >= tronco ? tronco : 0;
+  const paiEf = troncoEf ? pai : inicial?.pai && !inicial.tronco ? inicial.pai : undefined;
+  const nomeMae = paiEf ? (todas ?? rede).find((x) => x.id === paiEf.rota_id)?.nome ?? "rota-mãe" : "";
+  const travada = (i: number) => i < troncoEf;
   const [itemSalvo, setItemSalvo] = useState<number | null>(null);
   const [ferramenta, setFerramenta] = useState<Ferramenta>(inicial?.elementos.length ? "selecionar" : "estacao");
   const [pendentes, setPendentes] = useState<Ponto[]>([]);
@@ -461,6 +476,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }, []);
 
   function mover(i: number, d: -1 | 1) {
+    if (travada(i) || travada(i + d)) return setAviso("O tronco é da rota-mãe: mexa nele lá.");
     mudar((ls) => {
       const j = i + d;
       if (j < 0 || j >= ls.length) return ls;
@@ -474,6 +490,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   function remover(i: number) {
+    if (travada(i)) return setAviso("O tronco é da rota-mãe: mexa nele lá.");
     mudar((ls) => {
       const c = [...ls];
       const tirado = c[i];
@@ -886,6 +903,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       }));
       mudar(() => novas);
       if (r.calculo_potencia) setCalc(r.calculo_potencia);
+      // vira sub-rota da rota dona da caixa de onde o cabo sai
+      setPai({ rota_id: donoDoElemento(r, it.i - 1, todas ?? rede).id, chave: chaveElemento(r.elementos[it.i - 1]) });
+      setTronco(it.i);
       setSel(it.i - 1);
       setFerramenta("predio");
       setAviso(`Começando pelo caminho até ${r.elementos[it.i - 1].nome}. Agora clique no prédio ${predioNome} para colocar a nova CDOI.`);
@@ -905,9 +925,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       }));
       mudar(() => novas);
       if (r.calculo_potencia) setCalc(r.calculo_potencia);
+      // vira sub-rota: o tronco (até esta caixa) continua sendo da rota dona dela
+      const dona = donoDoElemento(r, it.i, todas ?? rede);
+      setPai({ rota_id: dona.id, chave: chaveElemento(r.elementos[it.i]) });
+      setTronco(it.i + 1);
       setSel(it.i);
       setFerramenta("ceo");
-      setAviso(`Começando pelo caminho da rota "${r.nome}" até ${e.nome} (${it.i + 1} elementos). Agora coloque as próximas caixas.`);
+      setAviso(`Sub-rota de "${dona.nome}", saindo de ${e.nome}. O tronco fica travado; coloque as próximas caixas.`);
       return;
     }
     // Rota em andamento: usa a caixa existente (mesmo nome/código/local/splitter), ligada pelo mesmo cabo do trecho anterior
@@ -1062,6 +1086,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   /** Insere um elemento sem local antes de i (pela lista); o próximo clique no mapa posiciona */
   function inserirNaLista(i: number) {
+    if (travada(i)) return setAviso("O tronco é da rota-mãe: insira caixas nele lá.");
     const tipo: TipoElementoRota = tipoDaFerramenta(ferramenta) ?? "ceo";
     const cur = linhas[i];
     mudar((ls) => {
@@ -1100,6 +1125,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const pendencias: { i: number; msg: string }[] = [];
   if (linhas.length && linhas[0].tipo !== "olt") pendencias.push({ i: 0, msg: "A rota precisa começar numa OLT" });
   linhas.forEach((l, i) => {
+    if (i < troncoEf) return; // tronco: pendências são da rota-mãe
     const nome = l.nome || `elemento ${i + 1}`;
     if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
@@ -1166,12 +1192,21 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const pots =
     calc.auto && tx !== undefined
       ? calcularPotencias(
-          linhas.map((l) => ({
-            tipo: l.tipo,
-            distancia_m: n(l.distancia_m),
-            splitter: l.splitter || undefined,
-            perda_splitter: modelosSplitter.find((m) => m.id === l.splitter_modelo)?.perda_db,
-          })),
+          linhas.map((l, i) =>
+            entradaPotencia(
+              {
+                nome: l.nome,
+                tipo: l.tipo,
+                distancia_m: n(l.distancia_m),
+                splitter: l.splitter || undefined,
+                splitter_modelo: l.splitter_modelo || undefined,
+                passagem: l.passagem,
+                meia_porta: l.tipo === "hub" && !!l.meiaPorta,
+                via_meia_porta: !!paiEf?.meia_porta && i === troncoEf - 1,
+              },
+              (id) => modelosSplitter.find((m) => m.id === id)?.perda_db
+            )
+          ),
           tx,
           calc
         )
@@ -1262,6 +1297,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       splitter: l.splitter.trim() || undefined,
       splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
       passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
+      meia_porta: l.tipo === "hub" && l.meiaPorta && !l.passagem ? true : undefined,
+      via_meia_porta: paiEf?.meia_porta && i === troncoEf - 1 ? true : undefined,
       mesmo_poste: i > 0 && l.mesmoPoste ? true : undefined,
       equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
       porta: l.porta.trim() || undefined,
@@ -1322,11 +1359,20 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       return a && b ? [{ nome: l.cabo_entrada.trim() || `Trecho ${i}`, pontos: [a, ...l.vertices, b], ate: i, ...(cor ? { cor } : {}) }] : [];
     });
 
+    if (inicial?.id && todas) {
+      const perdidas = subRotasDe(inicial.id, todas).filter((x) => !elementos.some((e) => chaveElemento(e) === x.pai!.chave));
+      if (perdidas.length) {
+        return setErro(
+          `${perdidas.length > 1 ? "As sub-rotas" : "A sub-rota"} ${perdidas.map((x) => `"${x.nome}"`).join(", ")} sai${perdidas.length > 1 ? "em" : ""} de uma caixa que foi tirada desta rota. Volte a caixa ou exclua a sub-rota antes.`
+        );
+      }
+    }
+
     setSalvando(true);
     try {
-      await gravarCabos(ls, tc);
+      await gravarCabos(ls.slice(Math.max(0, troncoEf - 1)), tc);
       if (linhas.some((l) => l.predio)) await gravarPredios(elementos);
-      await onSalvar({
+      await onSalvar(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: nome.trim(),
         origem: inicial?.origem ?? "manual",
         elementos,
@@ -1334,7 +1380,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         calculo_potencia: calc,
         obs: obs.trim() || undefined,
         criado_por: inicial?.criado_por ?? usuario,
-      });
+      }));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -1388,12 +1434,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const txS = novos[0]?.potencia_saida ?? novos[0]?.potencia_entrada;
     if (calc.auto && txS !== undefined) {
       const ps = calcularPotencias(
-        novos.map((e) => ({
-          tipo: e.tipo,
-          distancia_m: e.distancia_m,
-          splitter: e.splitter,
-          perda_splitter: modelosSplitter.find((m) => m.id === e.splitter_modelo)?.perda_db,
-        })),
+        novos.map((e) => entradaPotencia(e, (id) => modelosSplitter.find((m) => m.id === id)?.perda_db)),
         txS,
         calc
       );
@@ -1415,7 +1456,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setSalvandoItem(i);
     try {
       await gravarCabos([ls[i]], tc);
-      await onSalvarParcial({
+      await onSalvarParcial(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: inicial?.nome ?? nome.trim(),
         origem: inicial?.origem ?? "manual",
         elementos: novos,
@@ -1423,7 +1464,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         calculo_potencia: calc,
         obs: inicial?.obs,
         criado_por: inicial?.criado_por ?? usuario,
-      });
+      }));
       setSalvos(novos);
       setTrechosSalvos(trs);
       // o cabo ganhou código: todos os trechos dele no editor passam a usar o mesmo nome
@@ -1444,7 +1485,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
   /** Faixa no topo do painel do elemento: salvar só ele */
   function barraSalvarItem(i: number) {
-    if (!onSalvarParcial || !inicial?.id) return null;
+    if (!onSalvarParcial || !inicial?.id || travada(i)) return null;
     if (itemSalvo === i && !mudouDesdeSalvo(i)) {
       return <p className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">✓ Elemento salvo</p>;
     }
@@ -1660,7 +1701,42 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   /** Painel do elemento selecionado (abre dentro da lista) */
+  function painelTronco(i: number) {
+    const l = linhas[i];
+    const ancora = i === troncoEf - 1;
+    return (
+      <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+        <p className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] text-slate-600">
+          🔒 Tronco da rota <b>{nomeMae}</b>. Para mudar esta caixa, edite a rota-mãe: a mudança vale para esta sub-rota também.
+        </p>
+        {ancora && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-2.5 space-y-1.5">
+            <p className="text-[11px] font-semibold text-indigo-900">Esta sub-rota sai daqui</p>
+            {l.tipo === "hub" && l.meiaPorta ? (
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-white p-1">
+                {([[false, "Pelo primário desta HUB"], [true, "Pela meia porta (outra perna do 1:2)"]] as const).map(([v, rot0]) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    onClick={() => setPai((p) => (p ? { ...p, meia_porta: v || undefined } : p))}
+                    className={`rounded-md px-2 py-1 text-[11px] font-semibold ${!!paiEf?.meia_porta === v ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-50"}`}
+                  >
+                    {rot0}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-500">{l.tipo === "hub" ? "Sai por uma porta do primário desta HUB." : "Segue a partir desta caixa."}</p>
+            )}
+            {paiEf?.meia_porta && <p className="text-[10px] text-slate-500">A fibra sai pela outra perna do 1:2 (só a perda do 1:2) e segue até a HUB da outra metade da porta.</p>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function painel(i: number) {
+    if (travada(i)) return painelTronco(i);
     const l = linhas[i];
     const dm = distMapa(linhas, i);
     const kCabo = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
@@ -1714,6 +1790,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             )}
           </div>
           {camposEquipamento(i)}
+          {l.tipo === "hub" && !l.passagem && (
+            <label className="col-span-2 flex cursor-pointer items-start gap-2 rounded-lg border border-violet-200 bg-violet-50/60 px-2.5 py-1.5 text-[11px] text-violet-900">
+              <input type="checkbox" className="mt-0.5" checked={!!l.meiaPorta} onChange={(e) => alterar(i, { meiaPorta: e.target.checked })} />
+              <span>
+                <b>Meia porta</b>: tem um 1:2 antes do primário. Uma perna alimenta o primário desta HUB e a outra segue até a HUB da outra metade da porta.
+              </span>
+            </label>
+          )}
           {l.tipo === "hub" && !l.passagem && (
             <button
               type="button"
@@ -2032,11 +2116,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             centroPadrao={centroPadrao}
             onSelect={(i) => setSel(i)}
             onClicarMapa={clicarMapa}
-            onMoverElemento={(i, lat, lon) => alterar(i, { coords: fmtCoord({ lat, lon }) })}
-            onMoverVertice={(i, k, lat, lon) => alterar(i, { vertices: linhas[i].vertices.map((v, j) => (j === k ? { lat, lon } : v)) })}
-            onRemoverVertice={(i, k) => alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) })}
-            onInserirCurva={inserirCurva}
-            onInserirElemento={(i, lat, lon) => inserirElemento(i, lat, lon)}
+            onMoverElemento={(i, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { coords: fmtCoord({ lat, lon }) }))}
+            onMoverVertice={(i, k, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { vertices: linhas[i].vertices.map((v, j) => (j === k ? { lat, lon } : v)) }))}
+            onRemoverVertice={(i, k) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) }))}
+            onInserirCurva={(i, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : inserirCurva(i, lat, lon))}
+            onInserirElemento={(i, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: insira caixas nele lá.") : inserirElemento(i, lat, lon))}
             focoTrecho={focoTrecho}
             onRemoverPendente={(k) => setPendentes((ps) => ps.filter((_, j) => j !== k))}
             rede={pontosRede}
@@ -2232,11 +2316,17 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     olts={olts}
                     dios={dios}
                     tiposCabo={tiposDeCabo}
-                    onMudar={aplicarEstacao}
+                    onMudar={troncoEf >= 2 ? () => setAviso("A estação é do tronco: edite na rota-mãe.") : aplicarEstacao}
                     onVerSaida={linhas[2] ? () => { setSel(2); setFerramenta("selecionar"); setFocoTrecho((f) => ({ i: 2, vez: (f?.vez ?? 0) + 1 })); } : undefined}
                   />
                   {linhas.length > 2 && <p className="mt-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fora da estação</p>}
                 </div>
+              )}
+              {paiEf && (
+                <p className="mb-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
+                  <b>Sub-rota</b> de <b>{nomeMae}</b>
+                  {troncoEf ? <>, saindo de <b>{linhas[troncoEf - 1]?.nome}</b>{paiEf.meia_porta ? " pela meia porta" : ""}. Os {troncoEf} primeiros elementos são o tronco (🔒).</> : ". A caixa de onde ela saía não existe mais na rota-mãe."}
+                </p>
               )}
               <ol>
                 {linhas.map((l, i) => {
@@ -2283,18 +2373,19 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                             {pendentesDe.has(i) && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white" title="Tem pendência" />}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{l.nome || "sem nome"}</p>
+                            <p className={`text-sm font-semibold leading-tight truncate ${l.nome.trim() ? "text-slate-900" : "text-red-500"}`}>{travada(i) ? "🔒 " : ""}{l.nome || "sem nome"}</p>
                             <p className="text-[10.5px] text-slate-500 truncate flex items-center gap-1">
                               {TIPO_ELEMENTO_LABEL[l.tipo].split(" (")[0]}
                               {i > 0 && <span className="rounded bg-slate-100 px-1 tabular-nums text-slate-600" title="Metragem desde a OLT (para o OTDR)">{formatMetros(acumulado[i])}</span>}
                               {l.splitter ? ` · ${l.splitter}` : ""}
                               {(l.tipo === "hub" || l.tipo === "cto") && l.passagem && <span className="rounded bg-slate-200 px-1 text-slate-600">passagem</span>}
+                              {l.tipo === "hub" && l.meiaPorta && !l.passagem && <span className="rounded bg-violet-100 px-1 text-violet-700">½ porta</span>}
                               {!posDe(l) && <span className="text-amber-600 flex items-center gap-0.5"><MapPin className="w-3 h-3" />sem local</span>}
                               {emenda && <span className="rounded bg-amber-100 text-amber-800 px-1">emenda</span>}
                             </p>
                           </div>
                           <span className={`text-[11px] font-semibold tabular-nums ${nivelCor(pot)}`}>{pot !== undefined ? fmtDbm(pot).replace(" dBm", "") : ""}</span>
-                          <span className={`flex ${ativo ? "" : "opacity-0 group-hover:opacity-100"}`} onClick={(e) => e.stopPropagation()}>
+                          <span className={`flex ${travada(i) ? "hidden" : ativo ? "" : "opacity-0 group-hover:opacity-100"}`} onClick={(e) => e.stopPropagation()}>
                             <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30" aria-label="Subir"><ArrowUp className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={() => mover(i, 1)} disabled={i === linhas.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30" aria-label="Descer"><ArrowDown className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={() => remover(i)} className="p-1 rounded hover:bg-red-100 text-red-600" aria-label="Remover"><Trash2 className="w-3.5 h-3.5" /></button>

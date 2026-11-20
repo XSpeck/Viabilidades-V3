@@ -444,11 +444,13 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const x = X(n.profundidade), yy = Y(y.get(n)!);
               const t = tipoVisual(n.elemento);
               const ativo = n === sel;
-              const spl = n.elemento.passagem
+              const spl0 = n.elemento.passagem
                 ? "passagem"
                 : n.caixa?.splitters?.length
                   ? rotuloSplitters(splittersDoNo(n)) || undefined
                   : n.caixa?.splitter ?? n.elemento.splitter;
+              // HUB de meia porta: o 1:2 antes do primário
+              const spl = n.elemento.tipo === "hub" && n.elemento.meia_porta && !n.elemento.passagem ? `½ porta${spl0 ? ` · ${spl0}` : ""}` : spl0;
               const tam = t === "olt" || t === "predio" ? 36 : t === "onu" || t === "outro" ? 24 : 30;
               return (
                 <g

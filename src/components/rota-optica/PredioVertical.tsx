@@ -1,5 +1,7 @@
 "use client";
 
+import { donoDoElemento, paraGravar } from "@/lib/subRotas";
+
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
@@ -293,10 +295,10 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
         const novoUlt = elementos[elementos.length - 1];
         const nomeRota = ult.nome !== novoUlt.nome && rt.nome.endsWith(ult.nome) ? rt.nome.slice(0, -ult.nome.length) + novoUlt.nome : rt.nome;
         pendentes.push(
-          atualizarRota(rt.id, {
+          atualizarRota(rt.id, paraGravar(rt, {
             nome: nomeRota, origem: rt.origem, elementos, trechos: rt.trechos,
             calculo_potencia: rt.calculo_potencia, obs: rt.obs, criado_por: rt.criado_por,
-          }),
+          })),
         );
       }
       if (pendentes.length) {
@@ -460,14 +462,16 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     setCriando(true);
     setErro(null);
     try {
-      await criarRota({
+      // sub-rota: sai da caixa de onde o cabo vem (ex.: a HUB); o tronco continua sendo da rota dona dela
+      const pai = { rota_id: donoDoElemento(rt, i - 1, rotas).id, chave: chaveElemento(rt.elementos[i - 1]) };
+      await criarRota(paraGravar({ pai, tronco: i }, {
         nome: prefixo ? `${prefixo} ${el.nome}` : `${rt.nome} → ${el.nome}`,
         origem: "manual",
         elementos: [...rt.elementos.slice(0, i), el],
         trechos,
         calculo_potencia: rt.calculo_potencia,
         criado_por: usuario,
-      });
+      }));
       const o: PontoPredio = {
         id: novoId(), chave: chaveElemento(el), nome: el.nome, bloco: nova.bloco, andar: nova.andar,
         atende_de: nova.de, atende_ate: nova.ate, ...(nova.splitter ? { splitter: nova.splitter } : {}),
