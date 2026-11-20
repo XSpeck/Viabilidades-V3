@@ -206,9 +206,9 @@ export default function RotaEditorMapa({
         className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${desenhando ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}
       >
         {satelite ? (
-          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
+          <TileLayer key="satelite" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
         ) : (
-          <TileLayer
+          <TileLayer key="ruas"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
             maxZoom={20}

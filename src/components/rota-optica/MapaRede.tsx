@@ -134,9 +134,9 @@ export default function MapaRede({ rotas, onAbrirRota }: Props) {
       ) : (
         <MapContainer center={todos[0]} zoom={15} scrollWheelZoom={false} className="h-[min(70vh,640px)] w-full z-0 [&_.leaflet-interactive]:outline-none">
           {satelite ? (
-            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
+            <TileLayer key="satelite" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
           ) : (
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>' maxZoom={19} />
+            <TileLayer key="ruas" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>' maxZoom={19} />
           )}
           <ZoomComCtrl />
           <Enquadrar pts={todos} vez={pon} />
