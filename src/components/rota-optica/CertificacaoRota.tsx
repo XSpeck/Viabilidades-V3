@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { ArrowLeft, ArrowRight, FileDown, MapPin, Plus, X } from "lucide-react";
 import { formatMetros, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { localizarRompimento, type Sentido } from "@/lib/rompimento";
@@ -17,6 +18,12 @@ import {
 } from "@/lib/certificacao";
 import { IconeElemento } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
+import type { PontoVisita } from "./MapaCertificacao";
+
+const MapaCertificacao = dynamic(() => import("./MapaCertificacao"), {
+  ssr: false,
+  loading: () => <div className="h-[300px] animate-pulse rounded-xl bg-slate-100" />,
+});
 
 /**
  * Certificação de rota: o técnico digita a tabela de eventos que o OTDR mostrou (distância e perda)
@@ -65,6 +72,8 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   const [fimTxt, setFimTxt] = useState("");
   const [totalTxt, setTotalTxt] = useState("");
   const [verEsperados, setVerEsperados] = useState(false);
+  /** ponto a visitar em foco no mapa */
+  const [foco, setFoco] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const refOk = rota ? Math.min(ref, rota.elementos.length - 1) : 0;
@@ -93,11 +102,17 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   const sTotal = tMed !== undefined ? situacaoTotal(tMed, limiteTotal) : undefined;
   const visitar = analise.filter((a) => a.situacao !== "ok").sort((a, b) => (a.situacao === b.situacao ? a.leitura.distancia - b.leitura.distancia : a.situacao === "fora" ? -1 : 1));
   const conferidos = analise.filter((a) => a.situacao === "ok");
+  // pontos no mapa: a caixa (quando bateu) ou o ponto no traçado / na reserva
+  const pontosMapa: PontoVisita[] = visitar.flatMap((a, k) => {
+    const el = a.esperado ? rota.elementos[a.esperado.i] : undefined;
+    const pos = el?.lat !== undefined && el.lon !== undefined ? { lat: el.lat, lon: el.lon } : a.local?.ponto;
+    return pos ? [{ n: k + 1, lat: pos.lat, lon: pos.lon, cor: COR[a.situacao], titulo: a.onde }] : [];
+  });
   const situacoes = [...analise.map((a) => a.situacao), ...(sTotal ? [sTotal] : [])];
   const resultado: Situacao | null = !situacoes.length ? null : situacoes.includes("fora") ? "fora" : situacoes.includes("atencao") ? "atencao" : "ok";
   const tituloResultado = resultado === "ok" ? "Rota aprovada" : resultado === "atencao" ? "Aprovada com ressalvas" : resultado === "fora" ? "Precisa de visita" : "";
 
-  const limpar = () => { setLinhas(vazias()); setFimTxt(""); setTotalTxt(""); };
+  const limpar = () => { setLinhas(vazias()); setFimTxt(""); setTotalTxt(""); setFoco(null); };
 
   // ---------- Traço: esperado × eventos lidos ----------
   const W = 640, H = 210, L = 40, R = 14, T = 18, B = 24;
@@ -134,12 +149,16 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   function exportar() {
     const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
     const svg = svgRef.current?.outerHTML ?? "";
-    const linhaHtml = (a: AnaliseEvento) => `<tr>
-        <td><span style="color:${COR[a.situacao]};font-weight:800">${SIMBOLO[a.situacao]} ${TEXTO[a.situacao]}</span></td>
+    const linhaHtml = (a: AnaliseEvento, n?: number) => {
+      const pt = n ? pontosMapa.find((x) => x.n === n) : undefined;
+      const coord = pt ? `<br><a href="https://www.google.com/maps?q=${pt.lat.toFixed(6)},${pt.lon.toFixed(6)}">📍 ${pt.lat.toFixed(6)}, ${pt.lon.toFixed(6)}</a>` : "";
+      return `<tr>
+        <td><span style="color:${COR[a.situacao]};font-weight:800">${n ? `${n}. ` : ""}${SIMBOLO[a.situacao]} ${TEXTO[a.situacao]}</span></td>
         <td class="n">${fmtD(a.leitura.distancia)}</td>
         <td class="n">${a.leitura.fim ? "fim" : a.leitura.perda !== undefined ? `${db(a.leitura.perda)} dB` : "—"}</td>
-        <td><b>${esc(a.onde)}</b><br><span class="d">${esc(a.detalhe)}</span></td>
+        <td><b>${esc(a.onde)}</b><br><span class="d">${esc(a.detalhe)}</span>${coord}</td>
       </tr>`;
+    };
     const ref0 = rota.elementos[refOk];
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Certificação ${esc(rota.nome)}</title>
       <style>
@@ -166,9 +185,9 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
         <div class="box">Perda total lida<b>${tMed !== undefined ? `${db(tMed)} dB` : "—"}</b></div>
       </div>
       ${resultado ? `<div class="res" style="background:${COR[resultado]}">Resultado: ${tituloResultado}</div>` : ""}
-      ${visitar.length ? `<h2>Pontos para o técnico verificar</h2><table><thead><tr><th></th><th>Distância</th><th>Perda</th><th>Onde / o que fazer</th></tr></thead><tbody>${visitar.map(linhaHtml).join("")}</tbody></table>` : ""}
+      ${visitar.length ? `<h2>Pontos para o técnico verificar</h2><table><thead><tr><th></th><th>Distância</th><th>Perda</th><th>Onde / o que fazer</th></tr></thead><tbody>${visitar.map((a, k) => linhaHtml(a, k + 1)).join("")}</tbody></table>` : ""}
       ${svg}
-      ${conferidos.length ? `<h2>Eventos conferidos sem problema</h2><table><tbody>${conferidos.map(linhaHtml).join("")}</tbody></table>` : ""}
+      ${conferidos.length ? `<h2>Eventos conferidos sem problema</h2><table><tbody>${conferidos.map((a) => linhaHtml(a)).join("")}</tbody></table>` : ""}
       <div class="rod">Tolerâncias: fusão ≤ ${db(TOLERANCIA.fusao)} dB · conector ≤ ${db(TOLERANCIA.conector)} dB · splitter até +${db(TOLERANCIA.splitterExtra)} dB do nominal · distância ±${TOLERANCIA.distanciaPct * 100}% (mín. 10 m para achar a caixa). As distâncias da rota incluem as reservas técnicas das caixas.</div>
       <div class="ass"><div>Técnico</div><div>Responsável</div></div>
       <script>window.onload=()=>{setTimeout(()=>window.print(),300)}</script>
@@ -180,11 +199,21 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
     w.document.close();
   }
 
-  const cartao = (a: AnaliseEvento, k: number) => {
+  const cartao = (a: AnaliseEvento, k: number, n?: number) => {
     const el = a.esperado ? rota.elementos[a.esperado.i] : a.local?.depoisDe !== undefined ? rota.elementos[a.local.reservaDe ?? a.local.depoisDe] : undefined;
     return (
-      <div key={k} className="flex gap-2 rounded-xl border bg-white p-2.5" style={{ borderColor: `${COR[a.situacao]}66` }}>
-        <Selo s={a.situacao} />
+      <div
+        key={k}
+        onClick={n ? () => setFoco(n) : undefined}
+        className={`flex gap-2 rounded-xl border bg-white p-2.5 ${n ? "cursor-pointer hover:bg-slate-50" : ""} ${n && foco === n ? "ring-2 ring-offset-1" : ""}`}
+        style={{ borderColor: `${COR[a.situacao]}66`, ...(n && foco === n ? { ["--tw-ring-color" as string]: COR[a.situacao] } : {}) }}
+        title={n ? "Ver no mapa" : undefined}
+      >
+        {n ? (
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white" style={{ background: COR[a.situacao] }}>{n}</span>
+        ) : (
+          <Selo s={a.situacao} />
+        )}
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
             {el && <IconeElemento tipo={tipoVisual(el)} tamanho={18} />}
@@ -334,7 +363,7 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
           {visitar.length > 0 && (
             <section className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Onde enviar o técnico</p>
-              {visitar.map(cartao)}
+              {visitar.map((a, k) => cartao(a, k, k + 1))}
             </section>
           )}
 
@@ -377,13 +406,20 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
             </svg>
           </div>
 
+          <div className="h-[320px] overflow-hidden rounded-2xl border border-slate-200">
+            <MapaCertificacao key={`${rota.id}-${refOk}`} rota={rota} ref_={refOk} pontos={pontosMapa} foco={foco} />
+          </div>
+          {visitar.length > 0 && pontosMapa.length < visitar.length && (
+            <p className="text-[10px] text-amber-700">Algum ponto não aparece no mapa porque a caixa ou o trecho não tem coordenadas.</p>
+          )}
+
           {conferidos.length > 0 && (
             <details className="group rounded-2xl border border-slate-200 bg-white px-3 py-2">
               <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Conferidos sem problema <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] text-emerald-700">{conferidos.length}</span>
                 <span className="ml-auto text-slate-400 transition group-open:rotate-180">▾</span>
               </summary>
-              <div className="mt-2 space-y-1.5">{conferidos.map(cartao)}</div>
+              <div className="mt-2 space-y-1.5">{conferidos.map((a, k) => cartao(a, k))}</div>
             </details>
           )}
 
