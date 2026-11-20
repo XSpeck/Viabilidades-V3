@@ -227,6 +227,39 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
   const campo = "w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px]";
   const COR_ST: Record<StatusPorta, string> = { livre: "bg-white text-slate-500", cliente: "bg-sky-600 text-white", ramal: "bg-amber-500 text-white" };
 
+  // Só passagem nesta porta e nenhum splitter cadastrado: não há o que configurar, só mostra a fibra atravessando
+  if (no.elemento.passagem && !editando && spls.length === 0) {
+    const cEnt = corFibra(el.fibra_entrada, el.cabo_entrada);
+    return (
+      <div className="p-3 space-y-2.5">
+        <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-slate-800">Só passagem nesta porta</p>
+          <p className="mt-0.5 text-[11px] text-slate-600">A fibra atravessa a {tipoCaixa} sem usar splitter (como numa caixa de emenda).</p>
+        </div>
+        <ul className="space-y-1 text-[11px] text-slate-700">
+          <li className="flex items-center gap-1.5">
+            <span className="w-12 shrink-0 text-slate-400">Chega</span>
+            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: cEnt.hex }} />
+            <span className="truncate">F{el.fibra_entrada ?? "?"} {cEnt.nome.toLowerCase()} · {el.cabo_entrada ?? "cabo ?"}</span>
+          </li>
+          {saidas.map((sd, k) => {
+            const c = corFibra(sd.fibra, sd.cabo);
+            return (
+              <li key={k} className="flex items-center gap-1.5">
+                <span className="w-12 shrink-0 text-slate-400">Segue</span>
+                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
+                <span className="truncate">F{sd.fibra ?? "?"} {c.nome.toLowerCase()} · {sd.cabo ?? "cabo ?"} → {sd.nome}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <button type="button" onClick={() => setEditando(true)} className="text-[11px] text-slate-400 hover:text-indigo-600 hover:underline">
+          Esta {tipoCaixa} atende outra porta? Cadastrar os splitters dela
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
@@ -242,7 +275,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
 
       {no.elemento.passagem && !editando && (
         <p className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600">
-          Nesta porta PON a {tipoCaixa} é <b>só passagem</b>: a fibra atravessa a caixa sem usar os splitters abaixo.
+          Nesta porta PON a {tipoCaixa} é <b>só passagem</b>: a fibra atravessa a caixa; os splitters abaixo atendem outra porta ou outra fibra.
         </p>
       )}
       {/* Números */}
