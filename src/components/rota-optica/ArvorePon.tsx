@@ -490,11 +490,14 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             })}
           </svg>
         </div>
-        <p className="text-xs text-gray-500 px-4 py-2.5 border-t border-gray-200">
-          Rotas que saem da mesma porta da OLT são juntadas: onde passam pelas mesmas caixas formam o tronco e onde se separam a
-          árvore ramifica. A linha usa a cor real da fibra e a etiqueta mostra tubo e fibra. Cada janela pode ser arrastada,
-          minimizada ou fixada ao lado.
-        </p>
+        <details className="group border-t border-gray-200 px-4 py-2 text-xs text-gray-500">
+          <summary className="cursor-pointer select-none list-none font-medium text-gray-400 hover:text-gray-600">ⓘ Como ler a árvore</summary>
+          <p className="mt-1.5">
+            Rotas que saem da mesma porta da OLT são juntadas: onde passam pelas mesmas caixas formam o tronco e onde se separam a
+            árvore ramifica. A linha usa a cor real da fibra e a etiqueta mostra tubo e fibra. Cada janela pode ser arrastada,
+            minimizada ou fixada ao lado.
+          </p>
+        </details>
       </section>
 
       {janelas.map((j) => {
@@ -692,7 +695,7 @@ function JanelaNo({
         />
       ) : (
         <div className="p-3">
-          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba("diagrama")} />
+          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba(ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "diagrama")} />
         </div>
       )}
     </div>
@@ -1012,7 +1015,7 @@ function DetalheNo({
             <span>−30</span><span>−27 limite</span><span>−20</span><span>+7 dBm</span>
           </div>
           <p className="text-[11px] mt-1 text-center">
-            Sinal <b style={{ color: potAqui === undefined ? undefined : nv.cor === "#dc2626" ? "#fca5a5" : nv.cor === "#d97706" ? "#fcd34d" : "#86efac" }}>{nv.texto}</b>
+            Potência <b style={{ color: potAqui === undefined ? undefined : nv.cor === "#dc2626" ? "#fca5a5" : nv.cor === "#d97706" ? "#fcd34d" : "#86efac" }}>{nv.texto}</b>
             {" · "}{caminho.length - 1} trecho{caminho.length > 2 ? "s" : ""} desde a OLT
           </p>
         </div>
@@ -1054,14 +1057,18 @@ function DetalheNo({
           onClick={onAbrirCaixa}
           className="w-full text-xs px-3 py-2 rounded-xl border border-dashed border-indigo-300 text-indigo-700 font-medium hover:bg-indigo-50"
         >
-          {no.caixa ? "Ver diagrama da caixa" : "+ Cadastrar o diagrama desta caixa"}
+          Ver a caixa por dentro
         </button>
       )}
 
-      {/* Caminho */}
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Caminho desde a OLT</p>
-        <ol>
+      {/* Caminho (recolhido) */}
+      <details className="group rounded-xl border border-slate-200 bg-white px-2.5 py-1.5">
+        <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Caminho desde a OLT
+          <span className="font-normal normal-case tracking-normal text-slate-400">· {caminho.length - 1} trecho{caminho.length > 2 ? "s" : ""}</span>
+          <span className="ml-auto text-slate-400 transition group-open:rotate-180">▾</span>
+        </summary>
+        <ol className="mt-1.5">
           {caminho.map((n, i) => {
             const el = n.elemento;
             const c = corFibra(el.fibra_entrada, el.cabo_entrada);
@@ -1115,7 +1122,7 @@ function DetalheNo({
             );
           })}
         </ol>
-      </div>
+      </details>
 
       <RamosAqui no={no} rotas={rotas} onAbrirRota={onAbrirRota} />
     </div>

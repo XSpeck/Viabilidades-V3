@@ -208,28 +208,34 @@ export default function RotaOpticaPage() {
                 e.target.value = "";
               }}
             />
-            <button
-              type="button"
-              onClick={() => inputKml.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700"
-            >
-              <FileUp className="w-4 h-4" /> Importar KML do GeoGrid
-            </button>
-            <button
-              type="button"
-              onClick={() => setCadastro({ x: Math.max(8, (window.innerWidth - 800) / 2), y: 72 })}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
-            >
-              <Boxes className="w-4 h-4" /> Cadastros
-            </button>
-            <button
-              type="button"
-              onClick={() => setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 })}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
-              title="O que sobrou de rotas apagadas: prédios, caixas e cabos sem rota"
-            >
-              <Trash2 className="w-4 h-4" /> Limpeza
-            </button>
+            <details className="relative">
+              <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50">
+                <Boxes className="w-4 h-4" /> Mais ▾
+              </summary>
+              <div className="absolute right-0 z-[60] mt-1 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; inputKml.current?.click(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <FileUp className="w-4 h-4 text-indigo-600" /> Importar KML do GeoGrid
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setCadastro({ x: Math.max(8, (window.innerWidth - 800) / 2), y: 72 }); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <Boxes className="w-4 h-4 text-slate-600" /> Cadastros (equipamentos)
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 }); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
+                </button>
+              </div>
+            </details>
             <button
               type="button"
               disabled={!rotas.length}

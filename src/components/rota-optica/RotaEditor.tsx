@@ -305,6 +305,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** Pede ao mapa para enquadrar um trecho (ex.: cabo curto que sai da estação) */
   const [focoTrecho, setFocoTrecho] = useState<{ i: number; vez: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Nome da caixa antes de começar a editar (para renomear os cabos ao terminar) */
+  const nomeAntes = useRef("");
   /** Cabo sendo renomeado (lápis no quadro do cabo) */
   const [renomear, setRenomear] = useState<{ i: number; antigo: string } | null>(null);
   /** Prédios cadastrados (a ferramenta Prédio coloca a CDOI num deles ou cria um novo) */
@@ -398,28 +400,31 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setLinhas((ls) => recalcular(fn(ls), calc));
   }
   function alterar(i: number, mudanca: Partial<Linha>) {
-    const velho = linhas[i] ? curtoNome(linhas[i].nome) : "";
-    const novo = mudanca.nome !== undefined ? curtoNome(mudanca.nome) : "";
-    const troca = velho && novo && velho !== novo ? (c: string) => c.replace(`· ${velho} →`, `· ${novo} →`).replace(new RegExp(`→ ${velho.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), `→ ${novo}`) : null;
-    if (troca) {
-      // leva junto o tipo cadastrado para o nome novo do cabo
-      setTiposCabo((tc) => {
-        const c = { ...tc };
-        linhas.forEach((l) => {
-          const nv = troca(l.cabo_entrada);
-          if (nv !== l.cabo_entrada && tc[chaveCabo(l.cabo_entrada)]) c[chaveCabo(nv)] = tc[chaveCabo(l.cabo_entrada)];
-        });
-        return c;
+    mudar((ls) => ls.map((l, j) => (j === i ? { ...l, ...mudanca } : l)));
+  }
+
+  /**
+   * Caixa renomeada: os nomes automáticos dos cabos acompanham ("… · CEO 1 → HUB 1" vira "… → HUB 0/3/10").
+   * Roda quando o nome termina de ser editado (ao sair do campo), não a cada letra.
+   */
+  function renomearCabos(nomeVelho: string, nomeNovo: string) {
+    const velho = curtoNome(nomeVelho);
+    const novo = curtoNome(nomeNovo);
+    if (!velho || !novo || velho === novo) return;
+    const esc = velho.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const troca = (c: string) => c.replace(`· ${velho} →`, `· ${novo} →`).replace(new RegExp(`→ ${esc}(?=( \\(mesmo poste\\))?$)`), `→ ${novo}`).replace(new RegExp(`^Cordão ${esc} →`), `Cordão ${novo} →`);
+    setTiposCabo((tc) => {
+      const c = { ...tc };
+      linhas.forEach((l) => {
+        const nv = troca(l.cabo_entrada);
+        if (nv !== l.cabo_entrada && tc[chaveCabo(l.cabo_entrada)]) c[chaveCabo(nv)] = tc[chaveCabo(l.cabo_entrada)];
       });
-    }
-    mudar((ls) =>
-      ls.map((l, j) => {
-        const base = j === i ? { ...l, ...mudanca } : l;
-        if (!troca) return base;
-        const nv = troca(base.cabo_entrada);
-        return nv !== base.cabo_entrada ? { ...base, cabo_entrada: nv } : base;
-      }),
-    );
+      return c;
+    });
+    mudar((ls) => ls.map((l) => {
+      const nv = troca(l.cabo_entrada);
+      return nv !== l.cabo_entrada ? { ...l, cabo_entrada: nv } : l;
+    }));
   }
   function desfazer() {
     if (pendentes.length) return setPendentes((p) => p.slice(0, -1));
@@ -826,6 +831,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const nomeSaida = p.saidaCabo ?? (l2?.cabo_entrada.trim() || `Saída ${p.dioNome ?? l1?.nome ?? "DIO"}`);
     if (p.cordaoTipo !== undefined) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: p.cordaoTipo! }));
     if (p.saidaTipo !== undefined && l2) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeSaida)]: p.saidaTipo! }));
+    // OLT ou DIO trocados: o nome automático do cordão e do cabo de saída acompanha
+    const renomearDepois: [string, string][] = [];
+    if (p.oltNome !== undefined && linhas[0] && p.oltNome !== linhas[0].nome) renomearDepois.push([linhas[0].nome, p.oltNome]);
+    if (p.dioNome !== undefined && l1 && p.dioNome !== l1.nome) renomearDepois.push([l1.nome, p.dioNome]);
     mudar((ls) => {
       const c = ls.map((x) => ({ ...x }));
       if (!c[0] || !c[1]) return ls;
@@ -845,6 +854,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       }
       return c;
     });
+    renomearDepois.forEach(([a0, b0]) => renomearCabos(a0, b0));
   }
 
   /** Clique numa caixa da rede existente */
@@ -1445,7 +1455,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
             <label className={rot}>Nome</label>
-            <input className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""}`} value={l.nome} onChange={(e) => alterar(i, { nome: e.target.value })} placeholder="Ex.: CE 2222 - P. CHAMINE" />
+            <input
+              className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""}`}
+              value={l.nome}
+              onFocus={() => { nomeAntes.current = l.nome; }}
+              onChange={(e) => alterar(i, { nome: e.target.value })}
+              onBlur={() => renomearCabos(nomeAntes.current, l.nome)}
+              placeholder="Ex.: CE 2222 - P. CHAMINE"
+            />
           </div>
           <div>
             <label className={rot}>Tipo</label>
