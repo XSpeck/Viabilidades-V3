@@ -655,6 +655,18 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         <p className="text-[10px] text-slate-500">
           {pr ? "Ao salvar, a CDOI entra neste prédio." : "Ao salvar, o prédio é criado com esta CDOI (blocos e andares você ajusta na janela do prédio)."}
         </p>
+        <details className="group rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">
+          <summary className="flex cursor-pointer select-none list-none items-center gap-1 font-semibold text-sky-700">
+            ⓘ Como pôr mais CDOIs neste prédio
+            <span className="ml-auto text-slate-400 transition group-open:rotate-180">▾</span>
+          </summary>
+          <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+            <li>Cada CDOI fica numa fibra diferente, então cada uma é a ponta de uma rota. Esta rota leva só <b>esta</b> CDOI.</li>
+            <li>Dê o nome da CDOI (ex.: AND T_Majestoso_CDOI), escolha bloco, andar e a fibra no cabo que chega, e salve a rota.</li>
+            <li>Para as outras: na <b>Árvore</b>, abra o prédio e use <b>＋ Nova CDOI com rota</b>. Escolha nome, bloco, andar e fibra: o caminho até a HUB é copiado sozinho.</li>
+            <li>Se o cabo que entra no prédio for outro: <b>Nova rota</b>, clique no prédio no mapa e siga com a ferramenta Prédio.</li>
+          </ol>
+        </details>
       </div>
     );
   }
@@ -1663,9 +1675,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
         {barraSalvarItem(i)}
+        {l.tipo === "cdoi" && campoPredio(i)}
         <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
-            <label className={rot}>Nome</label>
+            <label className={rot}>{l.tipo === "cdoi" ? "Nome da CDOI" : "Nome"}</label>
             <input
               className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""}`}
               value={l.nome}
@@ -1727,7 +1740,6 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               ↩ Voltar para a HUB (transporte em outra fibra)
             </button>
           )}
-          {l.tipo === "cdoi" && <div className="col-span-2">{campoPredio(i)}</div>}
           {i === 0 && (
             <div className="col-span-2">
               <label className={rot}>Potência da porta PON (dBm)</label>
