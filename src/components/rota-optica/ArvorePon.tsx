@@ -99,7 +99,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
     let vivo = true;
     listarPredios().then((ps) => vivo && setPredios(ps)).catch(() => {});
     return () => { vivo = false; };
-  }, []);
+    // rotas mudaram (rota salva, CDOI nova): o prédio pode ter mudado junto
+  }, [rotas]);
   const arvores = useMemo(() => montarArvoresPon(rotasComPredios(rotas, predios), caixas), [rotas, caixas, predios]);
   const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
   const [chave, setChave] = useState<string | null>(null);

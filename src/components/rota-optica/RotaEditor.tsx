@@ -26,6 +26,7 @@ import { chaveCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento } from "@/lib/arvorePon";
+import { andaresDoBloco, listarPredios, novoId, predioNovo, rotuloAndarCurto, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
 
@@ -62,6 +63,17 @@ interface Linha {
   /** Postes do cabo no trecho que chega neste elemento */
   vertices: Ponto[];
   obs: string;
+  /** CDOI colocada com a ferramenta Prédio: em que prédio, bloco e andar ela fica (gravado no prédio ao salvar) */
+  predio?: VinculoPredio;
+}
+
+/** id vazio = prédio novo (criado ao salvar com este nome) */
+interface VinculoPredio {
+  id: string;
+  nome: string;
+  /** id do bloco (prédio existente) ou nome do bloco (prédio novo) */
+  bloco: string;
+  andar: number;
 }
 
 const s = (v?: number) => (v === undefined ? "" : String(v).replace(".", ","));
@@ -181,6 +193,7 @@ function verticesDoKml(els: ElementoRota[], i: number, kml: TrechoCabo[]): Ponto
 
 /** Tipo de elemento que a ferramenta coloca (null = Mover/Poste) */
 function tipoDaFerramenta(f: Ferramenta): TipoElementoRota | null {
+  if (f === "predio") return "cdoi";
   return f === "selecionar" || f === "poste" || f === "estacao" ? null : f;
 }
 
@@ -191,7 +204,7 @@ const PALETA: { t: TipoElementoRota; rot: string }[] = [
   { t: "ct", rot: "CT" },
   { t: "hub", rot: "HUB" },
   { t: "cto", rot: "CTO" },
-  { t: "cdoi", rot: "CDOI" },
+  { t: "predio", rot: "Prédio" },
   { t: "onu", rot: "Cliente" },
 ];
 
@@ -279,6 +292,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** Pede ao mapa para enquadrar um trecho (ex.: cabo curto que sai da estação) */
   const [focoTrecho, setFocoTrecho] = useState<{ i: number; vez: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Prédios cadastrados (a ferramenta Prédio coloca a CDOI num deles ou cria um novo) */
+  const [predios, setPredios] = useState<PredioRede[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    listarPredios().then((ps) => vivo && setPredios(ps)).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Linha[][]>([]);
@@ -415,6 +435,129 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   // ---------- Mapa ----------
+  /** Posição de cada CDOI da rede (para achar o prédio perto do clique) */
+  function posCdoiRede(chaveCdoi: string): Ponto | null {
+    for (const r of rede) for (const e of r.elementos) if (e.lat !== undefined && e.lon !== undefined && chaveElemento(e) === chaveCdoi) return { lat: e.lat, lon: e.lon };
+    return null;
+  }
+  /** Prédios perto de um ponto (até 200 m), do mais perto ao mais longe */
+  function prediosPerto(p: Ponto) {
+    return predios
+      .map((pr) => {
+        const ds = pr.chaves.map(posCdoiRede).filter((x): x is Ponto => !!x).map((x) => distanciaMetros(p, x));
+        return { pr, d: ds.length ? Math.min(...ds) : Infinity };
+      })
+      .filter((x) => x.d <= 200)
+      .sort((a, b) => a.d - b.d);
+  }
+  function vinculoPerto(p: Ponto): VinculoPredio {
+    const perto = prediosPerto(p)[0];
+    if (perto && perto.d <= 60) return { id: perto.pr.id, nome: perto.pr.nome, bloco: perto.pr.blocos[0]?.id ?? "", andar: 0 };
+    return { id: "", nome: "", bloco: "Bloco A", andar: 0 };
+  }
+
+  /** Cartão "Prédio" da CDOI: escolhe o prédio (ou cria um), o bloco e o andar */
+  function campoPredio(i: number) {
+    const l = linhas[i];
+    const v = l.predio;
+    if (!v) {
+      return (
+        <button
+          type="button"
+          onClick={() => { const pos = posDe(l); alterar(i, { predio: pos ? vinculoPerto(pos) : { id: "", nome: "", bloco: "Bloco A", andar: 0 } }); }}
+          className="w-full rounded-lg border border-dashed border-sky-300 bg-sky-50 py-1.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+        >
+          🏢 Colocar esta CDOI num prédio
+        </button>
+      );
+    }
+    const pos = posDe(l);
+    const opcoes = pos ? prediosPerto(pos) : predios.map((pr) => ({ pr, d: Infinity }));
+    const pr = predios.find((x) => x.id === v.id);
+    const bloco = pr?.blocos.find((b) => b.id === v.bloco) ?? pr?.blocos[0];
+    const andares = bloco ? andaresDoBloco(bloco) : Array.from({ length: 31 }, (_, k) => k);
+    const set = (m: Partial<VinculoPredio>) => alterar(i, { predio: { ...v, ...m } });
+    return (
+      <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-2.5 space-y-1.5">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+          <IconeElemento tipo="predio" tamanho={18} /> Prédio
+          <button type="button" onClick={() => alterar(i, { predio: undefined })} className="ml-auto font-normal text-slate-400 hover:text-red-600">tirar do prédio</button>
+        </p>
+        <select
+          className={campo}
+          value={v.id || "__novo"}
+          onChange={(e) => {
+            const id = e.target.value === "__novo" ? "" : e.target.value;
+            const np = predios.find((x) => x.id === id);
+            set({ id, nome: np?.nome ?? "", bloco: np?.blocos[0]?.id ?? "Bloco A", andar: 0 });
+          }}
+        >
+          {opcoes.map(({ pr: x, d }) => (
+            <option key={x.id} value={x.id}>{x.nome}{Number.isFinite(d) ? ` · ${Math.round(d)} m` : ""}</option>
+          ))}
+          <option value="__novo">+ Prédio novo…</option>
+        </select>
+        {!v.id && (
+          <input className={`${campo} ${!v.nome.trim() ? "border-red-400" : ""}`} value={v.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="Nome do prédio (ex.: Ed Majestoso)" />
+        )}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div>
+            <label className={rot}>Bloco</label>
+            {pr ? (
+              <select className={campo} value={bloco?.id ?? ""} onChange={(e) => set({ bloco: e.target.value })}>
+                {pr.blocos.map((b) => {
+                  const cheio = pr.pontos.filter((o) => o.bloco === b.id).length >= 4;
+                  return <option key={b.id} value={b.id} disabled={cheio}>{b.nome}{cheio ? " (4 CDOIs)" : ""}</option>;
+                })}
+              </select>
+            ) : (
+              <input className={campo} value={v.bloco} onChange={(e) => set({ bloco: e.target.value })} placeholder="Bloco A" />
+            )}
+          </div>
+          <div>
+            <label className={rot}>Andar da CDOI</label>
+            <select className={campo} value={v.andar} onChange={(e) => set({ andar: +e.target.value })}>
+              {andares.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+            </select>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-500">
+          {pr ? "Ao salvar, a CDOI entra neste prédio." : "Ao salvar, o prédio é criado com esta CDOI (blocos e andares você ajusta na janela do prédio)."}
+        </p>
+      </div>
+    );
+  }
+
+  /** Grava nos prédios as CDOIs colocadas com a ferramenta Prédio */
+  async function gravarPredios(elementos: ElementoRota[]) {
+    const atuais = await listarPredios(true);
+    const novos = new Map<string, PredioRede>();
+    for (let i = 0; i < linhas.length; i++) {
+      const v = linhas[i].predio;
+      if (!v || linhas[i].tipo !== "cdoi") continue;
+      const el = elementos[i];
+      const chaveCdoi = chaveElemento(el);
+      if (v.id) {
+        const pr = atuais.find((x) => x.id === v.id);
+        if (!pr || pr.pontos.some((o) => o.chave === chaveCdoi)) continue;
+        const b = pr.blocos.find((x) => x.id === v.bloco) ?? pr.blocos[0];
+        const ponto = { id: novoId(), chave: chaveCdoi, nome: el.nome, bloco: b.id, andar: v.andar, atende_de: v.andar <= 0 ? Math.min(1, b.andares) : v.andar, atende_ate: v.andar <= 0 ? b.andares : v.andar };
+        await salvarPredio({ ...pr, pontos: [...pr.pontos, ponto] }, usuario);
+      } else {
+        const k = v.nome.trim().toUpperCase();
+        const pr = novos.get(k) ?? predioNovo(v.nome.trim(), chaveCdoi, el.nome);
+        if (novos.has(k)) {
+          pr.pontos.push({ ...pr.pontos[0], id: novoId(), chave: chaveCdoi, nome: el.nome, andar: v.andar });
+        } else {
+          pr.blocos[0].nome = v.bloco.trim() || "Bloco A";
+          pr.pontos[0].andar = v.andar;
+        }
+        novos.set(k, pr);
+      }
+    }
+    for (const pr of novos.values()) await salvarPredio(pr, usuario);
+  }
+
   function clicarMapa(lat: number, lon: number) {
     setAviso(null);
     const p = { lat, lon };
@@ -435,7 +578,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       montarEstacao(p);
       return;
     }
-    const tipo = ferramenta;
+    const tipo: TipoElementoRota = ferramenta === "predio" ? "cdoi" : ferramenta;
+    // Ferramenta Prédio: a CDOI entra no prédio mais perto (até 60 m) ou num prédio novo
+    const extraPredio: Partial<Linha> = ferramenta === "predio" ? { predio: vinculoPerto(p) } : {};
     // Com um elemento do meio selecionado, o novo entra logo depois dele
     if (sel !== null && sel < linhas.length - 1 && tipo !== "olt") {
       const prox = linhas[sel + 1];
@@ -454,6 +599,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           cabo_entrada: prox.cabo_entrada,
           fibra_entrada: prox.fibra_entrada,
           ...extra,
+          ...extraPredio,
         });
         return c;
       });
@@ -482,6 +628,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         equipamento_id: olt?.id ?? "",
         potencia_saida: olt?.potencia_tx !== undefined ? s(olt.potencia_tx) : "",
         ...extraDio,
+        ...extraPredio,
       };
       return [...ls, nova];
     });
@@ -800,6 +947,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (l.tipo === "olt" && !olts.some((o) => o.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha a OLT do cadastro` });
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
     if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
+    if (l.predio && !l.predio.id && !l.predio.nome.trim()) pendencias.push({ i, msg: `${nome}: dê o nome do prédio` });
     if (i > 0) {
       if (!l.cabo_entrada.trim()) pendencias.push({ i, msg: `${nome}: informe o cabo que chega` });
       else if (!tipoDoCabo(l.cabo_entrada)) pendencias.push({ i, msg: `${nome}: o cabo "${l.cabo_entrada}" precisa de um tipo do cadastro` });
@@ -954,6 +1102,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         });
         onCaboSalvo(salvo);
       }
+      if (linhas.some((l) => l.predio)) await gravarPredios(elementos);
       await onSalvar({
         nome: nome.trim(),
         origem: inicial?.origem ?? "manual",
@@ -1154,6 +1303,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             )}
           </div>
           {camposEquipamento(i)}
+          {l.tipo === "cdoi" && <div className="col-span-2">{campoPredio(i)}</div>}
           {i === 0 && (
             <div className="col-span-2">
               <label className={rot}>Potência da porta PON (dBm)</label>
