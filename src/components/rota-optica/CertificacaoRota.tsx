@@ -97,7 +97,7 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
   const maxD = Math.max(10, ...eventos.map((e) => e.distancia), ...linhas.map((l) => l.dm ?? 0)) * 1.06;
   const maxP = Math.max(1, limiteTotal, tMed ?? 0) + 1;
   const sx = (d: number) => L + (d / maxD) * (W - L - R);
-  const sy = (p: number) => T + (p / maxP) * (H - T - B);
+  const sy = (p: number) => T + (Math.max(0, Math.min(maxP, p)) / maxP) * (H - T - B);
   const degraus = (campo: "acumulado" | "acumuladoLimite") => {
     let path = `M${sx(0)} ${sy(0)}`;
     let ant = 0;
