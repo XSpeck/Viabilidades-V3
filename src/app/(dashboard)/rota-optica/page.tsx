@@ -25,11 +25,12 @@ import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import { listarPredios } from "@/lib/prediosRede";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
+import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Trash2, X } from "lucide-react";
+import { Boxes, FileUp, Loader2, Pencil, Plus, Route, Save, Trash2, X, Zap } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -57,6 +58,8 @@ export default function RotaOpticaPage() {
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
   /** Janela de limpeza (resíduos de rotas apagadas) */
   const [limpeza, setLimpeza] = useState<{ x: number; y: number } | null>(null);
+  /** Janela do simulador de rompimento (OTDR) */
+  const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -218,6 +221,15 @@ export default function RotaOpticaPage() {
             </button>
             <button
               type="button"
+              disabled={!rotas.length}
+              onClick={() => setRompimento({ x: Math.max(8, (window.innerWidth - 1000) / 2), y: 12 })}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 font-medium disabled:opacity-50"
+              title="Onde está o rompimento medido pelo OTDR e o que fica sem sinal"
+            >
+              <Zap className="w-4 h-4" /> Simular rompimento
+            </button>
+            <button
+              type="button"
               onClick={() => { setModo({ tipo: "editar", rota: null }); }}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
             >
@@ -260,6 +272,20 @@ export default function RotaOpticaPage() {
           onFechar={() => setCadastro(null)}
         >
           <CadastroEquipamentos itens={catalogo} usuario={user?.nome ?? ""} onMudou={setCatalogo} onFechar={() => setCadastro(null)} />
+        </Janela>
+      )}
+
+      {rompimento && (
+        <Janela
+          inicial={rompimento}
+          largura={Math.min(1000, typeof window !== "undefined" ? window.innerWidth - 16 : 1000)}
+          titulo="Simulador de rompimento"
+          subtitulo="OTDR: onde rompeu e o que fica sem sinal"
+          icone={<Zap className="w-5 h-5 text-yellow-300" />}
+          corBarra="bg-red-900"
+          onFechar={() => setRompimento(null)}
+        >
+          <SimuladorRompimento rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} />
         </Janela>
       )}
 
