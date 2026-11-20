@@ -6,7 +6,7 @@
 import { CALCULO_PADRAO, type ElementoRota, type RotaOptica } from "./rotaOptica";
 import { acumuladoDaRota } from "./rompimento";
 import { entradaPotencia } from "./subRotas";
-import type { Sentido } from "./rompimento";
+import type { ResultadoRompimento, Sentido } from "./rompimento";
 
 export type Lambda = 1310 | 1550;
 
@@ -127,4 +127,103 @@ export function situacaoTotal(medido: number, limiteTotal: number): Situacao {
   if (medido <= limiteTotal + 0.005) return "ok";
   if (medido <= limiteTotal + 0.5) return "atencao";
   return "fora";
+}
+
+// =====================
+// Leitura do OTDR → onde fica cada evento na rota e o que precisa de visita
+// =====================
+
+export interface LeituraOtdr {
+  /** distância do evento a partir do OTDR (m) */
+  distancia: number;
+  /** perda do evento (Event-L, dB) */
+  perda?: number;
+  /** é o fim da fibra (último evento) */
+  fim?: boolean;
+}
+
+export interface AnaliseEvento {
+  leitura: LeituraOtdr;
+  situacao: Situacao;
+  /** onde fica, em texto para o técnico */
+  onde: string;
+  /** detalhe: o que era esperado e o que olhar */
+  detalhe: string;
+  /** evento esperado que bateu (caixa) */
+  esperado?: EventoOtdr;
+  /** localização na rota (quando caiu fora de caixa) */
+  local?: ResultadoRompimento;
+}
+
+/** Tolerância de distância para casar a leitura com uma caixa */
+export function toleranciaCasamento(d: number): number {
+  return Math.max(10, d * TOLERANCIA.distanciaPct);
+}
+
+export function analisarLeitura(
+  rota: RotaOptica,
+  esperados: EventoOtdr[],
+  leituras: LeituraOtdr[],
+  localizar: (d: number) => ResultadoRompimento,
+  nomeCurto: (s: string) => string
+): AnaliseEvento[] {
+  const els = rota.elementos;
+  const fimEsp = esperados[esperados.length - 1];
+  const nome = (i?: number) => (i !== undefined ? nomeCurto(els[i]?.nome ?? "") : "?");
+  const descreverLocal = (l: ResultadoRompimento): string => {
+    if (l.tipo === "reserva") return `Na reserva técnica da ${nome(l.reservaDe)}`;
+    if (l.tipo === "tracado") return `No cabo entre ${nome(l.depoisDe)} e ${nome(l.antesDe)}, ≈ ${Math.round(l.metrosDepois ?? 0)} m depois da ${nome(l.depoisDe)}`;
+    if (l.tipo === "alem") return `Depois do fim da rota (${Math.round(l.sobra ?? 0)} m além da ${nome(l.depoisDe)})`;
+    return "Antes do início da rota";
+  };
+  return leituras.map((lt) => {
+    const tol = toleranciaCasamento(lt.distancia);
+    if (lt.fim) {
+      const dif = lt.distancia - fimEsp.distancia;
+      if (Math.abs(dif) <= tol) {
+        return { leitura: lt, situacao: "ok", esperado: fimEsp, onde: `Fim da fibra na ${nome(fimEsp.i)}`, detalhe: `Comprimento esperado ${fimEsp.distancia} m: confere.` };
+      }
+      const local = localizar(lt.distancia);
+      if (dif < 0) {
+        return {
+          leitura: lt, situacao: "fora", local, onde: descreverLocal(local),
+          detalhe: `A fibra termina ${Math.round(-dif)} m antes do esperado (${fimEsp.distancia} m): provável rompimento ou conector aberto neste ponto.`,
+        };
+      }
+      return {
+        leitura: lt, situacao: "atencao", local, onde: `Fim ${Math.round(dif)} m depois da ${nome(fimEsp.i)}`,
+        detalhe: "A fibra vai além do fim cadastrado: metragem da rota curta no cadastro, ou a fibra segue (drop / outra caixa).",
+      };
+    }
+    // casa com a caixa mais próxima dentro da tolerância
+    let melhor: EventoOtdr | undefined;
+    for (const e of esperados) {
+      const dif = Math.abs(e.distancia - lt.distancia);
+      if (dif <= tol && (!melhor || dif < Math.abs(melhor.distancia - lt.distancia))) melhor = e;
+    }
+    if (melhor) {
+      const s = lt.perda !== undefined ? situacaoPerda(lt.perda, melhor.limite) : "ok";
+      const caixa = melhor.tipo === "lancamento" ? `Conector de lançamento (${nome(melhor.i)})` : `Na caixa ${nome(melhor.i)}`;
+      return {
+        leitura: lt, situacao: s, esperado: melhor, onde: caixa,
+        detalhe:
+          s === "ok"
+            ? `${melhor.rotulo}: perda dentro do esperado (máx. ${melhor.limite.toFixed(2).replace(".", ",")} dB).`
+            : `${melhor.rotulo}: esperado até ${melhor.limite.toFixed(2).replace(".", ",")} dB. Refazer a fusão / limpar ou trocar o conector nesta caixa.`,
+      };
+    }
+    // fora de caixa: em que trecho / reserva caiu
+    const local = localizar(lt.distancia);
+    const p = lt.perda ?? 0;
+    const s: Situacao = p <= 0.05 ? "ok" : p <= TOLERANCIA.fusao ? "atencao" : "fora";
+    return {
+      leitura: lt, situacao: s, local, onde: descreverLocal(local),
+      detalhe:
+        local.tipo === "reserva"
+          ? `Evento sem caixa esperada, dentro do rolo de reserva: ${p ? `perda de ${p.toFixed(2).replace(".", ",")} dB, ` : ""}provável curvatura apertada no rolo.`
+          : s === "ok"
+            ? "Evento pequeno fora de caixa (sem perda relevante)."
+            : `Perda de ${p.toFixed(2).replace(".", ",")} dB fora de caixa: verificar curvatura, cabo amassado/danificado ou emenda não cadastrada.`,
+    };
+  });
 }
