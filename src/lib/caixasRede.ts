@@ -19,10 +19,31 @@ export interface PortaCaixa {
   descricao?: string;
 }
 
+/** De onde vem a fibra que entra num splitter da caixa */
+export interface EntradaSplitter {
+  /** Uma fibra que chega na caixa (de uma rota) */
+  fibra?: { cabo: string; fibra: number };
+  /** Uma porta de outro splitter da mesma caixa (2º nível) */
+  splitter?: { id: string; porta: number };
+}
+
+/** Um splitter dentro da caixa (a CTO pode ter vários: 1:2 + 1:8, dois 1:8 em dois níveis…) */
+export interface SplitterCaixa {
+  id: string;
+  /** "1:8" */
+  relacao: string;
+  /** Modelo do cadastro */
+  modelo_id?: string;
+  entrada: EntradaSplitter;
+  portas: PortaCaixa[];
+}
+
 export interface CaixaRede {
   id: string;
   chave: string;
   nome: string;
+  /** Vários splitters (CTO com níveis). Quando existe, vale no lugar de splitter/portas. */
+  splitters?: SplitterCaixa[];
   /** "1:8", "1:16"... vazio quando a caixa não tem splitter */
   splitter?: string;
   /** Modelo de splitter do cadastro de equipamentos */
@@ -58,7 +79,54 @@ export interface ResumoPortas {
   livres: number;
 }
 
+/**
+ * Splitters da caixa: os cadastrados; ou, em caixa antiga com um splitter só, um splitter montado
+ * com ele (entrada = fibra que chega pela rota).
+ */
+export function splittersDaCaixa(
+  caixa: CaixaRede | undefined,
+  rota?: { splitter?: string; splitter_modelo?: string; cabo?: string; fibra?: number },
+): SplitterCaixa[] {
+  if (caixa?.splitters?.length) return caixa.splitters;
+  const rel = caixa?.splitter ?? rota?.splitter;
+  if (!rel || totalPernas(rel) === null) return [];
+  return [{
+    id: "s1",
+    relacao: rel,
+    modelo_id: caixa?.splitter_modelo ?? rota?.splitter_modelo,
+    entrada: rota?.cabo && rota.fibra ? { fibra: { cabo: rota.cabo, fibra: rota.fibra } } : {},
+    portas: portasPara(rel, caixa?.portas ?? []),
+  }];
+}
+
+/** Portas de atendimento: as que não alimentam outro splitter da caixa */
+export function portasFinais(spls: SplitterCaixa[]): { spl: SplitterCaixa; porta: PortaCaixa }[] {
+  const usadas = new Set(spls.map((x) => (x.entrada.splitter ? `${x.entrada.splitter.id}|${x.entrada.splitter.porta}` : "")));
+  return spls.flatMap((spl) =>
+    portasPara(spl.relacao, spl.portas).filter((p) => !usadas.has(`${spl.id}|${p.numero}`)).map((porta) => ({ spl, porta })),
+  );
+}
+
+/** Texto curto dos splitters ("1:8", "1:2 › 2×1:8") */
+export function rotuloSplitters(spls: SplitterCaixa[]): string {
+  if (spls.length <= 1) return spls[0]?.relacao ?? "";
+  const n1 = spls.filter((x) => !x.entrada.splitter);
+  const n2 = spls.filter((x) => x.entrada.splitter);
+  const agrupa = (l: SplitterCaixa[]) => {
+    const m = new Map<string, number>();
+    l.forEach((x) => m.set(x.relacao, (m.get(x.relacao) ?? 0) + 1));
+    return [...m.entries()].map(([r, q]) => (q > 1 ? `${q}×${r}` : r)).join("+");
+  };
+  return n2.length ? `${agrupa(n1)} › ${agrupa(n2)}` : agrupa(n1);
+}
+
 export function resumoPortas(caixa: CaixaRede | undefined): ResumoPortas | null {
+  if (caixa?.splitters?.length) {
+    const fin = portasFinais(caixa.splitters);
+    const clientes = fin.filter((f) => f.porta.status === "cliente").length;
+    const ramais = fin.filter((f) => f.porta.status === "ramal").length;
+    return { total: fin.length, clientes, ramais, livres: fin.length - clientes - ramais };
+  }
   const total = totalPernas(caixa?.splitter);
   if (!caixa || total === null) return null;
   const portas = portasPara(caixa.splitter, caixa.portas);
@@ -92,6 +160,7 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       splitter: data.splitter || undefined,
       splitter_modelo: data.splitter_modelo || undefined,
       portas: Array.isArray(data.portas) ? data.portas : [],
+      splitters: Array.isArray(data.splitters) && data.splitters.length ? data.splitters : undefined,
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
@@ -106,9 +175,18 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
   const portas = portasPara(dados.splitter, dados.portas).map((p) =>
     p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status }
   );
+  // Vários splitters: grava a lista; splitter/portas ficam com o primeiro (telas antigas)
+  const splitters = (dados.splitters ?? []).map((x) => ({
+    id: x.id,
+    relacao: x.relacao,
+    modelo_id: x.modelo_id ?? "",
+    entrada: x.entrada.fibra ? { fibra: x.entrada.fibra } : x.entrada.splitter ? { splitter: x.entrada.splitter } : {},
+    portas: portasPara(x.relacao, x.portas).map((p) => (p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status })),
+  }));
   const registro = {
     chave: dados.chave,
     nome: dados.nome,
+    splitters,
     splitter: dados.splitter ?? "",
     splitter_modelo: dados.splitter ? dados.splitter_modelo ?? "" : "",
     portas,
@@ -116,5 +194,5 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     atualizado_por: dados.atualizado_por ?? "",
   };
   await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
-  return { id, ...registro, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+  return { id, ...registro, splitters: splitters.length ? splitters : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
 }

@@ -4,7 +4,7 @@
 // onde elas se separam, a árvore ramifica.
 // =====================
 import type { ElementoRota, RotaOptica } from "./rotaOptica";
-import { totalPernas, type CaixaRede } from "./caixasRede";
+import { portasFinais, rotuloSplitters, totalPernas, type CaixaRede } from "./caixasRede";
 
 export interface NoArvore {
   id: string;
@@ -185,6 +185,18 @@ export interface PernasNo {
 
 /** Pernas do splitter do nó: usa o diagrama cadastrado da caixa ou o splitter informado na rota. */
 export function pernasSplitter(n: NoArvore): PernasNo | null {
+  // CTO com vários splitters: contam as portas de atendimento (as que não alimentam outro splitter)
+  if (n.caixa?.splitters?.length) {
+    const fin = portasFinais(n.caixa.splitters);
+    const nome = (id: string) => `S${n.caixa!.splitters!.findIndex((x) => x.id === id) + 1}`;
+    const portasCliente = fin
+      .filter((f) => f.porta.status === "cliente")
+      .map((f) => ({ numero: f.porta.numero, descricao: `${nome(f.spl.id)}${f.porta.descricao ? " · " + f.porta.descricao : ""}` }));
+    const ramaisMarcados = fin.filter((f) => f.porta.status === "ramal").length;
+    const ramais = Math.max(ramaisMarcados, n.filhos.length);
+    const total = fin.length;
+    return { splitter: rotuloSplitters(n.caixa.splitters), total, clientes: portasCliente.length, ramais, livres: Math.max(0, total - portasCliente.length - ramais), portasCliente };
+  }
   const splitter = n.caixa?.splitter ?? n.elemento.splitter;
   const total = totalPernas(splitter);
   if (total === null || !splitter) return null;

@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { caminhoAte, chaveElemento, dentroDePredio, filhosReais, montarArvoresPon, pernasSplitter, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
-import type { CaixaRede } from "@/lib/caixasRede";
+import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
 import { listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
+import CaixaCto from "./CaixaCto";
 import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
@@ -414,7 +415,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const x = X(n.profundidade), yy = Y(y.get(n)!);
               const t = tipoVisual(n.elemento);
               const ativo = n === sel;
-              const spl = n.caixa?.splitter ?? n.elemento.splitter;
+              const spl = n.caixa?.splitters?.length ? rotuloSplitters(n.caixa.splitters) : n.caixa?.splitter ?? n.elemento.splitter;
               const tam = t === "olt" || t === "predio" ? 36 : t === "onu" || t === "outro" ? 24 : 30;
               return (
                 <g
@@ -562,8 +563,9 @@ function JanelaNo({
   const ehPredio = no.elemento.tipo === "predio";
   const ehCdoi = tipoVisual(no.elemento) === "cdoi";
   const ehHub = tipoVisual(no.elemento) === "hub";
-  const [aba, setAba] = useState<"primario" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehHub ? "primario" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+  const ehCto = tipoVisual(no.elemento) === "cto";
+  const [aba, setAba] = useState<"primario" | "cto" | "predio" | "emendas" | "diagrama" | "caminho">(
+    ehHub ? "primario" : ehCto ? "cto" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
   /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
   const [editandoHub, setEditandoHub] = useState(false);
@@ -572,9 +574,10 @@ function JanelaNo({
       <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
         {([
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
+          ...(ehCto ? ([["cto", "CTO"]] as const) : []),
           ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
           ...(ehPredio ? [] : ([["emendas", "Emendas"]] as const)),
-          ...(ehHub || ehPredio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
+          ...(ehHub || ehPredio || ehCto ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -615,6 +618,16 @@ function JanelaNo({
         ) : (
           <PrimarioHub no={no} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
         )
+      ) : aba === "cto" ? (
+        <CaixaCto
+          key={`cto-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
+          no={no}
+          rotas={todasRotas}
+          modelos={catalogo.filter((m) => m.categoria === "splitter")}
+          usuario={usuario}
+          onSalva={onCaixaSalva}
+          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+        />
       ) : aba === "predio" ? (
         <PredioVertical
           chave={ehPredio ? chaveElemento((filhosReais(no)[0] ?? no).elemento) : chaveElemento(no.elemento)}
