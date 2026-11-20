@@ -11,7 +11,6 @@ import { expandir } from "@/lib/textoCompleto";
 function completoDe(alvo: EventTarget | null): string | null {
   let el = alvo instanceof Element ? alvo : null;
   for (let k = 0; el && k < 4; k++, el = el.parentElement) {
-    if (el instanceof HTMLElement && el.title) return null; // já tem a dica do navegador
     const texto = (el instanceof HTMLElement ? el.innerText : el.textContent) ?? "";
     if (!texto || texto.length > 300) continue;
     // cortado pelo espaço (CSS: reticências)
