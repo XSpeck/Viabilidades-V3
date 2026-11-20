@@ -2,9 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
+import { CamadaBase, SeletorCamada, useCamada } from "./CamadasMapa";
 import type { TipoElementoRota, TrechoCabo } from "@/lib/rotaOptica";
 import { iconeSvg } from "./IconesRede";
 import { Search, X } from "lucide-react";
@@ -153,7 +154,7 @@ export default function RotaEditorMapa({
   onSelect, onClicarMapa, onMoverElemento, onMoverVertice, onRemoverVertice, onInserirCurva, onInserirElemento, onRemoverPendente,
   rede, redeCabos, onClicarRede, focoTrecho,
 }: Props) {
-  const [satelite, setSatelite] = useState(false);
+  const [camada, setCamada] = useCamada();
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [textoBusca, setTextoBusca] = useState("");
   const [erroBusca, setErroBusca] = useState<string | null>(null);
@@ -205,16 +206,7 @@ export default function RotaEditorMapa({
         doubleClickZoom={false}
         className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${desenhando ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}
       >
-        {satelite ? (
-          <TileLayer key="satelite" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
-        ) : (
-          <TileLayer key="ruas"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
-            maxZoom={20}
-            maxNativeZoom={19}
-          />
-        )}
+        <CamadaBase camada={camada} />
         <ZoomComCtrl />
         <Cliques onClicar={onClicarMapa} />
         <Enquadrar pontos={todos.length ? todos : pontosRede} />
@@ -422,13 +414,7 @@ export default function RotaEditorMapa({
           >
             <Search className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSatelite((v) => !v)}
-            className="bg-white/95 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-white"
-          >
-            {satelite ? "Mapa de ruas" : "Satélite"}
-          </button>
+          <SeletorCamada valor={camada} onMudar={setCamada} />
         </div>
       </div>
     </div>

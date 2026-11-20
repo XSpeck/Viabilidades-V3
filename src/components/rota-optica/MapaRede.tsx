@@ -2,9 +2,10 @@
 
 import { Fragment, useEffect, useState } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Polyline, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
+import { CamadaBase, SeletorCamada, useCamada } from "./CamadasMapa";
 import { formatMetros, tipoVisual, type RotaOptica, type TipoElementoRota } from "@/lib/rotaOptica";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
@@ -47,7 +48,7 @@ const curto = (s: string, n = 26) => {
 
 export default function MapaRede({ rotas, onAbrirRota }: Props) {
   const [pon, setPon] = useState<string>("");
-  const [satelite, setSatelite] = useState(false);
+  const [camada, setCamada] = useCamada();
   const [nomes, setNomes] = useState(false);
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
@@ -124,20 +125,14 @@ export default function MapaRede({ rotas, onAbrirRota }: Props) {
         <label className="flex items-center gap-1 text-xs text-gray-600">
           <input type="checkbox" checked={nomes} onChange={(e) => setNomes(e.target.checked)} /> Nomes das caixas
         </label>
-        <button type="button" onClick={() => setSatelite((v) => !v)} className="ml-auto rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium hover:bg-gray-50">
-          {satelite ? "Mapa de ruas" : "Satélite"}
-        </button>
+        <SeletorCamada valor={camada} onMudar={setCamada} className="ml-auto" />
         <span className="text-[11px] text-gray-400">{caixas.size} caixas · {cabos.size} trechos de cabo</span>
       </div>
       {todos.length === 0 ? (
         <div className="flex h-[520px] items-center justify-center text-sm text-gray-500">Nenhuma rota com coordenadas para mostrar no mapa.</div>
       ) : (
         <MapContainer center={todos[0]} zoom={15} scrollWheelZoom={false} className="h-[min(70vh,640px)] w-full z-0 [&_.leaflet-interactive]:outline-none">
-          {satelite ? (
-            <TileLayer key="satelite" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles © Esri" maxZoom={20} maxNativeZoom={18} />
-          ) : (
-            <TileLayer key="ruas" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>' maxZoom={19} />
-          )}
+          <CamadaBase camada={camada} />
           <ZoomComCtrl />
           <Enquadrar pts={todos} vez={pon} />
           {soltos.map(({ r, t }, k) => (
