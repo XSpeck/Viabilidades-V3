@@ -28,7 +28,7 @@ import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salv
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
-import { andaresDoBloco, listarPredios, novoId, predioNovo, rotuloAndarCurto, salvarPredio, type PredioRede } from "@/lib/prediosRede";
+import { listarPredios, novoId, predioNovo, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
 
@@ -605,9 +605,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const pos = posDe(l);
     const opcoes = pos ? prediosPerto(pos) : predios.map((pr) => ({ pr, d: Infinity }));
     const pr = predios.find((x) => x.id === v.id);
-    const bloco = pr?.blocos.find((b) => b.id === v.bloco) ?? pr?.blocos[0];
-    const andares = bloco ? andaresDoBloco(bloco) : Array.from({ length: 31 }, (_, k) => k);
-    const set = (m: Partial<VinculoPredio>) => alterar(i, { predio: { ...v, ...m } });
+    // nome da CDOI acompanha o prédio enquanto for automático ("CDOI …")
+    const nomeAuto = (nomePredio: string) => (nomePredio.trim() ? `CDOI ${nomePredio.trim()}` : l.nome);
+    const automatico = !l.nome.trim() || /^CDOI\b/i.test(l.nome.trim());
+    const set = (m: Partial<VinculoPredio>, renomearJa = false) => {
+      const nv = { ...v, ...m };
+      const novoNome = automatico ? nomeAuto(nv.nome) : l.nome;
+      alterar(i, { predio: nv, nome: novoNome });
+      if (renomearJa && novoNome !== l.nome) renomearCabos(l.nome, novoNome);
+    };
     return (
       <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-2.5 space-y-1.5">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
@@ -620,7 +626,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           onChange={(e) => {
             const id = e.target.value === "__novo" ? "" : e.target.value;
             const np = predios.find((x) => x.id === id);
-            set({ id, nome: np?.nome ?? "", bloco: np?.blocos[0]?.id ?? "Bloco A", andar: 0 });
+            set({ id, nome: np?.nome ?? "", bloco: np?.blocos[0]?.id ?? "Bloco A", andar: 0 }, true);
           }}
         >
           {opcoes.map(({ pr: x, d }) => (
@@ -629,31 +635,17 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           <option value="__novo">+ Prédio novo…</option>
         </select>
         {!v.id && (
-          <input className={`${campo} ${!v.nome.trim() ? "border-red-400" : ""}`} value={v.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="Nome do prédio (ex.: Ed Majestoso)" />
+          <input
+            className={`${campo} ${!v.nome.trim() ? "border-red-400" : ""}`}
+            value={v.nome}
+            onFocus={() => { nomeAntes.current = l.nome; }}
+            onChange={(e) => set({ nome: e.target.value })}
+            onBlur={() => renomearCabos(nomeAntes.current, l.nome)}
+            placeholder="Nome do prédio (ex.: Ed Majestoso)"
+          />
         )}
-        <div className="grid grid-cols-2 gap-1.5">
-          <div>
-            <label className={rot}>Bloco</label>
-            {pr ? (
-              <select className={campo} value={bloco?.id ?? ""} onChange={(e) => set({ bloco: e.target.value })}>
-                {pr.blocos.map((b) => {
-                  const cheio = pr.pontos.filter((o) => o.bloco === b.id).length >= 4;
-                  return <option key={b.id} value={b.id} disabled={cheio}>{b.nome}{cheio ? " (4 CDOIs)" : ""}</option>;
-                })}
-              </select>
-            ) : (
-              <input className={campo} value={v.bloco} onChange={(e) => set({ bloco: e.target.value })} placeholder="Bloco A" />
-            )}
-          </div>
-          <div>
-            <label className={rot}>Andar da CDOI</label>
-            <select className={campo} value={v.andar} onChange={(e) => set({ andar: +e.target.value })}>
-              {andares.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
-            </select>
-          </div>
-        </div>
         <p className="text-[10px] text-slate-500">
-          {pr ? "Ao salvar, a CDOI entra neste prédio." : "Ao salvar, o prédio é criado com esta CDOI (blocos e andares você ajusta na janela do prédio)."}
+          {pr ? "Ao salvar, entra neste prédio." : "Ao salvar, o prédio é criado."} Bloco, andar e splitter de cada CDOI você coloca na janela do prédio (Árvore → clique no prédio).
         </p>
         <details className="group rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">
           <summary className="flex cursor-pointer select-none list-none items-center gap-1 font-semibold text-sky-700">
@@ -661,9 +653,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             <span className="ml-auto text-slate-400 transition group-open:rotate-180">▾</span>
           </summary>
           <ol className="mt-1.5 list-decimal space-y-1 pl-4">
-            <li>Cada CDOI fica numa fibra diferente, então cada uma é a ponta de uma rota. Esta rota leva só <b>esta</b> CDOI.</li>
-            <li>Dê o nome da CDOI (ex.: AND T_Majestoso_CDOI), escolha bloco, andar e a fibra no cabo que chega, e salve a rota.</li>
-            <li>Para as outras: na <b>Árvore</b>, abra o prédio e use <b>＋ Nova CDOI com rota</b>. Escolha nome, bloco, andar e fibra: o caminho até a HUB é copiado sozinho.</li>
+            <li>Cada CDOI fica numa fibra diferente, então cada uma é a ponta de uma rota. Esta rota leva o cabo e a fibra da <b>primeira</b> CDOI.</li>
+            <li>Dê o nome do prédio, escolha a fibra no cabo que chega e salve a rota.</li>
+            <li>Na <b>Árvore</b>, abra o prédio: coloque bloco, andar e splitter desta CDOI e use <b>＋ Nova CDOI com rota</b> para as outras (nome, andar e fibra; o caminho até a HUB é copiado sozinho).</li>
             <li>Se o cabo que entra no prédio for outro: <b>Nova rota</b>, clique no prédio no mapa e siga com a ferramenta Prédio.</li>
           </ol>
         </details>
@@ -1672,11 +1664,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const l = linhas[i];
     const dm = distMapa(linhas, i);
     const kCabo = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
+    // CDOI de prédio: aqui só o prédio e o cabo que chega (o resto fica na janela do prédio)
+    const soPredio = l.tipo === "cdoi" && !!l.predio;
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
         {barraSalvarItem(i)}
         {l.tipo === "cdoi" && campoPredio(i)}
-        <div className="grid grid-cols-2 gap-2">
+        {!soPredio && <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
             <label className={rot}>{l.tipo === "cdoi" ? "Nome da CDOI" : "Nome"}</label>
             <input
@@ -1746,7 +1740,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <input className={campo} inputMode="decimal" value={l.potencia_saida} onChange={(e) => alterar(i, { potencia_saida: e.target.value })} placeholder="ex.: 5" />
             </div>
           )}
-        </div>
+        </div>}
 
         {i > 0 && (
           <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-2.5">
@@ -1886,7 +1880,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         )}
 
-        {l.tipo !== "olt" && l.tipo !== "onu" && <div className="grid grid-cols-2 gap-2">{campoSplitter(i)}</div>}
+        {l.tipo !== "olt" && l.tipo !== "onu" && !soPredio && <div className="grid grid-cols-2 gap-2">{campoSplitter(i)}</div>}
 
         <details className="group">
           <summary className="cursor-pointer text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 list-none">
