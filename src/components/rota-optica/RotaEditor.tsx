@@ -1726,7 +1726,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 ))}
               </div>
             ) : (
-              <p className="text-[10px] text-slate-500">{l.tipo === "hub" ? "Sai por uma porta do primário desta HUB." : "Segue a partir desta caixa."}</p>
+              <p className="text-[10px] text-slate-500">{l.passagem ? "Nesta porta a fibra só passa por aqui (passagem) e segue." : l.tipo === "hub" ? "Sai por uma porta do primário desta HUB." : "Segue a partir desta caixa."}</p>
             )}
             {paiEf?.meia_porta && <p className="text-[10px] text-slate-500">A fibra sai pela outra perna do 1:2 (só a perda do 1:2) e segue até a HUB da outra metade da porta.</p>}
           </div>
