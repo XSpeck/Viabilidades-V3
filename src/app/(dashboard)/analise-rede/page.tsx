@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
+import { MODULOS } from "@/lib/modulos";
+import PainelEstrutura from "@/components/analise-rede/PainelEstrutura";
 import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
 import { uploadFoto, deleteFotos } from "@/lib/cloudinary";
 import { listTecnicos } from "@/lib/users";
@@ -544,7 +546,7 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
             )}
             {isMirror && (
               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700"
-                title="Espelho automático de uma visita de estruturação — data, técnico e status são gerenciados na Agenda/Auditoria.">
+                title={MODULOS.agendamento ? "Espelho automático de uma visita de estruturação — data, técnico e status são gerenciados na Agenda/Auditoria." : "Estrutura de prédio/condomínio vinda de um pedido de viabilidade — agende e conclua no painel abaixo."}>
                 🔗 Estruturação
               </span>
             )}
@@ -671,6 +673,10 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
         </div>
       </div>
 
+      {isMirror && !MODULOS.agendamento && d.status !== "concluida" && (
+        <PainelEstrutura demanda={d} tecnicosRede={tecnicosRede} onRefresh={onRefresh} />
+      )}
+
       {/* Painel de mudança de status */}
       {showStatusChange && (
         <div className="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-3">
@@ -757,7 +763,7 @@ function DemandaCard({ demanda: d, bairros, tecnicosRede, onRefresh }: { demanda
           <p className="text-xs font-semibold text-gray-700">✏️ Editar demanda</p>
           {isMirror ? (
             <p className="text-xs text-gray-400 italic">
-              👷 Técnico definido na Agenda/Auditoria — não editável aqui.
+              👷 {MODULOS.agendamento ? "Técnico definido na Agenda/Auditoria — não editável aqui." : "Técnicos definidos no agendamento da estrutura (painel abaixo)."}
             </p>
           ) : (
             <div className="flex flex-wrap gap-1.5 col-span-2">

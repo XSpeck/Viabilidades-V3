@@ -1,4 +1,5 @@
 import type { AppUser, UserCargo } from "@/types";
+import { MODULOS, PAGINAS_AGENDAMENTO } from "./modulos";
 
 export const PAGE_CARGOS: Record<string, UserCargo[]> = {
   home:             ["adm", "agendamento", "auditor", "usuario"],
@@ -41,6 +42,7 @@ function canAccessFinanceiro(user: AppUser): boolean {
 
 export function canAccess(user: AppUser | null, page: string): boolean {
   if (!user) return false;
+  if (!MODULOS.agendamento && PAGINAS_AGENDAMENTO.includes(page)) return false;
   if (page === "financeiro") return canAccessFinanceiro(user);
   return PAGE_CARGOS[page]?.includes(getCargo(user)) ?? true;
 }

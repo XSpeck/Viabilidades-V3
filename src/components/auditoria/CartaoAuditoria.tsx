@@ -9,6 +9,8 @@ import InfoPedido from "./InfoPedido";
 import FormCto from "./FormCto";
 import FormPredio from "./FormPredio";
 import AgendaVisita from "./AgendaVisita";
+import ComARede from "./ComARede";
+import { MODULOS } from "@/lib/modulos";
 import PainelContestacao from "./PainelContestacao";
 import type { Auditor, Tecnicos } from "./tipos";
 
@@ -75,7 +77,9 @@ export default function CartaoAuditoria({ v, auditor, tecnicos, erroTecnicos, ag
                   <FormCto key={tipo} {...props} tipo={tipo} nome={nome} onMapa={setMapa} />
                 )}
                 {!v.status_predio && tipo === "Prédio" && <FormPredio {...props} nome={nome} onMapa={setMapa} />}
-                {v.status_predio && <AgendaVisita {...props} tipo={tipo} tecnicos={tecnicos} erroTecnicos={erroTecnicos} />}
+                {v.status_predio && (!MODULOS.agendamento && ["pronto_auditoria", "agendado", "proposta_visita"].includes(v.status_predio)
+                  ? <ComARede {...props} />
+                  : <AgendaVisita {...props} tipo={tipo} tecnicos={tecnicos} erroTecnicos={erroTecnicos} />)}
               </div>
             </div>
           )}

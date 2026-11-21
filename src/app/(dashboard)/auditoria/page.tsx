@@ -8,6 +8,7 @@ import { listTecnicos } from "@/lib/users";
 import { canAccess, getCargo } from "@/lib/access";
 import { semAcento } from "@/lib/localizacao";
 import type { Viabilizacao } from "@/types";
+import { MODULOS } from "@/lib/modulos";
 import CartaoAuditoria from "@/components/auditoria/CartaoAuditoria";
 import HistoricoAuditor from "@/components/auditoria/HistoricoAuditor";
 import type { Auditor, Tecnicos } from "@/components/auditoria/tipos";
@@ -19,7 +20,7 @@ const FILTROS: { k: Filtro; rotulo: string; teste: (v: Viabilizacao) => boolean 
   { k: "casa", rotulo: "Casa", teste: (v) => v.tipo_instalacao === "FTTH" && !v.urgente },
   { k: "predios", rotulo: "Prédio/Cond.", teste: (v) => v.tipo_instalacao !== "FTTH" && !v.urgente && !v.status_predio },
   { k: "aguardando", rotulo: "Aguardando dados", teste: (v) => v.status_predio === "aguardando_dados" },
-  { k: "agendar", rotulo: "Agendar visita", teste: (v) => ["pronto_auditoria", "proposta_visita"].includes(v.status_predio ?? "") },
+  { k: "agendar", rotulo: MODULOS.agendamento ? "Agendar visita" : "Com a rede", teste: (v) => ["pronto_auditoria", "proposta_visita", ...(MODULOS.agendamento ? [] : ["agendado"])].includes(v.status_predio ?? "") },
   { k: "contestado", rotulo: "Contestações", teste: (v) => v.status === "em_revisao" && v.revisao_tipo === "contestado" },
 ];
 

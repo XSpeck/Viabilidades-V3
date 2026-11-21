@@ -4,6 +4,7 @@ import { useState } from "react";
 import { confirmarPropostaVisita, contraproporVisita, enviarDadosPredio } from "@/lib/firestore";
 import { formatarTelefone } from "@/lib/localizacao";
 import type { Viabilizacao } from "@/types";
+import { MODULOS } from "@/lib/modulos";
 import { Botao, Caixa, campo, CamposData, dataBr, Historico, Linha, MsgErro, useAcao } from "@/components/comum/ui";
 
 type Campo = "predio" | "sindico" | "telSindico" | "cliente" | "telCliente" | "apto";
@@ -87,7 +88,7 @@ export default function EtapaPredio({ r, onRefresh }: { r: Viabilizacao; onRefre
       return (
         <div className="space-y-2">
           <Caixa tom="azul" titulo="Dados enviados">
-            <p className="text-xs text-blue-700">Aguardando o agendamento da visita técnica.</p>
+            <p className="text-xs text-blue-700">{MODULOS.agendamento ? "Aguardando o agendamento da visita técnica." : "A equipe de rede vai agendar a visita e fazer a estrutura. A data aparece aqui."}</p>
           </Caixa>
           <Caixa tom="cinza">
             <Linha r={cond ? "Responsável" : "Síndico"} v={[r.nome_sindico, r.contato_sindico].filter(Boolean).join(" · ")} />

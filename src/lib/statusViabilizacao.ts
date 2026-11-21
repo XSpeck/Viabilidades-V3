@@ -3,6 +3,7 @@
 // a ação que o atendente precisa fazer. Usado pelos números, filtros, cartões e histórico.
 // =====================
 import type { Viabilizacao } from "@/types";
+import { MODULOS } from "./modulos";
 
 export type ChaveStatus =
   | "fila" | "analise" | "correcao" | "devolvida" | "contestado"
@@ -75,7 +76,7 @@ export function statusDe(v: Viabilizacao): StatusInfo {
   // Estrutura do prédio / condomínio
   switch (v.status_predio) {
     case "aguardando_dados": return { chave: "ag_dados", rotulo: "Dados pendentes", cor: LARANJA, grupo: "predio", acao: `Preencha os dados do ${cond ? "responsável" : "síndico"}` };
-    case "pronto_auditoria": return { chave: "ag_visita", rotulo: "Aguardando visita", cor: AZUL, grupo: "predio" };
+    case "pronto_auditoria": return { chave: "ag_visita", rotulo: MODULOS.agendamento ? "Aguardando visita" : "Com a equipe de rede", cor: AZUL, grupo: "predio" };
     case "proposta_visita": return { chave: "confirmar_visita", rotulo: "Confirmar visita", cor: LARANJA, grupo: "predio", acao: "Confirme a data da visita técnica" };
     case "agendado": return { chave: "visita_agendada", rotulo: "Visita agendada", cor: VERDE, grupo: "predio" };
     case "estruturado": return { chave: "estruturado", rotulo: "Estruturado", cor: VERDE, grupo: "aprovado", acao: "Estrutura pronta: dê ciência" };

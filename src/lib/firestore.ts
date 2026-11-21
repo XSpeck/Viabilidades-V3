@@ -6,6 +6,7 @@ import {
   deleteDoc,
   getDocs,
   getDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -19,6 +20,8 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { deleteFotos } from "./cloudinary";
+import { MODULOS } from "./modulos";
+import { descricaoEstrutura } from "./descricaoEstrutura";
 import type {
   Viabilizacao,
   PredioAtendido,
@@ -355,7 +358,7 @@ export async function aprovarFTTH(
   // aprovação e início do agendamento da instalação numa escrita só (nunca fica "pela metade")
   await updateViabilizacao(id, {
     status: "aprovado",
-    status_instalacao: "aguardando_proposta",
+    ...(MODULOS.agendamento ? { status_instalacao: "aguardando_proposta" as const } : {}),
     auditado_por: auditadoPor,
     auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
@@ -381,7 +384,7 @@ export async function aprovarFTTA(
   // aprovação e início do agendamento da instalação numa escrita só (nunca fica "pela metade")
   await updateViabilizacao(id, {
     status: "aprovado",
-    status_instalacao: "aguardando_proposta",
+    ...(MODULOS.agendamento ? { status_instalacao: "aguardando_proposta" as const } : {}),
     auditado_por: auditadoPor,
     auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
@@ -407,7 +410,7 @@ export async function rejeitarViabilizacao(
 export async function marcarUTP(id: string, auditadoPor: string, auditorId?: string): Promise<void> {
   await updateViabilizacao(id, {
     status: "utp",
-    status_instalacao: "aguardando_proposta",
+    ...(MODULOS.agendamento ? { status_instalacao: "aguardando_proposta" as const } : {}),
     motivo_rejeicao: "Atendemos UTP",
     auditado_por: auditadoPor,
     auditado_por_id: auditorId,
@@ -545,6 +548,7 @@ export async function enviarDadosPredio(
     historico_visita: entrada,
     ...dados,
   });
+  if (!MODULOS.agendamento) await sincronizarDemandaEstruturaViaApi(id);
 }
 
 // ─── Espelho em Análise de Rede das visitas de estruturação ────────
@@ -813,6 +817,90 @@ export async function finalizarEstruturado(
     data_estruturacao: new Date().toISOString(),
   });
   await concluirDemandaEstrutura(id, dados.observacao);
+}
+
+// =====================
+// Estrutura de prédio/condomínio feita pela equipe de rede (Análise da Rede), sem o módulo de agendamento
+// =====================
+
+export async function getViabilizacaoPorId(id: string): Promise<Viabilizacao | null> {
+  const snap = await getDoc(doc(db, "viabilizacoes", id));
+  return snap.exists() ? fromFirestore<Viabilizacao>(snap) : null;
+}
+
+/** Id da demanda-espelho da estrutura deste pedido (ou null se ainda não existe) */
+export async function demandaDaEstrutura(viabilizacaoId: string): Promise<string | null> {
+  const ref = await resolveDemandaEstruturaRef(viabilizacaoId);
+  const snap = await getDoc(ref);
+  return snap.exists() ? ref.id : null;
+}
+
+/** Manda um pedido com os dados do síndico para a Análise da Rede (demanda aberta, sem data) */
+export async function enviarEstruturaParaRede(viabilizacaoId: string, criadoPor: string): Promise<void> {
+  const v = await getViabilizacaoPorId(viabilizacaoId);
+  if (!v) throw new Error("Pedido não encontrado.");
+  const ref = await resolveDemandaEstruturaRef(viabilizacaoId);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return;
+  await setDoc(ref, stripUndefined({
+    tecnicos: [],
+    tipo: "Estruturação de Rede",
+    local: v.plus_code_cliente,
+    prioridade: (v.urgente ? "alta" : "media") as PrioridadeDemanda,
+    descricao: descricaoEstrutura(v),
+    status: "aberta" as StatusDemanda,
+    criado_por: criadoPor,
+    data_criacao: new Date().toISOString(),
+    viabilizacao_id: viabilizacaoId,
+  }));
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");
+}
+
+/** A equipe de rede agenda a visita de estrutura: atualiza a demanda e o pedido (o atendente vê a data) */
+export async function agendarEstruturaRede(
+  viabilizacaoId: string,
+  demandaId: string,
+  dados: { data: string; periodo: string; tecnicos: string[] }
+): Promise<void> {
+  await updateDemanda(demandaId, {
+    status: "agendada",
+    data_agendamento: dados.data,
+    periodo_agendamento: dados.periodo,
+    tecnicos: dados.tecnicos,
+  });
+  await updateViabilizacao(viabilizacaoId, {
+    status_predio: "agendado",
+    data_visita: dados.data,
+    periodo_visita: dados.periodo,
+    tecnico_responsavel: dados.tecnicos.join(", ") || undefined,
+    data_agendamento: new Date().toISOString(),
+  });
+  bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1");
+}
+
+/** Estrutura pronta: o prédio entra em Prédios Atendidos e o pedido fica "Estruturado" */
+export async function concluirEstruturaRede(
+  viabilizacaoId: string,
+  dados: { tecnologia: string; giga: boolean; obs: string; tecnico: string }
+): Promise<void> {
+  const v = await getViabilizacaoPorId(viabilizacaoId);
+  if (!v) throw new Error("Pedido não encontrado.");
+  await updateViabilizacao(viabilizacaoId, { tecnologia_predio: dados.tecnologia, giga: dados.giga, tecnico_responsavel: dados.tecnico || v.tecnico_responsavel });
+  await finalizarEstruturado(viabilizacaoId, {
+    condominio: v.predio_ftta ?? (v.tipo_instalacao === "Condomínio" ? "Condomínio" : "Prédio"),
+    tecnologia: dados.tecnologia,
+    localizacao: v.plus_code_cliente,
+    observacao: dados.obs,
+    tecnico: dados.tecnico,
+    giga: dados.giga,
+  });
+}
+
+/** A equipe de rede conclui que o prédio não tem como ser estruturado */
+export async function semViabEstruturaRede(viabilizacaoId: string, motivo: string, por: string): Promise<void> {
+  const v = await getViabilizacaoPorId(viabilizacaoId);
+  if (!v) throw new Error("Pedido não encontrado.");
+  await rejeitarPredio(viabilizacaoId, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivo, por);
 }
 
 export async function rejeitarPredio(

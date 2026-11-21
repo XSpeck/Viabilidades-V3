@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { MODULOS } from "@/lib/modulos";
+import { descricaoEstrutura } from "@/lib/descricaoEstrutura";
 
 export const runtime = "nodejs";
 
@@ -27,7 +29,32 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const viabDoc = await adminDb.collection("viabilizacoes").doc(viabilizacaoId).get();
     const v = viabDoc.data();
-    if (!viabDoc.exists || v?.status_predio !== "agendado" || !v.data_visita || !v.periodo_visita) {
+    if (!viabDoc.exists || !v) {
+      return NextResponse.json({ error: "Viabilização não encontrada." }, { status: 404 });
+    }
+
+    // Sem o módulo de agendamento: dados do síndico enviados → demanda aberta (sem data) na Análise da Rede
+    if (!MODULOS.agendamento && v.status_predio === "pronto_auditoria") {
+      const col0 = adminDb.collection("demandas_rede");
+      const ref0 = col0.doc(mirrorDemandaId(viabilizacaoId));
+      const legado = await col0.where("viabilizacao_id", "==", viabilizacaoId).limit(1).get();
+      if (legado.empty && !(await ref0.get()).exists) {
+        await ref0.set({
+          tecnicos: [],
+          tipo: "Estruturação de Rede",
+          ...(v.plus_code_cliente ? { local: v.plus_code_cliente } : {}),
+          prioridade: v.urgente ? "alta" : "media",
+          descricao: descricaoEstrutura(v),
+          status: "aberta",
+          criado_por: v.usuario ?? "Sistema",
+          data_criacao: new Date().toISOString(),
+          viabilizacao_id: viabilizacaoId,
+        });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (v.status_predio !== "agendado" || !v.data_visita || !v.periodo_visita) {
       return NextResponse.json({ error: "Viabilização não está agendada." }, { status: 403 });
     }
 
