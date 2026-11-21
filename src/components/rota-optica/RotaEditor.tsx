@@ -1146,7 +1146,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (i > 0) {
       if (!l.cabo_entrada.trim()) pendencias.push({ i, msg: `${nome}: informe o cabo que chega` });
       else if (!tipoDoCabo(l.cabo_entrada)) pendencias.push({ i, msg: `${nome}: o cabo "${l.cabo_entrada}" precisa de um tipo do cadastro` });
-      if (!n(l.fibra_entrada)) pendencias.push({ i, msg: `${nome}: escolha a fibra` });
+      // CDOI de prédio: a fibra de cada CDOI é escolhida na janela do prédio
+      const cdoiDePredio = l.tipo === "cdoi" && (!!l.predio || predioDaChave.has(chaveLinha(l)));
+      if (!n(l.fibra_entrada) && !cdoiDePredio) pendencias.push({ i, msg: `${nome}: escolha a fibra` });
     }
     if (l.splitter && !modelosSplitter.some((m) => m.id === l.splitter_modelo)) pendencias.push({ i, msg: `${nome}: splitter ${l.splitter} não é do cadastro` });
   });
@@ -1999,7 +2001,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   )}
                 </div>
               )}
-              {campoFibra(i)}
+              {l.tipo === "cdoi" && (l.predio || predioDaChave.has(chaveLinha(l))) ? (
+                <p className="col-span-2 rounded-lg bg-sky-50 px-2 py-1.5 text-[10px] text-sky-800">
+                  A fibra de cada CDOI você escolhe na janela do prédio (Árvore → clique no prédio).
+                  {n(l.fibra_entrada) ? ` Hoje: F${l.fibra_entrada}.` : ""}
+                </p>
+              ) : (
+                campoFibra(i)
+              )}
               <div>
                 <label className={rot}>Distância (m){l.dist_auto && dm !== null ? " · pelo mapa" : ""}</label>
                 <input className={campo} inputMode="decimal" value={l.distancia_m} onChange={(e) => alterar(i, { distancia_m: e.target.value, dist_auto: false })} />

@@ -124,10 +124,11 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
         chaveCabo(prox.cabo_entrada ?? "") === chaveCabo(cabo) &&
         p.pontos.some((x) => x.chave === chaveElemento(prox))
       ) continue;
-      const id = `${o.id}|${chaveCabo(cabo)}|${e.fibra_entrada}`;
+      const fibra = o.fibra ?? e.fibra_entrada;
+      const id = `${o.id}|${chaveCabo(cabo)}|${fibra}`;
       if (visto.has(id)) continue;
       visto.add(id);
-      lista.push({ ponto: o.id, cabo, fibra: e.fibra_entrada, kAnt: chaveElemento(ant), antNome: ant.nome, rota: r.id });
+      lista.push({ ponto: o.id, cabo, fibra, kAnt: chaveElemento(ant), antNome: ant.nome, rota: r.id });
     }
   }
   const dentro = (k: string) => p.pontos.find((x) => x.chave === k);
@@ -284,28 +285,40 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       const pendentes: Promise<void>[] = [];
       for (const rt of rotas) {
         let mudou = false;
-        const elementos = rt.elementos.map((e) => {
+        const fibraTrocada: { i: number; fibra: number }[] = [];
+        const elementos = rt.elementos.map((e, idx) => {
           const o = s.pontos.find((x) => x.chave && x.chave === chaveElemento(e));
           if (!o || !e.codigo) return e;
           // nome e splitter da CDOI definidos no prédio valem também na rota (a potência da ponta depende do splitter)
           const nomeNovo = o.nome.trim() && o.nome.trim() !== e.nome ? o.nome.trim() : e.nome;
           const splNovo = o.splitter && o.splitter !== e.splitter ? o.splitter : e.splitter;
-          if (nomeNovo === e.nome && splNovo === e.splitter) return e;
+          // fibra escolhida no prédio: só na rota desta CDOI (onde ela é a ponta da fibra)
+          const fibNova = o.fibra && rotaDe.get(o.id) === rt.id && o.fibra !== e.fibra_entrada ? o.fibra : e.fibra_entrada;
+          if (fibNova !== e.fibra_entrada) fibraTrocada.push({ i: idx, fibra: fibNova! });
+          if (nomeNovo === e.nome && splNovo === e.splitter && fibNova === e.fibra_entrada) return e;
           mudou = true;
           return {
             ...e,
             nome: nomeNovo,
+            fibra_entrada: fibNova,
             splitter: splNovo,
             splitter_modelo: splNovo !== e.splitter ? modelosSplitter.find((m) => m.relacao === splNovo)?.id : e.splitter_modelo,
           };
         });
         if (!mudou) continue;
+        // a caixa anterior sai na mesma fibra; o traçado do trecho ganha a cor dela
+        let trechosRt = rt.trechos;
+        for (const t of fibraTrocada) {
+          if (t.i > 0) elementos[t.i - 1] = { ...elementos[t.i - 1], fibra_saida: t.fibra };
+          const cb = elementos[t.i].cabo_entrada;
+          trechosRt = trechosRt.map((x) => (x.ate === t.i ? { ...x, cor: corFibra(t.fibra, cb).hex } : x));
+        }
         const ult = rt.elementos[rt.elementos.length - 1];
         const novoUlt = elementos[elementos.length - 1];
         const nomeRota = ult.nome !== novoUlt.nome && rt.nome.endsWith(ult.nome) ? rt.nome.slice(0, -ult.nome.length) + novoUlt.nome : rt.nome;
         pendentes.push(
           atualizarRota(rt.id, paraGravar(rt, {
-            nome: nomeRota, origem: rt.origem, elementos, trechos: rt.trechos,
+            nome: nomeRota, origem: rt.origem, elementos, trechos: trechosRt,
             calculo_potencia: rt.calculo_potencia, obs: rt.obs, criado_por: rt.criado_por,
           })),
         );
@@ -410,7 +423,10 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     rotas.forEach((rt) => rt.elementos.forEach((e) => {
       if (e.cabo_entrada && e.fibra_entrada && chaveCabo(e.cabo_entrada) === k && !m.has(e.fibra_entrada)) m.set(e.fibra_entrada, e.nome);
     }));
-    predio.pontos.forEach((o) => { if (o.cabo && o.fibra && chaveCabo(o.cabo) === k && !m.has(o.fibra)) m.set(o.fibra, o.nome); });
+    predio.pontos.forEach((o) => {
+      const cb = o.cabo ?? fibraDe(o.id)?.cabo;
+      if (cb && o.fibra && chaveCabo(cb) === k && !m.has(o.fibra)) m.set(o.fibra, o.nome);
+    });
     return m;
   };
   const capCabo = (cabo: string) => capacidadeRegistrada(cabo) ?? 12;
@@ -1026,14 +1042,34 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                       const f = fibraDe(o.id);
                       const rotaId = rotaDe.get(o.id);
                       if (rotaId && f) {
-                        const c = corFibra(f.fibra, f.cabo);
+                        const atual = o.fibra ?? f.fibra;
+                        const c = corFibra(atual, f.cabo);
+                        const capR = capacidadeRegistrada(f.cabo) ?? 12;
+                        const usadas = usadasNoCabo(f.cabo);
                         return (
-                          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600">
-                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                            <span className="min-w-0 flex-1 truncate">Fibra {f.fibra ?? "?"} ({c.nome.toLowerCase()}) · {curto(f.cabo, 26)} · da rota</span>
+                          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600" onClick={(e) => e.stopPropagation()}>
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: atual ? c.hex : "#cbd5e1" }} />
+                            <span className="shrink-0 font-semibold">Fibra</span>
+                            <select
+                              className={`${campo} w-auto ${!atual ? "border-amber-400" : ""}`}
+                              value={atual ?? ""}
+                              onChange={(e) => mudarPonto(o.id, { fibra: e.target.value ? +e.target.value : undefined })}
+                            >
+                              <option value="">escolha…</option>
+                              {Array.from({ length: capR }, (_, k) => k + 1).map((fb) => {
+                                const dono = usadas.get(fb);
+                                const minha = dono === o.nome || fb === f.fibra;
+                                return (
+                                  <option key={fb} value={fb} disabled={!!dono && !minha}>
+                                    F{fb} {corFibra(fb, f.cabo).nome.toLowerCase()}{dono && !minha ? ` → ${curto(dono, 12)}` : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <span className="min-w-0 flex-1 truncate">do cabo {curto(f.cabo, 24)}</span>
                             {onAbrirRota && (
-                              <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirRota(rotaId); }} className="shrink-0 font-semibold text-sky-700 hover:underline">
-                                trocar na rota
+                              <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirRota(rotaId); }} className="shrink-0 font-semibold text-sky-700 hover:underline" title="Abrir a rota desta CDOI">
+                                rota
                               </button>
                             )}
                           </div>
