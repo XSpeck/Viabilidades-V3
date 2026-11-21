@@ -831,10 +831,6 @@ function curtoNome(nome: string) {
   return cortar(nome.split(" - ")[0].split(" / ")[0], 26, nome);
 }
 
-/** Nome da rota sem o prefixo da porta PON ("0/6/0 AND 9" → "AND 9") */
-function nomeRotaCurto(nome: string) {
-  return nome.replace(/^\s*\d+\/\d+\/\d+\s+/, "");
-}
 
 /**
  * Ramificações a partir desta caixa, na mesma porta PON: cada caixa seguinte é um ramo, com a fibra que segue,
@@ -871,17 +867,17 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold text-slate-800">
               {ehTronco && <span className="mr-1 rounded bg-indigo-100 px-1 text-[9px] font-bold uppercase text-indigo-700">tronco</span>}
-              {nomeRotaCurto(r.nome)}
+              {r.nome}
             </p>
-            <p className="flex items-center gap-1 truncate text-[10px] text-slate-500">
+            <p className="flex min-w-0 items-center gap-1 py-px text-[10px] text-slate-500">
               {ehTronco ? (
-                <>{curtoNome(els[0]?.nome ?? "")} → {curtoNome(fim?.nome ?? "")}</>
+                <span className="truncate">{curtoNome(els[0]?.nome ?? "")} → {curtoNome(fim?.nome ?? "")}</span>
               ) : (
                 <>
                   {c && proprio?.fibra_entrada ? (
                     <>
-                      <span className="inline-block h-2 w-2 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                      {TF(proprio.fibra_entrada, proprio.cabo_entrada)}
+                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/25" style={{ background: c.hex }} />
+                      <span className="truncate">{TF(proprio.fibra_entrada, proprio.cabo_entrada)}</span>
                     </>
                   ) : proprio?.cabo_entrada ? (
                     // cabo até um prédio: entra inteiro (as fibras são das CDOIs)
