@@ -16,6 +16,7 @@ import type { AppUser, UserCargo, PapelFinanceiro, FuncaoTecnico, PredioAtendido
 import { FUNCOES_TECNICO_LABEL } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { canAccess } from "@/lib/access";
+import RestaurarArquivados from "@/components/adm/RestaurarArquivados";
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -49,6 +50,9 @@ export default function AdminPage() {
 
         {/* Gestão de Usuários — full width */}
         <GestaoUsuarios />
+
+        {/* Desfazer arquivamento em massa de um atendente */}
+        <RestaurarArquivados />
 
         {/* Prédios atendidos */}
         <GerenciarPrediosAtendidos />

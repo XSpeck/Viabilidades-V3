@@ -450,6 +450,37 @@ export function ouvirAuditoria(auditorNome: string, aoMudar: (lista: Viabilizaca
   return () => { a(); r(); };
 }
 
+/** Status que o pedido tinha antes de ser arquivado, pelos próprios dados (null = não dá para saber) */
+export function statusAntesDeArquivar(v: Viabilizacao): StatusViabilizacao | null {
+  if (v.motivo_desistencia) return null; // cancelado/desistência: não é resultado para voltar
+  if (v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP") return "utp";
+  if (v.motivo_rejeicao) return "rejeitado";
+  if (v.status_predio === "estruturado" || v.cto_numero || v.cdoi) return "aprovado";
+  return null;
+}
+
+/** Pedidos de um atendente que foram arquivados num dia ("AAAA-MM-DD", hora local) */
+export async function arquivadosNoDia(usuarioNome: string, usuarioId: string | undefined, dia: string): Promise<Viabilizacao[]> {
+  const consultas = [getDocs(query(collection(db, "viabilizacoes"), where("usuario", "==", usuarioNome)))];
+  if (usuarioId) consultas.push(getDocs(query(collection(db, "viabilizacoes"), where("usuario_id", "==", usuarioId))));
+  const snaps = await Promise.all(consultas);
+  const vistos = new Map<string, Viabilizacao>();
+  for (const snap of snaps) for (const d of snap.docs) vistos.set(d.id, fromFirestore<Viabilizacao>(d));
+  const diaLocal = (iso: string) => { const t = new Date(iso); return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  return [...vistos.values()]
+    .filter((v) => v.status === "finalizado" && v.data_finalizacao && diaLocal(v.data_finalizacao) === dia)
+    .sort((a, b) => (a.data_finalizacao ?? "").localeCompare(b.data_finalizacao ?? ""));
+}
+
+/** Desfaz o arquivamento: volta o status de antes e tira a data de finalização */
+export async function desarquivarResultado(v: Viabilizacao): Promise<void> {
+  const status = statusAntesDeArquivar(v);
+  if (!status) throw new Error(`Não dá para saber o status anterior de ${v.nome_cliente ?? v.id}.`);
+  await updateDoc(doc(db, "viabilizacoes", v.id), { status, data_finalizacao: deleteField(), status_atualizado_em: new Date().toISOString() });
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1");
+  bustCacheRelatorios();
+}
+
 export async function finalizarViabilizacao(id: string): Promise<void> {
   await updateViabilizacao(id, {
     status: "finalizado" as StatusViabilizacao,

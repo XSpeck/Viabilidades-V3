@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Archive, CheckCircle, Clock, Building2, Loader2, RefreshCw, Search, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, Building2, Loader2, RefreshCw, Search, XCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { finalizarViabilizacao, getViabilizacoesHistorico, getViabilizacoesUsuario, bustCacheResultados } from "@/lib/firestore";
+import { getViabilizacoesHistorico, getViabilizacoesUsuario, bustCacheResultados } from "@/lib/firestore";
 import { canAccess } from "@/lib/access";
 import { semAcento } from "@/lib/localizacao";
 import { DIAS_RESULTADO_NA_LISTA, ehResultadoFinal, ORDEM_CHAVES, ordenarResultados, resultadoVencido, statusDe, type ChaveStatus, type GrupoStatus } from "@/lib/statusViabilizacao";
-import { BotaoConfirmar } from "@/components/comum/ui";
 import type { TipoInstalacao, Viabilizacao } from "@/types";
 import ResultadoCard from "@/components/resultados/ResultadoCard";
 import HistoricoResultados from "@/components/resultados/HistoricoResultados";
@@ -77,30 +76,6 @@ export default function ResultadosPage() {
   // Resultado final com mais de 7 dias sai da lista (fica no histórico) — só exibição, nada é gravado
   const visiveis = useMemo(() => results.filter((r) => !resultadoVencido(r)), [results]);
   const foramProHistorico = results.length - visiveis.length;
-  // Tudo que já tem resposta final e ainda não foi arquivado (para o "Arquivar todos")
-  const arquivaveis = useMemo(() => results.filter((r) => ehResultadoFinal(r) && !r.data_finalizacao), [results]);
-  const [arquivando, setArquivando] = useState<{ feitos: number; total: number } | null>(null);
-  const [erroArquivar, setErroArquivar] = useState("");
-
-  async function arquivarTodos() {
-    const lista = arquivaveis;
-    setErroArquivar("");
-    setArquivando({ feitos: 0, total: lista.length });
-    let feitos = 0;
-    try {
-      for (let i = 0; i < lista.length; i += 10) {
-        await Promise.all(lista.slice(i, i + 10).map((r) => finalizarViabilizacao(r.id)));
-        feitos = Math.min(lista.length, i + 10);
-        setArquivando({ feitos, total: lista.length });
-      }
-    } catch (e) {
-      setErroArquivar(`Parou em ${feitos} de ${lista.length}: ${e instanceof Error ? e.message : "erro ao arquivar"}. Tente de novo.`);
-    } finally {
-      setArquivando(null);
-      load(true);
-    }
-  }
-
   const comStatus = useMemo(() => visiveis.map((r) => ({ r, st: statusDe(r) })), [visiveis]);
   const precisaDeVoce = comStatus.filter((x) => x.st.acao).length;
   const porGrupo = (g: GrupoStatus) => comStatus.filter((x) => x.st.grupo === g).length;
@@ -234,25 +209,10 @@ export default function ResultadosPage() {
         </div>
       )}
 
-      {!loading && (foramProHistorico > 0 || arquivaveis.length > 0) && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed bg-white px-4 py-3 text-sm text-gray-600">
-          {foramProHistorico > 0 && (
-            <span className="flex-1">
-              {foramProHistorico} resultado(s) com mais de {DIAS_RESULTADO_NA_LISTA} dias foram para o histórico (abaixo).
-            </span>
-          )}
-          {arquivaveis.length > 0 && (arquivando ? (
-            <span className="flex items-center gap-2 text-indigo-700"><Loader2 className="h-4 w-4 animate-spin" /> Arquivando {arquivando.feitos} de {arquivando.total}…</span>
-          ) : (
-            <BotaoConfirmar
-              rotulo={<><Archive className="h-3.5 w-3.5" /> Arquivar todos os resultados ({arquivaveis.length})</>}
-              pergunta={`Arquivar ${arquivaveis.length} pedido(s) com resposta final? Eles ficam no histórico.`}
-              confirmar="Arquivar"
-              onConfirmar={arquivarTodos}
-            />
-          ))}
-          {erroArquivar && <p className="w-full text-xs text-red-600">{erroArquivar}</p>}
-        </div>
+      {!loading && foramProHistorico > 0 && (
+        <p className="rounded-xl border border-dashed bg-white px-4 py-3 text-sm text-gray-600">
+          {foramProHistorico} resultado(s) com mais de {DIAS_RESULTADO_NA_LISTA} dias foram para o histórico (abaixo). Não é preciso arquivar nada.
+        </p>
       )}
 
       <HistoricoResultados carregar={() => getViabilizacoesHistorico(ids)} nomeArquivo={(user?.nome ?? "usuario").replace(/\s/g, "_")} />
