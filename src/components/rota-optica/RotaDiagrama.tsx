@@ -56,7 +56,7 @@ export default function RotaDiagrama({ elementos, selecionado, onSelect }: Props
                 </span>
                 <span className="block text-xs text-gray-500 mt-0.5">
                   {TIPO_ELEMENTO_LABEL[tipoVisual(e)]}
-                  {e.codigo ? ` · ${e.codigo}` : ""}
+                  {e.codigo && !e.codigo.startsWith("PREDIO-") ? ` · ${e.codigo}` : ""}
                   {e.splitter ? ` · splitter ${e.splitter}` : ""}
                   {i > 0 ? ` · ${formatMetros(acumulado)} da OLT` : ""}
                 </span>
@@ -126,7 +126,7 @@ export function DetalheElemento({ elementos, indice, catalogo = [] }: { elemento
         <p className="text-lg font-bold text-gray-900 leading-tight">{e.nome}</p>
         <p className="text-sm text-gray-500">
           {TIPO_ELEMENTO_LABEL[tipoVisual(e)]}
-          {e.codigo ? ` · ${e.codigo}` : ""} · elemento {indice + 1} de {elementos.length}
+          {e.codigo && !e.codigo.startsWith("PREDIO-") ? ` · ${e.codigo}` : ""} · elemento {indice + 1} de {elementos.length}
         </p>
       </div>
 
