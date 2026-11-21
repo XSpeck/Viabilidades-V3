@@ -380,6 +380,46 @@ export async function arquivarPorDesistencia(id: string, obs?: string): Promise<
   });
 }
 
+/** Só mexe se o pedido ainda está na fila, sem auditor (confere dentro de uma transação) */
+async function mexerNaFila(id: string, dados: Record<string, unknown>): Promise<void> {
+  const ref = doc(db, "viabilizacoes", id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Pedido não encontrado.");
+    const v = snap.data() as Partial<Viabilizacao>;
+    if (v.status !== "pendente" || v.auditor_responsavel || v.data_finalizacao) {
+      throw new Error("O auditor já pegou este pedido. Fale com ele para mudar.");
+    }
+    tx.update(ref, { ...dados, status_atualizado_em: new Date().toISOString() });
+  });
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1");
+  bustCacheRelatorios();
+}
+
+/** O atendente corrige os dados do pedido enquanto ele está na fila */
+export async function corrigirPedidoNaFila(id: string, dados: {
+  nome_cliente: string;
+  telefone_cliente?: string;
+  predio_ftta?: string;
+  andar_predio?: string;
+  bloco_predio?: string;
+  obs_usuario?: string;
+  urgente: boolean;
+}): Promise<void> {
+  const limpo: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(dados)) limpo[k] = val === undefined || val === "" ? deleteField() : val;
+  await mexerNaFila(id, limpo);
+}
+
+/** O atendente cancela o pedido enquanto ele está na fila (vai para o histórico como "Cancelado") */
+export async function cancelarPedidoNaFila(id: string, motivo?: string): Promise<void> {
+  await mexerNaFila(id, {
+    status: "finalizado",
+    motivo_desistencia: `Cancelado pelo atendente${motivo?.trim() ? `: ${motivo.trim()}` : ""}`,
+    data_finalizacao: new Date().toISOString(),
+  });
+}
+
 export async function salvarCTOEscolhida(
   id: string,
   ctoData: { cto_numero: string; distancia_cliente: string; localizacao_caixa: string }
