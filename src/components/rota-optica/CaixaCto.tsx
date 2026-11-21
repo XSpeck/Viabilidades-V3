@@ -19,6 +19,7 @@ import {
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
 import type { ClienteRede } from "@/lib/clientesRede";
+import BuscaCliente from "./BuscaCliente";
 import { chaveCabo } from "@/lib/cabosRede";
 import { cortar } from "@/lib/textoCompleto";
 
@@ -492,38 +493,21 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                                 <option value="">Fibra que segue…</option>
                                 {saidas.map((x) => <option key={textoSaida(x)} value={textoSaida(x)}>{x.fibra ? `F${x.fibra} → ` : ""}{curto(x.nome, 26)}</option>)}
                               </select>
-                            ) : p.status === "cliente" && cadastro.length > 0 ? (
-                              // cliente do cadastro (ou digitado, para quem ainda não foi cadastrado)
-                              <div className="flex min-w-0 flex-1 gap-1">
-                                <select
-                                  className={campo}
-                                  value={p.cliente_id ?? ""}
-                                  onChange={(e) => {
-                                    const c = cadastro.find((x) => x.id === e.target.value);
-                                    porta(s, p.numero, c ? { cliente_id: c.id, descricao: c.nome } : { cliente_id: undefined });
-                                  }}
-                                >
-                                  <option value="">Cliente do cadastro…</option>
-                                  {cadastro.map((c) => {
-                                    const emOutra = clientesOcupados?.has(c.id) || spls.some((x) => x.portas.some((y) => y.cliente_id === c.id && !(x.id === s.id && y.numero === p.numero)));
-                                    return (
-                                      <option key={c.id} value={c.id} disabled={emOutra}>
-                                        {c.nome}{c.codigo ? ` · ${c.codigo}` : ""}{emOutra ? " (já ligado)" : ""}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                                {!p.cliente_id && (
-                                  <input className={campo} value={p.descricao ?? ""} onChange={(e) => porta(s, p.numero, { descricao: e.target.value })} placeholder="ou digite" />
-                                )}
-                              </div>
+                            ) : p.status === "cliente" ? (
+                              // perna com cliente: busca no cadastro pelo código ou nome
+                              <BuscaCliente
+                                cadastro={cadastro}
+                                clienteId={p.cliente_id}
+                                ocupado={(id) => !!clientesOcupados?.has(id) || spls.some((x) => x.portas.some((y) => y.cliente_id === id && !(x.id === s.id && y.numero === p.numero)))}
+                                onEscolher={(c) => porta(s, p.numero, c ? { cliente_id: c.id, descricao: c.nome } : { cliente_id: undefined, descricao: undefined })}
+                              />
                             ) : (
                               <input
                                 className={campo}
                                 disabled={p.status === "livre"}
                                 value={p.descricao ?? ""}
                                 onChange={(e) => porta(s, p.numero, { descricao: e.target.value })}
-                                placeholder={p.status === "cliente" ? (tipoCaixa === "CDOI" ? "Apto / cliente (ex.: 302 · João)" : "Cliente / login") : p.status === "ramal" ? "Para onde vai (ex.: CT 12)" : "livre"}
+                                placeholder={p.status === "ramal" ? "Para onde vai (ex.: CT 12)" : "livre"}
                               />
                             )}
                           </>

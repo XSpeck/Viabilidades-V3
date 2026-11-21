@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Save, Search, Trash2, UserRound } from "lucide-react";
 import type { RotaOptica } from "@/lib/rotaOptica";
-import { portasFinais, type CaixaRede } from "@/lib/caixasRede";
+import type { CaixaRede } from "@/lib/caixasRede";
 import {
-  caixasDeAtendimento,
   documentoValido,
   ESTADOS,
   excluirCliente,
@@ -14,7 +13,6 @@ import {
   ligacoesDosClientes,
   ligarCliente,
   proximoCodigoCliente,
-  rotuloPerna,
   salvarCliente,
   soDigitos,
   type ClienteRede,
@@ -46,13 +44,10 @@ const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 export default function ClientesRede({ rotas, caixas, clientes, usuario, onClientes, onCaixas }: Props) {
   const [busca, setBusca] = useState("");
   const [form, setForm] = useState<Rascunho | null>(null);
-  /** Perna escolhida no formulário: "chave|spl|porta" ("" = sem ligação) */
-  const [perna, setPerna] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const ligacoes = useMemo(() => ligacoesDosClientes(rotas, caixas), [rotas, caixas]);
-  const atendem = useMemo(() => caixasDeAtendimento(rotas, caixas), [rotas, caixas]);
 
   const t = norm(busca.trim());
   const lista = clientes.filter((c) => {
@@ -65,11 +60,8 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
     setErro(null);
     if (c) {
       setForm({ ...c });
-      const l = ligacoes.get(c.id);
-      setPerna(l ? `${l.chave}|${l.spl}|${l.porta}` : "");
     } else {
       setForm(vazio(proximoCodigoCliente(clientes)));
-      setPerna("");
     }
   }
   const set = (m: Partial<Rascunho>) => setForm((f) => (f ? { ...f, ...m } : f));
@@ -89,12 +81,10 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
       const antes = clientes.find((c) => c.id === form.id);
       const salvo = await salvarCliente(form, usuario);
       onClientes([...clientes.filter((c) => c.id !== salvo.id), salvo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
-      // ligação com a perna (muda a porta da caixa); se só o nome mudou, a perna passa a mostrar o nome novo
+      // o nome mudou e ele está ligado: a perna passa a mostrar o nome novo
       const atual = ligacoes.get(salvo.id);
-      const atualTxt = atual ? `${atual.chave}|${atual.spl}|${atual.porta}` : "";
-      if (perna !== atualTxt || (!!atual && antes?.nome !== salvo.nome)) {
-        const [chave, spl, porta] = perna.split("|");
-        onCaixas(await ligarCliente(salvo, perna ? { chave, spl, porta: Number(porta) } : null, rotas, caixas, usuario));
+      if (atual && antes?.nome !== salvo.nome) {
+        onCaixas(await ligarCliente(salvo, { chave: atual.chave, spl: atual.spl, porta: atual.porta }, rotas, caixas, usuario));
       }
       setForm(null);
     } catch (e) {
@@ -194,30 +184,22 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
           </div>
         </div>
 
-        {/* Ligação com a perna do splitter */}
-        <div className="space-y-1.5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5">
-          <p className="text-[11px] font-bold text-emerald-900">Ligação na rede</p>
-          <select className={campo} value={perna} onChange={(e) => setPerna(e.target.value)}>
-            <option value="">Sem ligação</option>
-            {(["cto", "cdoi"] as const).map((tp) => {
-              const doTipo = atendem.filter((x) => x.tipo === tp);
-              if (!doTipo.length) return null;
-              return (
-                <optgroup key={tp} label={tp === "cto" ? "CTOs" : "CDOIs (prédios)"}>
-                  {doTipo.flatMap((cx) =>
-                    portasFinais(cx.splitters).map(({ spl, porta }) => {
-                      const v = `${cx.chave}|${spl.id}|${porta.numero}`;
-                      const minha = porta.cliente_id && porta.cliente_id === form.id;
-                      if (porta.status !== "livre" && !minha) return null;
-                      return <option key={v} value={v}>{cx.nome} · perna {rotuloPerna(spl.id, porta.numero)}</option>;
-                    })
-                  )}
-                </optgroup>
-              );
-            })}
-          </select>
-          <p className="text-[10px] text-slate-500">Só aparecem as pernas livres. A ligação vale na aba CTO/CDOI da caixa e conta nos clientes do prédio e da HUB.</p>
-        </div>
+        {/* Onde está ligado (a ligação é feita na perna do splitter, na aba CTO/CDOI) */}
+        {(() => {
+          const l = form.id ? ligacoes.get(form.id) : undefined;
+          return (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
+              {l ? (
+                <>
+                  <IconeElemento tipo={l.tipo} tamanho={18} />
+                  <span>Ligado na <b>{l.caixa}</b> · perna <b>{l.rotulo}</b></span>
+                </>
+              ) : (
+                <span>Sem ligação. Para ligar, abra a CTO/CDOI na árvore, marque a perna como <b>Cliente</b> e busque pelo código ou nome.</span>
+              )}
+            </div>
+          );
+        })()}
 
         {erro && <p className="text-xs text-red-600">{erro}</p>}
         <div className="flex items-center gap-2">
