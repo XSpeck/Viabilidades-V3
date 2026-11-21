@@ -68,6 +68,8 @@ export interface Viabilizacao {
   status: StatusViabilizacao;
   auditor_responsavel?: string;
   auditado_por?: string;
+  /** uid de quem auditou (decisões novas) */
+  auditado_por_id?: string;
   status_predio?: StatusPredio;
   status_busca?: string;
   predio_ftta?: string;

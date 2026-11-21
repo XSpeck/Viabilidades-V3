@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { ehUtp } from "@/lib/statusViabilizacao";
 import type { Viabilizacao } from "@/types";
-import { Caixa } from "./ui";
+import { Caixa } from "@/components/comum/ui";
 
 /** Linhas da viabilidade aprovada: CTO (casa e condomínio) ou CDOI (prédio) */
 function linhas(r: Viabilizacao): [string, string | number | undefined][] {

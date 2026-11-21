@@ -349,11 +349,15 @@ export async function aprovarFTTH(
     tipo_instalacao?: TipoInstalacao;
     nome_cliente?: string;
   },
-  auditadoPor: string
+  auditadoPor: string,
+  auditorId?: string
 ): Promise<void> {
+  // aprovação e início do agendamento da instalação numa escrita só (nunca fica "pela metade")
   await updateViabilizacao(id, {
     status: "aprovado",
+    status_instalacao: "aguardando_proposta",
     auditado_por: auditadoPor,
+    auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
     ...dados,
   });
@@ -371,11 +375,15 @@ export async function aprovarFTTA(
     tipo_instalacao?: TipoInstalacao;
     nome_cliente?: string;
   },
-  auditadoPor: string
+  auditadoPor: string,
+  auditorId?: string
 ): Promise<void> {
+  // aprovação e início do agendamento da instalação numa escrita só (nunca fica "pela metade")
   await updateViabilizacao(id, {
     status: "aprovado",
+    status_instalacao: "aguardando_proposta",
     auditado_por: auditadoPor,
+    auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
     ...dados,
   });
@@ -384,24 +392,59 @@ export async function aprovarFTTA(
 export async function rejeitarViabilizacao(
   id: string,
   motivo: string,
-  auditadoPor: string
+  auditadoPor: string,
+  auditorId?: string
 ): Promise<void> {
   await updateViabilizacao(id, {
     status: "rejeitado",
     motivo_rejeicao: motivo,
     auditado_por: auditadoPor,
+    auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
   });
 }
 
-export async function marcarUTP(id: string, auditadoPor: string): Promise<void> {
+export async function marcarUTP(id: string, auditadoPor: string, auditorId?: string): Promise<void> {
   await updateViabilizacao(id, {
     status: "utp",
+    status_instalacao: "aguardando_proposta",
     motivo_rejeicao: "Atendemos UTP",
     auditado_por: auditadoPor,
+    auditado_por_id: auditorId,
     data_auditoria: new Date().toISOString(),
   });
-  await iniciarAgendamentoInstalacao(id);
+}
+
+/** O auditor tira o pedido do caminho sem apagar: vai para o histórico como "Cancelado" */
+export async function cancelarPeloAuditor(id: string, motivo: string, auditor: string, auditorId?: string): Promise<void> {
+  await updateViabilizacao(id, {
+    status: "finalizado" as StatusViabilizacao,
+    motivo_desistencia: `Cancelado pelo auditor${motivo.trim() ? `: ${motivo.trim()}` : ""}`,
+    data_finalizacao: new Date().toISOString(),
+    auditado_por: auditor,
+    auditado_por_id: auditorId,
+    data_auditoria: new Date().toISOString(),
+  });
+}
+
+/** Pedidos com este auditor (em análise ou em revisão), ao vivo */
+export function ouvirAuditoria(auditorNome: string, aoMudar: (lista: Viabilizacao[]) => void, aoErrar: (e: Error) => void): () => void {
+  const partes: Record<string, Viabilizacao[]> = {};
+  const juntar = () => {
+    const todos = [...(partes.a ?? []), ...(partes.r ?? [])];
+    aoMudar(todos.sort((x, y) => {
+      if (x.urgente !== y.urgente) return x.urgente ? -1 : 1;
+      return (x.data_solicitacao ?? "").localeCompare(y.data_solicitacao ?? "");
+    }));
+  };
+  const ouvir = (status: string, chave: string) => onSnapshot(
+    query(collection(db, "viabilizacoes"), where("status", "==", status), where("auditor_responsavel", "==", auditorNome)),
+    (snap) => { partes[chave] = snap.docs.map((d) => fromFirestore<Viabilizacao>(d)); juntar(); },
+    aoErrar,
+  );
+  const a = ouvir("em_auditoria", "a");
+  const r = ouvir("em_revisao", "r");
+  return () => { a(); r(); };
 }
 
 export async function finalizarViabilizacao(id: string): Promise<void> {
@@ -777,7 +820,8 @@ export async function rejeitarPredio(
   condominio: string,
   localizacao: string,
   observacao: string,
-  registradoPor: string
+  registradoPor: string,
+  auditorId?: string
 ): Promise<void> {
   // 1. Registrar sem viabilidade
   await addDoc(collection(db, "predios_sem_viabilidade"), {
@@ -795,6 +839,7 @@ export async function rejeitarPredio(
     motivo_rejeicao: `Edifício sem viabilidade: ${observacao}`,
     data_auditoria: new Date().toISOString(),
     auditado_por: registradoPor,
+    auditado_por_id: auditorId,
   });
   await concluirDemandaEstrutura(id, `Sem viabilidade: ${observacao}`);
 }

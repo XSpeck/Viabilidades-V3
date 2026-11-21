@@ -6,7 +6,7 @@ import { cancelarPedidoNaFila, corrigirPedidoNaFila } from "@/lib/firestore";
 import { formatarTelefone } from "@/lib/localizacao";
 import { podeMexerNaFila } from "@/lib/statusViabilizacao";
 import type { Viabilizacao } from "@/types";
-import { Botao, Caixa, campo, Linha, MsgErro, useAcao } from "./ui";
+import { Botao, Caixa, campo, Linha, MsgErro, useAcao } from "@/components/comum/ui";
 
 /** O que o atendente enviou; na fila (sem auditor) dá para corrigir ou cancelar */
 export default function EtapaFila({ r, onRefresh }: { r: Viabilizacao; onRefresh: () => void }) {

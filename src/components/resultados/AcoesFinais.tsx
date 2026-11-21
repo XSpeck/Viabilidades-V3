@@ -4,7 +4,7 @@ import { useState } from "react";
 import { arquivarPorDesistencia, finalizarViabilizacao } from "@/lib/firestore";
 import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { Botao, BotaoConfirmar, Caixa, campo, MsgErro, useAcao } from "./ui";
+import { Botao, BotaoConfirmar, Caixa, campo, MsgErro, useAcao } from "@/components/comum/ui";
 
 /** Fechar o pedido (Finalizar / Entendi / Arquivar / Ciente) e desistência, sempre com confirmação */
 export default function AcoesFinais({ r, onRefresh }: { r: Viabilizacao; onRefresh: () => void }) {

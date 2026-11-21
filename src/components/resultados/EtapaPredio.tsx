@@ -4,7 +4,7 @@ import { useState } from "react";
 import { confirmarPropostaVisita, contraproporVisita, enviarDadosPredio } from "@/lib/firestore";
 import { formatarTelefone } from "@/lib/localizacao";
 import type { Viabilizacao } from "@/types";
-import { Botao, Caixa, campo, CamposData, dataBr, Historico, Linha, MsgErro, useAcao } from "./ui";
+import { Botao, Caixa, campo, CamposData, dataBr, Historico, Linha, MsgErro, useAcao } from "@/components/comum/ui";
 
 type Campo = "predio" | "sindico" | "telSindico" | "cliente" | "telCliente" | "apto";
 

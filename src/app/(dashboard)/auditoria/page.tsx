@@ -1,1186 +1,127 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle, Loader2, Radio, Search, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  getViabilizacoesAuditor, aprovarFTTH, aprovarFTTA, rejeitarViabilizacao,
-  marcarUTP, deleteViabilizacao, devolverViabilizacao,
-  solicitarViabilizacaoPredio, agendarVisita, rejeitarPredio, salvarCTOEscolhida,
-  iniciarAgendamentoInstalacao, devolverComMensagem, corrigirDadosViabilizacao,
-  manterDecisaoContestacao, revisarContestacao, reabrirAprovacao, proporDataVisita, deletarTrajeto,
-  bustCacheAuditoria, getViabilizacoesRelatorio,
-} from "@/lib/firestore";
-import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
+import { ouvirAuditoria } from "@/lib/firestore";
 import { listTecnicos } from "@/lib/users";
-import type { Viabilizacao, TipoInstalacao, AppUser } from "@/types";
-import { RefreshCw, Loader2, Trash2, RotateCcw, Search, CheckCircle, AlertTriangle, History, ChevronDown, ChevronUp } from "lucide-react";
-import { canAccess } from "@/lib/access";
-import CtoBusca from "@/components/auditoria/CtoBusca";
-import FttaMap from "@/components/auditoria/FttaMap";
-import { findPredioEstruturado, findPredioSemViab, type MatchPredio, type MatchPredioSemViab } from "@/lib/predios";
+import { canAccess, getCargo } from "@/lib/access";
+import { semAcento } from "@/lib/localizacao";
+import type { Viabilizacao } from "@/types";
+import CartaoAuditoria from "@/components/auditoria/CartaoAuditoria";
+import HistoricoAuditor from "@/components/auditoria/HistoricoAuditor";
+import type { Auditor, Tecnicos } from "@/components/auditoria/tipos";
 
-type AuditoriaFilter = "todos" | "urgentes" | "ftth" | "predios" | "aguardando" | "agendar" | "contestado";
+type Filtro = "todos" | "urgentes" | "casa" | "predios" | "aguardando" | "agendar" | "contestado";
 
-function defaultDataInicio() {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().slice(0, 10);
-}
+const FILTROS: { k: Filtro; rotulo: string; teste: (v: Viabilizacao) => boolean }[] = [
+  { k: "urgentes", rotulo: "Urgentes", teste: (v) => !!v.urgente },
+  { k: "casa", rotulo: "Casa", teste: (v) => v.tipo_instalacao === "FTTH" && !v.urgente },
+  { k: "predios", rotulo: "Prédio/Cond.", teste: (v) => v.tipo_instalacao !== "FTTH" && !v.urgente && !v.status_predio },
+  { k: "aguardando", rotulo: "Aguardando dados", teste: (v) => v.status_predio === "aguardando_dados" },
+  { k: "agendar", rotulo: "Agendar visita", teste: (v) => ["pronto_auditoria", "proposta_visita"].includes(v.status_predio ?? "") },
+  { k: "contestado", rotulo: "Contestações", teste: (v) => v.status === "em_revisao" && v.revisao_tipo === "contestado" },
+];
 
 export default function AuditoriaPage() {
   const { user } = useAuth();
-  const [items, setItems] = useState<Viabilizacao[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<AuditoriaFilter>("todos");
-  const [search, setSearch] = useState("");
+  const [itens, setItens] = useState<Viabilizacao[] | null>(null);
+  const [erro, setErro] = useState("");
+  const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [busca, setBusca] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [tecnicos, setTecnicos] = useState<Tecnicos>([]);
+  const [erroTecnicos, setErroTecnicos] = useState(false);
+  const [agora, setAgora] = useState(() => Date.now());
 
-  // ── Histórico ──────────────────────────────────────────
-  const [showHistorico, setShowHistorico] = useState(false);
-  const [loadingHistorico, setLoadingHistorico] = useState(false);
-  const [historico, setHistorico] = useState<Viabilizacao[]>([]);
-  const [histDataInicio, setHistDataInicio] = useState(defaultDataInicio);
-  const [histDataFim, setHistDataFim] = useState(new Date().toISOString().slice(0, 10));
-  const [histSearch, setHistSearch] = useState("");
-  const [histTipo, setHistTipo] = useState("todos");
-  const [histStatus, setHistStatus] = useState("todos");
+  const pode = canAccess(user ?? null, "auditoria");
+  const auditor: Auditor | null = useMemo(() => (user ? { nome: user.nome, uid: user.uid, adm: getCargo(user) === "adm" } : null), [user]);
 
-  const load = useCallback(async () => {
-    if (!user) return;
-    bustCacheAuditoria();
-    setLoading(true);
-    try { setItems(await getViabilizacoesAuditor(user.nome)); }
-    finally { setLoading(false); }
-  }, [user]);
+  // Pedidos com este auditor, ao vivo (respostas do atendente aparecem sozinhas)
+  useEffect(() => {
+    if (!pode || !auditor) return;
+    return ouvirAuditoria(auditor.nome, (l) => { setItens(l); setErro(""); }, (e) => setErro(`Não foi possível carregar a sua lista: ${e.message}`));
+  }, [pode, auditor]);
 
-  useEffect(() => { load(); }, [load]);
+  // Técnicos: uma leitura para a página toda
+  useEffect(() => {
+    if (!pode) return;
+    listTecnicos("rede").then(setTecnicos).catch(() => setErroTecnicos(true));
+  }, [pode]);
 
-  async function loadHistorico() {
-    if (!user || !histDataInicio || !histDataFim) return;
-    setLoadingHistorico(true);
-    try {
-      const todos = await getViabilizacoesRelatorio(histDataInicio, histDataFim);
-      setHistorico(todos.filter((v) => v.auditado_por === user.nome));
-    } finally { setLoadingHistorico(false); }
-  }
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
-  if (!canAccess(user ?? null, "auditoria")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
+  // aviso de sucesso some sozinho
+  useEffect(() => {
+    if (!aviso) return;
+    const t = setTimeout(() => setAviso(""), 6000);
+    return () => clearTimeout(t);
+  }, [aviso]);
 
-  const counts = {
-    todos:      items.length,
-    urgentes:   items.filter((i) => i.urgente).length,
-    ftth:       items.filter((i) => i.tipo_instalacao === "FTTH" && !i.urgente).length,
-    predios:    items.filter((i) => ["Prédio", "Condomínio"].includes(i.tipo_instalacao) && !i.urgente && !i.status_predio).length,
-    aguardando:  items.filter((i) => i.status_predio === "aguardando_dados").length,
-    agendar:     items.filter((i) => ["pronto_auditoria", "proposta_visita"].includes(i.status_predio ?? "")).length,
-    contestado:  items.filter((i) => i.status === "em_revisao" && i.revisao_tipo === "contestado").length,
-  };
+  const lista = useMemo(() => {
+    const q = semAcento(busca.trim());
+    const f = FILTROS.find((x) => x.k === filtro);
+    return (itens ?? [])
+      .filter((v) => !f || f.teste(v))
+      .filter((v) => !q || semAcento([v.nome_cliente, v.plus_code_cliente, v.predio_ftta, v.usuario, v.telefone_cliente].filter(Boolean).join(" ")).includes(q));
+  }, [itens, filtro, busca]);
 
-  const chips = (
-    [
-      { key: "todos",      label: `Todos (${counts.todos})` },
-      { key: "urgentes",   label: `🔥 Urgentes (${counts.urgentes})` },
-      { key: "ftth",       label: `🏠 FTTH (${counts.ftth})` },
-      { key: "predios",    label: `🏢 Prédios (${counts.predios})` },
-      { key: "aguardando",  label: `⏳ Ag. dados (${counts.aguardando})` },
-      { key: "agendar",     label: `📅 Agendar (${counts.agendar})` },
-      { key: "contestado",  label: `💬 Contestações (${counts.contestado})` },
-    ] as { key: AuditoriaFilter; label: string }[]
-  ).filter((c) => c.key === "todos" || counts[c.key] > 0);
+  if (!pode || !auditor) return <div className="py-20 text-center text-red-500">🚫 Acesso restrito.</div>;
 
-  function matchesFilter(v: Viabilizacao): boolean {
-    switch (filter) {
-      case "urgentes":   return !!v.urgente;
-      case "ftth":       return v.tipo_instalacao === "FTTH" && !v.urgente;
-      case "predios":    return ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !v.urgente && !v.status_predio;
-      case "aguardando":  return v.status_predio === "aguardando_dados";
-      case "agendar":     return ["pronto_auditoria", "proposta_visita"].includes(v.status_predio ?? "");
-      case "contestado":  return v.status === "em_revisao" && v.revisao_tipo === "contestado";
-      default:           return true;
-    }
-  }
-
-  const filtered = items
-    .filter(matchesFilter)
-    .filter((v) => {
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return (
-        v.nome_cliente?.toLowerCase().includes(q) ||
-        v.plus_code_cliente.toLowerCase().includes(q) ||
-        v.predio_ftta?.toLowerCase().includes(q) ||
-        v.usuario.toLowerCase().includes(q)
-      );
-    });
+  const chip = (on: boolean, urgente = false) =>
+    `rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${on ? (urgente ? "bg-red-600 text-white" : "bg-indigo-600 text-white") : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">🔍 Auditoria</h1>
-          <p className="text-gray-500 text-sm mt-1">{items.length} solicitação(ões) em análise</p>
-        </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Auditoria</h1>
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
+          <Radio className="h-3.5 w-3.5 text-green-600" /> {itens ? `${itens.length} pedido(s) com você` : "Carregando…"} · atualiza sozinho
+        </p>
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+      {aviso && (
+        <div className="flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800" role="status">
+          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" /> <span className="flex-1">{aviso}</span>
+          <button type="button" onClick={() => setAviso("")} aria-label="Fechar"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {erro && <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-700">{erro}</p>}
+
+      <div className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por cliente, plus code, prédio ou solicitante..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente, plus code, prédio, atendente ou telefone…"
+            className="w-full rounded-lg border py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
         </div>
         <div className="flex flex-wrap gap-2">
-          {chips.map((c) => (
-            <button key={c.key} onClick={() => setFilter(c.key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                filter === c.key
-                  ? c.key === "urgentes" ? "bg-red-600 text-white" : "bg-indigo-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}>
-              {c.label}
-            </button>
-          ))}
+          <button type="button" onClick={() => setFiltro("todos")} className={chip(filtro === "todos")}>Todos ({itens?.length ?? 0})</button>
+          {FILTROS.map((f) => {
+            const n = (itens ?? []).filter(f.teste).length;
+            if (!n) return null;
+            return <button key={f.k} type="button" onClick={() => setFiltro(filtro === f.k ? "todos" : f.k)} className={chip(filtro === f.k, f.k === "urgentes")}>{f.rotulo} ({n})</button>;
+          })}
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
-      ) : items.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border text-gray-400">✅ Nenhuma solicitação em análise.</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border text-gray-400">
-          Nenhum resultado para os filtros aplicados.
-        </div>
+      {itens === null ? (
+        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>
+      ) : itens.length === 0 ? (
+        <div className="rounded-xl border bg-white py-20 text-center text-gray-400">Nenhum pedido com você. Pegue o próximo na fila.</div>
+      ) : lista.length === 0 ? (
+        <div className="rounded-xl border bg-white py-12 text-center text-gray-400">Nenhum pedido com esses filtros.</div>
       ) : (
         <div className="space-y-4">
-          {filtered.map((v) => (
-            <AuditoriaCard key={v.id} v={v} userName={user!.nome} onRefresh={load} />
+          {lista.map((v) => (
+            <CartaoAuditoria key={`${v.id}|${v.tipo_instalacao}|${v.nome_cliente ?? ""}`} v={v} auditor={auditor} tecnicos={tecnicos} erroTecnicos={erroTecnicos} agora={agora} onFeito={setAviso} />
           ))}
         </div>
       )}
 
-      {/* ── Histórico do auditor ─────────────────────────── */}
-      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowHistorico((s) => !s)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-indigo-600" />
-            <span className="font-semibold text-gray-800">📋 Meu Histórico de Auditorias</span>
-          </div>
-          {showHistorico ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-
-        {showHistorico && (
-          <div className="border-t p-4 space-y-3">
-            {/* Filtros */}
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por cliente, plus code, prédio ou CTO..."
-                  value={histSearch}
-                  onChange={(e) => setHistSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-              <select value={histTipo} onChange={(e) => setHistTipo(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="todos">Todos os tipos</option>
-                <option value="FTTH">🏠 FTTH</option>
-                <option value="Prédio">🏢 Prédio</option>
-                <option value="Condomínio">🏘️ Condomínio</option>
-              </select>
-              <select value={histStatus} onChange={(e) => setHistStatus(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="todos">Todos os status</option>
-                <option value="aprovado">✅ Aprovado</option>
-                <option value="rejeitado">❌ Sem viabilidade</option>
-                <option value="utp">📡 UTP</option>
-              </select>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">De</span>
-                <input type="date" value={histDataInicio} onChange={(e) => setHistDataInicio(e.target.value)}
-                  className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                <span className="text-xs text-gray-400">até</span>
-                <input type="date" value={histDataFim} onChange={(e) => setHistDataFim(e.target.value)}
-                  className="px-2 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-              <button
-                onClick={loadHistorico}
-                disabled={loadingHistorico || !histDataInicio || !histDataFim}
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium"
-              >
-                {loadingHistorico ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                Buscar
-              </button>
-            </div>
-
-            {(() => {
-              const filtrado = historico
-                .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
-                .filter((v) => histStatus === "todos" || v.status === histStatus)
-                .filter((v) => {
-                  if (!histSearch.trim()) return true;
-                  const q = histSearch.toLowerCase();
-                  return (
-                    v.nome_cliente?.toLowerCase().includes(q) ||
-                    v.plus_code_cliente.toLowerCase().includes(q) ||
-                    v.predio_ftta?.toLowerCase().includes(q) ||
-                    v.cto_numero?.toLowerCase().includes(q) ||
-                    v.cdoi?.toLowerCase().includes(q)
-                  );
-                })
-                .sort((a, b) => ((b.data_auditoria ?? "") > (a.data_auditoria ?? "") ? 1 : -1));
-
-              if (historico.length === 0 && !loadingHistorico) {
-                return <p className="text-sm text-gray-400 text-center py-6">Selecione o período e clique em Buscar.</p>;
-              }
-              if (loadingHistorico) {
-                return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-indigo-600" /></div>;
-              }
-              if (filtrado.length === 0) {
-                return <p className="text-sm text-gray-400 text-center py-6">Nenhum resultado para os filtros aplicados.</p>;
-              }
-              return (
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-400">{filtrado.length} de {historico.length} registro(s)</p>
-                  {filtrado.map((v) => (
-                    <HistoricoCard key={v.id} v={v} userName={user!.nome} onReaberto={() => { load(); loadHistorico(); }} />
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function HistoricoCard({ v, userName, onReaberto }: { v: Viabilizacao; userName: string; onReaberto: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showReabrir, setShowReabrir] = useState(false);
-  const [motivoReabrir, setMotivoReabrir] = useState("");
-  const [reabrindo, setReabrindo] = useState(false);
-  const [reabertoMsg, setReabertoMsg] = useState<string | null>(null);
-
-  async function handleReabrir() {
-    if (!motivoReabrir.trim()) { alert("Explique o que precisa ser corrigido!"); return; }
-    setReabrindo(true);
-    try {
-      await reabrirAprovacao(v.id, motivoReabrir, userName, v.mensagens);
-      setReabertoMsg("🔄 Reaberta! O item voltou para sua fila de auditoria.");
-      setTimeout(onReaberto, 2000);
-    } finally { setReabrindo(false); }
-  }
-
-  const isFtta = v.tipo_instalacao === "Prédio";
-  const isCond = v.tipo_instalacao === "Condomínio";
-  const tipoIcon = v.status === "utp" ? "📡" : isFtta ? "🏢" : isCond ? "🏘️" : "🏠";
-
-  const statusLabel: Record<string, string> = {
-    aprovado:     "✅ Aprovado",
-    rejeitado:    "❌ Sem viabilidade",
-    utp:          "📡 UTP",
-    em_auditoria: v.revisao_tipo === "reaberto" ? "🔄 Reaberto p/ correção" : "🔍 Em auditoria",
-  };
-  const statusColor: Record<string, string> = {
-    aprovado:     "bg-green-100 text-green-700",
-    rejeitado:    "bg-red-100 text-red-700",
-    utp:          "bg-purple-100 text-purple-700",
-    em_auditoria: "bg-amber-100 text-amber-700",
-  };
-
-  function buildCopyText() {
-    if (isFtta) {
-      return [
-        `CDOI: ${v.cdoi ?? "-"}`,
-        v.olt ? `OLT: ${v.olt}` : "",
-        `Prédio: ${v.predio_ftta ?? "-"}`,
-        `Portas: ${v.portas_disponiveis ?? "-"}`,
-        `Média RX: ${v.media_rx ? v.media_rx + " dBm" : "-"}`,
-        v.observacoes ? `Obs: ${v.observacoes}` : "",
-      ].filter(Boolean).join("\n");
-    }
-    return [
-      `CTO: ${v.cto_numero ?? "-"}`,
-      v.olt ? `OLT: ${v.olt}` : "",
-      `Portas: ${v.portas_disponiveis ?? "-"}`,
-      `Menor RX: ${v.menor_rx ? v.menor_rx + " dBm" : "-"}`,
-      `Distância: ${v.distancia_cliente ?? "-"}`,
-      `Localização CTO: ${v.localizacao_caixa ?? "-"}`,
-      v.observacoes ? `Obs: ${v.observacoes}` : "",
-    ].filter(Boolean).join("\n");
-  }
-
-  function handleCopy() {
-    navigator.clipboard.writeText(buildCopyText());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <button onClick={() => setOpen((s) => !s)} className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 text-sm">
-              {tipoIcon} {v.nome_cliente ?? locationToPlusCode(v.plus_code_cliente)}
-              {v.predio_ftta && <span className="text-gray-500 font-normal"> · {v.predio_ftta}</span>}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              📍 <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline">{locationToPlusCode(v.plus_code_cliente)}</a>
-              {" · "}Auditado em {formatDateTime(v.data_auditoria)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[v.status] ?? "bg-gray-100 text-gray-600"}`}>
-              {statusLabel[v.status] ?? v.status}
-            </span>
-            <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
-          </div>
-        </div>
-      </button>
-
-      {open && (
-        <div className="border-t px-4 pb-4 pt-3 space-y-2 text-sm text-gray-700">
-          {/* FTTH */}
-          {(v.tipo_instalacao === "FTTH" || isCond) && v.status === "aprovado" && (
-            <div className="bg-green-50 rounded-lg p-3 space-y-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
-                <button onClick={handleCopy}
-                  className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors ${copied ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
-                  {copied ? "✓ Copiado!" : "📋 Copiar"}
-                </button>
-              </div>
-              <p><strong>CTO:</strong> {v.cto_numero ?? "-"}</p>
-              {v.olt && <p><strong>OLT:</strong> {v.olt}</p>}
-              <p><strong>Portas:</strong> {v.portas_disponiveis ?? "-"}</p>
-              <p><strong>Menor RX:</strong> {v.menor_rx ? `${v.menor_rx} dBm` : "-"}</p>
-              <p><strong>Distância:</strong> {v.distancia_cliente ?? "-"}</p>
-              <p><strong>Localização CTO:</strong> {v.localizacao_caixa ?? "-"}</p>
-              {v.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {v.observacoes}</p>}
-            </div>
-          )}
-
-          {/* FTTA (Prédio) */}
-          {isFtta && v.status === "aprovado" && (
-            <div className="bg-green-50 rounded-lg p-3 space-y-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Dados da viabilidade</span>
-                <button onClick={handleCopy}
-                  className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors ${copied ? "bg-green-600 text-white" : "bg-white border border-green-300 text-green-700 hover:bg-green-100"}`}>
-                  {copied ? "✓ Copiado!" : "📋 Copiar"}
-                </button>
-              </div>
-              <p><strong>CDOI:</strong> {v.cdoi ?? "-"}</p>
-              {v.olt && <p><strong>OLT:</strong> {v.olt}</p>}
-              <p><strong>Prédio:</strong> {v.predio_ftta ?? "-"}</p>
-              <p><strong>Portas:</strong> {v.portas_disponiveis ?? "-"}</p>
-              <p><strong>Média RX:</strong> {v.media_rx ? `${v.media_rx} dBm` : "-"}</p>
-              {v.observacoes && <p className="whitespace-pre-wrap"><strong>Obs:</strong> {v.observacoes}</p>}
-            </div>
-          )}
-
-          {/* Rejeitado */}
-          {v.status === "rejeitado" && (
-            <div className="bg-red-50 rounded-lg p-3">
-              <p><strong>Motivo:</strong> {v.motivo_rejeicao ?? "Sem viabilidade."}</p>
-            </div>
-          )}
-
-          {/* UTP */}
-          {v.status === "utp" && (
-            <div className="bg-purple-50 rounded-lg p-3">
-              <p>Atendemos esta área via UTP (cabo de rede).</p>
-            </div>
-          )}
-
-          <p className="text-xs text-gray-400 pt-1">
-            👤 Solicitante: <strong>{v.usuario}</strong> · Solicitado em {formatDateTime(v.data_solicitacao)}
-          </p>
-
-          {/* Reabrir aprovação com engano */}
-          {v.status === "aprovado" && (
-            reabertoMsg ? (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{reabertoMsg}</p>
-            ) : !showReabrir ? (
-              <button onClick={() => setShowReabrir(true)}
-                className="text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg">
-                🔄 Reabrir para correção
-              </button>
-            ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                <p className="text-xs font-medium text-amber-800">O que precisa ser corrigido?</p>
-                <textarea
-                  placeholder="Ex: CTO errada, número de portas incorreto..."
-                  value={motivoReabrir}
-                  onChange={(e) => setMotivoReabrir(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
-                />
-                <p className="text-xs text-amber-700">
-                  Isso volta o item para sua fila de auditoria e cancela o agendamento de instalação já iniciado a partir dele, se houver.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={handleReabrir} disabled={reabrindo || !motivoReabrir.trim()}
-                    className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-1.5 rounded-lg text-sm font-medium">
-                    {reabrindo ? "Reabrindo..." : "Confirmar reabertura"}
-                  </button>
-                  <button onClick={() => setShowReabrir(false)} className="px-3 border rounded-lg text-sm">✕</button>
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: string; onRefresh: () => void }) {
-  const [open, setOpen] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [mapExpanded, setMapExpanded] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [trajetoLinkLocal, setTrajetoLinkLocal] = useState<string | null>(null);
-
-  function finishWithSuccess(msg: string) {
-    setSuccessMsg(msg);
-    setTimeout(onRefresh, 2000);
-  }
-
-  // ── Prédio estruturado / sem viabilidade ──────────────
-  const [matchPredio, setMatchPredio] = useState<MatchPredio | null>(null);
-  const [matchSemViab, setMatchSemViab] = useState<MatchPredioSemViab | null>(null);
-  const isFtta = ["Prédio", "Condomínio"].includes(v.tipo_instalacao);
-  useEffect(() => {
-    if (!isFtta || !open || v.status_predio) return;
-    const nome = v.predio_ftta ?? undefined;
-    Promise.all([
-      findPredioEstruturado(v.plus_code_cliente, nome),
-      findPredioSemViab(v.plus_code_cliente, nome),
-    ]).then(([est, sem]) => { setMatchPredio(est); setMatchSemViab(sem); })
-      .catch(() => {});
-  }, [open]);
-
-  // ── Edição inline ──────────────────────────────────────
-  const [tipoLocal, setTipoLocal] = useState<TipoInstalacao>(v.tipo_instalacao);
-  const [nomeClienteLocal, setNomeClienteLocal] = useState(v.nome_cliente ?? "");
-  const [editandoInfo, setEditandoInfo] = useState(false);
-
-  useEffect(() => {
-    setTipoLocal(v.tipo_instalacao);
-    setNomeClienteLocal(v.nome_cliente ?? "");
-    setOlt(v.olt ?? "");
-    setOltFtta(v.olt ?? "");
-  }, [v.tipo_instalacao, v.nome_cliente, v.olt]);
-
-  async function handleSalvarInfo() {
-    setLoading(true);
-    try {
-      await corrigirDadosViabilizacao(v.id, { nome_cliente: nomeClienteLocal || undefined, tipo_instalacao: tipoLocal });
-      setEditandoInfo(false);
-      onRefresh();
-    } finally { setLoading(false); }
-  }
-
-  // ── Devolução com mensagem ─────────────────────────────
-  const [showDevolver, setShowDevolver] = useState(false);
-  const [msgDevolver, setMsgDevolver] = useState("");
-
-  async function handleDevolver() {
-    setLoading(true);
-    try { await devolverViabilizacao(v.id); onRefresh(); }
-    finally { setLoading(false); }
-  }
-
-  async function handleDevolverComMensagem() {
-    if (!msgDevolver.trim()) { alert("Escreva a mensagem!"); return; }
-    setLoading(true);
-    try {
-      await devolverComMensagem(v.id, msgDevolver, userName, v.mensagens);
-      finishWithSuccess("↩️ Devolvida com mensagem ao usuário.");
-    } finally { setLoading(false); }
-  }
-
-  // ── Resposta a contestação ─────────────────────────────
-  const [showResponderContest, setShowResponderContest] = useState(false);
-  const [msgRespContest, setMsgRespContest] = useState("");
-
-  async function handleManterDecisao() {
-    if (!msgRespContest.trim()) { alert("Escreva a resposta!"); return; }
-    setLoading(true);
-    try {
-      await manterDecisaoContestacao(v.id, msgRespContest, userName, v.status_anterior ?? "rejeitado", v.mensagens);
-      finishWithSuccess("✅ Decisão mantida. Resposta enviada ao usuário.");
-    } finally { setLoading(false); }
-  }
-
-  async function handleRevisarContestacao() {
-    setLoading(true);
-    try { await revisarContestacao(v.id); onRefresh(); }
-    finally { setLoading(false); }
-  }
-
-  // ── Campos FTTH ────────────────────────────────────────
-  const [cto, setCto] = useState(v.cto_numero ?? "");
-  const [distancia, setDistancia] = useState(v.distancia_cliente ?? "");
-  const [localizacao, setLocalizacao] = useState(v.localizacao_caixa ?? "");
-  const [portas, setPortas] = useState(v.portas_disponiveis ?? 0);
-  const [rx, setRx] = useState(v.menor_rx ?? "");
-  const [obs, setObs] = useState(v.observacoes ?? "");
-  const [olt, setOlt] = useState(v.olt ?? "");
-
-  // ── Campos FTTA ────────────────────────────────────────
-  const [cdoi, setCdoi] = useState(v.cdoi ?? "");
-  const [predioNome, setPredioNome] = useState(v.predio_ftta ?? "");
-  const [portasFtta, setPortasFtta] = useState(v.portas_disponiveis ?? 0);
-  const [mediaRx, setMediaRx] = useState(v.media_rx ?? "");
-  const [obsFtta, setObsFtta] = useState(v.observacoes ?? "");
-  const [oltFtta, setOltFtta] = useState(v.olt ?? "");
-
-  // ── Agendamento prédio ─────────────────────────────────
-  const [dataVisita, setDataVisita] = useState(v.data_preferencia_visita ?? "");
-  const [periodo, setPeriodo] = useState(v.periodo_preferencia_visita ?? "Manhã");
-  const [tecnico, setTecnico] = useState("");
-  const [tecnicos, setTecnicos] = useState<AppUser[]>([]);
-  const [erroTecnicos, setErroTecnicos] = useState(false);
-  useEffect(() => { listTecnicos("rede").then(setTecnicos).catch(() => setErroTecnicos(true)); }, []);
-  const [tecnologia, setTecnologia] = useState(v.tipo_instalacao === "Condomínio" ? "FTTH" : "FTTA");
-  const [giga, setGiga] = useState(true);
-  const [obsVisita, setObsVisita] = useState("");
-  // ── Rejeição ───────────────────────────────────────────
-  const [showRejeitar, setShowRejeitar] = useState(false);
-  const [motivo, setMotivo] = useState("");
-
-  // ── Busca de CTOs ──────────────────────────────────────
-  const [showCtoBusca, setShowCtoBusca] = useState(false);
-  const [showFttaMap, setShowFttaMap] = useState(false);
-
-  // ── Handlers aprovação ─────────────────────────────────
-  async function handleAprovarFTTH() {
-    if (!cto || !distancia || !localizacao || !portas || !rx) { alert("Preencha todos os campos!"); return; }
-    const temRota = !!trajetoLinkLocal || (
-      (v.trajeto_cabo?.length ?? 0) > 0 &&
-      !!v.trajeto_expira_em &&
-      new Date(v.trajeto_expira_em) > new Date()
-    );
-    if (!temRota && tipoLocal !== "Condomínio") { alert("É necessário traçar a rota do cabo antes de viabilizar."); return; }
-    setLoading(true);
-    try {
-      await aprovarFTTH(v.id, { cto_numero: cto, portas_disponiveis: portas, menor_rx: rx, distancia_cliente: distancia, localizacao_caixa: localizacao, observacoes: obs, olt: olt || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
-      await iniciarAgendamentoInstalacao(v.id);
-      finishWithSuccess("✅ Viabilidade FTTH aprovada! Enviada para agendamento técnico.");
-    } finally { setLoading(false); }
-  }
-
-  async function handleAprovarFTTA() {
-    if (!cdoi || !predioNome || !portasFtta || !mediaRx) { alert("Preencha todos os campos!"); return; }
-    setLoading(true);
-    try {
-      await aprovarFTTA(v.id, { cdoi, predio_ftta: predioNome, portas_disponiveis: portasFtta, media_rx: mediaRx, observacoes: obsFtta, olt: oltFtta || undefined, tipo_instalacao: tipoLocal, nome_cliente: nomeClienteLocal || undefined }, userName);
-      await iniciarAgendamentoInstalacao(v.id);
-      finishWithSuccess("✅ Viabilidade FTTA aprovada! Enviada para Agenda Técnica.");
-    } finally { setLoading(false); }
-  }
-
-  async function handleRejeitar() {
-    if (!motivo.trim()) { alert("Informe o motivo!"); return; }
-    setLoading(true);
-    try { await rejeitarViabilizacao(v.id, motivo, userName); finishWithSuccess("❌ Sem viabilidade registrada."); }
-    finally { setLoading(false); }
-  }
-
-  async function handleUTP() {
-    setLoading(true);
-    try { await marcarUTP(v.id, userName); finishWithSuccess("📡 Marcado como UTP."); }
-    finally { setLoading(false); }
-  }
-
-  async function handleDelete() {
-    setLoading(true);
-    try { await deleteViabilizacao(v.id); onRefresh(); }
-    finally { setLoading(false); }
-  }
-
-  async function handleSolicitarPredio() {
-    setLoading(true);
-    try { await solicitarViabilizacaoPredio(v.id); finishWithSuccess("🏗️ Solicitação de dados do prédio enviada ao usuário."); }
-    finally { setLoading(false); }
-  }
-
-  const dataDiferePref = !!v.data_preferencia_visita && (
-    dataVisita !== v.data_preferencia_visita || periodo !== (v.periodo_preferencia_visita ?? "Manhã")
-  );
-
-  async function handleAgendar() {
-    if (!dataVisita || !tecnico) { alert("Preencha data e técnico!"); return; }
-    setLoading(true);
-    try {
-      await agendarVisita(v.id, { data_visita: dataVisita, periodo_visita: periodo, tecnico_responsavel: tecnico, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita, {
-        predio: v.predio_ftta, localizacao: v.plus_code_cliente, criadoPor: userName, urgente: v.urgente,
-      });
-      finishWithSuccess(`📅 Visita agendada para ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo} — ${tecnico}.`);
-    } finally { setLoading(false); }
-  }
-
-  async function handleProporData() {
-    if (!dataVisita) { alert("Preencha a data!"); return; }
-    setLoading(true);
-    try {
-      await proporDataVisita(v.id, { proposta_visita_data: dataVisita, proposta_visita_periodo: periodo, tecnologia_predio: tecnologia, giga, obs_agendamento: obsVisita || undefined }, v.historico_visita);
-      finishWithSuccess(`📤 Nova data proposta ao usuário: ${new Date(dataVisita + "T12:00:00").toLocaleDateString("pt-BR")} — ${periodo}.`);
-    } finally { setLoading(false); }
-  }
-
-  async function handleRejeitarPredio() {
-    if (!motivo.trim()) { alert("Informe o motivo!"); return; }
-    setLoading(true);
-    try { await rejeitarPredio(v.id, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivo, userName); finishWithSuccess("❌ Prédio sem viabilidade registrado."); }
-    finally { setLoading(false); }
-  }
-
-  const isContestacao       = v.status === "em_revisao"    && v.revisao_tipo === "contestado";
-  const isRevisandoContest  = v.status === "em_auditoria" && v.revisao_tipo === "contestado";
-  const isReaberto          = v.status === "em_auditoria" && v.revisao_tipo === "reaberto";
-  const tipoIcon = tipoLocal === "FTTH" ? "🏠" : tipoLocal === "Prédio" ? "🏢" : "🏘️";
-  const titulo = `${tipoIcon} ${nomeClienteLocal || "Cliente"} | ${locationToPlusCode(v.plus_code_cliente)}${v.predio_ftta ? ` | 🏢 ${v.predio_ftta}` : ""}${v.urgente ? " 🔥 URGENTE" : ""}`;
-
-  return (
-    <div className={`bg-white rounded-xl shadow-sm border-l-4 ${v.urgente ? "border-red-500" : (isContestacao || isRevisandoContest) ? "border-orange-400" : isReaberto ? "border-amber-400" : "border-indigo-400"}`}>
-      <button onClick={() => setOpen(!open)} className="w-full text-left px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-semibold text-gray-900">{titulo}</p>
-          <div className="flex items-center gap-2 shrink-0">
-            {isContestacao       && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
-            {isRevisandoContest  && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔁 Reanalisando</span>}
-            {isReaberto          && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">🔄 Reaberto</span>}
-            <span className="text-gray-400 text-xs">👤 {v.usuario} · {formatDateTime(v.data_solicitacao)}</span>
-          </div>
-        </div>
-      </button>
-
-      {open && (
-        <div className={`px-5 pb-5 border-t pt-4 ${mapExpanded ? "block" : "grid grid-cols-1 md:grid-cols-2 gap-6"}`}>
-
-          {/* Banner de sucesso */}
-          {successMsg && (
-            <div className="col-span-2 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-green-800 text-sm font-medium">
-              <span className="text-xl">🎉</span><span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* ── Banner de reanálise pós-contestação ── */}
-          {isRevisandoContest && !successMsg && (
-            <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm">
-              <p className="font-semibold text-orange-800">🔁 Reanalisando após contestação</p>
-              <p className="text-orange-700 text-xs mt-0.5">
-                O usuário contestou a decisão anterior
-                {v.status_anterior ? ` (${v.status_anterior})` : ""}. Analise as mensagens abaixo e tome uma nova decisão.
-              </p>
-            </div>
-          )}
-
-          {/* ── Banner de reabertura por correção ── */}
-          {isReaberto && !successMsg && (
-            <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
-              <p className="font-semibold text-amber-800">🔄 Reaberto para correção</p>
-              <p className="text-amber-700 text-xs mt-0.5">
-                Você reabriu esta viabilidade (estava aprovada). Corrija os dados abaixo e envie a decisão novamente.
-              </p>
-            </div>
-          )}
-
-          {/* ── Thread de mensagens ── */}
-          {!successMsg && v.mensagens && v.mensagens.length > 0 && (
-            <div className={`col-span-2 space-y-2 pb-2 ${mapExpanded ? "hidden" : ""}`}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">💬 Histórico de mensagens</p>
-              {v.mensagens.map((m, i) => (
-                <div key={i} className={`rounded-lg px-3 py-2.5 text-sm ${
-                  m.tipo === "auditoria"   ? "bg-blue-50 border border-blue-200" :
-                  m.tipo === "contestacao" ? "bg-orange-50 border border-orange-200" :
-                  "bg-gray-50 border border-gray-200"
-                }`}>
-                  <p className="text-xs font-medium text-gray-500 mb-0.5">{m.de} · {formatDateTime(m.data)}</p>
-                  <p className="text-gray-800 whitespace-pre-wrap">{m.texto}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Painel de contestação ── */}
-          {isContestacao && !successMsg && (
-            <div className={`col-span-2 space-y-3 ${mapExpanded ? "hidden" : ""}`}>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
-                <p className="font-medium text-orange-800">⚠️ O usuário contestou a decisão anterior
-                  {v.status_anterior ? ` (${v.status_anterior})` : ""}.
-                </p>
-                <p className="text-orange-700 text-xs mt-1">Leia as mensagens acima e escolha como proceder.</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleRevisarContestacao} disabled={loading}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-medium">
-                  🔍 Revisar viabilidade
-                </button>
-                <button onClick={() => setShowResponderContest(!showResponderContest)}
-                  className="flex-1 border border-orange-300 text-orange-700 hover:bg-orange-50 py-2 rounded-lg text-sm font-medium">
-                  ✉️ Manter e responder
-                </button>
-              </div>
-              {showResponderContest && (
-                <div className="space-y-2">
-                  <textarea
-                    placeholder="Explique ao usuário por que a decisão se mantém..."
-                    value={msgRespContest}
-                    onChange={(e) => setMsgRespContest(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300"
-                  />
-                  <button onClick={handleManterDecisao} disabled={loading || !msgRespContest.trim()}
-                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white py-2 rounded-lg text-sm font-medium">
-                    {loading ? "Enviando..." : "✅ Confirmar e enviar resposta"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Painel de informações ── */}
-          <div className={`space-y-3 ${mapExpanded || successMsg || isContestacao ? "hidden" : ""}`}>
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-700">📋 Informações</h4>
-              {!editandoInfo && !v.status_predio && (
-                <button onClick={() => setEditandoInfo(true)} className="text-xs text-indigo-600 hover:underline">✏️ Editar</button>
-              )}
-            </div>
-
-            {/* Banner: prédio já estruturado */}
-            {matchPredio && !v.status_predio && (
-              <div className="flex items-start gap-2.5 px-3 py-3 bg-emerald-50 border border-emerald-300 rounded-lg">
-                <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                <div className="text-xs text-emerald-800 space-y-0.5">
-                  <p className="font-semibold text-sm">🏗️ Prédio já estruturado no sistema</p>
-                  <p><strong>{matchPredio.predio.predio_ftta}</strong></p>
-                  <p className="text-emerald-700">
-                    {matchPredio.porProximidade && matchPredio.porNome
-                      ? `📍 ${Math.round(matchPredio.distancia)}m · nome similar`
-                      : matchPredio.porProximidade
-                      ? `📍 ${Math.round(matchPredio.distancia)}m de distância`
-                      : "📝 Nome similar ao cadastrado"}
-                    {matchPredio.predio.data_auditoria && ` · estruturado em ${new Date(matchPredio.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Banner: prédio sem viabilidade */}
-            {matchSemViab && !v.status_predio && (
-              <div className="flex items-start gap-2.5 px-3 py-3 bg-red-50 border border-red-300 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
-                <div className="text-xs text-red-800 space-y-0.5">
-                  <p className="font-semibold text-sm">❌ Prédio já avaliado como sem viabilidade</p>
-                  <p><strong>{matchSemViab.predio.predio_ftta}</strong></p>
-                  {matchSemViab.predio.motivo_rejeicao && (
-                    <p className="text-red-700">Motivo: {matchSemViab.predio.motivo_rejeicao}</p>
-                  )}
-                  <p className="text-red-700">
-                    {matchSemViab.porProximidade && matchSemViab.porNome
-                      ? `📍 ${Math.round(matchSemViab.distancia)}m · nome similar`
-                      : matchSemViab.porProximidade
-                      ? `📍 ${Math.round(matchSemViab.distancia)}m de distância`
-                      : "📝 Nome similar ao cadastrado"}
-                    {matchSemViab.predio.data_auditoria && ` · avaliado em ${new Date(matchSemViab.predio.data_auditoria).toLocaleDateString("pt-BR")}`}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {editandoInfo ? (
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Tipo de instalação</p>
-                  <select value={tipoLocal} onChange={(e) => setTipoLocal(e.target.value as TipoInstalacao)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <option value="FTTH">🏠 FTTH</option>
-                    <option value="Prédio">🏢 Prédio (FTTA)</option>
-                    <option value="Condomínio">🏘️ Condomínio</option>
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Nome do cliente</p>
-                  <input type="text" value={nomeClienteLocal} onChange={(e) => setNomeClienteLocal(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleSalvarInfo} disabled={loading}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded-lg text-sm">
-                    {loading ? "..." : "✅ Salvar"}
-                  </button>
-                  <button onClick={() => { setEditandoInfo(false); setTipoLocal(v.tipo_instalacao); setNomeClienteLocal(v.nome_cliente ?? ""); }}
-                    className="flex-1 border py-1.5 rounded-lg text-sm">Cancelar</button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600 space-y-1">
-                {nomeClienteLocal && <p>🙋 Cliente: {nomeClienteLocal}</p>}
-                {v.telefone_cliente && <p>📞 Telefone: <a href={`tel:${v.telefone_cliente.replace(/\D/g, "")}`} className="hover:text-indigo-600 hover:underline">{v.telefone_cliente}</a></p>}
-                {v.predio_estruturado && (
-                  <p className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">🏗️ Prédio pronto: {v.predio_estruturado}</p>
-                )}
-                <p>📍 Plus Code: <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-indigo-600 hover:underline" title="Ver no Google Maps">{locationToPlusCode(v.plus_code_cliente)}</a></p>
-                <p>🏷️ Tipo: {tipoLocal}{tipoLocal !== v.tipo_instalacao && <span className="ml-1 text-xs text-amber-600 font-medium">(alterado — não salvo)</span>}</p>
-                {v.predio_ftta && <p>🏢 Prédio: {v.predio_ftta}</p>}
-                {v.bloco_predio && <p>🏗️ Bloco: {v.bloco_predio}</p>}
-                {v.andar_predio && <p>🚪 Apto: {v.andar_predio}</p>}
-                {v.obs_usuario && (
-                  <div className="mt-1 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                    <p className="text-xs font-semibold text-orange-700 mb-0.5">💬 Observação do usuário</p>
-                    <p className="text-orange-800 whitespace-pre-wrap">{v.obs_usuario}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Ações gerais */}
-            <div className="flex flex-wrap gap-2 pt-2">
-              {!v.status_predio && !isRevisandoContest && (
-                <>
-                  <button onClick={handleDevolver} disabled={loading}
-                    className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 flex items-center gap-1">
-                    <RotateCcw className="w-3 h-3" /> Fila
-                  </button>
-                  <button onClick={() => setShowDevolver(!showDevolver)} disabled={loading}
-                    className="text-xs px-3 py-1.5 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
-                    ↩️ Devolver c/ msg
-                  </button>
-                </>
-              )}
-              {!isRevisandoContest && (
-                confirmDelete ? (
-                  <div className="flex gap-2">
-                    <button onClick={handleDelete} disabled={loading} className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg">Confirmar</button>
-                    <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 border rounded-lg">Cancelar</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setConfirmDelete(true)} className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1">
-                    <Trash2 className="w-3 h-3" /> Excluir
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Formulário de devolução */}
-            {showDevolver && !v.status_predio && (
-              <div className="border border-gray-200 rounded-lg p-3 space-y-2">
-                <p className="text-xs font-medium text-gray-700">↩️ Devolver viabilização</p>
-                <textarea
-                  placeholder="Mensagem para o usuário (ex: endereço incorreto, tipo errado...)"
-                  value={msgDevolver}
-                  onChange={(e) => setMsgDevolver(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-                <div className="flex gap-2">
-                  <button onClick={handleDevolverComMensagem} disabled={loading || !msgDevolver.trim()}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-1.5 rounded-lg text-sm">
-                    {loading ? "..." : "↩️ Devolver com mensagem"}
-                  </button>
-                  <button onClick={() => setShowDevolver(false)} className="px-3 border rounded-lg text-sm">✕</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Formulário técnico ── */}
-          <div className={`space-y-3 ${successMsg || isContestacao ? "hidden" : ""}`}>
-
-            {/* FTTH */}
-            {tipoLocal === "FTTH" && !v.status_predio && (
-              <>
-                <h4 className="font-medium text-gray-700">🏠 Dados FTTH</h4>
-                {cto && !showCtoBusca && (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
-                    <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
-                  </div>
-                )}
-                {showCtoBusca ? (
-                  <CtoBusca
-                    plusCode={v.plus_code_cliente}
-                    nomeCliente={v.nome_cliente}
-                    initialCto={cto || undefined}
-                   
-                    onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
-                    onClose={() => setShowCtoBusca(false)}
-                    onExpandChange={setMapExpanded}
-                    viabilizacaoId={v.id}
-                    trajetoExistente={v.trajeto_cabo}
-                    onTrajetoSalvo={setTrajetoLinkLocal}
-                  />
-                ) : (
-                  <>
-                    <button onClick={() => setShowCtoBusca(true)} className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
-                      🔍 {cto ? "Buscar outra CTO" : "Buscar CTOs Próximas"}
-                    </button>
-                    {/* Link de rota do cabo */}
-                    {(() => {
-                      const linkAtivo = trajetoLinkLocal ?? (
-                        v.trajeto_cabo?.length && v.trajeto_expira_em && new Date(v.trajeto_expira_em) > new Date()
-                          ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/rota/${v.id}`
-                          : null
-                      );
-                      if (!linkAtivo) return null;
-                      const diasRestantes = v.trajeto_expira_em
-                        ? Math.ceil((new Date(v.trajeto_expira_em).getTime() - Date.now()) / 86400000)
-                        : 7;
-                      return (
-                        <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
-                          <span className="text-xs text-purple-700 flex-1">✏️ Rota do cabo salva · expira em {diasRestantes}d</span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(linkAtivo)}
-                            className="text-xs bg-purple-600 text-white px-2 py-1 rounded font-medium hover:bg-purple-700"
-                          >
-                            📋 Copiar link
-                          </button>
-                          <button
-                            onClick={async () => { await deletarTrajeto(v.id); setTrajetoLinkLocal(null); onRefresh(); }}
-                            title="Excluir rota"
-                            className="text-purple-400 hover:text-red-500 font-bold text-sm leading-none px-1"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })()}
-                    <div className="grid grid-cols-2 gap-2">
-                      <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                      <input placeholder="OLT *" value={olt} onChange={(e) => setOlt(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                      <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <textarea placeholder="Observações" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Viabilizar</button>
-                      <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm font-medium">❌ Sem Viabilidade</button>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* FTTA (Prédio) */}
-            {tipoLocal === "Prédio" && !v.status_predio && (
-              <>
-                <h4 className="font-medium text-gray-700">🏢 Dados FTTA</h4>
-                <button onClick={() => setShowFttaMap(!showFttaMap)}
-                  className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${showFttaMap ? "border-blue-400 text-blue-700 bg-blue-50" : "border-blue-300 text-blue-600 hover:bg-blue-50"}`}>
-                  🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
-                </button>
-                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
-                <div className="grid grid-cols-2 gap-2">
-                  <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                  <input placeholder="OLT *" value={oltFtta} onChange={(e) => setOltFtta(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                  <input placeholder="Nome do prédio" value={predioNome} onChange={(e) => setPredioNome(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                  <input type="number" placeholder="Portas" value={portasFtta || ""} onChange={(e) => setPortasFtta(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input placeholder="Média RX" value={mediaRx} onChange={(e) => setMediaRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <textarea placeholder="Observações" value={obsFtta} onChange={(e) => setObsFtta(e.target.value)} rows={2} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button onClick={handleAprovarFTTA} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium">✅ Viabilizar</button>
-                  <button onClick={handleUTP} disabled={loading} className="bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium">📡 UTP</button>
-                  <button onClick={handleSolicitarPredio} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">🏗️ Estrutura</button>
-                </div>
-                <button onClick={() => setShowRejeitar(!showRejeitar)} className="w-full border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
-              </>
-            )}
-
-            {/* Condomínio */}
-            {tipoLocal === "Condomínio" && !v.status_predio && (
-              <>
-                <h4 className="font-medium text-gray-700">🏘️ Dados Condomínio</h4>
-                {cto && !showCtoBusca && (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    <p className="text-xs text-green-700">✅ <strong>{cto}</strong> — {distancia}</p>
-                    <button onClick={() => setShowCtoBusca(true)} className="text-xs text-indigo-600 underline">Trocar</button>
-                  </div>
-                )}
-                {showCtoBusca ? (
-                  <CtoBusca
-                    plusCode={v.plus_code_cliente}
-                    nomeCliente={v.nome_cliente}
-                    initialCto={cto || undefined}
-                   
-                    semRota
-                    onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
-                    onClose={() => setShowCtoBusca(false)}
-                    onExpandChange={setMapExpanded}
-                  />
-                ) : (
-                  <>
-                    <button onClick={() => setShowCtoBusca(true)} className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
-                      🔍 {cto ? "Buscar outra CTO" : "Buscar CTOs Próximas"}
-                    </button>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input placeholder="N° CTO *" value={cto} onChange={(e) => setCto(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                      <input placeholder="OLT *" value={olt} onChange={(e) => setOlt(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
-                      <input placeholder="Distância *" value={distancia} onChange={(e) => setDistancia(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input placeholder="Loc. Caixa *" value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input type="number" placeholder="Portas *" value={portas || ""} onChange={(e) => setPortas(Number(e.target.value))} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input placeholder="Menor RX *" value={rx} onChange={(e) => setRx(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={handleAprovarFTTH} disabled={loading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm">✅ Viabilizar</button>
-                      <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
-                    </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-                      🔧 Temos projeto na rua mas sem estrutura pronta no condomínio?
-                    </div>
-                    <button onClick={handleSolicitarPredio} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">
-                      🏘️ Solicitar Viabilização da Estrutura do Condomínio
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Aguardando dados */}
-            {v.status_predio === "aguardando_dados" && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
-                ⏳ <strong>Aguardando dados do usuário.</strong> O usuário está preenchendo o formulário.
-              </div>
-            )}
-
-            {/* Pronto para agendar */}
-            {v.status_predio === "pronto_auditoria" && (
-              <>
-                <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
-                  <p className="font-medium text-blue-800 mb-1">✅ Dados recebidos — agendar visita</p>
-                  <p>👤 {tipoLocal === "Condomínio" ? "Responsável" : "Síndico"}: <strong>{v.nome_sindico}</strong> · {v.contato_sindico}</p>
-                  <p>🏠 Cliente: <strong>{v.nome_cliente_predio}</strong> · {v.contato_cliente_predio}</p>
-                  <p>🚪 {tipoLocal === "Condomínio" ? "Casa/Lote" : "Apto"}: <strong>{v.apartamento}</strong></p>
-                </div>
-                {v.obs_agendamento && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm">
-                    <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">💬 Observação do usuário</p>
-                    <p className="text-gray-700 italic whitespace-pre-wrap">"{v.obs_agendamento}"</p>
-                  </div>
-                )}
-                {v.data_preferencia_visita && (
-                  <div className={`rounded-lg p-2.5 text-sm flex items-center gap-2 ${dataDiferePref ? "bg-orange-50 border border-orange-200 text-orange-800" : "bg-green-50 border border-green-200 text-green-800"}`}>
-                    <span>{dataDiferePref ? "⚠️" : "✅"}</span>
-                    <span>
-                      Preferência do usuário: <strong>{new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")}</strong> — {v.periodo_preferencia_visita ?? "Manhã"}
-                      {dataDiferePref && <span className="ml-1 font-medium"> (data alterada)</span>}
-                    </span>
-                  </div>
-                )}
-                {v.historico_visita && (
-                  <details className="text-xs">
-                    <summary className="cursor-pointer text-gray-400 hover:text-gray-600">📋 Histórico de negociação</summary>
-                    <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-gray-50 border rounded-lg p-2.5 leading-relaxed">{v.historico_visita}</pre>
-                  </details>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <option>Manhã</option><option>Tarde</option><option>Noturno</option><option>Dia todo</option>
-                  </select>
-                  <select value={tecnico} onChange={(e) => setTecnico(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <option value="">Técnico *</option>
-                    {tecnicos.map((t) => <option key={t.uid} value={t.nome}>{t.nome}</option>)}
-                  </select>
-                  <select value={tecnologia} onChange={(e) => { setTecnologia(e.target.value); if (e.target.value === "FTTA") setGiga(true); }} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    {tipoLocal === "Condomínio" ? <option>FTTH</option> : <><option>FTTA</option><option>UTP</option><option>FTTH</option></>}
-                  </select>
-                </div>
-                {erroTecnicos && (
-                  <p className="text-xs text-red-600 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Erro ao carregar técnicos — recarregue a página.
-                  </p>
-                )}
-                {(() => {
-                  const alwaysGiga = tecnologia === "FTTA" || tipoLocal === "Condomínio";
-                  return (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={giga} onChange={(e) => setGiga(e.target.checked)} disabled={alwaysGiga} />
-                      ⚡ {tipoLocal === "Condomínio" ? "Condomínio" : "Prédio"} Giga?
-                      {alwaysGiga && <span className="text-xs text-blue-600">{tipoLocal === "Condomínio" ? "(sempre ativo em Condomínio)" : "(sempre ativo em FTTA)"}</span>}
-                    </label>
-                  );
-                })()}
-                <textarea
-                  placeholder="Observações (opcional)"
-                  value={obsVisita}
-                  onChange={(e) => setObsVisita(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={handleAgendar} disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm">📅 Agendar</button>
-                  {dataDiferePref && (
-                    <button onClick={handleProporData} disabled={loading} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm">📤 Propor</button>
-                  )}
-                  <button onClick={() => setShowRejeitar(!showRejeitar)} className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm">❌ Sem Viabilidade</button>
-                </div>
-              </>
-            )}
-
-            {/* Proposta enviada — aguardando confirmação do usuário */}
-            {v.status_predio === "proposta_visita" && (
-              <div className="space-y-2">
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm space-y-1">
-                  <p className="font-medium text-orange-800">⏳ Aguardando confirmação do usuário</p>
-                  <p>📆 Data proposta: <strong>{v.proposta_visita_data ? new Date(v.proposta_visita_data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</strong> — {v.proposta_visita_periodo}</p>
-                  {v.proposta_visita_tecnico && <p>👷 Técnico: {v.proposta_visita_tecnico}</p>}
-                  {v.data_preferencia_visita && (
-                    <p className="text-xs text-orange-600">Preferência original: {new Date(v.data_preferencia_visita + "T12:00:00").toLocaleDateString("pt-BR")} — {v.periodo_preferencia_visita ?? "Manhã"}</p>
-                  )}
-                  {v.historico_visita && (
-                    <details className="text-xs mt-1">
-                      <summary className="cursor-pointer text-orange-500 hover:text-orange-700">📋 Histórico de negociação</summary>
-                      <pre className="mt-1.5 whitespace-pre-wrap text-gray-500 bg-white border rounded-lg p-2 leading-relaxed">{v.historico_visita}</pre>
-                    </details>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Formulário de rejeição */}
-            {showRejeitar && (
-              <div className="border border-red-200 rounded-lg p-3 space-y-2">
-                <p className="text-sm font-medium text-red-700">❌ Confirmar sem viabilidade</p>
-                <textarea
-                  placeholder="Motivo da não viabilidade *"
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400"
-                />
-                <div className="flex gap-2">
-                  <button onClick={v.status_predio === "pronto_auditoria" ? handleRejeitarPredio : handleRejeitar} disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm">Confirmar</button>
-                  <button onClick={() => setShowRejeitar(false)} className="flex-1 border py-2 rounded-lg text-sm">Cancelar</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <HistoricoAuditor auditor={auditor} />
     </div>
   );
 }

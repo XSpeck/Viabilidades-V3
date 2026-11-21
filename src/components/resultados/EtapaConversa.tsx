@@ -5,7 +5,7 @@ import { MessageSquare } from "lucide-react";
 import { contestarViabilizacao, reenviarParaAuditoria } from "@/lib/firestore";
 import { formatDateTime } from "@/lib/pluscode";
 import type { Viabilizacao } from "@/types";
-import { Botao, Caixa, campo, MsgErro, useAcao } from "./ui";
+import { Botao, Caixa, campo, MsgErro, useAcao } from "@/components/comum/ui";
 
 const COR_MSG = {
   auditoria: "border-blue-200 bg-blue-50",

@@ -35,7 +35,7 @@ export const ehUtp = (v: Pick<Viabilizacao, "status" | "motivo_rejeicao">) =>
   v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
 export const ehCancelado = (v: Pick<Viabilizacao, "motivo_desistencia">) =>
-  !!v.motivo_desistencia?.startsWith("Cancelado pelo atendente");
+  !!v.motivo_desistencia?.startsWith("Cancelado pelo");
 
 /** Como o pedido terminou (para o histórico) */
 function fim(v: Viabilizacao): StatusInfo {

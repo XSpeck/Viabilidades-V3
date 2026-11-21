@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { agendarViaWhatsapp, confirmarPropostaUsuario, enviarPropostaInstalacao } from "@/lib/firestore";
 import type { Viabilizacao } from "@/types";
-import { Botao, Caixa, CamposData, dataBr, Historico, Linha, MsgErro, useAcao } from "./ui";
+import { Botao, Caixa, CamposData, dataBr, Historico, Linha, MsgErro, useAcao } from "@/components/comum/ui";
 
 /** Agendamento da instalação: propor data, aguardar, confirmar a contraproposta, agendada, instalada */
 export default function EtapaInstalacao({ r, onRefresh }: { r: Viabilizacao; onRefresh: () => void }) {
