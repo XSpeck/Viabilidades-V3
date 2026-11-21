@@ -929,7 +929,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                     </span>
                   )}
                   {o.chave && onAbrirCdoi && (rotaDe.has(o.id) || o.rota_id) && (
-                    <button type="button" onClick={() => onAbrirCdoi(o.chave)} className="rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
+                    <button type="button" onClick={() => onAbrirCdoi(o.chave)} className="rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 hover:bg-orange-100">
                       clientes →
                     </button>
                   )}

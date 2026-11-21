@@ -225,6 +225,13 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
   }
 
   const campo = "w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px]";
+  // cores por tipo: CTO verde · CDOI laranja · HUB amarelo
+  const tema =
+    tipoCaixa === "CDOI"
+      ? { caixa: "border-orange-900/40 bg-[#431407]", grade: "#7c2d12", texto: "#fdba74" }
+      : tipoCaixa === "HUB"
+        ? { caixa: "border-yellow-900/40 bg-[#422006]", grade: "#713f12", texto: "#fde047" }
+        : { caixa: "border-emerald-900/40 bg-[#052e1f]", grade: "#064e3b", texto: "#6ee7b7" };
   const COR_ST: Record<StatusPorta, string> = { livre: "bg-white text-slate-500", cliente: "bg-sky-600 text-white", ramal: "bg-amber-500 text-white" };
 
   // Só passagem nesta porta: não há o que configurar aqui (splitters, se houver, são da porta que usa); só mostra a fibra atravessando
@@ -304,16 +311,16 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
           Esta {tipoCaixa} ainda não tem splitter. {editando ? "Adicione abaixo." : "Clique em Editar."}
         </div>
       ) : (
-        <div className={`overflow-hidden rounded-2xl border shadow-lg ${tipoCaixa === "CDOI" ? "border-sky-900/40 bg-[#082f49]" : "border-emerald-900/40 bg-[#052e1f]"}`}>
+        <div className={`overflow-hidden rounded-2xl border shadow-lg ${tema.caixa}`}>
           <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
             <defs>
               <pattern id="ctoGrade" width="14" height="14" patternUnits="userSpaceOnUse">
-                <path d="M14 0H0V14" fill="none" stroke={tipoCaixa === "CDOI" ? "#0c4a6e" : "#064e3b"} strokeWidth=".6" />
+                <path d="M14 0H0V14" fill="none" stroke={tema.grade} strokeWidth=".6" />
               </pattern>
             </defs>
             <rect width={W} height={H} fill="url(#ctoGrade)" />
-            <text x="8" y="14" fontSize="7.5" fill={tipoCaixa === "CDOI" ? "#7dd3fc" : "#6ee7b7"} fontWeight={800} letterSpacing=".08em">FIBRAS QUE CHEGAM</text>
-            <text x={W - 8} y="14" fontSize="7.5" fill={tipoCaixa === "CDOI" ? "#7dd3fc" : "#6ee7b7"} fontWeight={800} textAnchor="end" letterSpacing=".08em">
+            <text x="8" y="14" fontSize="7.5" fill={tema.texto} fontWeight={800} letterSpacing=".08em">FIBRAS QUE CHEGAM</text>
+            <text x={W - 8} y="14" fontSize="7.5" fill={tema.texto} fontWeight={800} textAnchor="end" letterSpacing=".08em">
               {tipoCaixa === "CDOI" ? "APARTAMENTOS / CLIENTES" : "PORTAS DE ATENDIMENTO"}
             </text>
 

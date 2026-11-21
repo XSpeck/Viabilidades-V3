@@ -195,7 +195,7 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
           {cto ? <>Extensão da <b>{curto(cto.elemento.nome, 26)}</b>: portas dela seguem pelo cabo até aqui.</> : "Não há CTO antes desta CT na rota."}
         </p>
         {!editando && (
-          <button type="button" onClick={() => { setLinhas(inicial()); setEditando(true); }} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-teal-400">
+          <button type="button" onClick={() => { setLinhas(inicial()); setEditando(true); }} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-neutral-400">
             ✎ Editar
           </button>
         )}
@@ -216,11 +216,11 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-teal-900/40 bg-[#042f2e] shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-neutral-900/40 bg-[#0a0a0a] shadow-lg">
         <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
           <defs>
             <pattern id="ctGrade" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M14 0H0V14" fill="none" stroke="#134e4a" strokeWidth=".6" />
+              <path d="M14 0H0V14" fill="none" stroke="#262626" strokeWidth=".6" />
             </pattern>
           </defs>
           <rect width={W} height={H} fill="url(#ctGrade)" />
@@ -229,11 +229,11 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
           <IconeElementoSvg tipo="cto" x={xCto + 14} y={TOPO - 10} tamanho={16} />
           <text x={xCto + 25} y={TOPO - 7} fontSize="7.5" fill="#d1fae5" fontWeight={800}>{cto ? curto(cto.elemento.nome, 12) : "CTO ?"}</text>
           {/* cabo */}
-          <text x={(xCto + wCto + xCt) / 2} y={TOPO - 22} fontSize="7.5" fill="#99f6e4" textAnchor="middle" fontWeight={700}>{cabo ? caboCurto(cabo) : "cabo"}{dist ? ` · ${Math.round(dist)} m` : ""}</text>
+          <text x={(xCto + wCto + xCt) / 2} y={TOPO - 22} fontSize="7.5" fill="#d4d4d4" textAnchor="middle" fontWeight={700}>{cabo ? caboCurto(cabo) : "cabo"}{dist ? ` · ${Math.round(dist)} m` : ""}</text>
           <rect x={xCto + wCto + 6} y={TOPO - 16} width={xCt - xCto - wCto - 12} height="8" rx="4" fill="#020617" />
           {/* CT */}
-          <rect x={xCt} y={TOPO - 22} width={wCt} height={H - TOPO + 14} rx="8" fill="#0d9488" stroke="#5eead4" strokeWidth="1" />
-          <text x={xCt + wCt / 2} y={TOPO - 10} fontSize="7.5" fill="#f0fdfa" textAnchor="middle" fontWeight={900}>CT</text>
+          <rect x={xCt} y={TOPO - 22} width={wCt} height={H - TOPO + 14} rx="8" fill="#171717" stroke="#a3a3a3" strokeWidth="1" />
+          <text x={xCt + wCt / 2} y={TOPO - 10} fontSize="7.5" fill="#fafafa" textAnchor="middle" fontWeight={900}>CT</text>
 
           {linhas.map((l, i) => {
             const y = Y(i);
@@ -246,21 +246,21 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
               <g key={l.fibra}>
                 {o && (
                   <>
-                    <rect x={xCto + wCto - 30} y={y - 6} width="26" height="12" rx="2.5" fill="#d97706" stroke="#022c22" />
+                    <rect x={xCto + wCto - 30} y={y - 6} width="26" height="12" rx="2.5" fill="#d97706" stroke="#171717" />
                     <text x={xCto + wCto - 17} y={y + 2.6} fontSize="6.5" fill="#fff" textAnchor="middle" fontWeight={800}>{rotuloPortaCto(o.spl.id, o.porta.numero)}</text>
                   </>
                 )}
-                <path d={`M${xCto + wCto - 4} ${y} H${xCt}`} stroke={ligado ? c.hex : "#335b58"} strokeWidth={ligado ? 2 : 1} strokeDasharray={ligado ? undefined : "3 2"} />
+                <path d={`M${xCto + wCto - 4} ${y} H${xCt}`} stroke={ligado ? c.hex : "#404040"} strokeWidth={ligado ? 2 : 1} strokeDasharray={ligado ? undefined : "3 2"} />
                 {ligado && (
                   <circle r="1.7" fill="#fff">
                     <animateMotion dur="2.4s" repeatCount="indefinite" path={`M${xCto + wCto - 4} ${y} H${xCt}`} />
                   </circle>
                 )}
-                <rect x={xCt + 4} y={y - 6} width="26" height="12" rx="2.5" fill={l.status === "cliente" ? "#0284c7" : "#134e4a"} stroke="#022c22" />
+                <rect x={xCt + 4} y={y - 6} width="26" height="12" rx="2.5" fill={l.status === "cliente" ? "#0284c7" : "#262626"} stroke="#171717" />
                 <text x={xCt + 17} y={y + 2.6} fontSize="6.5" fill="#fff" textAnchor="middle" fontWeight={800}>F{l.fibra}</text>
                 {l.status === "cliente" && <IconeElementoSvg tipo="onu" x={xCt + wCt + 10} y={y} tamanho={13} />}
-                <text x={xCt + wCt + (l.status === "cliente" ? 19 : 8)} y={y + 2.8} fontSize="7.5" fill={l.status === "cliente" ? "#f0fdfa" : "#5f8f8b"} fontWeight={l.status === "cliente" ? 700 : 400}>{curto(txt, 14)}</text>
-                <text x={W - 6} y={y + 2.8} fontSize="7" fill={ligado ? nivel(pot) : "#5f8f8b"} textAnchor="end" fontWeight={700}>{ligado ? dbm(pot) : "sem porta"}</text>
+                <text x={xCt + wCt + (l.status === "cliente" ? 19 : 8)} y={y + 2.8} fontSize="7.5" fill={l.status === "cliente" ? "#fafafa" : "#737373"} fontWeight={l.status === "cliente" ? 700 : 400}>{curto(txt, 14)}</text>
+                <text x={W - 6} y={y + 2.8} fontSize="7" fill={ligado ? nivel(pot) : "#737373"} textAnchor="end" fontWeight={700}>{ligado ? dbm(pot) : "sem porta"}</text>
               </g>
             );
           })}
@@ -304,7 +304,7 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
           {erro && <p className="text-xs text-red-600">{erro}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => { setEditando(false); setErro(null); }} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
-            <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-neutral-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-60">
               {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar CT
             </button>
           </div>

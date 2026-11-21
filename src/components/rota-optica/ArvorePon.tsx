@@ -558,6 +558,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             titulo={no.elemento.nome}
             subtitulo={t === "predio" ? `Prédio · ${filhosReais(no).length} CDOI${filhosReais(no).length !== 1 ? "s" : ""}` : `${TIPO_ELEMENTO_LABEL[t]}${no.elemento.codigo ? ` · ${no.elemento.codigo}` : ""}`}
             icone={<IconeElemento tipo={t} tamanho={22} />}
+            corBarra={({ hub: "bg-yellow-600", cdoi: "bg-orange-600", cto: "bg-emerald-700", ceo: "bg-blue-700", ct: "bg-neutral-900", predio: "bg-slate-700" } as Record<string, string>)[t] ?? "bg-indigo-900"}
             largura={460}
             onFechar={() => fecharJanela(j.id)}
           >

@@ -174,7 +174,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
       <div className="flex items-center gap-2">
         <p className="text-[11px] text-slate-500">Mapa de emendas: cor com cor e as exceções.</p>
         {!editando && (
-          <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-amber-400">
+          <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-400">
             ✎ Editar emendas
           </button>
         )}
@@ -197,17 +197,17 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
       </div>
 
       {/* Desenho: bandeja de emendas */}
-      <div className="overflow-hidden rounded-2xl border border-amber-900/40 bg-[#1c1206] shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-blue-900/40 bg-[#0b1a33] shadow-lg">
         <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
           <defs>
             <pattern id="ceoGrade" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M14 0H0V14" fill="none" stroke="#3b2a0e" strokeWidth=".6" />
+              <path d="M14 0H0V14" fill="none" stroke="#172554" strokeWidth=".6" />
             </pattern>
           </defs>
           <rect width={W} height={H} fill="url(#ceoGrade)" />
-          <text x="8" y="16" fontSize="7.5" fill="#fcd34d" fontWeight={800} letterSpacing=".08em">CHEGA</text>
-          <text x={W / 2} y="16" fontSize="7.5" fill="#fcd34d" fontWeight={800} textAnchor="middle" letterSpacing=".08em">BANDEJA</text>
-          <text x={W - 8} y="16" fontSize="7.5" fill="#fcd34d" fontWeight={800} textAnchor="end" letterSpacing=".08em">SAI</text>
+          <text x="8" y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} letterSpacing=".08em">CHEGA</text>
+          <text x={W / 2} y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} textAnchor="middle" letterSpacing=".08em">BANDEJA</text>
+          <text x={W - 8} y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} textAnchor="end" letterSpacing=".08em">SAI</text>
           {linhas.length === 0 && (
             <text x={W / 2} y={42} fontSize="9" fill="#a8a29e" textAnchor="middle">Nenhuma emenda. Clique em Editar para montar o mapa.</text>
           )}
@@ -220,7 +220,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
             return (
               <g key={i} opacity={op}>
                 <title>{`${l.de.cabo} F${l.de.fibra} → ${l.para.cabo} F${l.para.fibra}${l.destino ? ` (segue para ${l.destino})` : ""}${l.origem === "rota" ? " — só na rota, falta no mapa" : ""}`}</title>
-                <text x="6" y={y + 3} fontSize="6.8" fill="#fef3c7" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.de)}</text>
+                <text x="6" y={y + 3} fontSize="6.8" fill="#dbeafe" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.de)}</text>
                 <path d={`M${x1} ${y} H${xm - 9}`} stroke={cIn.hex} strokeWidth={l.sinal ? 2.4 : 1.4} />
                 <path d={`M${xm + 9} ${y} H${x2}`} stroke={cOut.hex} strokeWidth={l.sinal ? 2.4 : 1.4} />
                 <rect x={xm - 9} y={y - 4} width="18" height="8" rx="4" fill={l.ruim ? "#dc2626" : l.origem === "rota" ? "#78716c" : "#e7e5e4"} stroke="#fff" strokeWidth=".8" strokeDasharray={l.origem === "rota" ? "2 1.5" : undefined} />
@@ -231,7 +231,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
                 )}
                 <circle cx={x1} cy={y} r="2.6" fill={cIn.hex} stroke="#000" strokeWidth=".6" />
                 <circle cx={x2} cy={y} r="2.6" fill={cOut.hex} stroke="#000" strokeWidth=".6" />
-                <text x={W - 6} y={y + 3} fontSize="6.8" fill="#fef3c7" textAnchor="end" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.para)}</text>
+                <text x={W - 6} y={y + 3} fontSize="6.8" fill="#dbeafe" textAnchor="end" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.para)}</text>
               </g>
             );
           })}
@@ -247,7 +247,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
       {!editando && (
         <div className="space-y-1.5 text-[11px]">
           {regras.map((r) => (
-            <p key={r.de} className="rounded-lg bg-amber-50 px-2 py-1 text-amber-900">
+            <p key={r.de} className="rounded-lg bg-blue-50 px-2 py-1 text-blue-900">
               <b>Cor com cor:</b> {curto(r.de, 30)} → {curto(r.para, 30)} ({Math.min(cap(r.de), cap(r.para))} fibras)
             </p>
           ))}
@@ -267,8 +267,8 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
       {/* Edição */}
       {editando && (
         <div className="space-y-2.5">
-          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 space-y-1.5">
-            <p className="text-[11px] font-bold text-amber-900">Cor com cor (fibra N → fibra N)</p>
+          <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2 space-y-1.5">
+            <p className="text-[11px] font-bold text-blue-900">Cor com cor (fibra N → fibra N)</p>
             {regras.map((r) => (
               <div key={r.de} className="flex items-center gap-1 text-[11px]">
                 <span className="min-w-0 flex-1 truncate">{curto(r.de, 26)} → {curto(r.para, 26)}</span>
@@ -284,7 +284,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
                 <option value="">Cabo que sai…</option>
                 {cabosSaem.map((c) => <option key={c} value={c}>{curto(c, 30)}</option>)}
               </select>
-              <button type="button" onClick={addRegra} className="rounded-md bg-amber-600 px-2 text-[11px] font-semibold text-white"><Plus className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={addRegra} className="rounded-md bg-blue-600 px-2 text-[11px] font-semibold text-white"><Plus className="h-3.5 w-3.5" /></button>
             </div>
           </div>
 
@@ -331,7 +331,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
           {erro && <p className="text-xs text-red-600">{erro}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={cancelar} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
-            <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60">
+            <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
               {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar emendas
             </button>
           </div>

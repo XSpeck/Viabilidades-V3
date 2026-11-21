@@ -8,11 +8,11 @@ import type { TipoElementoRota } from "@/lib/rotaOptica";
 export const COR_ELEMENTO: Record<TipoElementoRota, string> = {
   olt: "#0f172a",
   dio: "#475569",
-  ceo: "#d97706",
-  ct: "#0d9488",
-  hub: "#4f46e5",
+  ceo: "#2563eb",
+  ct: "#111827",
+  hub: "#d4a106",
   cto: "#059669",
-  cdoi: "#0284c7",
+  cdoi: "#ea580c",
   predio: "#334155",
   onu: "#64748b",
   outro: "#6b7280",
@@ -37,8 +37,8 @@ const DESENHO: Record<TipoElementoRota, (cor: string) => string> = {
   // Caixa de emenda: cilindro (domo) com cintas
   ceo: (c) => `${SOMBRA}
     <rect x="8" y="3" width="16" height="25" rx="8" fill="${c}" stroke="#fff" stroke-width="1.5"/>
-    <path d="M8.8 11h14.4M8.8 20h14.4" stroke="#78350f" stroke-width="1.6" opacity=".55"/>
-    <rect x="13" y="6.5" width="6" height="2.2" rx="1.1" fill="#fde68a"/>
+    <path d="M8.8 11h14.4M8.8 20h14.4" stroke="#1e3a8a" stroke-width="1.6" opacity=".55"/>
+    <rect x="13" y="6.5" width="6" height="2.2" rx="1.1" fill="#bfdbfe"/>
     <path d="M12.5 15.5l2 -1.5 2 3 2 -1.5" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
   // Caixa de transporte: caixa com setas de passagem
   ct: (c) => `${SOMBRA}
@@ -49,7 +49,7 @@ const DESENHO: Record<TipoElementoRota, (cor: string) => string> = {
   hub: (c) => `${SOMBRA}
     <circle cx="16" cy="15.5" r="13" fill="${c}" stroke="#fff" stroke-width="1.5"/>
     <path d="M6.5 15.5h6.5M13 15.5L23.5 9M13 15.5l10.5 2.3M13 15.5L23.5 13.2M13 15.5L23.5 22" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-    <circle cx="13" cy="15.5" r="2" fill="#c7d2fe"/>`,
+    <circle cx="13" cy="15.5" r="2" fill="#fef9c3"/>`,
   // CTO: caixa de atendimento com portas embaixo
   cto: (c) => `${SOMBRA}
     <path d="M5 8a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v15a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z" fill="${c}" stroke="#fff" stroke-width="1.5"/>

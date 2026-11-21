@@ -27,7 +27,7 @@ interface Props {
 
 const ROW = 40;
 /** Cor de cada cabo que sai da HUB (A, B, C…) */
-const CORES_CABO = ["#f59e0b", "#38bdf8", "#a78bfa", "#f472b6", "#34d399", "#fb923c"];
+const CORES_CABO = ["#f59e0b", "#38bdf8", "#fcd34d", "#f472b6", "#34d399", "#fb923c"];
 const W = 440;
 const TOPO = 58;
 
@@ -79,7 +79,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
       <p className="mb-1 font-semibold text-slate-700">{el.passagem ? "Splitters desta HUB (de outras portas)" : "Esta HUB também tem splitters de outras portas"}</p>
       {outros.map((x) => (
         <p key={x.id} className="flex items-center gap-1.5">
-          <span className="rounded bg-indigo-100 px-1 font-bold text-indigo-800">{x.relacao}</span>
+          <span className="rounded bg-yellow-100 px-1 font-bold text-yellow-800">{x.relacao}</span>
           {x.entrada.fibra ? <>F{x.entrada.fibra.fibra} · {curto(x.entrada.fibra.cabo, 26)}</> : "sem entrada"}
           {ponDe(x) && <span className="ml-auto text-slate-400">{ponDe(x)}</span>}
         </p>
@@ -137,7 +137,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
         </p>
         {outros.length > 0 && <div className="mt-2 text-left">{listaOutros}</div>}
         {onEditarPortas && (
-          <button type="button" onClick={onEditarPortas} className="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
+          <button type="button" onClick={onEditarPortas} className="mt-3 rounded-xl bg-yellow-600 px-4 py-2 text-xs font-semibold text-white hover:bg-yellow-700">
             Escolher o splitter primário
           </button>
         )}
@@ -236,7 +236,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           <button
             type="button"
             onClick={onEditarPortas}
-            className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-indigo-400"
+            className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-yellow-400"
           >
             ✎ Editar splitter e portas
           </button>
@@ -263,12 +263,12 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
         <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
           <defs>
             <linearGradient id="hubCaixa" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#4338ca" />
-              <stop offset="1" stopColor="#1e1b4b" />
+              <stop offset="0" stopColor="#ca8a04" />
+              <stop offset="1" stopColor="#422006" />
             </linearGradient>
             <linearGradient id="hubPlc" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#e0e7ff" />
-              <stop offset="1" stopColor="#a5b4fc" />
+              <stop offset="0" stopColor="#fef9c3" />
+              <stop offset="1" stopColor="#fde047" />
             </linearGradient>
             <pattern id="hubGrade" width="16" height="16" patternUnits="userSpaceOnUse">
               <path d="M16 0H0V16" fill="none" stroke="#1e293b" strokeWidth=".6" />
@@ -286,8 +286,8 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           <text x={W - 10} y="29" fontSize="8" fill="#94a3b8" textAnchor="end">cada porta {dbm(potSaida)} dBm</text>
 
           {/* caixa da HUB */}
-          <rect x={xHub} y={yHub0} width={wHub} height={yHub1 - yHub0} rx="12" fill="url(#hubCaixa)" stroke="#818cf8" strokeWidth="1.2" />
-          <text x={xHub + wHub / 2} y={yHub0 + 12} fontSize="7.5" fill="#c7d2fe" textAnchor="middle" fontWeight={800} letterSpacing=".1em">HUB</text>
+          <rect x={xHub} y={yHub0} width={wHub} height={yHub1 - yHub0} rx="12" fill="url(#hubCaixa)" stroke="#facc15" strokeWidth="1.2" />
+          <text x={xHub + wHub / 2} y={yHub0 + 12} fontSize="7.5" fill="#fef08a" textAnchor="middle" fontWeight={800} letterSpacing=".1em">HUB</text>
 
           {/* fibra de entrada */}
           <path d={`M0 ${yMeio} H${xPlc}`} stroke="#020617" strokeWidth="7" strokeLinecap="round" />
@@ -315,9 +315,9 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           {/* PLC */}
           <g>
             <rect x={xPlc - 6} y={yMeio - 24} width="34" height="48" rx="6" fill="url(#hubPlc)" stroke="#fff" strokeWidth="1.2" />
-            <text x={xPlc + 11} y={yMeio - 8} fontSize="7" fill="#312e81" textAnchor="middle" fontWeight={800}>PLC</text>
-            <text x={xPlc + 11} y={yMeio + 4} fontSize="10" fill="#1e1b4b" textAnchor="middle" fontWeight={900}>{relacao}</text>
-            <text x={xPlc + 11} y={yMeio + 16} fontSize="6.5" fill="#4338ca" textAnchor="middle" fontWeight={700}>−{perda.toFixed(1).replace(".", ",")} dB</text>
+            <text x={xPlc + 11} y={yMeio - 8} fontSize="7" fill="#713f12" textAnchor="middle" fontWeight={800}>PLC</text>
+            <text x={xPlc + 11} y={yMeio + 4} fontSize="10" fill="#422006" textAnchor="middle" fontWeight={900}>{relacao}</text>
+            <text x={xPlc + 11} y={yMeio + 16} fontSize="6.5" fill="#ca8a04" textAnchor="middle" fontWeight={700}>−{perda.toFixed(1).replace(".", ",")} dB</text>
           </g>
 
           {/* portas e destinos */}
@@ -426,12 +426,12 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
       {listaOutros}
 
       {/* Cascata */}
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-900">
+      <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 px-3 py-2 text-[11px] text-yellow-900">
         <p className="font-semibold">
           Cascata: primário {relacao}
           {relSec ? ` × secundário ${relSec}` : ""} = até {total * (maxSec || 1)} clientes nesta porta PON
         </p>
-        <p className="mt-0.5 text-indigo-700">
+        <p className="mt-0.5 text-yellow-700">
           {dbm(potIn)} dBm na entrada → {dbm(potSaida)} dBm em cada saída
           {pior !== undefined ? ` → pior ponta ${dbm(pior)} dBm` : ""}
         </p>
