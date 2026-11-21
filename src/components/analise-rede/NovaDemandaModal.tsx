@@ -77,7 +77,7 @@ export default function NovaDemandaModal({ auditorNome, bairros, tecnicosRede, o
 
           <div className="p-5 space-y-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Técnico(s) *</label>
+              <label className="block text-xs text-gray-500 mb-1">Técnico(s) <span className="font-normal text-gray-400">(opcional, pode atribuir depois)</span></label>
               <div className="flex flex-wrap gap-1.5">
                 {tecnicosRede.map((t) => {
                   const sel = tecnicos.includes(t);

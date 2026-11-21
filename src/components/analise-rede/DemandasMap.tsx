@@ -5,16 +5,16 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { DemandaRede, PrioridadeDemanda } from "@/types";
+import { interpretarLocalizacao } from "@/lib/localizacao";
+import { corTecnicoHex } from "./constantes";
 
 const REFERENCE_LAT = -28.6775;
 const REFERENCE_LON = -49.3696;
 
-const TECNICO_COLOR: Record<string, string> = {
-  Eduardo: "#3b82f6",
-  Ulisses: "#16a34a",
-  Zilli:   "#ea580c",
-  Andre:   "#7c3aed",
-};
+const SEM_TECNICO = "Sem técnico";
+const COR_SEM_TECNICO = "#9ca3af";
+const corDe = (t: string) => (t === SEM_TECNICO ? COR_SEM_TECNICO : corTecnicoHex(t));
+const tecnicosDe = (d: DemandaRede) => (d.tecnicos.length ? d.tecnicos : [SEM_TECNICO]);
 
 const PRIORIDADE_SIZE: Record<PrioridadeDemanda, number> = {
   baixa: 10, media: 13, alta: 16, urgente: 20,
@@ -30,6 +30,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function decode(local: string): { lat: number; lon: number } | null {
+  const lido = interpretarLocalizacao(local);
+  if (lido) return { lat: lido.lat, lon: lido.lon };
   try {
     // lat,lon direto
     const m = local.trim().match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
@@ -71,7 +73,7 @@ function FitBounds({ pins }: { pins: Pin[] }) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────
-export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
+export default function DemandasMap({ demandas, onAbrir }: { demandas: DemandaRede[]; onAbrir?: (id: string) => void }) {
   const [satellite, setSatellite]   = useState(false);
   const [hidden, setHidden]         = useState<Set<string>>(new Set());
 
@@ -83,8 +85,8 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
     });
 
   const semLocal   = demandas.filter((d) => !d.local).length;
-  const visible    = allPins.filter((p) => p.demanda.tecnicos.some((t) => !hidden.has(t)));
-  const tecnicosPresentes = Array.from(new Set(demandas.flatMap((d) => d.tecnicos))).sort();
+  const visible    = allPins.filter((p) => tecnicosDe(p.demanda).some((t) => !hidden.has(t)));
+  const tecnicosPresentes = Array.from(new Set(demandas.flatMap(tecnicosDe))).sort((a, b) => (a === SEM_TECNICO ? 1 : b === SEM_TECNICO ? -1 : a.localeCompare(b)));
 
   function toggle(tec: string) {
     setHidden((prev) => {
@@ -101,7 +103,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
       <div className="flex flex-wrap items-start gap-2">
         <div className="flex flex-wrap gap-2 flex-1">
           {tecnicosPresentes.map((tec) => {
-            const count = allPins.filter((p) => p.demanda.tecnicos.includes(tec)).length;
+            const count = allPins.filter((p) => tecnicosDe(p.demanda).includes(tec)).length;
             const off   = hidden.has(tec);
             return (
               <button key={tec} onClick={() => toggle(tec)}
@@ -110,7 +112,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                       : "bg-white border-gray-300 text-gray-700 shadow-sm hover:shadow-md"
                 }`}>
                 <span className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ background: TECNICO_COLOR[tec] ?? "#999" }} />
+                  style={{ background: corDe(tec) }} />
                 {tec}
                 <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500 font-bold">
                   {count}
@@ -155,7 +157,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
           <p className="text-sm">Nenhuma demanda com localização cadastrada.</p>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden border shadow-sm" style={{ height: 500 }}>
+        <div className="relative z-0 isolate rounded-xl overflow-hidden border shadow-sm" style={{ height: 500 }}>
           <MapContainer
             center={[REFERENCE_LAT, REFERENCE_LON]}
             zoom={13}
@@ -177,7 +179,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
             <FitBounds pins={visible} />
 
             {visible.map((p) => {
-              const color = TECNICO_COLOR[p.demanda.tecnicos[0]] ?? "#666";
+              const color = corDe(tecnicosDe(p.demanda)[0]);
               const size  = PRIORIDADE_SIZE[p.demanda.prioridade];
               return (
                 <Marker key={p.demanda.id} position={[p.lat, p.lon]} icon={makeIcon(color, size)}>
@@ -190,7 +192,7 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                           width: 10, height: 10, borderRadius: "50%",
                           background: color, display: "inline-block", flexShrink: 0,
                         }} />
-                        <strong style={{ fontSize: 13 }}>{p.demanda.tecnicos.join(", ")}</strong>
+                        <strong style={{ fontSize: 13 }}>{tecnicosDe(p.demanda).join(", ")}</strong>
                       </div>
                       {p.demanda.bairro && (
                         <p style={{ fontSize: 12, marginBottom: 2 }}>
@@ -210,6 +212,12 @@ export default function DemandasMap({ demandas }: { demandas: DemandaRede[] }) {
                             {" — "}{p.demanda.periodo_agendamento}
                           </strong>
                         </p>
+                      )}
+                      {onAbrir && (
+                        <button type="button" onClick={() => onAbrir(p.demanda.id)}
+                          style={{ marginTop: 8, width: "100%", background: "#4f46e5", color: "white", border: "none", borderRadius: 6, padding: "5px 0", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                          Abrir na lista
+                        </button>
                       )}
                     </div>
                   </Popup>

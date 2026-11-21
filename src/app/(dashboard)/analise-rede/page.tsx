@@ -152,7 +152,7 @@ export default function AnaliseRedePage() {
             <h2 className="font-semibold text-gray-800">Mapa de demandas</h2>
             <p className="mt-0.5 text-xs text-gray-400">{filtradas.filter((d) => d.local).length} de {filtradas.length} demanda(s) com localização · pin maior = maior prioridade</p>
           </div>
-          <DemandasMap demandas={filtradas} />
+          <DemandasMap demandas={filtradas} onAbrir={abrirNaLista} />
         </div>
       )}
 

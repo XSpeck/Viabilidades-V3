@@ -43,18 +43,25 @@ export const STATUS_COLOR: Record<string, string> = {
 };
 
 /** Cor de cada técnico, sempre a mesma para o mesmo nome (sem lista fixa de nomes) */
-export const CORES_TECNICO = ["bg-blue-500", "bg-green-600", "bg-orange-500", "bg-purple-600", "bg-pink-500", "bg-teal-500", "bg-amber-500", "bg-sky-600", "bg-rose-600", "bg-lime-600"];
-let ORDEM_TECNICOS: string[] = [];
+export let ORDEM_TECNICOS: string[] = [];
+const CORES_TECNICO = ["bg-blue-500", "bg-green-600", "bg-orange-500", "bg-purple-600", "bg-pink-500", "bg-teal-500", "bg-amber-500", "bg-sky-600", "bg-rose-600", "bg-lime-600"];
+/** As mesmas cores em hex (para o mapa) */
+const CORES_TECNICO_HEX = ["#3b82f6", "#16a34a", "#f97316", "#9333ea", "#ec4899", "#14b8a6", "#f59e0b", "#0284c7", "#e11d48", "#65a30d"];
+
+function indiceTecnico(nome: string): number {
+  const i = ORDEM_TECNICOS.indexOf(nome);
+  if (i >= 0) return i % CORES_TECNICO.length;
+  let h = 0;
+  for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % CORES_TECNICO.length;
+}
+export const corTecnicoHex = (nome: string) => CORES_TECNICO_HEX[indiceTecnico(nome)];
 /** A página informa a lista de técnicos: cada um ganha uma cor diferente, na ordem do cadastro */
 export function registrarTecnicos(lista: string[]): void {
   ORDEM_TECNICOS = lista;
 }
 export function corTecnico(nome: string): string {
-  const i = ORDEM_TECNICOS.indexOf(nome);
-  if (i >= 0) return CORES_TECNICO[i % CORES_TECNICO.length];
-  let h = 0;
-  for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return CORES_TECNICO[h % CORES_TECNICO.length];
+  return CORES_TECNICO[indiceTecnico(nome)];
 }
 
 // ── Prazos e ordem da lista ──────────────────────────────
