@@ -860,10 +860,13 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
                     <>
                       <span className="inline-block h-2 w-2 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
                       {TF(proprio.fibra_entrada, proprio.cabo_entrada)}
-                      <span className="text-slate-300">·</span>
                     </>
+                  ) : proprio?.cabo_entrada ? (
+                    // cabo até um prédio: entra inteiro (as fibras são das CDOIs)
+                    <span className="truncate">cabo {curtoNome(semCodigo(proprio.cabo_entrada).split(" · ")[0])}</span>
                   ) : null}
-                  {r.pai?.meia_porta ? "meia porta · " : ""}{nivel === 0 || !c?.hex ? `sai de ${curtoNome(ancora?.nome ?? "?")}` : ""}
+                  {r.pai?.meia_porta && <span className="text-slate-400">· meia porta</span>}
+                  {nivel === 0 && <span className="truncate">· sai de {curtoNome(ancora?.nome ?? "?")}</span>}
                 </>
               )}
             </p>
