@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, MapPin, MessageCircle } from "lucide-react";
+import { Check, Copy, MapPin } from "lucide-react";
 
 /** Link do ponto no Google Maps (abre a navegação no celular do técnico) */
 export function linkMaps(lat: number, lon: number): string {
@@ -9,8 +9,8 @@ export function linkMaps(lat: number, lon: number): string {
 }
 
 /**
- * Botões para mandar o ponto ao técnico: abrir no Google Maps, copiar a mensagem com o link
- * e abrir o WhatsApp com a mensagem pronta (o envio é feito por quem clica).
+ * Botões para mandar o ponto ao técnico: abrir no Google Maps e copiar a mensagem com o link
+ * (quem clica cola e envia onde quiser).
  */
 export default function EnviarTecnico({ texto, lat, lon, compacto }: { texto: string; lat?: number; lon?: number; compacto?: boolean }) {
   const [copiado, setCopiado] = useState(false);
@@ -37,15 +37,6 @@ export default function EnviarTecnico({ texto, lat, lon, compacto }: { texto: st
       >
         {copiado ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />} {copiado ? "Copiado" : "Copiar"}
       </button>
-      <a
-        href={`https://wa.me/?text=${encodeURIComponent(mensagem)}`}
-        target="_blank"
-        rel="noreferrer"
-        className={`${btn} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
-        title="Abrir o WhatsApp com a mensagem pronta (você escolhe o contato e envia)"
-      >
-        <MessageCircle className="h-3 w-3" /> WhatsApp
-      </a>
     </span>
   );
 }
