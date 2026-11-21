@@ -60,8 +60,10 @@ export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => 
     const ja = prontas.get(r.id);
     if (ja) return ja;
     if (!r.pai) {
-      prontas.set(r.id, r);
-      return r;
+      // potência sempre recalculada pelos elementos (um splitter mudado depois não deixa a ponta desatualizada)
+      const pronta = comPotencias(r, perdaModelo);
+      prontas.set(r.id, pronta);
+      return pronta;
     }
     const mae0 = porId.get(r.pai.rota_id);
     if (!mae0 || visitando.has(r.id)) {

@@ -1738,6 +1738,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   /** Painel do elemento selecionado (abre dentro da lista) */
+  /** ✂ Separar: a rota termina nesta caixa e o resto vira sub-rota */
+  function botaoSeparar(i: number) {
+    return (
+      <>
+        {inicial?.id && i >= Math.max(troncoEf, 1) && i < linhas.length - 1 && (
+          <button
+            type="button"
+            onClick={() => setSeparar(sepEf?.k === i ? null : { k: i, nome: separar?.nome || nomeSubPadrao() })}
+            className={`w-full rounded-lg border-2 border-dashed py-1.5 text-[11px] font-semibold ${sepEf?.k === i ? "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100" : "border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"}`}
+            title="A rota termina nesta caixa e as caixas seguintes viram uma sub-rota que sai daqui"
+          >
+            {sepEf?.k === i ? "Não separar" : "✂ Separar daqui: o que vem depois vira sub-rota"}
+          </button>
+        )}
+      </>
+    );
+  }
+
   function painelTronco(i: number) {
     const l = linhas[i];
     const ancora = i === troncoEf - 1;
@@ -1782,6 +1800,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
         {barraSalvarItem(i)}
+        {l.tipo === "hub" && botaoSeparar(i)}
         {l.tipo === "cdoi" && campoPredio(i)}
         {!soPredio && <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
@@ -2038,16 +2057,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         </details>
         {pots && pots[i] && i > 0 && <p className="text-[10px] text-slate-500 leading-tight">Potência: −{pots[i].detalhe}</p>}
-        {inicial?.id && i >= Math.max(troncoEf, 1) && i < linhas.length - 1 && (
-          <button
-            type="button"
-            onClick={() => setSeparar(sepEf?.k === i ? null : { k: i, nome: separar?.nome || nomeSubPadrao() })}
-            className={`w-full rounded-lg border-2 border-dashed py-1.5 text-[11px] font-semibold ${sepEf?.k === i ? "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100" : "border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"}`}
-            title="A rota termina nesta caixa e as caixas seguintes viram uma sub-rota que sai daqui"
-          >
-            {sepEf?.k === i ? "Não separar" : "✂ Separar daqui: o que vem depois vira sub-rota"}
-          </button>
-        )}
+        {l.tipo !== "hub" && botaoSeparar(i)}
       </div>
     );
   }

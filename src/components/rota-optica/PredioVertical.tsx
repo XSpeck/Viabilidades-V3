@@ -286,9 +286,18 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
         let mudou = false;
         const elementos = rt.elementos.map((e) => {
           const o = s.pontos.find((x) => x.chave && x.chave === chaveElemento(e));
-          if (!o || !e.codigo || !o.nome.trim() || o.nome.trim() === e.nome) return e;
+          if (!o || !e.codigo) return e;
+          // nome e splitter da CDOI definidos no prédio valem também na rota (a potência da ponta depende do splitter)
+          const nomeNovo = o.nome.trim() && o.nome.trim() !== e.nome ? o.nome.trim() : e.nome;
+          const splNovo = o.splitter && o.splitter !== e.splitter ? o.splitter : e.splitter;
+          if (nomeNovo === e.nome && splNovo === e.splitter) return e;
           mudou = true;
-          return { ...e, nome: o.nome.trim() };
+          return {
+            ...e,
+            nome: nomeNovo,
+            splitter: splNovo,
+            splitter_modelo: splNovo !== e.splitter ? modelosSplitter.find((m) => m.relacao === splNovo)?.id : e.splitter_modelo,
+          };
         });
         if (!mudou) continue;
         const ult = rt.elementos[rt.elementos.length - 1];
