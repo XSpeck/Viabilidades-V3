@@ -248,13 +248,6 @@ export default function RotaOpticaPage() {
               <div className="absolute right-0 z-[60] mt-1 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
                 <button
                   type="button"
-                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; inputKml.current?.click(); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  <FileUp className="w-4 h-4 text-indigo-600" /> Importar KML do GeoGrid
-                </button>
-                <button
-                  type="button"
                   onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setCadastro({ x: Math.max(8, (window.innerWidth - 800) / 2), y: 72 }); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
@@ -262,17 +255,24 @@ export default function RotaOpticaPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 }); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
-                </button>
-                <button
-                  type="button"
                   onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setJanelaClientes({ x: Math.max(8, (window.innerWidth - 560) / 2), y: 72 }); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
                   <Users className="w-4 h-4 text-emerald-600" /> Clientes
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; inputKml.current?.click(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <FileUp className="w-4 h-4 text-indigo-600" /> Importar KML do GeoGrid
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 }); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
                 </button>
               </div>
             </details>
