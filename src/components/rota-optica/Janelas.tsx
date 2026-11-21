@@ -48,8 +48,11 @@ function limitar(x: number, y: number, largura: number) {
   };
 }
 
-export function Janela({ titulo, subtitulo, icone, inicial, largura = 340, corBarra = "bg-slate-900", onFechar, children }: Props) {
+export function Janela({ titulo, subtitulo, icone, inicial, largura: larguraPedida = 340, corBarra = "bg-slate-900", onFechar, children }: Props) {
   const dock = useContext(DockCtx);
+  // celular: a janela nunca passa da largura da tela (sobra 8 px de cada lado)
+  const telaPequena = typeof window !== "undefined" && window.innerWidth < 640;
+  const largura = typeof window !== "undefined" ? Math.min(larguraPedida, window.innerWidth - 16) : larguraPedida;
   // Abre colada no topo da tela (com um pequeno degrau quando há várias), na altura de x do clique
   const [pos, setPos] = useState(() => limitar(inicial.x, 12 + ((zGlobal - 100) % 5) * 22, largura));
   const [z, setZ] = useState(() => ++zGlobal);
@@ -91,7 +94,7 @@ export function Janela({ titulo, subtitulo, icone, inicial, largura = 340, corBa
         onPointerUp={soltar}
         onPointerCancel={soltar}
         onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest("button")) setMinimizada((m) => !m); }}
-        className={`flex items-center gap-2 px-2.5 py-2 text-white select-none ${corBarra} ${fixada ? "" : "cursor-move"}`}
+        className={`flex items-center gap-2 px-2.5 py-2 text-white select-none touch-none ${corBarra} ${fixada ? "" : "cursor-move"}`}
       >
         {icone ? <span className="shrink-0 flex">{icone}</span> : <GripHorizontal className="w-4 h-4 text-white/60 shrink-0" />}
         <div className="min-w-0 flex-1">
@@ -103,6 +106,7 @@ export function Janela({ titulo, subtitulo, icone, inicial, largura = 340, corBa
         </button>
         <button
           type="button"
+          hidden={telaPequena}
           onClick={() => { setFixada((f) => !f); setMinimizada(false); }}
           className="p-1 rounded hover:bg-white/15"
           aria-label={fixada ? "Soltar da lateral" : "Fixar ao lado"}

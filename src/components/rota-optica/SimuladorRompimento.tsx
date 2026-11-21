@@ -295,8 +295,9 @@ function Rompimento({ rotas, caixas, onAbrirRota, inicio }: Props) {
 
         {/* ---------- Coluna direita: régua e mapa ---------- */}
         <div className="flex min-h-[420px] flex-col gap-3">
-          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
-            <svg viewBox={`0 0 ${RW} ${RH}`} className="block w-full h-auto select-none">
+          {/* no celular a régua mantém um tamanho legível e rola para o lado */}
+          <div className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950">
+            <svg viewBox={`0 0 ${RW} ${RH}`} className="block w-full min-w-[560px] h-auto select-none">
               <text x={RW - 10} y="14" fontSize="9" fill="#94a3b8" fontWeight={800} letterSpacing=".08em" textAnchor="end">RÉGUA DA ROTA · {formatMetros(total)}</text>
               {/* cabo: com sinal até o corte, vermelho depois */}
               <line x1={x0} y1={yR} x2={corte !== null ? X(corte) : x1} y2={yR} stroke="#22c55e" strokeWidth="5" strokeLinecap="round" />

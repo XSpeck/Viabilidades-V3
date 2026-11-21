@@ -2177,7 +2177,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] lg:h-[calc(100vh-190px)] lg:min-h-[560px]">
         {/* Mapa com a paleta */}
-        <div className="relative h-[460px] lg:h-full">
+        <div className="relative h-[60vh] min-h-[420px] lg:h-full">
           <RotaEditorMapa
             pontos={pontosMapa}
             trechosFixos={trechosFixos}
@@ -2201,7 +2201,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
 
           {/* Paleta de ferramentas */}
           <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-none flex">
-            <div className="pointer-events-auto flex flex-wrap items-stretch gap-1 rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg p-1.5">
+            <div className="pointer-events-auto flex max-w-full flex-nowrap items-stretch gap-1 overflow-x-auto rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg p-1.5 sm:flex-wrap">
               {([
                 { k: "selecionar" as Ferramenta, rot: "Mover", icone: <MousePointer2 className="w-5 h-5 text-slate-700" /> },
                 {
@@ -2219,7 +2219,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   key={b.k}
                   type="button"
                   onClick={() => { setFerramenta(b.k); setAviso(null); }}
-                  className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === b.k ? "bg-indigo-600 text-white [&_svg_path]:stroke-white" : "hover:bg-slate-100"}`}
+                  className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === b.k ? "bg-indigo-600 text-white [&_svg_path]:stroke-white" : "hover:bg-slate-100"}`}
                   title={b.rot}
                 >
                   <span className={ferramenta === b.k ? "[&_*]:!text-white" : ""}>{b.icone}</span>
@@ -2230,7 +2230,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 type="button"
                 onClick={() => { setFerramenta("estacao"); setAviso(null); }}
                 disabled={linhas.length > 0}
-                className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 disabled:opacity-30 ${ferramenta === "estacao" ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}
+                className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 disabled:opacity-30 ${ferramenta === "estacao" ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}
                 title={linhas.length ? "A estação é o começo da rota" : "Montar estação: OLT + DIO + cordão"}
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
@@ -2246,7 +2246,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   key={p.t}
                   type="button"
                   onClick={() => { setFerramenta(p.t); setAviso(null); }}
-                  className={`flex flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === p.t ? "bg-indigo-100 ring-2 ring-indigo-500" : "hover:bg-slate-100"}`}
+                  className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === p.t ? "bg-indigo-100 ring-2 ring-indigo-500" : "hover:bg-slate-100"}`}
                   title={`Adicionar ${TIPO_ELEMENTO_LABEL[p.t]}`}
                 >
                   <IconeElemento tipo={p.t} tamanho={24} />
@@ -2257,7 +2257,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
 
           {/* Dica do que o clique faz */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] max-w-[90%] flex flex-col items-center gap-1.5 pointer-events-none">
+          <div className="absolute bottom-14 sm:bottom-6 left-1/2 -translate-x-1/2 z-[500] max-w-[90%] flex flex-col items-center gap-1.5 pointer-events-none">
             {aviso && <p className="pointer-events-auto rounded-xl bg-amber-500 text-white text-xs font-medium px-3 py-1.5 shadow">{aviso}</p>}
             {pendentes.length > 0 && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs px-3 py-1.5 shadow">

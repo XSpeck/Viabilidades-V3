@@ -401,8 +401,8 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
             </section>
           )}
 
-          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
-            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full select-none" style={{ background: "#020617" }}>
+          <div className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950">
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[540px] select-none" style={{ background: "#020617" }}>
               <text x="10" y="11" fontSize="8.5" fill="#94a3b8" fontWeight={800} letterSpacing=".08em">TRAÇO · {lambda} nm · OTDR em {curto(rota.elementos[refOk]?.nome ?? "", 24)}</text>
               {ticksP.map((p) => (
                 <g key={`p${p}`}>
