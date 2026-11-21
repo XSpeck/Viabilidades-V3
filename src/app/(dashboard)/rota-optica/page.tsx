@@ -24,7 +24,7 @@ import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras
 import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
-import { listarPredios } from "@/lib/prediosRede";
+import { listarPredios, salvarPredio } from "@/lib/prediosRede";
 import { montarRotas, subRotasDe } from "@/lib/subRotas";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
@@ -189,9 +189,20 @@ export default function RotaOpticaPage() {
       alert(`A rota "${r.nome}" tem ${filhas.length} sub-rota${filhas.length > 1 ? "s" : ""} saindo dela:\n\n${lista}\n\nExclua as sub-rotas antes.`);
       return;
     }
-    if (!confirm(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.`)) return;
+    // rota de CDOI montada por um prédio: a CDOI continua no prédio, só que sem fibra (só no desenho)
+    const prediosAgora = await listarPredios(true).catch(() => []);
+    const doPredio = prediosAgora.find((p) => p.pontos.some((o) => o.rota_id === r.id));
+    const cdoi = doPredio?.pontos.find((o) => o.rota_id === r.id);
+    const aviso = doPredio && cdoi ? `\n\nA ${cdoi.nome} continua no prédio ${doPredio.nome}, sem fibra (só no desenho).` : "";
+    if (!confirm(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.${aviso}`)) return;
     try {
       await excluirRota(r.id);
+      if (doPredio && cdoi) {
+        await salvarPredio(
+          { ...doPredio, pontos: doPredio.pontos.map((o) => (o.id === cdoi.id ? { ...o, rota_id: undefined, fibra: undefined, chave: "" } : o)) },
+          user?.nome ?? ""
+        );
+      }
       await recarregar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao excluir.");

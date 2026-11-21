@@ -2,12 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Building2, Cable as CableIcon, GitBranch, Loader2, Package, Trash2 } from "lucide-react";
-import { atualizarRota, type RotaOptica } from "@/lib/rotaOptica";
+import { atualizarRota, excluirRota, type RotaOptica } from "@/lib/rotaOptica";
 import { candidatasSubRota, paraGravar, type CandidataSubRota } from "@/lib/subRotas";
 import { chaveElemento } from "@/lib/arvorePon";
 import { excluirCaixa, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, excluirCabo, type CaboRede } from "@/lib/cabosRede";
-import { excluirPredio, listarPredios, salvarPredio, type PredioRede } from "@/lib/prediosRede";
+import { excluirPredio, idPredioDoElemento, listarPredios, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 
 /**
  * Limpeza: o que ficou guardado sem nenhuma rota usando (resíduos de rotas apagadas).
@@ -47,12 +47,16 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
     .map((p) => {
       const semRota = p.pontos.filter((o) => o.chave && !chavesRotas.has(o.chave));
       const comRota = p.pontos.filter((o) => o.chave && chavesRotas.has(o.chave));
-      return { p, semRota, comRota };
+      // prédio com cabo chegando (elemento Prédio numa rota) está em uso, mesmo sem CDOI
+      const comCabo = rotas.some((r) => r.elementos.some((e) => idPredioDoElemento(e) === p.id));
+      return { p, semRota, comRota, comCabo };
     })
-    .filter((x) => x.semRota.length > 0 || x.comRota.length === 0);
+    .filter((x) => x.semRota.length > 0 || (x.comRota.length === 0 && !x.comCabo));
+  // sub-rotas cuja caixa de origem sumiu da rota-mãe
+  const orfas = rotas.filter((r) => r.orfa);
   const caixasSobra = caixas.filter((c) => !chavesRotas.has(c.chave));
   const cabosSobra = cabos.filter((c) => !cabosRotas.has(c.chave));
-  const total = prediosSobra.length + caixasSobra.length + cabosSobra.length;
+  const total = prediosSobra.length + caixasSobra.length + cabosSobra.length + orfas.length;
 
   async function rodar(id: string, fn: () => Promise<void>, acao = "apagar") {
     setOcupado(id);
@@ -152,6 +156,25 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
         )}
       </div>
       {erro && <p className="text-xs text-red-600">{erro}</p>}
+
+      {orfas.length > 0 && (
+        <section className="space-y-1.5">
+          {secao(<GitBranch className="h-4 w-4 text-slate-500" />, "Sub-rotas soltas", orfas.length, "a caixa de onde saíam não existe mais na rota-mãe")}
+          {orfas.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">{r.nome}</p>
+              <button
+                type="button"
+                disabled={!!ocupado}
+                onClick={() => confirm(`Excluir a rota "${r.nome}"?`) && rodar(`o${r.id}`, async () => { await excluirRota(r.id); onRotas?.(); })}
+                className={`${btn} border-red-200 bg-red-50 text-red-700`}
+              >
+                {ocupado === `o${r.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Excluir
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="space-y-1.5">
         <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700">

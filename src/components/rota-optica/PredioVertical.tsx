@@ -387,7 +387,13 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
   }
 
   async function excluir() {
-    if (!salvo || !confirm(`Excluir o prédio "${salvo.nome}"? As CDOIs e rotas continuam.`)) return;
+    if (!salvo) return;
+    const usam = rotas.filter((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && (idPredioDoElemento(e) === salvo.id || salvo.pontos.some((o) => o.chave && o.chave === chaveElemento(e)))));
+    if (usam.length) {
+      alert(`O prédio "${salvo.nome}" ainda é usado por ${usam.length} rota${usam.length > 1 ? "s" : ""}:\n\n${usam.map((r) => `• ${r.nome}`).join("\n")}\n\nExclua antes as rotas das CDOIs e depois a do cabo até o prédio.`);
+      return;
+    }
+    if (!confirm(`Excluir o prédio "${salvo.nome}"? Isso não pode ser desfeito.`)) return;
     await excluirPredio(salvo.id);
     setPredios((ps) => (ps ?? []).filter((p) => p.id !== salvo.id));
     setRascunho(null);

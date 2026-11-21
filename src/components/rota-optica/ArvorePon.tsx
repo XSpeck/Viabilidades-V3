@@ -21,6 +21,7 @@ import { Janela } from "./Janelas";
 import BuscaRede from "./BuscaRede";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
+import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
 
 interface Props {
   rotas: RotaOptica[];
@@ -685,7 +686,11 @@ function JanelaNo({
           rotas={todasRotas}
           modelos={catalogo.filter((m) => m.categoria === "splitter")}
           usuario={usuario}
-          onSalva={onCaixaSalva}
+          onSalva={(c) => {
+            onCaixaSalva(c);
+            // o splitter do diagrama da CDOI passa para o prédio e para a rota (potência)
+            sincronizarSplitterCdoi(c, todasRotas, catalogo, usuario).then((mudou) => mudou && onRotasMudaram?.()).catch(() => {});
+          }}
           saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
           tipoCaixa="CDOI"
         />
