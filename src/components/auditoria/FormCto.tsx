@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Copy, Search, X } from "lucide-react";
-import { aprovarFTTH, deletarTrajeto, rejeitarViabilizacao, salvarCTOEscolhida, solicitarViabilizacaoPredio } from "@/lib/firestore";
+import { AlertTriangle, Search } from "lucide-react";
+import { aprovarFTTH, rejeitarViabilizacao, salvarCTOEscolhida, solicitarViabilizacaoPredio } from "@/lib/firestore";
 import type { TipoInstalacao } from "@/types";
-import { Botao, BotaoConfirmar, campo, MsgErro, useAcao } from "@/components/comum/ui";
+import { Botao, campo, MsgErro, useAcao } from "@/components/comum/ui";
 import CtoBusca from "./CtoBusca";
 import SemViabilidade from "./SemViabilidade";
 import { avisoRx, type PropsEtapa } from "./tipos";
 
-type Campo = "cto" | "olt" | "distancia" | "localizacao" | "portas" | "rx" | "rota";
+type Campo = "cto" | "olt" | "distancia" | "localizacao" | "portas" | "rx";
 
-/** Casa (FTTH) e Condomínio: escolha da CTO, rota do cabo (só casa), dados e decisão */
+/** Casa (FTTH) e Condomínio: escolha da CTO, dados e decisão (o traçado da rota do cabo foi tirado por enquanto) */
 export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: PropsEtapa & {
   tipo: TipoInstalacao; nome: string; onMapa: (aberto: boolean) => void;
 }) {
@@ -28,14 +28,6 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
   const [erros, setErros] = useState<Campo[]>([]);
   const [semViab, setSemViab] = useState(false);
   const [rxConfirmado, setRxConfirmado] = useState(false);
-  const [rotaLocal, setRotaLocal] = useState<string | null>(null);
-  const [rotaApagada, setRotaApagada] = useState(false);
-  const [copiado, setCopiado] = useState(false);
-  const [agora] = useState(() => Date.now());
-
-  const rotaSalva = !rotaApagada && (v.trajeto_cabo?.length ?? 0) > 0 && !!v.trajeto_expira_em && new Date(v.trajeto_expira_em).getTime() > agora;
-  const linkRota = rotaLocal ?? (rotaSalva ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/rota/${v.id}` : null);
-  const diasRota = v.trajeto_expira_em ? Math.max(0, Math.ceil((new Date(v.trajeto_expira_em).getTime() - agora) / 86400000)) : 7;
   const aviso = avisoRx(rx);
   const errado = (c: Campo) => erros.includes(c);
   const mudar = (c: Campo, set: (x: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => { set(e.target.value); setErros((x) => x.filter((y) => y !== c)); };
@@ -48,7 +40,6 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
     if (!localizacao.trim()) faltando.push("localizacao");
     if (!(Number(portas) > 0)) faltando.push("portas");
     if (!rx.trim()) faltando.push("rx");
-    if (!cond && !linkRota) faltando.push("rota");
     setErros(faltando);
     if (faltando.length) return;
     if (aviso && !rxConfirmado) { setRxConfirmado(true); return; }
@@ -65,7 +56,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
         plusCode={v.plus_code_cliente}
         nomeCliente={v.nome_cliente}
         initialCto={cto || undefined}
-        semRota={cond}
+        semRota
         onConfirm={(d) => {
           setCto(d.cto_numero); setDistancia(d.distancia_cliente); setLocalizacao(d.localizacao_caixa);
           setErros((x) => x.filter((y) => !["cto", "distancia", "localizacao"].includes(y)));
@@ -74,9 +65,6 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
         }}
         onClose={() => { setBusca(false); onMapa(false); }}
         onExpandChange={onMapa}
-        viabilizacaoId={cond ? undefined : v.id}
-        trajetoExistente={cond ? undefined : v.trajeto_cabo}
-        onTrajetoSalvo={cond ? undefined : (l) => { setRotaLocal(l); setRotaApagada(false); setErros((x) => x.filter((y) => y !== "rota")); }}
       />
     );
   }
@@ -96,21 +84,6 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
         <Search className="h-4 w-4" /> {cto ? "Buscar outra CTO" : "Buscar CTOs próximas"}
       </button>
 
-      {!cond && (linkRota ? (
-        <div className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs">
-          <span className="flex-1 text-purple-800">Rota do cabo salva · expira em {diasRota} d</span>
-          <button type="button" onClick={() => navigator.clipboard.writeText(linkRota).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 2000); })}
-            className={`flex items-center gap-1 rounded px-2 py-1 font-medium ${copiado ? "bg-green-600 text-white" : "bg-purple-600 text-white hover:bg-purple-700"}`}>
-            {copiado ? <><Check className="h-3 w-3" /> Copiado</> : <><Copy className="h-3 w-3" /> Copiar link</>}
-          </button>
-          <BotaoConfirmar rotulo={<X className="h-3.5 w-3.5" />} pergunta="Apagar a rota?" confirmar="Apagar" ocupado={acao.ocupado}
-            onConfirmar={() => acao.rodar(() => deletarTrajeto(v.id), () => { setRotaLocal(null); setRotaApagada(true); })} />
-        </div>
-      ) : (
-        <p className={`rounded-lg px-3 py-2 text-xs ${errado("rota") ? "border border-red-300 bg-red-50 text-red-700" : "bg-gray-50 text-gray-500"}`}>
-          Trace a rota do cabo na busca de CTOs: ela é obrigatória para viabilizar casa.
-        </p>
-      ))}
 
       <div className="grid grid-cols-2 gap-2">
         <input placeholder="Nº da CTO *" value={cto} onChange={mudar("cto", setCto)} className={`${campo(errado("cto"))} col-span-2`} />
