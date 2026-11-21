@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Building2, CheckCircle, Home, Loader2, Send, Users } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle, Home, Loader2, MapPin, Send, Users } from "lucide-react";
 import { createViabilizacao, pedidosAbertosNoLocal, posicaoNaFila } from "@/lib/firestore";
-import { findPredioEstruturado, findPredioSemViab, type MatchPredio, type MatchPredioSemViab } from "@/lib/predios";
+import { findPredioEstruturado, findPredioSemViab, prediosPerto, RAIO_MATCH, RAIO_SUGESTAO, type MatchPredio, type MatchPredioSemViab, type PredioPerto } from "@/lib/predios";
 import { formatarTelefone, plusCodeCurto, type LocalInterpretado } from "@/lib/localizacao";
 import { formatDateTime } from "@/lib/pluscode";
 import type { AppUser, TipoInstalacao, Viabilizacao } from "@/types";
@@ -55,6 +55,8 @@ export default function FormSolicitacao({
   /** Resultado da busca de prédio, marcado com a chave (tipo|nome|local) que o gerou */
   const [busca, setBusca] = useState<{ chave: string; est: MatchPredio | null; sem: MatchPredioSemViab | null } | null>(null);
   const [abertos, setAbertos] = useState<Viabilizacao[]>([]);
+  /** Prédios cadastrados perto do ponto (tipo|local que gerou a lista) */
+  const [perto, setPerto] = useState<{ chave: string; lista: PredioPerto[] } | null>(null);
 
   /** Passo "tem certeza?" quando há pedido aberto no local ou prédio recusado; vale só para a chave em que foi aberto */
   const [confirmandoChave, setConfirmandoChave] = useState<string | null>(null);
@@ -73,6 +75,9 @@ export default function FormSolicitacao({
   const buscando = ehPredio && !atual;
   const confirmando = confirmandoChave === chave;
   const setConfirmando = (v: boolean) => setConfirmandoChave(v ? chave : null);
+  const tipoPredio = tipo === "Condomínio" ? "Condomínio" : "Prédio";
+  const chavePerto = `${tipoPredio}|${local.plusCode}`;
+  const listaPerto = ehPredio && perto?.chave === chavePerto ? perto.lista : [];
 
   // Pedido em aberto no mesmo local (novo ou antigo, gravado com Plus Code curto)
   useEffect(() => {
@@ -89,12 +94,23 @@ export default function FormSolicitacao({
     let vivo = true;
     const t = setTimeout(() => {
       const n = predio.trim() || undefined;
-      Promise.all([findPredioEstruturado(local.plusCode, n), findPredioSemViab(local.plusCode, n)])
+      const raio = RAIO_MATCH[tipo === "Condomínio" ? "Condomínio" : "Prédio"];
+      Promise.all([findPredioEstruturado(local.plusCode, n, raio), findPredioSemViab(local.plusCode, n, raio)])
         .then(([est, sem]) => { if (vivo) setBusca({ chave, est, sem }); })
         .catch(() => { if (vivo) setBusca({ chave, est: null, sem: null }); });
     }, predio ? 500 : 0);
     return () => { vivo = false; clearTimeout(t); };
-  }, [ehPredio, predio, local.plusCode, chave]);
+  }, [ehPredio, predio, local.plusCode, chave, tipo]);
+
+  // Sugestões "perto daqui": não dependem do nome digitado
+  useEffect(() => {
+    if (!ehPredio) return;
+    let vivo = true;
+    prediosPerto(local.plusCode, RAIO_SUGESTAO[tipoPredio])
+      .then((lista) => { if (vivo) setPerto({ chave: chavePerto, lista }); })
+      .catch(() => { if (vivo) setPerto({ chave: chavePerto, lista: [] }); });
+    return () => { vivo = false; };
+  }, [ehPredio, local.plusCode, tipoPredio, chavePerto]);
 
   function validar(): boolean {
     const e: Erros = {};
@@ -213,6 +229,34 @@ export default function FormSolicitacao({
                 <label htmlFor="sol-bloco" className="mb-1 block text-xs font-medium text-gray-600">{tipo === "Prédio" ? "Bloco" : "Quadra"}</label>
                 <input id="sol-bloco" value={bloco} onChange={(e) => setBloco(e.target.value)} className={campo()} autoComplete="off" />
               </div>
+            </div>
+          )}
+
+          {listaPerto.length > 0 && !matchPredio && !matchSemViab && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2">
+              <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-indigo-900">
+                <MapPin className="h-3.5 w-3.5" /> Já cadastrados perto daqui. É algum destes?
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {listaPerto.map((p) => (
+                  <button
+                    key={`${p.situacao}-${p.nome}`}
+                    type="button"
+                    onClick={() => { setPredio(p.nome); setErros((x) => ({ ...x, predio: undefined })); }}
+                    title={p.motivo ? `Sem viabilidade: ${p.motivo}` : "Prédio já atendido"}
+                    className={`flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-xs hover:shadow-sm ${
+                      p.situacao === "atendido" ? "border-emerald-300 text-emerald-800 hover:bg-emerald-50" : "border-red-300 text-red-800 hover:bg-red-50"}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${p.situacao === "atendido" ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <span className="font-medium">{p.nome}</span>
+                    <span className="text-gray-500">{Math.round(p.distancia)} m</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-500">
+                <span className="mr-2 inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> atendido</span>
+                <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /> sem viabilidade</span>
+              </p>
             </div>
           )}
 
