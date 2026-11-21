@@ -13,7 +13,7 @@ import DemandaCard from "@/components/analise-rede/DemandaCard";
 import NovaDemandaModal from "@/components/analise-rede/NovaDemandaModal";
 import ArquivoPanel from "@/components/analise-rede/ArquivoPanel";
 import AgendaSemana from "@/components/analise-rede/AgendaSemana";
-import { corTecnico, diasAtraso, hojeIso, ordenarDemandas } from "@/components/analise-rede/constantes";
+import { corTecnico, diasAtraso, hojeIso, ordenarDemandas, registrarTecnicos } from "@/components/analise-rede/constantes";
 import { BotaoConfirmar } from "@/components/comum/ui";
 
 const DemandasMap = dynamic(() => import("@/components/analise-rede/DemandasMap"), { ssr: false });
@@ -42,6 +42,7 @@ export default function AnaliseRedePage() {
   const [destaque, setDestaque] = useState<string | null>(null);
   const autoArquivou = useRef(false);
   const hoje = hojeIso();
+  registrarTecnicos(tecnicosRede);
 
   // Demandas ao vivo: estrutura nova, agendamento de outro auditor etc. aparecem na hora
   useEffect(() => {
