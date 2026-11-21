@@ -90,10 +90,6 @@ service cloud.firestore {
     }
 
     // Fila de notificações do bot — escrita pelo app, leitura só via Admin SDK
-    match /bot_notificacoes/{id} {
-      allow create: if isAuth();
-      allow read, update, delete: if false;
-    }
 
     // Financeiro — tipos de serviço (tabela de preços)
     match /tipos_servico_financeiro/{id} {

@@ -61,12 +61,6 @@ export default function AdminPage() {
 
         {/* Bairros de Rede */}
         <GerenciarBairros />
-
-        <PlaceholderCard
-          icon="🔔"
-          title="Notificações Telegram"
-          desc="Configurar bot e grupos de notificação"
-        />
       </div>
     </div>
   );
@@ -2066,22 +2060,3 @@ function GerenciarBairros() {
   );
 }
 
-// =====================
-// Card placeholder
-// =====================
-function PlaceholderCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
-  return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden opacity-60">
-      <div className="flex items-center gap-3 px-5 py-4 border-b bg-gray-50">
-        <span className="text-xl">{icon}</span>
-        <div>
-          <h3 className="font-semibold text-gray-700">{title}</h3>
-          <p className="text-xs text-gray-400">{desc}</p>
-        </div>
-      </div>
-      <div className="px-5 py-8 text-center text-gray-400 text-sm">
-        🚧 Em desenvolvimento
-      </div>
-    </div>
-  );
-}

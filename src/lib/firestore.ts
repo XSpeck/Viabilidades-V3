@@ -18,7 +18,6 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { enqueueNotificacao } from "./notificacoes";
 import { deleteFotos } from "./cloudinary";
 import type {
   Viabilizacao,
@@ -122,7 +121,6 @@ export async function createViabilizacao(
     data_solicitacao: serverTimestamp(),
   });
   bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
-  void enqueueNotificacao(ref.id, "nova_viabilizacao");
   return ref.id;
 }
 
@@ -359,7 +357,6 @@ export async function aprovarFTTH(
     data_auditoria: new Date().toISOString(),
     ...dados,
   });
-  void enqueueNotificacao(id, "aprovado");
 }
 
 export async function aprovarFTTA(
@@ -382,7 +379,6 @@ export async function aprovarFTTA(
     data_auditoria: new Date().toISOString(),
     ...dados,
   });
-  void enqueueNotificacao(id, "aprovado");
 }
 
 export async function rejeitarViabilizacao(
@@ -396,7 +392,6 @@ export async function rejeitarViabilizacao(
     auditado_por: auditadoPor,
     data_auditoria: new Date().toISOString(),
   });
-  void enqueueNotificacao(id, "rejeitado");
 }
 
 export async function marcarUTP(id: string, auditadoPor: string): Promise<void> {
@@ -407,7 +402,6 @@ export async function marcarUTP(id: string, auditadoPor: string): Promise<void> 
     data_auditoria: new Date().toISOString(),
   });
   await iniciarAgendamentoInstalacao(id);
-  void enqueueNotificacao(id, "utp");
 }
 
 export async function finalizarViabilizacao(id: string): Promise<void> {
@@ -776,7 +770,6 @@ export async function finalizarEstruturado(
     data_estruturacao: new Date().toISOString(),
   });
   await concluirDemandaEstrutura(id, dados.observacao);
-  void enqueueNotificacao(id, "aprovado");
 }
 
 export async function rejeitarPredio(
@@ -804,7 +797,6 @@ export async function rejeitarPredio(
     auditado_por: registradoPor,
   });
   await concluirDemandaEstrutura(id, `Sem viabilidade: ${observacao}`);
-  void enqueueNotificacao(id, "rejeitado");
 }
 
 // =====================
@@ -859,7 +851,6 @@ export async function enviarPropostaInstalacao(
     historico_agendamento: historico,
     ...(!agChegouEmExistente ? { ag_chegou_em: new Date().toISOString() } : {}),
   });
-  void enqueueNotificacao(id, "proposta_enviada");
 }
 
 // Usuário já combinou tudo direto com o cliente via WhatsApp — pula a negociação e vai direto pra agendado
@@ -897,7 +888,6 @@ export async function confirmarAgendamentoTecnico(
       periodo_instalacao: dados.agendamento_periodo,
       historico_agendamento: historico,
     });
-    void enqueueNotificacao(id, "agendado");
   } else {
     await updateViabilizacao(id, {
       status_instalacao: "aguardando_confirmacao",
@@ -906,7 +896,6 @@ export async function confirmarAgendamentoTecnico(
       ...(dados.agendamento_obs !== undefined ? { agendamento_obs: dados.agendamento_obs } : {}),
       historico_agendamento: historico,
     });
-    void enqueueNotificacao(id, "aguardando_confirmacao");
   }
 }
 
@@ -923,7 +912,6 @@ export async function confirmarPropostaUsuario(
     periodo_instalacao: dados.agendamento_periodo,
     historico_agendamento: historico,
   });
-  void enqueueNotificacao(id, "agendado");
 }
 
 export async function atribuirTecnicoInstalacao(id: string, tecnico: string): Promise<void> {
@@ -949,7 +937,6 @@ export async function reagendarInstalacao(
 // Setor marca como instalado após a visita técnica
 export async function marcarInstalado(id: string): Promise<void> {
   await updateViabilizacao(id, { status_instalacao: "instalado" });
-  void enqueueNotificacao(id, "instalado");
 }
 
 // Desfaz o "marcar como instalado" feito por engano, voltando para agendado
@@ -1008,7 +995,6 @@ export async function contestarViabilizacao(
     status_anterior: statusAtual,
     mensagens: [...(mensagensAnteriores ?? []), nova],
   });
-  void enqueueNotificacao(id, "contestacao");
 }
 
 export async function reenviarParaAuditoria(
@@ -1075,7 +1061,6 @@ export async function reabrirAprovacao(
     "viab_instalacoes_arquivadas_v1", "viab_audit_v1", "viab_agendamentos_v1",
   );
   bustCacheRelatorios();
-  void enqueueNotificacao(id, "reaberto");
 }
 
 export async function corrigirDadosViabilizacao(
