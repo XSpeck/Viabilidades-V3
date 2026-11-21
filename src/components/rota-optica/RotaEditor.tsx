@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, ChevronDown, Loader2, MapPin, MousePointer2, Plus, Route, Save, Settings2, Trash2, Undo2, X,
+  ArrowDown, ArrowUp, ChevronDown, Loader2, MapPin, Plus, Save, Trash2, X,
 } from "lucide-react";
 import {
   CALCULO_PADRAO,
@@ -27,7 +27,11 @@ import type { PaiRota } from "@/lib/rotaOptica";
 import { atualizarRota, criarRota } from "@/lib/rotaOptica";
 import { donoDoElemento, entradaPotencia, paraGravar, subRotasDe } from "@/lib/subRotas";
 import EtiquetaCabo from "./EtiquetaCabo";
-import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
+import PaletaFerramentas from "./editor/PaletaFerramentas";
+import CartaoPredio from "./editor/CartaoPredio";
+import BarraTopo from "./editor/BarraTopo";
+import { comparavel, elementoDaLinha, garantirCodigosCabos } from "./editor/salvar";
+import { chaveCabo, codigoDoCabo, comCodigo, normalizar, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
@@ -44,222 +48,31 @@ const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ),
 });
 
-type Ponto = { lat: number; lon: number };
-
-/** Linha do formulário: números ficam como texto até salvar. */
-interface Linha {
-  nome: string;
-  tipo: TipoElementoRota;
-  codigo: string;
-  cabo_entrada: string;
-  fibra_entrada: string;
-  cabo_saida: string;
-  fibra_saida: string;
-  distancia_m: string;
-  /** Distância calculada pelo mapa (muda sozinha quando mexe no mapa) */
-  dist_auto: boolean;
-  potencia_entrada: string;
-  potencia_saida: string;
-  splitter: string;
-  splitter_modelo: string;
-  /** HUB só de passagem nesta rota (splitter de outra porta) */
-  passagem: boolean;
-  /** Trecho que chega é um link no mesmo poste (sem traçado e sem reserva) */
-  mesmoPoste: boolean;
-  equipamento_id: string;
-  porta: string;
-  coords: string;
-  /** Postes do cabo no trecho que chega neste elemento */
-  vertices: Ponto[];
-  obs: string;
-  /** Elemento Prédio (entrada do cabo): em que prédio o cabo chega (o prédio novo é criado ao salvar) */
-  predio?: VinculoPredio;
-  /** Posição deste elemento na rota salva (para salvar só ele) */
-  orig?: number;
-  /** HUB com meia porta (1:2 antes do primário) */
-  meiaPorta?: boolean;
-}
-
-/** id vazio = prédio novo (criado ao salvar com este nome) */
-interface VinculoPredio {
-  id: string;
-  nome: string;
-  /** id do bloco (prédio existente) ou nome do bloco (prédio novo) */
-  bloco: string;
-  andar: number;
-}
-
-const s = (v?: number) => (v === undefined ? "" : String(v).replace(".", ","));
-const pad2 = (v: number) => String(v).padStart(2, "0");
-const fmtDbm = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2).replace(".", ",")} dBm`;
-const fmtCoord = (p: Ponto) => `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
-
-function paraLinha(e: ElementoRota, vertices: Ponto[] = []): Linha {
-  return {
-    nome: e.nome,
-    tipo: e.tipo,
-    codigo: e.codigo ?? "",
-    cabo_entrada: e.cabo_entrada ?? "",
-    fibra_entrada: s(e.fibra_entrada),
-    cabo_saida: e.cabo_saida ?? "",
-    fibra_saida: s(e.fibra_saida),
-    distancia_m: s(e.distancia_m),
-    dist_auto: e.distancia_m === undefined,
-    potencia_entrada: s(e.potencia_entrada),
-    potencia_saida: s(e.potencia_saida),
-    splitter: e.splitter ?? "",
-    splitter_modelo: e.splitter_modelo ?? "",
-    passagem: !!e.passagem,
-    meiaPorta: !!e.meia_porta,
-    mesmoPoste: !!e.mesmo_poste,
-    equipamento_id: e.equipamento_id ?? "",
-    porta: e.porta ?? "",
-    coords: e.lat !== undefined && e.lon !== undefined ? `${e.lat}, ${e.lon}` : "",
-    vertices,
-    obs: e.obs ?? "",
-  };
-}
-
-const linhaVazia = (tipo: TipoElementoRota = "ceo"): Linha => paraLinha({ nome: "", tipo });
-
-function n(v: string): number | undefined {
-  const t = v.trim().replace(",", ".");
-  if (!t) return undefined;
-  const x = parseFloat(t);
-  return isFinite(x) ? x : undefined;
-}
-
-function parseCoords(v: string): { lat?: number; lon?: number; erro?: boolean } {
-  const t = v.trim();
-  if (!t) return {};
-  const m = t.match(/^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/);
-  if (!m) return { erro: true };
-  const lat = parseFloat(m[1]);
-  const lon = parseFloat(m[2]);
-  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { erro: true };
-  return { lat, lon };
-}
-
-function posDe(l: Linha): Ponto | null {
-  const c = parseCoords(l.coords);
-  return c.lat !== undefined && c.lon !== undefined ? { lat: c.lat, lon: c.lon } : null;
-}
-
-/** Comprimento pelo mapa do trecho que chega em ls[i] (anterior → postes → este). */
-function distMapa(ls: Linha[], i: number): number | null {
-  if (i === 0) return null;
-  const a = posDe(ls[i - 1]);
-  const b = posDe(ls[i]);
-  if (!a || !b) return null;
-  return Math.round(comprimentoTracado([a, ...ls[i].vertices, b]));
-}
-
-/** Distância do trecho para o OTDR: traçado no mapa + reservas técnicas das duas caixas */
-function distTotal(ls: Linha[], i: number, c: Partial<CalculoPotencia>): number | null {
-  const d = distMapa(ls, i);
-  return d === null ? null : d + reservaTrecho(ls[i - 1]?.tipo, ls[i].tipo, c);
-}
-
-function recalcular(ls: Linha[], c: Partial<CalculoPotencia> = CALCULO_PADRAO): Linha[] {
-  return ls.map((l, i) => {
-    if (!l.dist_auto) return l;
-    const d = distTotal(ls, i, c);
-    return d === null ? l : { ...l, distancia_m: String(d) };
-  });
-}
-
-/** Índice do segmento (entre pts[j] e pts[j+1]) mais perto do ponto, em plano local. */
-function segmentoMaisPerto(pts: Ponto[], p: Ponto): number {
-  const k = Math.cos((p.lat * Math.PI) / 180);
-  let melhor = 0;
-  let dMin = Infinity;
-  for (let j = 0; j < pts.length - 1; j++) {
-    const ax = pts[j].lon * k, ay = pts[j].lat, bx = pts[j + 1].lon * k, by = pts[j + 1].lat, px = p.lon * k, py = p.lat;
-    const dx = bx - ax, dy = by - ay;
-    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
-    const d = (ax + t * dx - px) ** 2 + (ay + t * dy - py) ** 2;
-    if (d < dMin) { dMin = d; melhor = j; }
-  }
-  return melhor;
-}
-
-const normNome = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
-
-/** Postes do trecho i (anterior → i) tirados do traçado do KML: pedaço do cabo entre os pontos mais perto das duas caixas. */
-function verticesDoKml(els: ElementoRota[], i: number, kml: TrechoCabo[]): Ponto[] {
-  const a = els[i - 1];
-  const b = els[i];
-  if (!a || !b || a.lat === undefined || a.lon === undefined || b.lat === undefined || b.lon === undefined) return [];
-  const pa = { lat: a.lat, lon: a.lon };
-  const pb = { lat: b.lat, lon: b.lon };
-  const nomeCabo = normNome(b.cabo_entrada ?? "");
-  let melhor: { score: number; pts: Ponto[] } | null = null;
-  for (const t of kml) {
-    if (t.pontos.length < 2) continue;
-    let ia = 0, da = Infinity, ib = 0, db = Infinity;
-    t.pontos.forEach((p, k) => {
-      const d1 = distanciaMetros(pa, p);
-      if (d1 < da) { da = d1; ia = k; }
-      const d2 = distanciaMetros(pb, p);
-      if (d2 < db) { db = d2; ib = k; }
-    });
-    if (da > 80 || db > 80 || ia === ib) continue;
-    const score = da + db - (nomeCabo && normNome(t.nome) === nomeCabo ? 1000 : 0);
-    if (!melhor || score < melhor.score) {
-      const pts = ia < ib ? t.pontos.slice(ia + 1, ib) : t.pontos.slice(ib + 1, ia).reverse();
-      melhor = { score, pts: pts.map((p) => ({ lat: p.lat, lon: p.lon })) };
-    }
-  }
-  return melhor?.pts ?? [];
-}
-
-/** Tipo de elemento que a ferramenta coloca (null = Mover/Poste) */
-function tipoDaFerramenta(f: Ferramenta): TipoElementoRota | null {
-  return f === "selecionar" || f === "poste" || f === "estacao" ? null : f;
-}
-
-const PALETA: { t: TipoElementoRota; rot: string }[] = [
-  { t: "olt", rot: "OLT" },
-  { t: "dio", rot: "DIO" },
-  { t: "ceo", rot: "CEO" },
-  { t: "ct", rot: "CT" },
-  { t: "hub", rot: "HUB" },
-  { t: "cto", rot: "CTO" },
-  { t: "predio", rot: "Prédio" },
-  { t: "onu", rot: "Cliente" },
-];
-
-const PREFIXO: Record<TipoElementoRota, string> = {
-  olt: "OLT", dio: "DIO", ceo: "CEO", ct: "CT", hub: "HUB", cto: "CTO", cdoi: "CDOI", predio: "Prédio", onu: "Cliente", outro: "Ponto",
-};
-
-/** Parte curta do nome de um elemento, usada no nome automático do cabo ("24 FO ASO · HUB 1 → CTO 2") */
-function curtoNome(s0: string) {
-  return s0.split(" - ")[0].split(" / ")[0].trim();
-}
-
-/** Depois de um splitter (HUB/CTO/CDOI) a fibra segue num cabo novo: não herda o cabo do trecho anterior */
-function herdaCabo(ant?: Linha): ant is Linha {
-  return !!ant && ant.tipo !== "dio" && ((ant.tipo !== "hub" && ant.tipo !== "cto") || ant.passagem) && ant.tipo !== "cdoi";
-}
-
-/** Nome automático ("CDOI 3"): pula os nomes que já existem nesta rota e na rede */
-function nomeAuto(tipo: TipoElementoRota, ls: Linha[], outros: string[] = []): string {
-  const qtd = ls.filter((l) => l.tipo === tipo).length;
-  if (tipo === "olt" && qtd === 0) return "OLT";
-  const usados = new Set([...ls.map((l) => l.nome), ...outros].map((x) => x.trim().toUpperCase()));
-  let k = qtd + 1;
-  while (usados.has(`${PREFIXO[tipo]} ${k}`.toUpperCase())) k++;
-  return `${PREFIXO[tipo]} ${k}`;
-}
-
-function nivelCor(v?: number) {
-  if (v === undefined) return "text-slate-500";
-  if (v >= -20) return "text-emerald-600";
-  if (v >= -25) return "text-lime-600";
-  if (v >= -27) return "text-amber-600";
-  return "text-red-600";
-}
+import {
+  type Ponto,
+  type Linha,
+  type VinculoPredio,
+  s,
+  pad2,
+  fmtDbm,
+  fmtCoord,
+  paraLinha,
+  linhaVazia,
+  n,
+  parseCoords,
+  posDe,
+  distMapa,
+  recalcular,
+  segmentoMaisPerto,
+  verticesDoKml,
+  tipoDaFerramenta,
+  PALETA,
+  PREFIXO,
+  curtoNome,
+  herdaCabo,
+  nomeAuto,
+  nivelCor,
+} from "./editor/linhas";
 
 interface Props {
   inicial?: RotaOptica | null;
@@ -624,49 +437,20 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** Cartão do elemento Prédio: só qual prédio (o cabo chega nele; CDOIs, fibras e splitters ficam na janela do prédio) */
   function campoPredio(i: number) {
     const l = linhas[i];
-    const v = vinculoDe(l) ?? { id: "", nome: "", bloco: "", andar: 0 };
     const pos = posDe(l);
-    const opcoes = pos ? prediosPerto(pos) : predios.map((pr) => ({ pr, d: Infinity }));
-    const set = (m: Partial<VinculoPredio>, renomearJa = false) => {
-      const nv = { ...v, ...m };
-      const novoNome = nv.nome.trim() || "Prédio";
-      alterar(i, { predio: nv, nome: novoNome });
-      if (renomearJa && novoNome !== l.nome) renomearCabos(l.nome, novoNome);
-    };
     return (
-      <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-2.5 space-y-1.5">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
-          <IconeElemento tipo="predio" tamanho={18} /> Prédio
-        </p>
-        <select
-          className={campo}
-          value={v.id || "__novo"}
-          onChange={(e) => {
-            const id = e.target.value === "__novo" ? "" : e.target.value;
-            const np = predios.find((x) => x.id === id);
-            set({ id, nome: np?.nome ?? "" }, true);
-          }}
-        >
-          {opcoes.map(({ pr: x, d }) => (
-            <option key={x.id} value={x.id}>{x.nome}{Number.isFinite(d) ? ` · ${Math.round(d)} m` : ""}</option>
-          ))}
-          {v.id && !opcoes.some((o) => o.pr.id === v.id) && <option value={v.id}>{v.nome}</option>}
-          <option value="__novo">+ Prédio novo…</option>
-        </select>
-        {!v.id && (
-          <input
-            className={`${campo} ${!v.nome.trim() ? "border-red-400" : ""}`}
-            value={v.nome}
-            onFocus={() => { nomeAntes.current = l.nome; }}
-            onChange={(e) => set({ nome: e.target.value })}
-            onBlur={() => renomearCabos(nomeAntes.current, l.nome)}
-            placeholder="Nome do prédio (ex.: Ed Majestoso)"
-          />
-        )}
-        <p className="text-[10px] text-slate-500">
-          Aqui só o <b>cabo</b> chega ao prédio. Blocos, andares, CDOIs, fibras e splitters você monta na janela do prédio (Árvore → clique no prédio): cada CDOI vira uma sub-rota sozinha.
-        </p>
-      </div>
+      <CartaoPredio
+        vinculo={vinculoDe(l) ?? { id: "", nome: "", bloco: "", andar: 0 }}
+        opcoes={pos ? prediosPerto(pos) : predios.map((pr) => ({ pr, d: Infinity }))}
+        predios={predios}
+        onMudar={(nv, renomearJa) => {
+          const novoNome = nv.nome.trim() || "Prédio";
+          alterar(i, { predio: nv, nome: novoNome });
+          if (renomearJa && novoNome !== l.nome) renomearCabos(l.nome, novoNome);
+        }}
+        onNomeFoco={() => { nomeAntes.current = l.nome; }}
+        onNomeSair={() => renomearCabos(nomeAntes.current, l.nome)}
+      />
     );
   }
 
@@ -1226,42 +1010,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return { c: corFibraPorCapacidade(f, Math.max(cap, f), t?.fibras_por_tubo), excede: !!t?.capacidade && f > t.capacidade };
   }
 
-  /**
-   * Todo cabo ganha um código fixo (CB-000123) no fim do nome: é a etiqueta que o técnico põe no cabo real.
-   * Cabo com o mesmo nome já codificado em outra rota reaproveita o código.
-   */
-  function garantirCodigos(): { ls: Linha[]; tc: Record<string, string> } {
-    const todos = [
-      ...rede.flatMap((r) => r.elementos.flatMap((e) => [e.cabo_entrada ?? "", e.cabo_saida ?? ""])),
-      ...linhas.map((l) => l.cabo_entrada),
-      ...salvos.map((e) => e.cabo_entrada ?? ""),
-      ...cabos.map((c) => c.chave),
-    ];
-    const porNome = new Map<string, string>();
-    const anotar = (nm?: string) => {
-      const c = codigoDoCabo(nm);
-      if (c && nm) porNome.set(normalizar(semCodigo(nm)), c);
-    };
-    rede.forEach((r) => r.elementos.forEach((e) => anotar(e.cabo_entrada)));
-    salvos.forEach((e) => anotar(e.cabo_entrada));
-    linhas.forEach((l) => anotar(l.cabo_entrada));
-    let extra = 0;
-    const tc = { ...tiposCabo };
-    const ls = linhas.map((l, i) => {
-      const nm = l.cabo_entrada.trim();
-      // a OLT não tem cabo de chegada; cordão da estação não leva etiqueta de cabo
-      if (i === 0 || !nm || codigoDoCabo(nm) || /^Cordão /i.test(nm)) return l;
-      const base = normalizar(nm);
-      let cod = porNome.get(base);
-      if (!cod) {
-        cod = proximoCodigoCabo(todos, extra++);
-        porNome.set(base, cod);
-      }
-      const tAnt = tiposCabo[chaveCabo(nm)];
-      if (tAnt && !tc[cod]) tc[cod] = tAnt;
-      return { ...l, cabo_entrada: comCodigo(nm, cod) };
-    });
-    return { ls, tc };
+  /** Todo cabo da rota ganha o código fixo (CB-000123); veja editor/salvar.ts */
+  function garantirCodigos() {
+    return garantirCodigosCabos(linhas, { rede, salvos, cabos, tiposCabo });
   }
 
   /** Erro que impede gravar a linha i (null = ok) */
@@ -1274,35 +1025,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   function montarElemento(ls: Linha[], i: number): ElementoRota {
-    const l = ls[i];
-    const c = parseCoords(l.coords);
-    // Saída de um elemento = chegada do próximo (quando informada)
-    const prox = ls[i + 1];
-    const caboSaida = prox?.cabo_entrada.trim() || l.cabo_saida.trim();
-    const fibraSaida = prox && n(prox.fibra_entrada) !== undefined ? n(prox.fibra_entrada) : n(l.fibra_saida);
-    return {
-      nome: l.nome.trim(),
-      tipo: l.tipo,
-      codigo: l.codigo.trim() || undefined,
-      cabo_entrada: i > 0 ? l.cabo_entrada.trim() || undefined : undefined,
-      fibra_entrada: i > 0 ? n(l.fibra_entrada) : undefined,
-      cabo_saida: prox ? caboSaida || undefined : undefined,
-      fibra_saida: prox ? fibraSaida : undefined,
-      distancia_m: i > 0 ? n(l.distancia_m) : undefined,
-      potencia_entrada: pots ? pots[i].entrada : n(l.potencia_entrada),
-      potencia_saida: pots ? pots[i].saida : n(l.potencia_saida),
-      splitter: l.splitter.trim() || undefined,
-      splitter_modelo: l.splitter ? l.splitter_modelo || undefined : undefined,
-      passagem: (l.tipo === "hub" || l.tipo === "cto") && l.passagem ? true : undefined,
-      meia_porta: l.tipo === "hub" && l.meiaPorta && !l.passagem ? true : undefined,
-      via_meia_porta: paiEf?.meia_porta && i === troncoEf - 1 ? true : undefined,
-      mesmo_poste: i > 0 && l.mesmoPoste ? true : undefined,
-      equipamento_id: l.tipo === "olt" || l.tipo === "dio" ? l.equipamento_id || undefined : undefined,
-      porta: l.porta.trim() || undefined,
-      lat: c.lat,
-      lon: c.lon,
-      obs: l.obs.trim() || undefined,
-    };
+    return elementoDaLinha(ls, i, { pots, viaMeiaPorta: !!paiEf?.meia_porta, troncoEf });
   }
 
   /** Tipo de cabo escolhido aqui vai para o cadastro do cabo (vale para todas as rotas) */
@@ -1434,14 +1157,6 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   // ---------- Salvar só um elemento ----------
-  /** Texto comparável de um elemento (sem o que depende dos vizinhos ou da potência) */
-  function comparavel(e?: ElementoRota): string {
-    if (!e) return "";
-    const { cabo_saida, fibra_saida, potencia_entrada, potencia_saida, ...resto } = e;
-    void cabo_saida; void fibra_saida; void potencia_entrada; void potencia_saida;
-    return JSON.stringify(Object.entries(resto).filter(([, v]) => v !== undefined && v !== "").sort(([a], [b]) => a.localeCompare(b)));
-  }
-
   /** Os vizinhos no editor são os mesmos da rota gravada (dá para gravar só este elemento) */
   function vizinhosIguais(i: number): boolean {
     const o = linhas[i].orig;
@@ -2105,68 +1820,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       </datalist>
 
       {/* Barra do topo */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60">
-        <span className="rounded-lg bg-indigo-600 text-white p-1.5"><Route className="w-4 h-4" /></span>
-        <input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          placeholder={inicial ? "Nome da rota" : "Nome da nova rota (ex.: OLT1 PL04 P13 → HUB 0/4/13)"}
-          className={`flex-1 min-w-[220px] bg-transparent text-base font-semibold text-slate-900 border-b-2 py-1 outline-none placeholder:font-normal placeholder:text-slate-400 ${
-            erro && !nome.trim() ? "border-red-400" : "border-transparent focus:border-indigo-400"
-          }`}
-        />
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1"><b>{linhas.length}</b> elementos</span>
-          <span className="rounded-full bg-white border border-slate-200 px-2.5 py-1"><b>{formatMetros(totalDist)}</b></span>
-          <span className={`rounded-full bg-white border border-slate-200 px-2.5 py-1 font-semibold ${nivelCor(potFinal)}`}>
-            {potFinal !== undefined ? fmtDbm(potFinal) : "— dBm"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {linhas.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setVerPendencias((v) => !v)}
-              className={`flex items-center gap-1 px-2.5 py-2 rounded-lg border text-xs font-semibold ${
-                pendencias.length ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-emerald-50 border-emerald-300 text-emerald-700"
-              }`}
-              title="Pendências para salvar"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" /> {pendencias.length ? `${pendencias.length} pendência${pendencias.length > 1 ? "s" : ""}` : "tudo ok"}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setVerCalc((v) => !v)}
-            className={`p-2 rounded-lg border ${verCalc ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-300 hover:bg-slate-50"}`}
-            title="Cálculo de potência"
-            aria-label="Cálculo de potência"
-          >
-            <Settings2 className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={desfazer}
-            disabled={!pendentes.length && !historico.length}
-            className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40"
-            title="Desfazer (Ctrl+Z)"
-            aria-label="Desfazer"
-          >
-            <Undo2 className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={onCancelar} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando}
-            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5 shadow-sm"
-          >
-            {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar rota
-          </button>
-        </div>
-      </header>
+      <BarraTopo
+        nome={nome}
+        onNome={setNome}
+        rotaNova={!inicial}
+        nomeComErro={!!erro && !nome.trim()}
+        elementos={linhas.length}
+        distancia={totalDist}
+        potFinal={potFinal}
+        pendencias={pendencias.length}
+        onPendencias={() => setVerPendencias((v) => !v)}
+        verCalc={verCalc}
+        onCalc={() => setVerCalc((v) => !v)}
+        podeDesfazer={pendentes.length > 0 || historico.length > 0}
+        onDesfazer={desfazer}
+        onCancelar={onCancelar}
+        onSalvar={salvar}
+        salvando={salvando}
+      />
 
       {erro && (
         <div className="flex items-center justify-between gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700">
@@ -2200,61 +1871,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           />
 
           {/* Paleta de ferramentas */}
-          <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-none flex">
-            <div className="pointer-events-auto flex max-w-full flex-nowrap items-stretch gap-1 overflow-x-auto rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg p-1.5 sm:flex-wrap">
-              {([
-                { k: "selecionar" as Ferramenta, rot: "Mover", icone: <MousePointer2 className="w-5 h-5 text-slate-700" /> },
-                {
-                  k: "poste" as Ferramenta,
-                  rot: "Poste",
-                  icone: (
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
-                      <path d="M3 18 Q 9 6 21 8" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeDasharray="4 3" />
-                      <circle cx="9" cy="10.5" r="3" fill="#fff" stroke="#f59e0b" strokeWidth="2" />
-                    </svg>
-                  ),
-                },
-              ]).map((b) => (
-                <button
-                  key={b.k}
-                  type="button"
-                  onClick={() => { setFerramenta(b.k); setAviso(null); }}
-                  className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === b.k ? "bg-indigo-600 text-white [&_svg_path]:stroke-white" : "hover:bg-slate-100"}`}
-                  title={b.rot}
-                >
-                  <span className={ferramenta === b.k ? "[&_*]:!text-white" : ""}>{b.icone}</span>
-                  <span className={`text-[9px] font-semibold mt-0.5 ${ferramenta === b.k ? "text-white" : "text-slate-600"}`}>{b.rot}</span>
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => { setFerramenta("estacao"); setAviso(null); }}
-                disabled={linhas.length > 0}
-                className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 disabled:opacity-30 ${ferramenta === "estacao" ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}
-                title={linhas.length ? "A estação é o começo da rota" : "Montar estação: OLT + DIO + cordão"}
-              >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
-                  <path d="M3 21V9l9-6 9 6v12z" fill={ferramenta === "estacao" ? "#334155" : "#e2e8f0"} stroke="#475569" strokeWidth="1.5" strokeLinejoin="round" />
-                  <rect x="8" y="11" width="8" height="10" rx="1" fill="#0f172a" />
-                  <path d="M9.5 13.5h5M9.5 16h5M9.5 18.5h5" stroke="#4ade80" strokeWidth="1.2" />
-                </svg>
-                <span className={`text-[9px] font-semibold mt-0.5 ${ferramenta === "estacao" ? "text-white" : "text-slate-600"}`}>Estação</span>
-              </button>
-              <span className="w-px bg-slate-200 mx-0.5" />
-              {PALETA.map((p) => (
-                <button
-                  key={p.t}
-                  type="button"
-                  onClick={() => { setFerramenta(p.t); setAviso(null); }}
-                  className={`flex shrink-0 flex-col items-center justify-center w-12 rounded-xl py-1 ${ferramenta === p.t ? "bg-indigo-100 ring-2 ring-indigo-500" : "hover:bg-slate-100"}`}
-                  title={`Adicionar ${TIPO_ELEMENTO_LABEL[p.t]}`}
-                >
-                  <IconeElemento tipo={p.t} tamanho={24} />
-                  <span className="text-[9px] font-semibold text-slate-700 mt-0.5">{p.rot}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <PaletaFerramentas ferramenta={ferramenta} temElementos={linhas.length > 0} onEscolher={(f) => { setFerramenta(f); setAviso(null); }} />
 
           {/* Dica do que o clique faz */}
           <div className="absolute bottom-14 sm:bottom-6 left-1/2 -translate-x-1/2 z-[500] max-w-[90%] flex flex-col items-center gap-1.5 pointer-events-none">
