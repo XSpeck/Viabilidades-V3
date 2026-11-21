@@ -12,7 +12,7 @@ import {
   batchImportViabilizacoes,
   getBairros, createBairro, renameBairro, deleteBairro,
 } from "@/lib/firestore";
-import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, FuncaoTecnico, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
+import type { AppUser, UserCargo, PapelFinanceiro, FuncaoTecnico, PredioAtendido, PredioSemViabilidade, Viabilizacao, TipoInstalacao, StatusViabilizacao, StatusPredio, BairroRede } from "@/types";
 import { FUNCOES_TECNICO_LABEL } from "@/types";
 import { Loader2, Upload, CheckCircle, AlertTriangle, MapPin, Settings, Network, Users, Plus, Pencil, Trash2 as TrashIcon, Building2, Search, XCircle, Database, KeyRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { canAccess } from "@/lib/access";
@@ -406,17 +406,6 @@ const PAPEL_FINANCEIRO_COLOR: Record<PapelFinanceiro, string> = {
   financeiro: "bg-emerald-100 text-emerald-700",
 };
 
-const EQUIPE_LABEL: Record<EquipeUsuario, string> = {
-  comercial_mf: "Comercial MF",
-  comercial: "Comercial",
-  atendimento: "Atendimento",
-};
-const EQUIPE_COLOR: Record<EquipeUsuario, string> = {
-  comercial_mf: "bg-orange-100 text-orange-700",
-  comercial: "bg-sky-100 text-sky-700",
-  atendimento: "bg-teal-100 text-teal-700",
-};
-
 type ModalState = { mode: "create" } | { mode: "edit"; user: AppUser };
 
 function GestaoUsuarios() {
@@ -424,7 +413,7 @@ function GestaoUsuarios() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, equipe: "" as EquipeUsuario | "", funcoesTecnico: [] as FuncaoTecnico[], papelFinanceiro: "" as PapelFinanceiro | "" });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", cargo: "usuario" as UserCargo, funcoesTecnico: [] as FuncaoTecnico[], papelFinanceiro: "" as PapelFinanceiro | "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AppUser | null>(null);
@@ -445,7 +434,7 @@ function GestaoUsuarios() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ nome: "", email: "", senha: "", cargo: "usuario", equipe: "", funcoesTecnico: [], papelFinanceiro: "" });
+    setForm({ nome: "", email: "", senha: "", cargo: "usuario", funcoesTecnico: [], papelFinanceiro: "" });
     setFormError(null);
     setModal({ mode: "create" });
   }
@@ -456,7 +445,6 @@ function GestaoUsuarios() {
       email: u.login,
       senha: "",
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
-      equipe: u.equipe ?? "",
       funcoesTecnico: u.funcoes_tecnico ?? [],
       papelFinanceiro: u.papel_financeiro ?? "",
     });
@@ -476,12 +464,11 @@ function GestaoUsuarios() {
       const funcoesTecnico = form.cargo === "tecnico" ? form.funcoesTecnico : undefined;
       const papelFinanceiro = form.cargo !== "tecnico" ? form.papelFinanceiro || undefined : undefined;
       if (modal?.mode === "create") {
-        await createUser(form.email, form.senha, form.nome, form.cargo, form.equipe || undefined, funcoesTecnico, papelFinanceiro);
+        await createUser(form.email, form.senha, form.nome, form.cargo, funcoesTecnico, papelFinanceiro);
       } else if (modal?.mode === "edit") {
         await updateUser(modal.user.uid, {
           nome: form.nome,
           cargo: form.cargo,
-          equipe: form.equipe || null,
           funcoes_tecnico: form.cargo === "tecnico" ? (funcoesTecnico ?? null) : null,
           papel_financeiro: papelFinanceiro ?? null,
         });
@@ -584,7 +571,7 @@ function GestaoUsuarios() {
                     <th className="text-left py-2 pr-4 font-medium">Nome</th>
                     <th className="text-left py-2 pr-4 font-medium">Email</th>
                     <th className="text-left py-2 pr-4 font-medium">Cargo</th>
-                    <th className="text-left py-2 pr-4 font-medium hidden sm:table-cell">Equipe</th>
+                    <th className="text-left py-2 pr-4 font-medium hidden sm:table-cell">Funções</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -608,11 +595,7 @@ function GestaoUsuarios() {
                           </div>
                         </td>
                         <td className="py-2.5 pr-4 hidden sm:table-cell">
-                          {u.equipe ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${EQUIPE_COLOR[u.equipe]}`}>
-                              {EQUIPE_LABEL[u.equipe]}
-                            </span>
-                          ) : (u.funcoes_tecnico?.length ?? 0) > 0 ? (
+                          {(u.funcoes_tecnico?.length ?? 0) > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {u.funcoes_tecnico!.map((f) => (
                                 <span key={f} className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700">
@@ -762,19 +745,6 @@ function GestaoUsuarios() {
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Equipe <span className="font-normal">(opcional)</span></label>
-                <select
-                  value={form.equipe}
-                  onChange={(e) => setForm((f) => ({ ...f, equipe: e.target.value as EquipeUsuario | "" }))}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >
-                  <option value="">Sem equipe</option>
-                  <option value="comercial_mf">Comercial MF</option>
-                  <option value="comercial">Comercial</option>
-                  <option value="atendimento">Atendimento</option>
-                </select>
-              </div>
             </div>
             {formError && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">

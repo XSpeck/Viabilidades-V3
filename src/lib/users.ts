@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
-import { equipeValida, type AppUser, type UserCargo, type EquipeUsuario, type PapelFinanceiro, type FuncaoTecnico } from "@/types";
+import type { AppUser, UserCargo, PapelFinanceiro, FuncaoTecnico } from "@/types";
 
 /** Fallback pra usuários técnicos cadastrados antes da função virar checkbox (campo antigo `funcao_tecnico`, texto livre). */
 export function inferFuncoesTecnico(data: { funcoes_tecnico?: unknown; funcao_tecnico?: unknown }): FuncaoTecnico[] {
@@ -45,7 +45,6 @@ export async function listUsers(): Promise<AppUser[]> {
       login: u.login,
       nivel: u.nivel,
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
-      equipe: equipeValida(u.equipe),
       funcoes_tecnico: inferFuncoesTecnico(u),
       papel_financeiro: u.papel_financeiro,
     };
@@ -83,7 +82,6 @@ export async function createUser(
   password: string,
   nome: string,
   cargo: UserCargo,
-  equipe?: EquipeUsuario,
   funcoesTecnico?: FuncaoTecnico[],
   papelFinanceiro?: PapelFinanceiro
 ): Promise<void> {
@@ -103,7 +101,6 @@ export async function createUser(
   const { localId } = await res.json();
   const nivel = cargo === "usuario" ? 2 : 1;
   const docData: Record<string, unknown> = { nome, login: email, nivel, cargo };
-  if (equipe) docData.equipe = equipe;
   if (funcoesTecnico && funcoesTecnico.length > 0) docData.funcoes_tecnico = funcoesTecnico;
   if (papelFinanceiro) docData.papel_financeiro = papelFinanceiro;
   await setDoc(doc(db, "users", localId), docData);
@@ -115,7 +112,6 @@ export async function updateUser(
   data: {
     nome?: string;
     cargo?: UserCargo;
-    equipe?: EquipeUsuario | null;
     funcoes_tecnico?: FuncaoTecnico[] | null;
     papel_financeiro?: PapelFinanceiro | null;
   }
@@ -126,9 +122,8 @@ export async function updateUser(
     updates.cargo = data.cargo;
     updates.nivel = data.cargo === "usuario" ? 2 : 1;
   }
-  if (data.equipe !== undefined) {
-    updates.equipe = data.equipe === null ? deleteField() : data.equipe;
-  }
+  // "equipe" não existe mais (só servia para o Telegram): sai do cadastro ao editar
+  updates.equipe = deleteField();
   if (data.funcoes_tecnico !== undefined) {
     updates.funcoes_tecnico = (data.funcoes_tecnico === null || data.funcoes_tecnico.length === 0)
       ? deleteField() : data.funcoes_tecnico;

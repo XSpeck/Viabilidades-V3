@@ -1,10 +1,5 @@
 export type UserNivel = 1 | 2;
 export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario" | "tecnico";
-export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento";
-
-/** Equipe válida (a antiga "comercial_gmarx" não existe mais e vira "sem equipe") */
-export const equipeValida = (e: unknown): EquipeUsuario | undefined =>
-  e === "comercial_mf" || e === "comercial" || e === "atendimento" ? e : undefined;
 /** Papel adicional do módulo financeiro — não substitui o cargo principal, coexiste com ele (ex: um "auditor" também pode ser "financeiro"). */
 export type PapelFinanceiro = "auditor_servico" | "financeiro";
 
@@ -20,7 +15,6 @@ export interface AppUser {
   login: string;
   nivel: UserNivel;
   cargo?: UserCargo;
-  equipe?: EquipeUsuario;
   /** Só usado quando cargo === "tecnico"; um técnico pode acumular as duas funções. */
   funcoes_tecnico?: FuncaoTecnico[];
   papel_financeiro?: PapelFinanceiro;
@@ -71,7 +65,6 @@ export interface Viabilizacao {
   plus_code_cliente: string;
   tipo_instalacao: TipoInstalacao;
   urgente: boolean;
-  equipe?: EquipeUsuario;
   status: StatusViabilizacao;
   auditor_responsavel?: string;
   auditado_por?: string;

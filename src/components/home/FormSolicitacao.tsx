@@ -145,7 +145,6 @@ export default function FormSolicitacao({
         plus_code_cliente: local.plusCode,
         tipo_instalacao: tipo,
         urgente,
-        equipe: user.equipe,
         status: "pendente",
         predio_ftta: ehPredio ? predio.trim() : undefined,
         andar_predio: ehPredio ? apto.trim() : undefined,
