@@ -618,7 +618,8 @@ function JanelaNo({
   const [editandoHub, setEditandoHub] = useState(false);
   return (
     <div>
-      <div className="flex border-b border-gray-200 bg-slate-50 text-xs font-medium" role="tablist">
+      {/* CDOI: só a aba dela (a barra de abas some) */}
+      <div className={`flex border-b border-gray-200 bg-slate-50 text-xs font-medium ${ehCdoi ? "hidden" : ""}`} role="tablist">
         {([
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
           ...(ehCto ? ([["cto", "CTO"]] as const) : []),
@@ -626,10 +627,10 @@ function JanelaNo({
           ...(ehCeo ? ([["ceo", "Emendas (CEO)"]] as const) : []),
           ...(ehCt ? ([["ct", "CT"]] as const) : []),
           ...(ehDio ? ([["dio", "DIO"]] as const) : []),
-          ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
-          ...(ehPredio || ehCeo || ehDio ? [] : ([["emendas", "Emendas"]] as const)),
+          ...(ehPredio ? ([["predio", "Prédio"]] as const) : []),
+          ...(ehPredio || ehCeo || ehDio || ehCdoi ? [] : ([["emendas", "Emendas"]] as const)),
           ...(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
-          ["caminho", "Caminho e potência"],
+          ...(ehCdoi ? [] : ([["caminho", "Caminho e potência"]] as const)),
         ] as const).map(([k, r]) => (
           <button
             key={k}
