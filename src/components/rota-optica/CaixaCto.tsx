@@ -464,7 +464,8 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                         ) : (
                           <>
                             <div className="flex shrink-0 rounded border border-slate-200 bg-slate-50 p-0.5">
-                              {(["livre", "cliente", "ramal"] as const).map((st) => (
+                              {/* CDOI: perna livre ou com cliente (não sai ramal de CDOI) */}
+                              {(tipoCaixa === "CDOI" ? (["livre", "cliente"] as const) : (["livre", "cliente", "ramal"] as const)).map((st) => (
                                 <button
                                   key={st}
                                   type="button"

@@ -620,18 +620,21 @@ function JanelaNo({
     <div>
       {/* CDOI: só a aba dela (a barra de abas some) */}
       <div className={`flex border-b border-gray-200 bg-slate-50 text-xs font-medium ${ehCdoi ? "hidden" : ""}`} role="tablist">
-        {([
-          ...(ehHub ? ([["primario", "Primário"]] as const) : []),
-          ...(ehCto ? ([["cto", "CTO"]] as const) : []),
-          ...(ehCdoi ? ([["cdoi", "CDOI"]] as const) : []),
-          ...(ehCeo ? ([["ceo", "Emendas (CEO)"]] as const) : []),
-          ...(ehCt ? ([["ct", "CT"]] as const) : []),
-          ...(ehDio ? ([["dio", "DIO"]] as const) : []),
-          ...(ehPredio ? ([["predio", "Prédio"]] as const) : []),
-          ...(ehPredio || ehCeo || ehDio || ehCdoi ? [] : ([["emendas", "Emendas"]] as const)),
-          ...(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
-          ...(ehCdoi ? [] : ([["caminho", "Caminho e potência"]] as const)),
-        ] as const).map(([k, r]) => (
+        {(() => {
+          type Aba = typeof aba;
+          const abas: [Aba, string][] = [];
+          if (ehHub) abas.push(["primario", "Primário"]);
+          if (ehCto) abas.push(["cto", "CTO"]);
+          if (ehCdoi) abas.push(["cdoi", "CDOI"]);
+          if (ehCeo) abas.push(["ceo", "Emendas (CEO)"]);
+          if (ehCt) abas.push(["ct", "CT"]);
+          if (ehDio) abas.push(["dio", "DIO"]);
+          if (ehPredio) abas.push(["predio", "Prédio"]);
+          if (!(ehPredio || ehCeo || ehDio || ehCdoi)) abas.push(["emendas", "Emendas"]);
+          if (!(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio)) abas.push(["diagrama", "Splitter e portas"]);
+          if (!ehCdoi) abas.push(["caminho", "Caminho e potência"]);
+          return abas;
+        })().map(([k, r]) => (
           <button
             key={k}
             type="button"
