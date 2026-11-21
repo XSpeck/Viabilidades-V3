@@ -19,7 +19,7 @@ interface GrupoSplitter {
   inCabo: string;
   inFibra?: number;
   splitter: string;
-  saidas: { outCabo: string; outFibra?: number; destino: string; rotas: string[] }[];
+  saidas: { outCabo: string; outFibra?: number; destino: string; rotas: string[]; predio?: boolean }[];
 }
 
 export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
@@ -32,15 +32,16 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
     const prox = r.elementos[j + 1];
     const inCabo = e.cabo_entrada ?? "cabo não informado";
     const inFibra = e.fibra_entrada;
-    // cabo que só leva até a entrada de um prédio (as fibras são escolhidas no prédio): não é uma ligação
-    if (prox && prox.tipo === "predio" && prox.fibra_entrada === undefined) continue;
+    // cabo que só leva até a entrada de um prédio: as fibras são escolhidas no prédio
+    const soCaboPredio = !!prox && prox.tipo === "predio" && prox.fibra_entrada === undefined;
+    if (soCaboPredio && !e.splitter) continue;
     if (e.splitter && prox) {
       const k = `${chaveCabo(inCabo)}|${inFibra}`;
       const g = splitters.get(k) ?? { inCabo, inFibra, splitter: e.splitter, saidas: [] };
       const outCabo = prox.cabo_entrada ?? "cabo não informado";
       const s0 = g.saidas.find((x) => chaveCabo(x.outCabo) === chaveCabo(outCabo) && x.outFibra === prox.fibra_entrada);
       if (s0) s0.rotas.push(r.nome);
-      else g.saidas.push({ outCabo, outFibra: prox.fibra_entrada, destino: prox.nome, rotas: [r.nome] });
+      else g.saidas.push({ outCabo, outFibra: prox.fibra_entrada, destino: prox.nome, rotas: [r.nome], predio: prox.tipo === "predio" });
       splitters.set(k, g);
       continue;
     }
@@ -58,6 +59,10 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
     const l = simples.get(k);
     if (l) l.rotas.push(r.nome);
     else simples.set(k, { tipo: passa ? "passa" : "fusao", inCabo, inFibra, outCabo, outFibra, destino: prox.nome, rotas: [r.nome] });
+  }
+  // cabo até o prédio sem fibra: some quando as CDOIs do prédio já têm as fibras dele
+  for (const g of splitters.values()) {
+    g.saidas = g.saidas.filter((x) => x.outFibra !== undefined || !g.saidas.some((y) => y !== x && y.outFibra !== undefined && chaveCabo(y.outCabo) === chaveCabo(x.outCabo)));
   }
   // "termina aqui" só quando nenhuma outra rota segue com a mesma fibra (ex.: o tronco termina na HUB, mas as sub-rotas continuam)
   for (const [k, l] of [...simples.entries()]) {
@@ -131,7 +136,7 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
   }
 
   /** Tubo + fibra de um lado (pílula do tubo e etiqueta da fibra) */
-  function fibraLado(cabo: string, fibra: number | undefined, y: number, lado: "e" | "d") {
+  function fibraLado(cabo: string, fibra: number | undefined, y: number, lado: "e" | "d", semFibra?: [string, string]) {
     const c = corFibra(fibra, cabo);
     const xt = lado === "e" ? xTuboE : xTuboD;
     return (
@@ -139,10 +144,10 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
         <rect x={xt} y={y - 6} width={18} height={12} rx={6} fill={c.corTubo?.hex ?? "#cbd5e1"} stroke="#0f172a" strokeWidth={0.8} />
         <text x={xt + 9} y={y + 3} fontSize={7} textAnchor="middle" fontWeight={800} fill="#0f172a">{c.tubo ? `T${c.tubo}` : "–"}</text>
         <text x={lado === "e" ? xt + 24 : xt - 6} y={y - 5} fontSize={8.5} fontWeight={700} textAnchor={lado === "e" ? "start" : "end"} fill="#0f172a">
-          {fibra ? `F${String(fibra).padStart(2, "0")}` : "F?"}
+          {fibra ? `F${String(fibra).padStart(2, "0")}` : semFibra ? semFibra[0] : "F?"}
         </text>
         <text x={lado === "e" ? xt + 24 : xt - 6} y={y + 11} fontSize={7} textAnchor={lado === "e" ? "start" : "end"} fill="#64748b">
-          {c.nome.toLowerCase()}
+          {!fibra && semFibra ? semFibra[1] : c.nome.toLowerCase()}
         </text>
       </g>
     );
@@ -257,7 +262,7 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
                       <title>{`Saída do splitter → ${sd.destino} · ${sd.rotas.join(", ")}`}</title>
                       {fio(xMeio + 22, yMeio, inicioFibraD, y, cOut.hex)}
                       <line x1={xTuboD + 18} y1={y} x2={xStubD} y2={y} stroke="#0f172a" strokeWidth={3} />
-                      {fibraLado(sd.outCabo, sd.outFibra, y, "d")}
+                      {fibraLado(sd.outCabo, sd.outFibra, y, "d", sd.predio ? ["cabo até o prédio", `fibras no ${curto(sd.destino, 16)}`] : undefined)}
                     </g>
                   );
                 })}
