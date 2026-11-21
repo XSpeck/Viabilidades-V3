@@ -15,6 +15,7 @@ import {
   arrayUnion,
   writeBatch,
   runTransaction,
+  onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { enqueueNotificacao } from "./notificacoes";
@@ -271,11 +272,55 @@ export async function updateViabilizacao(
   bustCacheRelatorios();
 }
 
+/**
+ * Pega o pedido da fila numa transação: só funciona se ele ainda está livre.
+ * Evita dois auditores com o mesmo pedido e pegar um pedido que o atendente acabou de cancelar.
+ */
 export async function pegarViabilizacao(id: string, auditor: string): Promise<void> {
-  await updateViabilizacao(id, {
-    status: "em_auditoria",
-    auditor_responsavel: auditor,
+  const ref = doc(db, "viabilizacoes", id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Este pedido não existe mais.");
+    const v = snap.data() as Partial<Viabilizacao>;
+    if (v.data_finalizacao || v.status === "finalizado") throw new Error("O atendente cancelou este pedido.");
+    if (v.auditor_responsavel && v.auditor_responsavel !== auditor) throw new Error(`${v.auditor_responsavel} já pegou este pedido.`);
+    if (v.status !== "pendente" && v.auditor_responsavel !== auditor) throw new Error("Este pedido já saiu da fila.");
+    tx.update(ref, { status: "em_auditoria", auditor_responsavel: auditor, status_atualizado_em: new Date().toISOString() });
   });
+  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1");
+  bustCacheRelatorios();
+}
+
+/** Ordem da fila: urgentes primeiro, depois o mais antigo */
+export function ordenarFila(lista: Viabilizacao[]): Viabilizacao[] {
+  return [...lista].sort((a, b) => {
+    if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+    return (a.data_solicitacao ?? "").localeCompare(b.data_solicitacao ?? "");
+  });
+}
+
+/** Fila ao vivo: chama "aoMudar" a cada pedido que entra ou sai. Devolve a função que para de ouvir. */
+export function ouvirFila(aoMudar: (fila: Viabilizacao[]) => void, aoErrar: (e: Error) => void): () => void {
+  return onSnapshot(
+    query(collection(db, "viabilizacoes"), where("status", "==", "pendente")),
+    (snap) => aoMudar(ordenarFila(
+      snap.docs.map((d) => fromFirestore<Viabilizacao>(d)).filter((v) => !v.auditor_responsavel && v.status_predio !== "agendado" && !v.data_finalizacao),
+    )),
+    aoErrar,
+  );
+}
+
+/** Pedidos sendo analisados agora (quem pegou o quê), ao vivo */
+export function ouvirEmAnalise(aoMudar: (lista: Viabilizacao[]) => void, aoErrar: (e: Error) => void): () => void {
+  return onSnapshot(
+    query(collection(db, "viabilizacoes"), where("status", "==", "em_auditoria")),
+    (snap) => aoMudar(
+      snap.docs.map((d) => fromFirestore<Viabilizacao>(d))
+        .filter((v) => v.auditor_responsavel && !v.data_finalizacao)
+        .sort((a, b) => (a.status_atualizado_em ?? "").localeCompare(b.status_atualizado_em ?? "")),
+    ),
+    aoErrar,
+  );
 }
 
 export async function devolverViabilizacao(id: string): Promise<void> {

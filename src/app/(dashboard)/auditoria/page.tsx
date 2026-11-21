@@ -43,7 +43,6 @@ export default function AuditoriaPage() {
   const [histSearch, setHistSearch] = useState("");
   const [histTipo, setHistTipo] = useState("todos");
   const [histStatus, setHistStatus] = useState("todos");
-  const [histEquipe, setHistEquipe] = useState("todos");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -208,11 +207,6 @@ export default function AuditoriaPage() {
                 <option value="rejeitado">❌ Sem viabilidade</option>
                 <option value="utp">📡 UTP</option>
               </select>
-              <select value={histEquipe} onChange={(e) => setHistEquipe(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="todos">Todas as equipes</option>
-                <option value="comercial_gmarx">Somente Gmarx</option>
-              </select>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">De</span>
                 <input type="date" value={histDataInicio} onChange={(e) => setHistDataInicio(e.target.value)}
@@ -235,7 +229,6 @@ export default function AuditoriaPage() {
               const filtrado = historico
                 .filter((v) => histTipo === "todos" || v.tipo_instalacao === histTipo)
                 .filter((v) => histStatus === "todos" || v.status === histStatus)
-                .filter((v) => histEquipe === "todos" || v.equipe === histEquipe)
                 .filter((v) => {
                   if (!histSearch.trim()) return true;
                   const q = histSearch.toLowerCase();
@@ -673,7 +666,6 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
         <div className="flex items-center justify-between gap-3">
           <p className="font-semibold text-gray-900">{titulo}</p>
           <div className="flex items-center gap-2 shrink-0">
-            {v.equipe === "comercial_gmarx" && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Gmarx</span>}
             {isContestacao       && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">💬 Contestação</span>}
             {isRevisandoContest  && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔁 Reanalisando</span>}
             {isReaberto          && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">🔄 Reaberto</span>}
@@ -931,7 +923,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
-                    isGmarx={v.equipe === "comercial_gmarx"}
+                   
                     onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
                     onClose={() => setShowCtoBusca(false)}
                     onExpandChange={setMapExpanded}
@@ -1000,7 +992,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                   className={`w-full border-2 border-dashed py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${showFttaMap ? "border-blue-400 text-blue-700 bg-blue-50" : "border-blue-300 text-blue-600 hover:bg-blue-50"}`}>
                   🗺️ {showFttaMap ? "Ocultar Mapa" : "Ver Redes e CDOIs no Mapa"}
                 </button>
-                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} isGmarx={v.equipe === "comercial_gmarx"} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
+                {showFttaMap && <FttaMap plusCode={v.plus_code_cliente} nomeCliente={v.nome_cliente} onSelectCdoi={(name) => setCdoi(name)} onConfirm={() => setShowFttaMap(false)} onExpandChange={setMapExpanded} />}
                 <div className="grid grid-cols-2 gap-2">
                   <input placeholder="CDOI *" value={cdoi} onChange={(e) => setCdoi(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
                   <input placeholder="OLT *" value={oltFtta} onChange={(e) => setOltFtta(e.target.value)} className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 col-span-2" />
@@ -1033,7 +1025,7 @@ function AuditoriaCard({ v, userName, onRefresh }: { v: Viabilizacao; userName: 
                     plusCode={v.plus_code_cliente}
                     nomeCliente={v.nome_cliente}
                     initialCto={cto || undefined}
-                    isGmarx={v.equipe === "comercial_gmarx"}
+                   
                     semRota
                     onConfirm={async (data) => { setCto(data.cto_numero); setDistancia(data.distancia_cliente); setLocalizacao(data.localizacao_caixa); setShowCtoBusca(false); try { await salvarCTOEscolhida(v.id, data); } catch { alert("Erro ao salvar CTO. Verifique a conexão e tente novamente."); } }}
                     onClose={() => setShowCtoBusca(false)}

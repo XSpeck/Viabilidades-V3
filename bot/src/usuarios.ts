@@ -12,7 +12,9 @@ export async function getEquipeDoUsuario(login: string): Promise<EquipeUsuario |
     .limit(1)
     .get();
 
-  const equipe = (snap.docs[0]?.data()?.equipe ?? null) as EquipeUsuario | null;
+  const bruto = snap.docs[0]?.data()?.equipe;
+  // a equipe "comercial_gmarx" não existe mais: vira "sem equipe"
+  const equipe = (["comercial_mf", "comercial", "atendimento"].includes(bruto) ? bruto : null) as EquipeUsuario | null;
   cache.set(login, equipe);
   return equipe;
 }

@@ -36,7 +36,6 @@ export const GRUPOS = {
   comercial_mf:    req("TELEGRAM_GROUP_COMERCIAL_MF"),
   comercial:       req("TELEGRAM_GROUP_COMERCIAL"),
   atendimento:     req("TELEGRAM_GROUP_ATENDIMENTO"),
-  comercial_gmarx: req("TELEGRAM_GROUP_COMERCIAL_GMARX"),
 } as const;
 
 export type GrupoEquipe = keyof typeof GRUPOS;

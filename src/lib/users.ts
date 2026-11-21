@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
-import type { AppUser, UserCargo, EquipeUsuario, PapelFinanceiro, FuncaoTecnico } from "@/types";
+import { equipeValida, type AppUser, type UserCargo, type EquipeUsuario, type PapelFinanceiro, type FuncaoTecnico } from "@/types";
 
 /** Fallback pra usuários técnicos cadastrados antes da função virar checkbox (campo antigo `funcao_tecnico`, texto livre). */
 export function inferFuncoesTecnico(data: { funcoes_tecnico?: unknown; funcao_tecnico?: unknown }): FuncaoTecnico[] {
@@ -45,7 +45,7 @@ export async function listUsers(): Promise<AppUser[]> {
       login: u.login,
       nivel: u.nivel,
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
-      equipe: u.equipe,
+      equipe: equipeValida(u.equipe),
       funcoes_tecnico: inferFuncoesTecnico(u),
       papel_financeiro: u.papel_financeiro,
     };

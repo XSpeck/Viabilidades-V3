@@ -19,8 +19,7 @@ export type StatusInstalacao =
 export type EquipeUsuario =
   | "comercial_mf"
   | "comercial"
-  | "atendimento"
-  | "comercial_gmarx";
+  | "atendimento";
 
 export interface Viabilizacao {
   id: string;

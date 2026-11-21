@@ -1,5 +1,5 @@
 // Server-side only — importado apenas por API routes
-import type { EquipeUsuario } from "@/types";
+import { equipeValida, type EquipeUsuario } from "@/types";
 import { adminDb } from "./firebaseAdmin";
 
 export type TipoNotificacao =
@@ -22,7 +22,6 @@ const GRUPOS: Record<string, string> = {
   comercial_mf:    process.env.TELEGRAM_GROUP_COMERCIAL_MF ?? "",
   comercial:       process.env.TELEGRAM_GROUP_COMERCIAL ?? "",
   atendimento:     process.env.TELEGRAM_GROUP_ATENDIMENTO ?? "",
-  comercial_gmarx: process.env.TELEGRAM_GROUP_COMERCIAL_GMARX ?? "",
 };
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ const equipeCache = new Map<string, EquipeUsuario | null>();
 async function getEquipe(login: string): Promise<EquipeUsuario | null> {
   if (equipeCache.has(login)) return equipeCache.get(login) ?? null;
   const snap = await adminDb.collection("users").where("login", "==", login).limit(1).get();
-  const equipe = (snap.docs[0]?.data()?.equipe ?? null) as EquipeUsuario | null;
+  const equipe = equipeValida(snap.docs[0]?.data()?.equipe) ?? null;
   equipeCache.set(login, equipe);
   return equipe;
 }

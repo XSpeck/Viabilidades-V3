@@ -1,6 +1,10 @@
 export type UserNivel = 1 | 2;
 export type UserCargo = "adm" | "auditor" | "agendamento" | "usuario" | "tecnico";
-export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento" | "comercial_gmarx";
+export type EquipeUsuario = "comercial_mf" | "comercial" | "atendimento";
+
+/** Equipe válida (a antiga "comercial_gmarx" não existe mais e vira "sem equipe") */
+export const equipeValida = (e: unknown): EquipeUsuario | undefined =>
+  e === "comercial_mf" || e === "comercial" || e === "atendimento" ? e : undefined;
 /** Papel adicional do módulo financeiro — não substitui o cargo principal, coexiste com ele (ex: um "auditor" também pode ser "financeiro"). */
 export type PapelFinanceiro = "auditor_servico" | "financeiro";
 
