@@ -1325,9 +1325,19 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
     const g0 = garantirCodigos();
     const tc = g0.tc;
+    // cordão da estação: o nome acompanha a OLT e o DIO de agora ("Cordão OLT2_DC → DIO 72 Portas")
+    const lsCordao = g0.ls.map((l, i) => {
+      const ant = g0.ls[i - 1];
+      if (l.tipo !== "dio" || ant?.tipo !== "olt" || !/^Cordão /i.test(l.cabo_entrada)) return l;
+      const nomeC = `Cordão ${ant.nome.split(" / ")[0]} → ${l.nome}`;
+      if (nomeC === l.cabo_entrada) return l;
+      const t0 = tc[chaveCabo(l.cabo_entrada)];
+      if (t0 && !tc[chaveCabo(nomeC)]) tc[chaveCabo(nomeC)] = t0;
+      return { ...l, cabo_entrada: nomeC };
+    });
     let ls: Linha[];
     try {
-      ls = await prepararPredios(g0.ls);
+      ls = await prepararPredios(lsCordao);
     } catch (e) {
       return setErro(/permission/i.test(String(e)) ? "Sem permissão para criar o prédio." : "Não foi possível criar o prédio.");
     }
