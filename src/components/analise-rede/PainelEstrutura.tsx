@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, CheckCircle, XCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { agendarEstruturaRede, concluirEstruturaRede, semViabEstruturaRede } from "@/lib/firestore";
+import { agendarEstruturaRede, concluirEstruturaRede, getViabilizacaoPorId, semViabEstruturaRede } from "@/lib/firestore";
 import type { DemandaRede } from "@/types";
 import { Botao, Caixa, campo, MsgErro, PERIODOS, useAcao } from "@/components/comum/ui";
 
@@ -29,6 +29,18 @@ export default function PainelEstrutura({ demanda: d, tecnicosRede, onRefresh }:
   const [motivo, setMotivo] = useState("");
   const [faltando, setFaltando] = useState(false);
   const viab = d.viabilizacao_id!;
+
+  // Sem data ainda: começa com a preferência que o atendente informou
+  useEffect(() => {
+    if (d.data_agendamento) return;
+    let vivo = true;
+    getViabilizacaoPorId(viab).then((v) => {
+      if (!vivo || !v?.data_preferencia_visita) return;
+      setData((x) => x || v.data_preferencia_visita!);
+      if (v.periodo_preferencia_visita) setPeriodo(v.periodo_preferencia_visita);
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [viab, d.data_agendamento]);
   const sempreGiga = tecnologia === "FTTA";
   const abrir = (p: typeof painel) => { setPainel(painel === p ? "" : p); setFaltando(false); acao.setErro(""); };
   const alternarTecnico = (t: string) => setTecnicos((x) => (x.includes(t) ? x.filter((y) => y !== t) : [...x, t]));

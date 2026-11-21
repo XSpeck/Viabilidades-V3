@@ -1,6 +1,7 @@
 "use client";
 
 import type { Viabilizacao } from "@/types";
+import { MODULOS } from "@/lib/modulos";
 
 interface Step {
   label: string;
@@ -143,7 +144,7 @@ export default function FluxoStepper({ v }: Props) {
       {/* Sub-label do passo atual */}
       {isFtta && v.status_predio === "pronto_auditoria" && (
         <p className="text-xs text-indigo-600 text-center mt-1 font-medium">
-          ⏳ Aguardando agendamento da visita técnica
+          ⏳ {MODULOS.agendamento ? "Aguardando agendamento da visita técnica" : "Com a equipe de rede para agendar a visita"}
         </p>
       )}
       {["FTTH", "Prédio"].includes(v.tipo_instalacao) && v.status_instalacao === "aguardando_proposta" && (

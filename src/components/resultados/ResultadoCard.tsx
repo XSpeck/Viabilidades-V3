@@ -77,8 +77,8 @@ export default function ResultadoCard({ r, usuario, onRefresh }: { r: Viabilizac
         {aberto && (
           <div className="mt-3 space-y-3 border-t pt-3 text-sm text-gray-600">
             <EtapaFila r={r} onRefresh={onRefresh} />
-            <EtapaConversa r={r} usuario={usuario} onRefresh={onRefresh} />
             <DadosAprovados r={r} />
+            <EtapaConversa r={r} usuario={usuario} onRefresh={onRefresh} />
             {(r.trajeto_cabo?.length ?? 0) > 0 && (
               <RotaMapaDownload
                 plusCodeCliente={r.plus_code_cliente}

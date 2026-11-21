@@ -6,6 +6,7 @@ import { aprovarFTTA, marcarUTP, rejeitarViabilizacao, solicitarViabilizacaoPred
 import { Botao, BotaoConfirmar, campo, MsgErro, useAcao } from "@/components/comum/ui";
 import FttaMap from "./FttaMap";
 import SemViabilidade from "./SemViabilidade";
+import { MODULOS } from "@/lib/modulos";
 import { avisoRx, type PropsEtapa } from "./tipos";
 
 type Campo = "cdoi" | "olt" | "predio" | "portas" | "rx";
@@ -41,7 +42,7 @@ export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsE
     acao.rodar(() => aprovarFTTA(v.id, {
       cdoi: cdoi.trim(), predio_ftta: predio.trim(), portas_disponiveis: Number(portas), media_rx: rx.trim().replace(",", "."),
       observacoes: obs.trim(), olt: olt.trim(), tipo_instalacao: "Prédio", nome_cliente: nome.trim() || undefined,
-    }, auditor.nome, auditor.uid), () => onFeito(`${quem}: viabilidade aprovada e enviada para o agendamento.`));
+    }, auditor.nome, auditor.uid), () => onFeito(`${quem}: viabilidade aprovada${MODULOS.agendamento ? " e enviada para o agendamento" : ""}.`));
   }
 
   return (

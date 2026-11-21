@@ -7,6 +7,7 @@ import type { TipoInstalacao } from "@/types";
 import { Botao, campo, MsgErro, useAcao } from "@/components/comum/ui";
 import CtoBusca from "./CtoBusca";
 import SemViabilidade from "./SemViabilidade";
+import { MODULOS } from "@/lib/modulos";
 import { avisoRx, type PropsEtapa } from "./tipos";
 
 type Campo = "cto" | "olt" | "distancia" | "localizacao" | "portas" | "rx";
@@ -47,7 +48,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
       cto_numero: cto.trim(), portas_disponiveis: Number(portas), menor_rx: rx.trim().replace(",", "."),
       distancia_cliente: distancia.trim(), localizacao_caixa: localizacao.trim(), observacoes: obs.trim(),
       olt: olt.trim(), tipo_instalacao: tipo, nome_cliente: nome.trim() || undefined,
-    }, auditor.nome, auditor.uid), () => onFeito(`${nome || "Pedido"}: viabilidade aprovada e enviada para o agendamento.`));
+    }, auditor.nome, auditor.uid), () => onFeito(`${nome || "Pedido"}: viabilidade aprovada${MODULOS.agendamento ? " e enviada para o agendamento" : ""}.`));
   }
 
   if (busca) {

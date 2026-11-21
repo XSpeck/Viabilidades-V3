@@ -87,7 +87,7 @@ export function statusDe(v: Viabilizacao): StatusInfo {
     case "em_auditoria": return { chave: "analise", rotulo: "Em análise", cor: AZUL, grupo: "analise" };
     case "aprovado": return { chave: "aprovado", rotulo: "Aprovado", cor: VERDE, grupo: "aprovado" };
     case "rejeitado": return { chave: "sem_viab", rotulo: "Sem viabilidade", cor: VERMELHO, grupo: "sem_viab" };
-    case "utp": return { chave: "utp", rotulo: "UTP", cor: ROXO, grupo: "sem_viab" };
+    case "utp": return { chave: "utp", rotulo: "UTP", cor: ROXO, grupo: "aprovado" };
     default: return { chave: "analise", rotulo: v.status, cor: CINZA, grupo: "analise" };
   }
 }
