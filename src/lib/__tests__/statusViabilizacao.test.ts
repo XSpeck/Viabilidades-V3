@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decisaoDoAuditor, ordenarResultados, podeMexerNaFila, statusDe, vistaDoPedido } from "../statusViabilizacao";
+import { decisaoDoAuditor, ehResultadoFinal, ordenarResultados, podeMexerNaFila, resultadoVencido, statusDe, vistaDoPedido } from "../statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 
 const v = (x: Partial<Viabilizacao>): Viabilizacao =>
@@ -77,5 +77,21 @@ describe("depois de finalizado", () => {
     expect(decisaoDoAuditor(v({ status: "em_auditoria", tipo_instalacao: "Prédio", status_predio: "pronto_auditoria" })).rotulo).toBe("Pediu estrutura");
     expect(decisaoDoAuditor(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "estruturado" })).rotulo).toBe("Estruturado");
     expect(decisaoDoAuditor(v({ status: "rejeitado", tipo_instalacao: "Prédio", status_predio: "rejeitado", motivo_rejeicao: "Edifício sem viabilidade: x" })).rotulo).toBe("Sem viabilidade");
+  });
+});
+
+describe("resultado vencido (7 dias)", () => {
+  const agora = Date.parse("2026-11-21T12:00:00Z");
+  it("aprovado há 10 dias sai da lista; há 3 dias fica", () => {
+    expect(resultadoVencido(v({ status: "aprovado", cto_numero: "X", data_auditoria: "2026-11-11T10:00:00Z" }), agora)).toBe(true);
+    expect(resultadoVencido(v({ status: "aprovado", cto_numero: "X", data_auditoria: "2026-11-18T10:00:00Z" }), agora)).toBe(false);
+  });
+  it("estruturado conta pela data da estrutura", () => {
+    expect(resultadoVencido(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "estruturado", data_auditoria: "2026-10-01T10:00:00Z", data_estruturacao: "2026-11-20T10:00:00Z" }), agora)).toBe(false);
+  });
+  it("pedido em andamento nunca vence", () => {
+    expect(ehResultadoFinal(v({ status: "em_auditoria" }))).toBe(false);
+    expect(resultadoVencido(v({ status: "em_revisao", revisao_tipo: "devolvido", data_auditoria: "2026-10-01T10:00:00Z" }), agora)).toBe(false);
+    expect(resultadoVencido(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "aguardando_dados", data_auditoria: "2026-10-01T10:00:00Z" }), agora)).toBe(false);
   });
 });

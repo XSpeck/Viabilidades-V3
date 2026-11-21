@@ -141,3 +141,26 @@ export function ordenarResultados(lista: Viabilizacao[]): Viabilizacao[] {
 
 /** O pedido ainda está na fila, sem auditor: o atendente pode corrigir ou cancelar */
 export const podeMexerNaFila = (v: Viabilizacao) => v.status === "pendente" && !v.auditor_responsavel && !v.status_predio && !v.data_finalizacao;
+
+// ── Resultados que já foram vistos ───────────────────────────
+
+/** Depois de quantos dias um resultado final sai da lista principal do atendente (vai para o histórico) */
+export const DIAS_RESULTADO_NA_LISTA = 7;
+
+const CHAVES_FINAIS = new Set<ChaveStatus>(["aprovado", "sem_viab", "utp", "estruturado", "instalado"]);
+
+/** O pedido já tem resposta final (aprovado, sem viabilidade, UTP, estruturado) */
+export const ehResultadoFinal = (v: Viabilizacao) => CHAVES_FINAIS.has(statusDe(v).chave);
+
+/** Quando saiu a resposta final */
+export function dataDoResultado(v: Viabilizacao): string | undefined {
+  if (v.status_predio === "estruturado" && v.data_estruturacao) return v.data_estruturacao;
+  return v.data_auditoria ?? v.status_atualizado_em ?? v.data_solicitacao;
+}
+
+/** Resultado final com mais de 7 dias: some da lista principal (continua no histórico) */
+export function resultadoVencido(v: Viabilizacao, agora = Date.now()): boolean {
+  if (!ehResultadoFinal(v)) return false;
+  const d = dataDoResultado(v);
+  return !!d && agora - Date.parse(d) > DIAS_RESULTADO_NA_LISTA * 86400000;
+}
