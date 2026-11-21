@@ -1112,6 +1112,20 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       if (conflito) pendencias.push({ i, msg: `${nome}: a fibra F${l.fibra_entrada} do cabo "${curtoNome(l.cabo_entrada)}" já é usada pela ${conflito.pon} (rota ${conflito.rota})` });
     }
     if (l.tipo === "hub" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter primário da HUB (ou marque "Só passa")` });
+    // duas HUBs dividindo a mesma fibra: só vale com meia porta (a sub-rota sai pela outra perna do 1:2 da primeira)
+    if (l.tipo === "hub" && !l.passagem && l.splitter) {
+      let j = i - 1;
+      while (j >= 0 && !(linhas[j].tipo === "hub" && !linhas[j].passagem && linhas[j].splitter)) j--;
+      if (j >= 0) {
+        const pelaMeiaPorta = !!linhas[j].meiaPorta && !!paiEf?.meia_porta && j === troncoEf - 1;
+        if (!pelaMeiaPorta) {
+          pendencias.push({
+            i,
+            msg: `${nome}: a ${linhas[j].nome} já divide esta fibra com splitter. Marque "Só passa" numa delas, ou use meia porta (1:2 na primeira e esta rota saindo pela meia porta).`,
+          });
+        }
+      }
+    }
     if (l.tipo === "cto" && !l.passagem && !l.splitter) pendencias.push({ i, msg: `${nome}: escolha o splitter da CTO (ou marque "Só passa")` });
     if (l.tipo === "predio") {
       const v = vinculoDe(l);

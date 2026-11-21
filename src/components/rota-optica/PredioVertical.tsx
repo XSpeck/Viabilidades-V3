@@ -279,6 +279,15 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       const outro = rascunho.pontos.find((x) => x.id !== o.id && x.fibra === o.fibra && entDe(x) === eid);
       if (outro) return setErro(`${o.nome} e ${outro.nome} estão na mesma fibra F${o.fibra} do cabo de entrada.`);
     }
+    // fibra usada por outra rota da rede (outra CDOI, outra porta…) no mesmo cabo
+    for (const o of rascunho.pontos) {
+      const eid = entDe(o);
+      const ent = eid ? ents.find((x) => x.rota.id === eid) : undefined;
+      if (!ent || !o.fibra) continue;
+      const dono = ocupadas(ent.cabo, o).get(o.fibra);
+      if (dono) return setErro(`A fibra F${o.fibra} do cabo de entrada já é usada por ${dono}. Escolha outra para ${o.nome}.`);
+      if (o.fibra > capCabo(ent.cabo)) return setErro(`${o.nome}: o cabo de entrada só tem ${capCabo(ent.cabo)} fibras.`);
+    }
     const comRota = rascunho.pontos.filter((o) => entDe(o) && o.fibra);
     const removidas = (salvo?.pontos ?? []).filter((o) => o.rota_id && !comRota.some((x) => x.id === o.id));
     if (removidas.length && !confirm(`Excluir a rota de: ${removidas.map((o) => o.nome).join(", ")}? (CDOI tirada do prédio ou sem fibra)`)) return;
