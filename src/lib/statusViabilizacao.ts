@@ -38,6 +38,23 @@ export const ehUtp = (v: Pick<Viabilizacao, "status" | "motivo_rejeicao">) =>
 export const ehCancelado = (v: Pick<Viabilizacao, "motivo_desistencia">) =>
   !!v.motivo_desistencia?.startsWith("Cancelado pelo");
 
+/** Teve viabilidade aprovada (mesmo depois de finalizado pelo atendente) */
+export const foiAprovado = (v: Pick<Viabilizacao, "status" | "cto_numero" | "cdoi" | "motivo_rejeicao">) =>
+  !v.motivo_rejeicao && (v.status === "aprovado" || !!v.cto_numero || !!v.cdoi);
+
+/** A decisão que o auditor tomou (para o histórico dele) */
+export function decisaoDoAuditor(v: Viabilizacao): { rotulo: string; cor: string } {
+  if (v.status === "em_auditoria" && v.revisao_tipo === "reaberto") return { rotulo: "Reaberto", cor: AMARELO };
+  if (ehUtp(v)) return { rotulo: "UTP", cor: ROXO };
+  if (v.status_predio === "estruturado") return { rotulo: "Estruturado", cor: VERDE };
+  if (v.motivo_rejeicao) return { rotulo: "Sem viabilidade", cor: VERMELHO };
+  if (["aguardando_dados", "pronto_auditoria", "proposta_visita", "agendado"].includes(v.status_predio ?? "")) return { rotulo: "Pediu estrutura", cor: AZUL };
+  if (ehCancelado(v)) return { rotulo: "Cancelado", cor: CINZA };
+  if (foiAprovado(v)) return { rotulo: "Aprovado", cor: VERDE };
+  const s = statusDe(v);
+  return { rotulo: s.rotulo, cor: s.cor };
+}
+
 /** Como o pedido terminou (para o histórico) */
 function fim(v: Viabilizacao): StatusInfo {
   const base = { chave: "finalizado" as const, grupo: "finalizado" as const };
@@ -47,6 +64,7 @@ function fim(v: Viabilizacao): StatusInfo {
   if (v.motivo_rejeicao) return { ...base, rotulo: "Sem viabilidade", cor: VERMELHO };
   if (ehCancelado(v)) return { ...base, rotulo: "Cancelado", cor: CINZA };
   if (v.motivo_desistencia) return { ...base, rotulo: "Desistência", cor: LARANJA };
+  if (foiAprovado(v)) return { ...base, rotulo: "Aprovado", cor: VERDE };
   return { ...base, rotulo: "Finalizado", cor: CINZA };
 }
 

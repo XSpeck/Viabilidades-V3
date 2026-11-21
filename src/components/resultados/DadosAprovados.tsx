@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { ehUtp } from "@/lib/statusViabilizacao";
+import { ehUtp, foiAprovado } from "@/lib/statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 import { Caixa } from "@/components/comum/ui";
 
@@ -33,14 +33,15 @@ function linhas(r: Viabilizacao): [string, string | number | undefined][] {
 export default function DadosAprovados({ r }: { r: Viabilizacao }) {
   const [copiado, setCopiado] = useState(false);
 
-  if (r.status === "rejeitado") {
+  const finalizado = r.status === "finalizado";
+  if (r.status === "rejeitado" || (finalizado && r.motivo_rejeicao && !ehUtp(r))) {
     return <Caixa tom="vermelho" titulo="Sem viabilidade"><p>{r.motivo_rejeicao ?? "Não temos projeto neste ponto."}</p></Caixa>;
   }
-  if (r.status === "utp" && !r.status_instalacao) {
+  if ((r.status === "utp" || (finalizado && ehUtp(r))) && !r.status_instalacao) {
     return <Caixa tom="roxo" titulo="Atendemos via UTP"><p>Esta área é atendida por cabo de rede (UTP).</p></Caixa>;
   }
   // Aprovado direto (sem passar pela estrutura do prédio)
-  if (r.status !== "aprovado" || r.status_predio || ehUtp(r)) return null;
+  if (!foiAprovado(r) || r.status_predio || ehUtp(r)) return null;
 
   const dados = linhas(r).filter(([, v]) => v !== undefined && v !== "");
   const copiar = () =>

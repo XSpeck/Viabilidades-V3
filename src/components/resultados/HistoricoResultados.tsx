@@ -1,11 +1,39 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, Download, History, Loader2, Search } from "lucide-react";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import { semAcento } from "@/lib/localizacao";
 import { ehUtp, statusDe } from "@/lib/statusViabilizacao";
 import type { TipoInstalacao, Viabilizacao } from "@/types";
+import DadosAprovados from "./DadosAprovados";
+
+/** Detalhe de um pedido do histórico: dados da viabilidade, motivo, auditor e conversa */
+function Detalhe({ v }: { v: Viabilizacao }) {
+  return (
+    <div className="space-y-2 pt-2 text-sm text-gray-700">
+      <DadosAprovados r={v} />
+      {v.motivo_desistencia && <p className="text-xs text-gray-600">{v.motivo_desistencia}</p>}
+      {v.status_predio === "estruturado" && (
+        <p className="text-xs text-green-700">Prédio estruturado{v.tecnologia_predio ? ` (${v.tecnologia_predio})` : ""}{v.data_estruturacao ? ` em ${formatDateTime(v.data_estruturacao)}` : ""}.</p>
+      )}
+      {v.mensagens && v.mensagens.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-gray-500">Conversa com o auditor ({v.mensagens.length})</summary>
+          <ul className="mt-1 space-y-1">
+            {v.mensagens.map((m, i) => (
+              <li key={i} className="rounded border bg-white px-2 py-1"><span className="text-gray-500">{m.de} · {formatDateTime(m.data)}:</span> {m.texto}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="text-xs text-gray-400">
+        {v.auditado_por ? `Auditado por ${v.auditado_por} em ${formatDateTime(v.data_auditoria)}` : "Sem auditoria"}
+        {v.data_finalizacao ? ` · encerrado em ${formatDateTime(v.data_finalizacao)}` : ""}
+      </p>
+    </div>
+  );
+}
 
 const POR_PAGINA = 20;
 type Coluna = "data" | "cliente" | "tipo" | "status" | "auditor" | "dt_audit";
@@ -17,6 +45,9 @@ const motivoDe = (v: Viabilizacao) => v.motivo_rejeicao ?? v.motivo_desistencia 
 /** Histórico completo (inclusive finalizados): filtros, tabela no computador, cartões no celular, CSV */
 export default function HistoricoResultados({ carregar, nomeArquivo }: { carregar: () => Promise<Viabilizacao[]>; nomeArquivo: string }) {
   const [aberto, setAberto] = useState(false);
+  /** Pedido aberto para ver o detalhe */
+  const [detalhe, setDetalhe] = useState<string | null>(null);
+  const alternar = (id: string) => setDetalhe((d) => (d === id ? null : id));
   const [lista, setLista] = useState<Viabilizacao[] | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
@@ -171,6 +202,7 @@ export default function HistoricoResultados({ carregar, nomeArquivo }: { carrega
                       const st = statusDe(v);
                       return (
                         <li key={v.id} className="rounded-lg border px-3 py-2 text-sm">
+                          <button type="button" onClick={() => alternar(v.id)} className="w-full text-left" aria-expanded={detalhe === v.id}>
                           <div className="flex items-center gap-2">
                             <span className="min-w-0 flex-1 truncate font-medium text-gray-900">{v.nome_cliente ?? "-"}</span>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${st.cor}`}>{st.rotulo}</span>
@@ -178,6 +210,8 @@ export default function HistoricoResultados({ carregar, nomeArquivo }: { carrega
                           <p className="text-xs text-gray-500">{tipoDe(v)}{v.predio_ftta ? ` · ${v.predio_ftta}` : ""} · {formatDateTime(v.data_solicitacao)}</p>
                           {caixaDe(v) !== "-" && <p className="text-xs text-gray-500">{caixaDe(v)}{v.distancia_cliente ? ` · ${v.distancia_cliente}` : ""}</p>}
                           {motivoDe(v) !== "-" && <p className="text-xs text-gray-600">{motivoDe(v)}</p>}
+                          </button>
+                          {detalhe === v.id && <Detalhe v={v} />}
                         </li>
                       );
                     })}
@@ -204,12 +238,13 @@ export default function HistoricoResultados({ carregar, nomeArquivo }: { carrega
                         {itens.map((v) => {
                           const st = statusDe(v);
                           return (
-                            <tr key={v.id} className="hover:bg-gray-50">
+                            <Fragment key={v.id}>
+                            <tr onClick={() => alternar(v.id)} className={`cursor-pointer hover:bg-gray-50 ${detalhe === v.id ? "bg-indigo-50/50" : ""}`}>
                               <td className="whitespace-nowrap px-3 py-2.5 text-xs text-gray-500">{formatDateTime(v.data_solicitacao)}</td>
                               <td className="whitespace-nowrap px-3 py-2.5 text-xs">{tipoDe(v)}</td>
                               <td className="whitespace-nowrap px-3 py-2.5">{v.nome_cliente ?? "-"}</td>
                               <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-gray-500">
-                                <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 hover:underline">{locationToPlusCode(v.plus_code_cliente)}</a>
+                                <a href={`https://maps.google.com/?q=${encodeURIComponent(v.plus_code_cliente)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-indigo-600 hover:underline">{locationToPlusCode(v.plus_code_cliente)}</a>
                               </td>
                               <td className="whitespace-nowrap px-3 py-2.5 text-gray-600">{v.predio_ftta ?? "-"}</td>
                               <td className="whitespace-nowrap px-3 py-2.5 text-gray-600">{caixaDe(v)}</td>
@@ -219,6 +254,10 @@ export default function HistoricoResultados({ carregar, nomeArquivo }: { carrega
                               <td className="whitespace-nowrap px-3 py-2.5 text-xs text-gray-500">{v.auditado_por ?? "-"}</td>
                               <td className="whitespace-nowrap px-3 py-2.5 text-xs text-gray-500">{formatDateTime(v.data_auditoria)}</td>
                             </tr>
+                            {detalhe === v.id && (
+                              <tr><td colSpan={11} className="bg-gray-50 px-4 pb-3"><Detalhe v={v} /></td></tr>
+                            )}
+                            </Fragment>
                           );
                         })}
                       </tbody>

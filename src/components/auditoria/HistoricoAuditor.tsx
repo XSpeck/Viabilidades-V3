@@ -5,7 +5,7 @@ import { ChevronDown, History, Loader2, Search } from "lucide-react";
 import { getViabilizacoesRelatorio, reabrirAprovacao } from "@/lib/firestore";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import { semAcento } from "@/lib/localizacao";
-import { statusDe } from "@/lib/statusViabilizacao";
+import { decisaoDoAuditor } from "@/lib/statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 import DadosAprovados from "@/components/resultados/DadosAprovados";
 import { Botao, Caixa, campo, MsgErro, useAcao } from "@/components/comum/ui";
@@ -14,15 +14,7 @@ import type { Auditor } from "./tipos";
 const hoje = () => new Date().toISOString().slice(0, 10);
 const diasAtras = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 
-/** Situação vista pelo auditor: a decisão que ele tomou */
-function decisao(v: Viabilizacao): { rotulo: string; cor: string } {
-  if (v.status === "em_auditoria" && v.revisao_tipo === "reaberto") return { rotulo: "Reaberto", cor: "bg-amber-100 text-amber-700" };
-  if (v.status === "aprovado") return { rotulo: "Aprovado", cor: "bg-green-100 text-green-700" };
-  if (v.status === "rejeitado") return { rotulo: "Sem viabilidade", cor: "bg-red-100 text-red-700" };
-  if (v.status === "utp") return { rotulo: "UTP", cor: "bg-purple-100 text-purple-700" };
-  const s = statusDe(v);
-  return { rotulo: s.rotulo, cor: s.cor };
-}
+const decisao = decisaoDoAuditor;
 
 function ItemHistorico({ v, auditor }: { v: Viabilizacao; auditor: Auditor }) {
   const [aberto, setAberto] = useState(false);
@@ -52,7 +44,7 @@ function ItemHistorico({ v, auditor }: { v: Viabilizacao; auditor: Auditor }) {
           {v.motivo_desistencia && <p className="text-xs text-gray-600">{v.motivo_desistencia}</p>}
           <p className="text-xs text-gray-400">Pedido por <strong>{v.usuario}</strong> em {formatDateTime(v.data_solicitacao)}</p>
 
-          {v.status === "aprovado" && (feito ? (
+          {v.status === "aprovado" && !v.status_predio && (feito ? (
             <Caixa tom="amarelo"><p className="text-yellow-800">Reaberto: o pedido voltou para a sua lista.</p></Caixa>
           ) : !reabrindo ? (
             <Botao tipo="borda" onClick={() => setReabrindo(true)} className="text-xs text-amber-700">Reabrir para correção</Botao>

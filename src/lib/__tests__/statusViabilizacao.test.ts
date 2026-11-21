@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ordenarResultados, podeMexerNaFila, statusDe } from "../statusViabilizacao";
+import { decisaoDoAuditor, ordenarResultados, podeMexerNaFila, statusDe } from "../statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 
 const v = (x: Partial<Viabilizacao>): Viabilizacao =>
@@ -59,5 +59,20 @@ describe("podeMexerNaFila", () => {
     expect(podeMexerNaFila(v({}))).toBe(true);
     expect(podeMexerNaFila(v({ auditor_responsavel: "Carlos" }))).toBe(false);
     expect(podeMexerNaFila(v({ status: "em_auditoria" }))).toBe(false);
+  });
+});
+
+describe("depois de finalizado", () => {
+  const f = { status: "finalizado" as const, data_finalizacao: "2026-11-21" };
+  it("aprovado continua Aprovado para o atendente", () => {
+    expect(statusDe(v({ ...f, cto_numero: "2009.01.N" })).rotulo).toBe("Aprovado");
+    expect(statusDe(v({ ...f })).rotulo).toBe("Finalizado");
+  });
+  it("decisão do auditor", () => {
+    expect(decisaoDoAuditor(v({ ...f, cto_numero: "2009.01.N" })).rotulo).toBe("Aprovado");
+    expect(decisaoDoAuditor(v({ ...f, motivo_rejeicao: "Atendemos UTP" })).rotulo).toBe("UTP");
+    expect(decisaoDoAuditor(v({ status: "em_auditoria", tipo_instalacao: "Prédio", status_predio: "pronto_auditoria" })).rotulo).toBe("Pediu estrutura");
+    expect(decisaoDoAuditor(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "estruturado" })).rotulo).toBe("Estruturado");
+    expect(decisaoDoAuditor(v({ status: "rejeitado", tipo_instalacao: "Prédio", status_predio: "rejeitado", motivo_rejeicao: "Edifício sem viabilidade: x" })).rotulo).toBe("Sem viabilidade");
   });
 });

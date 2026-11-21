@@ -115,7 +115,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
         <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
           <p>Tem projeto na rua, mas o condomínio ainda não tem estrutura?</p>
           <Botao ocupado={acao.ocupado} className="w-full bg-blue-600 hover:bg-blue-700"
-            onClick={() => acao.rodar(() => solicitarViabilizacaoPredio(v.id), () => onFeito("Pedido de dados da estrutura enviado ao atendente."))}>
+            onClick={() => acao.rodar(() => solicitarViabilizacaoPredio(v.id, auditor.nome, auditor.uid), () => onFeito("Pedido de dados da estrutura enviado ao atendente."))}>
             Solicitar estrutura do condomínio
           </Botao>
         </div>

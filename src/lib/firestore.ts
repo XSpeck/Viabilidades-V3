@@ -519,10 +519,13 @@ export async function salvarCTOEscolhida(
 // Prédios / Condomínios
 // =====================
 
-export async function solicitarViabilizacaoPredio(id: string): Promise<void> {
+export async function solicitarViabilizacaoPredio(id: string, auditor?: string, auditorId?: string): Promise<void> {
+  const agora = new Date().toISOString();
   await updateViabilizacao(id, {
     status_predio: "aguardando_dados",
-    data_solicitacao_predio: new Date().toISOString(),
+    data_solicitacao_predio: agora,
+    // a decisão "precisa de estrutura" é do auditor: entra no histórico e nos números dele
+    ...(auditor ? { auditado_por: auditor, auditado_por_id: auditorId, data_auditoria: agora } : {}),
   });
 }
 

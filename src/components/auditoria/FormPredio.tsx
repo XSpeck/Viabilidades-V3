@@ -80,7 +80,7 @@ export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsE
             <BotaoConfirmar rotulo="UTP" pergunta="Atender por UTP?" classeAberto="col-span-3 order-last" ocupado={acao.ocupado}
               onConfirmar={() => acao.rodar(() => marcarUTP(v.id, auditor.nome, auditor.uid), () => onFeito(`${quem}: marcado como UTP.`))} />
             <BotaoConfirmar rotulo="Pedir estrutura" pergunta="Pedir os dados do síndico?" classeAberto="col-span-3 order-last" ocupado={acao.ocupado}
-              onConfirmar={() => acao.rodar(() => solicitarViabilizacaoPredio(v.id), () => onFeito("Pedido de dados do prédio enviado ao atendente."))} />
+              onConfirmar={() => acao.rodar(() => solicitarViabilizacaoPredio(v.id, auditor.nome, auditor.uid), () => onFeito("Pedido de dados do prédio enviado ao atendente."))} />
           </div>
           <Botao tipo="borda" onClick={() => setSemViab(true)} className="w-full text-red-600">Sem viabilidade</Botao>
         </>
