@@ -411,6 +411,13 @@ export default function RotaOpticaPage() {
                 rota={r}
                 catalogo={catalogo}
                 emJanela
+                origemTexto={
+                  r.pai
+                    ? `Sub-rota de ${rotas.find((x) => x.id === r.pai!.rota_id)?.nome ?? "rota-mãe"}, saindo de ${r.tronco ? r.elementos[r.tronco - 1]?.nome : "?"}`
+                    : rotas.some((x) => x.pai?.rota_id === r.id)
+                      ? `Rota tronco · ${rotas.filter((x) => x.pai?.rota_id === r.id).length} sub-rota(s) saindo dela`
+                      : undefined
+                }
                 onEditar={() => { setRotasAbertas((rs) => rs.filter((x) => x.id !== j.id)); setModo({ tipo: "editar", rota: r }); }}
                 onExcluir={() => excluir(r)}
               />
@@ -492,6 +499,7 @@ function VisualizarRota({
   rota,
   catalogo = [],
   emJanela,
+  origemTexto,
   onEditar,
   onExcluir,
 }: {
@@ -499,6 +507,8 @@ function VisualizarRota({
   catalogo?: ItemCatalogo[];
   /** Dentro de uma janela: sem o nome repetido */
   emJanela?: boolean;
+  /** "Sub-rota de …" / "Rota tronco · …" */
+  origemTexto?: string;
   onEditar?: () => void;
   onExcluir?: () => void;
 }) {
@@ -531,6 +541,7 @@ function VisualizarRota({
               {rota.criado_por ? ` · por ${rota.criado_por}` : ""}
               {rota.atualizado_em ? ` · atualizada em ${new Date(rota.atualizado_em).toLocaleDateString("pt-BR")}` : ""}
             </p>
+            {origemTexto && <p className="mt-1 inline-block rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">{origemTexto}</p>}
             {rota.obs && <p className="text-sm text-gray-600 mt-1">{rota.obs}</p>}
           </div>
           {(onEditar || onExcluir) && (

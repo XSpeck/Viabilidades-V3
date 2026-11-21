@@ -721,7 +721,7 @@ function ResumoPon({ arvore, onAbrirRota }: { arvore: ArvorePon; onAbrirRota: (i
   const pior = comPot.sort((a, b) => a.p - b.p)[0];
   const nvPior = nivelPotencia(pior?.p);
   const maisLonge = pontas.reduce<NoArvore | undefined>((m, n) => (!m || n.distancia > m.distancia ? n : m), undefined);
-  const ORDEM: ReturnType<typeof tipoVisual>[] = ["dio", "ceo", "ct", "hub", "cto", "cdoi", "onu", "outro"];
+  const ORDEM: ReturnType<typeof tipoVisual>[] = ["dio", "ceo", "ct", "hub", "cto", "predio", "cdoi", "onu", "outro"];
   const pct = (v: number) => (tot.total ? (v / tot.total) * 100 : 0);
 
   const tiles: { icone: React.ReactNode; rotulo: string; valor: string; detalhe?: string; cor?: string }[] = [
@@ -863,7 +863,7 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
                       <span className="text-slate-300">·</span>
                     </>
                   ) : null}
-                  {r.pai?.meia_porta ? "meia porta · " : ""}sai de {curtoNome(ancora?.nome ?? "?")}
+                  {r.pai?.meia_porta ? "meia porta · " : ""}{nivel === 0 || !c?.hex ? `sai de ${curtoNome(ancora?.nome ?? "?")}` : ""}
                 </>
               )}
             </p>

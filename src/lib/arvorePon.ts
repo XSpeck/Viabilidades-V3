@@ -130,7 +130,7 @@ function montar(chave: string, rotulo: string, olt: string, rotas: RotaOptica[],
   const calc = (n: NoArvore): void => {
     n.filhos.forEach(calc);
     n.clientes = (pernasSplitter(n)?.clientes ?? 0) + n.filhos.reduce((s, f) => s + f.clientes, 0);
-    n.pontas = (n.fimDe.length > 0 ? 1 : 0) + n.filhos.reduce((s, f) => s + f.pontas, 0);
+    n.pontas = (n.fimDe.length > 0 && n.filhos.length === 0 ? 1 : 0) + n.filhos.reduce((s, f) => s + f.pontas, 0);
     n.abaixo = n.filhos.reduce((s, f) => s + 1 + f.abaixo, 0);
   };
   calc(raiz);

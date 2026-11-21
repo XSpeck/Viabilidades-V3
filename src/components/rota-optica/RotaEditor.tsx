@@ -72,7 +72,7 @@ interface Linha {
   /** Postes do cabo no trecho que chega neste elemento */
   vertices: Ponto[];
   obs: string;
-  /** CDOI colocada com a ferramenta Prédio: em que prédio, bloco e andar ela fica (gravado no prédio ao salvar) */
+  /** Elemento Prédio (entrada do cabo): em que prédio o cabo chega (o prédio novo é criado ao salvar) */
   predio?: VinculoPredio;
   /** Posição deste elemento na rota salva (para salvar só ele) */
   orig?: number;
@@ -339,8 +339,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const nomeAntes = useRef("");
   /** Cabo sendo renomeado (lápis no quadro do cabo) */
   const [renomear, setRenomear] = useState<{ i: number; antigo: string } | null>(null);
-  /** Prédios cadastrados (a ferramenta Prédio coloca a CDOI num deles ou cria um novo) */
+  /** Prédios cadastrados (a ferramenta Prédio leva o cabo até um deles ou cria um novo) */
   const [predios, setPredios] = useState<PredioRede[]>([]);
+  /** Rota de uma CDOI montada pelo prédio: quem manda nela é a janela do prédio */
+  const predioDono = inicial?.id ? predios.find((p) => p.pontos.some((o) => o.rota_id === inicial.id)) : undefined;
   useEffect(() => {
     let vivo = true;
     listarPredios().then((ps) => vivo && setPredios(ps)).catch(() => {});
@@ -409,7 +411,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     pontosRede.push({ nome: el.nome, tipo: el.tipo, lat: el.lat!, lon: el.lon!, naRota: chavesNaRota.has(chaveElemento(el)) });
     itemDoPonto.push(k);
   });
-  /** Clique num marcador da rede: no prédio com a ferramenta Prédio, a CDOI nova entra nele */
+  /** Clique num marcador da rede: no prédio com a ferramenta Prédio, o cabo chega nele */
   function clicarRede(k: number) {
     const p = pontosRede[k];
     if (p?.tipo === "predio" && ferramenta === "predio") return clicarMapa(p.lat, p.lon);
@@ -880,26 +882,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   function usarDaRede(k: number, predioNome?: string) {
     const it = redeInfo.itens[k];
     if (!it) return;
-    // Rota vazia e clique num prédio: copia o caminho até a caixa de onde o cabo sai (ex.: a HUB) e já fica com a ferramenta Prédio
+    // Rota vazia e clique num prédio: o prédio se monta na janela dele; um cabo novo começa pela caixa de origem
     if (predioNome && !linhas.length) {
       setAviso(`Para mexer no ${predioNome}, abra-o na Árvore. Para levar outro cabo até ele, comece pela caixa de onde o cabo sai (ex.: a HUB) e use a ferramenta Prédio.`);
-      return;
-    }
-    if (predioNome && !linhas.length && it.i > 0) {
-      const r = it.rota;
-      const manual = r.origem !== "geogrid";
-      const novas = r.elementos.slice(0, it.i).map((x, j) => ({
-        ...paraLinha(x, manual ? r.trechos.find((t) => t.ate === j)?.pontos.slice(1, -1) ?? [] : []),
-        dist_auto: false,
-      }));
-      mudar(() => novas);
-      if (r.calculo_potencia) setCalc(r.calculo_potencia);
-      // vira sub-rota da rota dona da caixa de onde o cabo sai
-      setPai({ rota_id: donoDoElemento(r, it.i - 1, todas ?? rede).id, chave: chaveElemento(r.elementos[it.i - 1]) });
-      setTronco(it.i);
-      setSel(it.i - 1);
-      setFerramenta("predio");
-      setAviso(`Começando pelo caminho até ${r.elementos[it.i - 1].nome}. Agora clique no prédio ${predioNome} para colocar a nova CDOI.`);
       return;
     }
     const e = it.el;
@@ -2401,6 +2386,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     </button>
                   </div>
                 </div>
+              )}
+              {predioDono && (
+                <p className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                  Esta é a rota de uma CDOI do prédio <b>{predioDono.nome}</b>. Fibra, splitter, andar e nome são definidos na janela do prédio (Árvore → clique no prédio → Editar):
+                  mudanças feitas aqui voltam ao que está no prédio quando ele for salvo.
+                </p>
               )}
               {paiEf && (
                 <p className="mb-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">

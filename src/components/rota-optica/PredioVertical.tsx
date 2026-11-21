@@ -399,14 +399,16 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
         {erroCarga && <p className="text-xs text-red-600">{erroCarga}</p>}
         <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-4 text-center">
           <Building2 className="mx-auto h-9 w-9 text-sky-600" />
-          <p className="mt-2 text-sm font-semibold text-slate-800">Esta CDOI ainda não está num prédio</p>
-          <p className="text-xs text-slate-500">Monte o prédio com blocos e andares e mostre em que andar fica cada CDOI e quais andares ela atende.</p>
+          <p className="mt-2 text-sm font-semibold text-slate-800">Esta CDOI está fora de prédio</p>
+          <p className="text-xs text-slate-500">
+            O jeito normal é levar o cabo até o prédio numa rota (ferramenta Prédio) e montar as CDOIs na janela dele. Para uma CDOI avulsa, dá para montar o desenho do prédio a partir dela aqui.
+          </p>
           <button
             type="button"
             onClick={() => { const p = predioNovo(curto(nome.replace(/^\s*CDOI\s*/i, ""), 40) || "Prédio", chave, nome); setRascunho(p); setSelPonto(p.pontos[0].id); }}
             className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700"
           >
-            <Plus className="h-4 w-4" /> Montar prédio
+            <Plus className="h-4 w-4" /> Montar prédio a partir desta CDOI
           </button>
         </div>
         {outros.length > 0 && (
