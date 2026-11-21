@@ -47,6 +47,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, semRota, o
   const [selectedName, setSelectedName] = useState<string | null>(initialCto ?? null);
   const [confirming, setConfirming] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Só a busca mais recente vale (trocar o raio rápido não deixa resposta velha por cima) */
+  const pedidoRef = useRef(0);
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   // Fluxo em 2 etapas
@@ -54,6 +56,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, semRota, o
   const [confirmedData, setConfirmedData] = useState<SelectedCto | null>(null);
 
   const loadCtos = useCallback(async (lat: number, lon: number, r: number) => {
+    const pedido = ++pedidoRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -67,8 +70,11 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, semRota, o
         return;
       }
 
-      const withRoutes = await calculateRoutes(lat, lon, nearby, 6);
-      setCtos(withRoutes);
+      // rota a pé das 10 mais perto em linha reta; mostra as 6 melhores a pé
+      // (uma CTO um pouco mais longe em linha reta pode ser mais perto pela rua)
+      const withRoutes = await calculateRoutes(lat, lon, nearby, 10);
+      if (pedidoRef.current !== pedido) return; // chegou resposta mais nova
+      setCtos(withRoutes.slice(0, 6));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar CTOs.");
     } finally {
@@ -162,8 +168,8 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, semRota, o
         {step === "selecionar" && (
           <>
             <div className="flex items-center gap-3">
-              <label className="text-sm text-gray-600 whitespace-nowrap">
-                Raio: <strong>{radius}m</strong>
+              <label className="text-sm text-gray-600 whitespace-nowrap" title="Procura as CTOs dentro deste raio em linha reta e mostra as 6 mais perto a pé">
+                Raio em linha reta: <strong>{radius}m</strong>
               </label>
               <input
                 type="range" min={200} max={1000} step={50}
@@ -174,6 +180,7 @@ export default function CtoBusca({ plusCode, nomeCliente, initialCto, semRota, o
               />
               <span className="text-xs text-gray-400 whitespace-nowrap">1km</span>
             </div>
+            <p className="-mt-1 text-xs text-gray-400">Mostra as 6 mais perto pela rua (distância a pé) dentro do raio.</p>
 
             {loading && (
               <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500">

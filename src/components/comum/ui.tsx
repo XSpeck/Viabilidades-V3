@@ -101,13 +101,15 @@ export function Botao({ tipo = "primario", ocupado, children, className = "", ..
 }
 
 /** Botão que pede um segundo clique ("Tem certeza?") antes de agir */
-export function BotaoConfirmar({ rotulo, pergunta, confirmar = "Sim", tipo = "borda", ocupado, onConfirmar }: {
+export function BotaoConfirmar({ rotulo, pergunta, confirmar = "Sim", tipo = "borda", ocupado, onConfirmar, classeAberto = "" }: {
   rotulo: ReactNode; pergunta: string; confirmar?: string; tipo?: keyof typeof BOTOES; ocupado?: boolean; onConfirmar: () => void;
+  /** Classes extras quando a pergunta está aberta (ex.: col-span para ocupar a linha) */
+  classeAberto?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   if (!aberto) return <Botao tipo={tipo} onClick={() => setAberto(true)} className="text-xs">{rotulo}</Botao>;
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs">
+    <div className={`flex flex-wrap items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs ${classeAberto}`}>
       <span className="text-gray-700">{pergunta}</span>
       <Botao tipo="primario" ocupado={ocupado} onClick={onConfirmar} className="px-2.5 py-1 text-xs">{confirmar}</Botao>
       <button type="button" onClick={() => setAberto(false)} className="text-gray-500 hover:text-gray-700">Não</button>

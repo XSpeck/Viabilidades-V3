@@ -917,7 +917,7 @@ export default function CtoMap({
                     cursor: "pointer", fontWeight: 600, fontSize: 12,
                   }}
                 >
-                  ✅ Confirmar esta CTO
+                  ✅ Confirmar esta {cto.name.toUpperCase().startsWith("CDOI") ? "CDOI" : "CTO"}
                 </button>
               </div>
             </Popup>
