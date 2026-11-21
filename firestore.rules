@@ -84,6 +84,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Clientes da rede (cadastro e ligação com a perna da CTO/CDOI) — só ADM
+    match /clientes_rede/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // Bairros de rede
     match /bairros_rede/{id} {
       allow read: if isAuth();

@@ -18,6 +18,8 @@ export interface PortaCaixa {
   status: StatusPorta;
   /** Nome/código do cliente ou da caixa de destino */
   descricao?: string;
+  /** Cliente do cadastro ligado nesta perna */
+  cliente_id?: string;
 }
 
 /** Uma fibra de um cabo */
@@ -207,12 +209,22 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
   });
 }
 
+/** Porta como vai para o banco (sem campos vazios) */
+function gravarPorta(p: PortaCaixa): PortaCaixa {
+  return {
+    numero: p.numero,
+    status: p.status,
+    ...(p.descricao?.trim() ? { descricao: p.descricao.trim() } : {}),
+    ...(p.status === "cliente" && p.cliente_id ? { cliente_id: p.cliente_id } : {}),
+  };
+}
+
 export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">): Promise<CaixaRede> {
   const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
   const { db } = await import("./firebase");
   const id = idCaixa(dados.chave);
   const portas = portasPara(dados.splitter, dados.portas).map((p) =>
-    p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status }
+    gravarPorta(p)
   );
   // Vários splitters: grava a lista; splitter/portas ficam com o primeiro (telas antigas)
   const splitters = (dados.splitters ?? []).map((x) => ({
@@ -220,7 +232,7 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     relacao: x.relacao,
     modelo_id: x.modelo_id ?? "",
     entrada: x.entrada.fibra ? { fibra: x.entrada.fibra } : x.entrada.splitter ? { splitter: x.entrada.splitter } : {},
-    portas: portasPara(x.relacao, x.portas).map((p) => (p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status })),
+    portas: portasPara(x.relacao, x.portas).map((p) => (gravarPorta(p))),
   }));
   const registro = {
     chave: dados.chave,
@@ -230,7 +242,7 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     emendas: (dados.emendas ?? []).map((x) => ({ de: { cabo: x.de.cabo, fibra: x.de.fibra }, para: { cabo: x.para.cabo, fibra: x.para.fibra } })),
     atendimento: (dados.atendimento ?? [])
       .filter((p) => p.status !== "livre" || p.descricao?.trim())
-      .map((p) => (p.descricao?.trim() ? { numero: p.numero, status: p.status, descricao: p.descricao.trim() } : { numero: p.numero, status: p.status })),
+      .map((p) => (gravarPorta(p))),
     splitter: dados.splitter ?? "",
     splitter_modelo: dados.splitter ? dados.splitter_modelo ?? "" : "",
     portas,

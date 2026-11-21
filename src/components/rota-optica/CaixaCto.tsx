@@ -18,6 +18,7 @@ import {
 } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
+import type { ClienteRede } from "@/lib/clientesRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import { cortar } from "@/lib/textoCompleto";
 
@@ -40,6 +41,9 @@ interface Props {
   /** Abre direto na edição; Salvar/Cancelar chamam onFechar */
   soEdicao?: boolean;
   onFechar?: () => void;
+  /** Clientes do cadastro (para ligar numa perna) e os que já estão ligados em outra caixa */
+  clientes?: ClienteRede[];
+  clientesOcupados?: Set<string>;
 }
 
 const ROW = 22;
@@ -66,7 +70,7 @@ const textoSaida = (s: { nome: string; cabo?: string; fibra?: number }) => {
   return resto ? `${s.nome} · ${resto}` : s.nome;
 };
 
-export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas, tipoCaixa = "CTO", soEdicao, onFechar }: Props) {
+export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas, tipoCaixa = "CTO", soEdicao, onFechar, clientes: cadastro = [], clientesOcupados }: Props) {
   const el = no.elemento;
   const chave = chaveElemento(el);
   const [editando, setEditando] = useState(!!soEdicao);
@@ -476,7 +480,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                                 <button
                                   key={st}
                                   type="button"
-                                  onClick={() => porta(s, p.numero, { status: st, descricao: st === "livre" ? undefined : p.descricao })}
+                                  onClick={() => porta(s, p.numero, { status: st, descricao: st === "livre" ? undefined : p.descricao, cliente_id: st === "cliente" ? p.cliente_id : undefined })}
                                   className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${p.status === st ? COR_ST[st] : "text-slate-500"}`}
                                 >
                                   {st === "livre" ? "Livre" : st === "cliente" ? "Cliente" : "Ramal"}
@@ -488,6 +492,31 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                                 <option value="">Fibra que segue…</option>
                                 {saidas.map((x) => <option key={textoSaida(x)} value={textoSaida(x)}>{x.fibra ? `F${x.fibra} → ` : ""}{curto(x.nome, 26)}</option>)}
                               </select>
+                            ) : p.status === "cliente" && cadastro.length > 0 ? (
+                              // cliente do cadastro (ou digitado, para quem ainda não foi cadastrado)
+                              <div className="flex min-w-0 flex-1 gap-1">
+                                <select
+                                  className={campo}
+                                  value={p.cliente_id ?? ""}
+                                  onChange={(e) => {
+                                    const c = cadastro.find((x) => x.id === e.target.value);
+                                    porta(s, p.numero, c ? { cliente_id: c.id, descricao: c.nome } : { cliente_id: undefined });
+                                  }}
+                                >
+                                  <option value="">Cliente do cadastro…</option>
+                                  {cadastro.map((c) => {
+                                    const emOutra = clientesOcupados?.has(c.id) || spls.some((x) => x.portas.some((y) => y.cliente_id === c.id && !(x.id === s.id && y.numero === p.numero)));
+                                    return (
+                                      <option key={c.id} value={c.id} disabled={emOutra}>
+                                        {c.nome}{c.codigo ? ` · ${c.codigo}` : ""}{emOutra ? " (já ligado)" : ""}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {!p.cliente_id && (
+                                  <input className={campo} value={p.descricao ?? ""} onChange={(e) => porta(s, p.numero, { descricao: e.target.value })} placeholder="ou digite" />
+                                )}
+                              </div>
                             ) : (
                               <input
                                 className={campo}

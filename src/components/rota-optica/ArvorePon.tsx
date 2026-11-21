@@ -22,6 +22,7 @@ import BuscaRede from "./BuscaRede";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
+import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
 
 interface Props {
   rotas: RotaOptica[];
@@ -30,6 +31,8 @@ interface Props {
   catalogo: ItemCatalogo[];
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
+  /** Clientes do cadastro (para ligar nas pernas de CTO/CDOI) */
+  clientes?: ClienteRede[];
   onCaboSalvo: (c: CaboRede) => void;
   onAbrirRota: (id: string) => void;
   /** Rotas criadas fora do editor (ex.: CDOI nova no prédio): recarregar */
@@ -96,7 +99,7 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram, clientes = [] }: Props) {
   /** Prédios: agrupam as CDOIs na árvore e entram como destino das fibras de um cabo */
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
@@ -572,6 +575,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               catalogo={catalogo}
               usuario={usuario}
               onCaixaSalva={onCaixaSalva}
+              clientes={clientes}
               onAbrirRota={onAbrirRota}
               onFechar={() => fecharJanela(j.id)}
             />
@@ -584,10 +588,11 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram,
+  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram, clientes = [],
 }: {
   onRotasMudaram?: () => void;
   onAbrirNo: (id: string) => void;
+  clientes?: ClienteRede[];
   no: NoArvore;
   rotas: RotaOptica[];
   todasRotas: RotaOptica[];
@@ -608,6 +613,7 @@ function JanelaNo({
   const [aba, setAba] = useState<"primario" | "cto" | "cdoi" | "ceo" | "ct" | "dio" | "predio" | "emendas" | "diagrama" | "caminho">(
     ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
+  const ocupadosFora = new Set([...ligacoesDosClientes(todasRotas, caixas)].filter(([, l]) => l.chave !== chaveElemento(no.elemento)).map(([id]) => id));
   /** CDOIs do prédio (descendentes do nó) para abrir a janela de cada uma */
   const abrirCdoi = (k: string) => {
     const todos = (n: NoArvore): NoArvore[] => [n, ...n.filhos.flatMap(todos)];
@@ -679,6 +685,8 @@ function JanelaNo({
           usuario={usuario}
           onSalva={onCaixaSalva}
           saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+          clientes={clientes}
+          clientesOcupados={ocupadosFora}
         />
       ) : aba === "cdoi" ? (
         <CaixaCto
@@ -694,6 +702,8 @@ function JanelaNo({
           }}
           saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
           tipoCaixa="CDOI"
+          clientes={clientes}
+          clientesOcupados={ocupadosFora}
         />
       ) : aba === "predio" ? (
         <PredioVertical

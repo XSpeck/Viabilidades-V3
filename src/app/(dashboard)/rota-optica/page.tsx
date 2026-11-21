@@ -26,13 +26,15 @@ import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
 import { listarPredios, salvarPredio } from "@/lib/prediosRede";
 import { montarRotas, subRotasDe } from "@/lib/subRotas";
+import { listarClientes, type ClienteRede } from "@/lib/clientesRede";
+import ClientesRede from "@/components/rota-optica/ClientesRede";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, X, Zap } from "lucide-react";
+import { Boxes, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -70,6 +72,9 @@ export default function RotaOpticaPage() {
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
   /** Janela de limpeza (resíduos de rotas apagadas) */
   const [limpeza, setLimpeza] = useState<{ x: number; y: number } | null>(null);
+  /** Janela do cadastro de clientes */
+  const [janelaClientes, setJanelaClientes] = useState<{ x: number; y: number } | null>(null);
+  const [clientes, setClientes] = useState<ClienteRede[]>([]);
   /** Janela do simulador de rompimento (OTDR) */
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   /** Tela principal: árvore das portas PON ou mapa da rede */
@@ -106,6 +111,9 @@ export default function RotaOpticaPage() {
     listarCabos()
       .then((cb) => { if (ativo) setCabos(cb); })
       .catch((e) => console.warn("Não foi possível carregar os cabos:", e));
+    listarClientes()
+      .then((cl) => { if (ativo) setClientes(cl); })
+      .catch((e) => console.warn("Não foi possível carregar os clientes (publique a regra clientes_rede):", e));
     listarCaixas()
       .then((cx) => { if (ativo) setCaixas(cx); })
       .catch((e) => console.warn("Não foi possível carregar as caixas:", e));
@@ -259,6 +267,13 @@ export default function RotaOpticaPage() {
                 >
                   <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setJanelaClientes({ x: Math.max(8, (window.innerWidth - 560) / 2), y: 72 }); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <Users className="w-4 h-4 text-emerald-600" /> Clientes
+                </button>
               </div>
             </details>
             <button
@@ -333,6 +348,20 @@ export default function RotaOpticaPage() {
         </Janela>
       )}
 
+      {janelaClientes && (
+        <Janela
+          inicial={janelaClientes}
+          largura={560}
+          titulo="Clientes"
+          subtitulo="Cadastro e ligação na perna da CTO / CDOI"
+          icone={<Users className="w-5 h-5" />}
+          corBarra="bg-emerald-800"
+          onFechar={() => setJanelaClientes(null)}
+        >
+          <ClientesRede rotas={rotas} caixas={caixas} clientes={clientes} usuario={user?.nome ?? ""} onClientes={setClientes} onCaixas={setCaixas} />
+        </Janela>
+      )}
+
       {limpeza && (
         <Janela
           inicial={limpeza}
@@ -389,6 +418,7 @@ export default function RotaOpticaPage() {
           <ArvorePonView
             rotas={rotas}
             caixas={caixas}
+            clientes={clientes}
             cabos={cabos}
             catalogo={catalogo}
             onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
