@@ -32,8 +32,6 @@ interface Props {
   onAbrirRota: (id: string) => void;
   /** Dentro de uma janela: sem barra de título própria */
   semMoldura?: boolean;
-  /** Caixas para escolher como destino de uma fibra marcada à mão (as deste cabo primeiro) */
-  destinos?: { nome: string; doCabo: boolean }[];
   /** Fibra clicada: a árvore mostra o caminho dela */
   onFibra?: (n: number) => void;
 }

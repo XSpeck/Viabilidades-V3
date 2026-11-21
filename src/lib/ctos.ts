@@ -235,7 +235,7 @@ export async function getWalkingRoute(
     if (data.code !== "Ok" || !data.routes?.length) throw new Error("OSRM sem rota");
 
     const route = data.routes[0];
-    let distance: number = route.distance;
+    const distance: number = route.distance;
 
     // Verificação de sanidade: se rota > 5x linha reta, provável erro de dado
     let warningMsg: string | undefined;

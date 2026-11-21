@@ -478,19 +478,6 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
   };
   // ---------- Entradas de cabo e fibras ----------
   const entradas = entradasDo(predio);
-  /** Fibras já usadas neste cabo (rede toda + planejadas no prédio) e por quem */
-  const usadasNoCabo = (cabo: string) => {
-    const k = chaveCabo(cabo);
-    const m = new Map<number, string>();
-    rotas.forEach((rt) => rt.elementos.forEach((e) => {
-      if (e.cabo_entrada && e.fibra_entrada && chaveCabo(e.cabo_entrada) === k && !m.has(e.fibra_entrada)) m.set(e.fibra_entrada, e.nome);
-    }));
-    predio.pontos.forEach((o) => {
-      const cb = o.cabo ?? fibraDe(o.id)?.cabo;
-      if (cb && o.fibra && chaveCabo(cb) === k && !m.has(o.fibra)) m.set(o.fibra, o.nome);
-    });
-    return m;
-  };
   const capCabo = (cabo: string) => capacidadeRegistrada(cabo) ?? 12;
   /** Fibras ocupadas no cabo de uma entrada (rede toda + outras CDOIs do prédio), sem contar a própria CDOI */
   function ocupadas(cabo: string, o: PontoPredio): Map<number, string> {
@@ -1100,69 +1087,24 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                         </div>
                       );
                     })() : (() => {
+                      // CDOI que veio de uma rota feita fora do prédio: a fibra é a da rota (muda-se no editor da rota)
                       const f = fibraDe(o.id);
                       const rotaId = rotaDe.get(o.id);
                       if (rotaId && f) {
-                        const atual = o.fibra ?? f.fibra;
-                        const c = corFibra(atual, f.cabo);
-                        const capR = capacidadeRegistrada(f.cabo) ?? 12;
-                        const usadas = usadasNoCabo(f.cabo);
+                        const c = corFibra(f.fibra, f.cabo);
                         return (
                           <div className="mt-1 flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600" onClick={(e) => e.stopPropagation()}>
-                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: atual ? c.hex : "#cbd5e1" }} />
-                            <span className="shrink-0 font-semibold">Fibra</span>
-                            <select
-                              className={`${campo} w-auto ${!atual ? "border-amber-400" : ""}`}
-                              value={atual ?? ""}
-                              onChange={(e) => mudarPonto(o.id, { fibra: e.target.value ? +e.target.value : undefined })}
-                            >
-                              <option value="">escolha…</option>
-                              {Array.from({ length: capR }, (_, k) => k + 1).map((fb) => {
-                                const dono = usadas.get(fb);
-                                const minha = dono === o.nome || fb === f.fibra;
-                                return (
-                                  <option key={fb} value={fb} disabled={!!dono && !minha}>
-                                    F{fb} {corFibra(fb, f.cabo).nome.toLowerCase()}{dono && !minha ? ` → ${curto(dono, 12)}` : ""}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            <span className="min-w-0 flex-1 truncate">do cabo {curto(f.cabo, 24)}</span>
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
+                            <span className="min-w-0 flex-1 truncate">Fibra {f.fibra ?? "?"} ({c.nome.toLowerCase()}) do cabo {curto(f.cabo, 24)} · da rota</span>
                             {onAbrirRota && (
-                              <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirRota(rotaId); }} className="shrink-0 font-semibold text-sky-700 hover:underline" title="Abrir a rota desta CDOI">
-                                rota
+                              <button type="button" onClick={() => onAbrirRota(rotaId)} className="shrink-0 font-semibold text-sky-700 hover:underline">
+                                ver rota
                               </button>
                             )}
                           </div>
                         );
                       }
-                      // sem rota: escolhe cabo e fibra (planejado)
-                      const nomesCabos = [...new Set([...cabos.filter((g) => g.de !== "planejado").map((g) => g.cabo), ...(o.cabo ? [o.cabo] : [])])];
-                      if (!nomesCabos.length) return <p className="mt-1 text-[10px] text-amber-700">CDOI sem rota: só aparece no desenho.</p>;
-                      const caboSel = o.cabo ?? "";
-                      const g = cabos.find((x) => chaveCabo(x.cabo) === chaveCabo(caboSel));
-                      const cap = capacidadeRegistrada(caboSel) ?? 12;
-                      return (
-                        <div className="mt-1 grid grid-cols-[1fr_92px] gap-1">
-                          <select className={campo} value={caboSel} onChange={(e) => mudarPonto(o.id, { cabo: e.target.value || undefined, fibra: undefined })} title="Cabo que leva a fibra até esta CDOI">
-                            <option value="">Fibra que chega: escolha o cabo…</option>
-                            {nomesCabos.map((nm) => <option key={nm} value={nm}>{curto(nm, 40)}</option>)}
-                          </select>
-                          <select className={campo} disabled={!caboSel} value={o.fibra ?? ""} onChange={(e) => mudarPonto(o.id, { fibra: e.target.value ? +e.target.value : undefined })}>
-                            <option value="">fibra…</option>
-                            {Array.from({ length: cap }, (_, k) => k + 1).map((fb) => {
-                              const usada = g?.gotas.find((x) => x.fibra === fb && x.ponto !== o.id);
-                              const dono = usada ? predio.pontos.find((x) => x.id === usada.ponto)?.nome : undefined;
-                              return (
-                                <option key={fb} value={fb} disabled={!!usada}>
-                                  F{fb} {corFibra(fb, caboSel).nome.toLowerCase()}{dono ? ` → ${curto(dono, 12)}` : ""}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <p className="col-span-2 text-[10px] text-amber-700">Sem rota: a fibra fica planejada (tracejada no desenho).</p>
-                        </div>
-                      );
+                      return <p className="mt-1 text-[10px] text-amber-700">Nenhum cabo chega neste prédio: a CDOI fica só no desenho.</p>;
                     })()}
                   </div>
                 );
