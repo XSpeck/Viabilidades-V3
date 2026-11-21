@@ -125,6 +125,23 @@ export async function createViabilizacao(
   return ref.id;
 }
 
+/** Pedidos ainda sem resposta no mesmo local (Plus Code completo ou curto) */
+export async function pedidosAbertosNoLocal(codigos: string[]): Promise<Viabilizacao[]> {
+  const unicos = [...new Set(codigos.filter(Boolean))];
+  if (!unicos.length) return [];
+  const snap = await getDocs(query(collection(db, "viabilizacoes"), where("plus_code_cliente", "in", unicos)));
+  return snap.docs
+    .map((d) => fromFirestore<Viabilizacao>(d))
+    .filter((v) => !v.data_finalizacao && ["pendente", "em_auditoria", "em_revisao"].includes(v.status));
+}
+
+/** Posição do pedido na fila de auditoria (1 = próximo); null se já saiu da fila */
+export async function posicaoNaFila(id: string): Promise<number | null> {
+  const fila = await getViabilizacoesPendentes();
+  const i = fila.findIndex((v) => v.id === id);
+  return i < 0 ? null : i + 1;
+}
+
 // Filtragem feita client-side para evitar índices compostos complexos
 
 export async function getViabilizacoesPendentes(): Promise<Viabilizacao[]> {
@@ -176,14 +193,20 @@ export async function getViabilizacoesAuditor(auditorNome: string): Promise<Viab
 // Base compartilhada entre getViabilizacoesUsuario e getViabilizacoesHistorico
 // — uma única query por sessão, cache de 5 min.
 async function _fetchViabilizacoesUsuario(ids: string[]): Promise<Viabilizacao[]> {
-  const cached = getCached<Viabilizacao[]>("viab_user_v1");
-  if (cached) return cached;
-  const q = query(collection(db, "viabilizacoes"), where("usuario", "in", ids));
-  const snap = await getDocs(q);
-  const data = snap.docs
-    .map((d) => fromFirestore<Viabilizacao>(d))
+  // O cache guarda de quem é a lista: outro login na mesma aba não enxerga a do anterior
+  const dono = ids.join("|");
+  const cached = getCached<{ dono: string; itens: Viabilizacao[] }>("viab_user_v1");
+  if (cached && cached.dono === dono && Array.isArray(cached.itens)) return cached.itens;
+  // Pedidos novos levam o id do login (usuario_id); os antigos só têm o nome em "usuario"
+  const [porNome, porId] = await Promise.all([
+    getDocs(query(collection(db, "viabilizacoes"), where("usuario", "in", ids))),
+    getDocs(query(collection(db, "viabilizacoes"), where("usuario_id", "in", ids))),
+  ]);
+  const vistos = new Map<string, Viabilizacao>();
+  for (const d of [...porNome.docs, ...porId.docs]) vistos.set(d.id, fromFirestore<Viabilizacao>(d));
+  const data = [...vistos.values()]
     .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1);
-  setCache("viab_user_v1", data);
+  setCache("viab_user_v1", { dono, itens: data });
   return data;
 }
 

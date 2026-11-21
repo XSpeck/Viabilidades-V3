@@ -245,13 +245,13 @@ export default function ResultadosPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Em Análise",     count: counts.analise,                             color: "blue",   icon: <Clock className="w-5 h-5" /> },
-          { label: "Aprovadas",      count: counts.aprovado + counts.estruturado,        color: "green",  icon: <CheckCircle className="w-5 h-5" /> },
-          { label: "Sem Viabilidade",count: counts.semViab,                              color: "red",    icon: <XCircle className="w-5 h-5" /> },
-          { label: "Prédio/Cond.",   count: counts.ag_dados + counts.agendado,           color: "purple", icon: <Building2 className="w-5 h-5" /> },
+          { label: "Em Análise",     count: counts.analise,                             color: "text-blue-600",   icon: <Clock className="w-5 h-5" /> },
+          { label: "Aprovadas",      count: counts.aprovado + counts.estruturado,        color: "text-green-600",  icon: <CheckCircle className="w-5 h-5" /> },
+          { label: "Sem Viabilidade",count: counts.semViab,                              color: "text-red-600",    icon: <XCircle className="w-5 h-5" /> },
+          { label: "Prédio/Cond.",   count: counts.ag_dados + counts.agendado,           color: "text-purple-600", icon: <Building2 className="w-5 h-5" /> },
         ].map((item) => (
           <div key={item.label} className="bg-white border rounded-xl p-4 flex items-center gap-3">
-            <div className={`text-${item.color}-600`}>{item.icon}</div>
+            <div className={item.color}>{item.icon}</div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{item.count}</p>
               <p className="text-xs text-gray-500">{item.label}</p>

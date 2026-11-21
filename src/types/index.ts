@@ -58,7 +58,12 @@ export type StatusInstalacao =
 export interface Viabilizacao {
   id: string;
   usuario: string;
+  /** uid de quem pediu (pedidos novos); "usuario" segue com o nome para exibição */
+  usuario_id?: string;
   nome_cliente?: string;
+  telefone_cliente?: string;
+  /** Nome do prédio já estruturado achado no local na hora do pedido */
+  predio_estruturado?: string;
   plus_code_cliente: string;
   tipo_instalacao: TipoInstalacao;
   urgente: boolean;

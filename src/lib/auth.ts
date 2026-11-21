@@ -39,6 +39,8 @@ export async function signIn(email: string, password: string): Promise<AppUser> 
 
 export async function signOut(): Promise<void> {
   _userCache.clear();
+  // Os caches de tela (fila, resultados, CTOs…) ficam na sessão: limpa para o próximo login
+  try { sessionStorage.clear(); } catch {}
   await firebaseSignOut(auth);
 }
 

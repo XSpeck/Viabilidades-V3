@@ -141,13 +141,13 @@ export default function AnaliseRedePage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Abertas",       value: counts.aberta,       color: "red"    },
-          { label: "Agendadas",     value: counts.agendada,     color: "indigo" },
-          { label: "Em andamento",  value: counts.em_andamento, color: "yellow" },
-          { label: "Concluídas",    value: counts.concluida,    color: "green"  },
+          { label: "Abertas",       value: counts.aberta,       color: "text-red-600"    },
+          { label: "Agendadas",     value: counts.agendada,     color: "text-indigo-600" },
+          { label: "Em andamento",  value: counts.em_andamento, color: "text-yellow-600" },
+          { label: "Concluídas",    value: counts.concluida,    color: "text-green-600"  },
         ].map((k) => (
           <div key={k.label} className="bg-white border rounded-xl p-4 text-center">
-            <p className={`text-3xl font-bold text-${k.color}-600`}>{k.value}</p>
+            <p className={`text-3xl font-bold ${k.color}`}>{k.value}</p>
             <p className="text-xs text-gray-500 mt-1">{k.label}</p>
           </div>
         ))}
