@@ -204,6 +204,7 @@ export function calcularPotencias(elementos: EntradaPotencia[], tx: number, p: C
     const partes = [`fibra ${fmt(fibra)} dB`];
     if (e.tipo === "dio") { local = p.conector_db + p.emenda_db; partes.push(`conector + fusão ${fmt(local)} dB`); }
     else if (e.tipo === "onu") { local = p.conector_db; partes.push(`conector ${fmt(local)} dB`); }
+    else if (e.tipo === "predio") { local = 0; partes.push("entrada do prédio (sem perda)"); }
     else { local = p.emenda_db; partes.push(`fusão ${fmt(local)} dB`); }
     const entrada = ant - fibra - local;
     let saida = entrada;

@@ -9,7 +9,7 @@ import { chaveCabo, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRe
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
-import { listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
+import { idPredioDoElemento, listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
 import CaixaCto from "./CaixaCto";
 import CaixaCeo from "./CaixaCeo";
@@ -672,7 +672,7 @@ function JanelaNo({
       ) : aba === "predio" ? (
         <PredioVertical
           chave={ehPredio ? chaveElemento((filhosReais(no)[0] ?? no).elemento) : chaveElemento(no.elemento)}
-          nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
+          nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} predioId={idPredioDoElemento(no.elemento) ?? undefined} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (

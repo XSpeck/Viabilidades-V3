@@ -93,6 +93,7 @@ export function eventosEsperados(
   });
   let anterior = 0;
   ordem.forEach((j, k) => {
+    if (els[j].tipo === "predio") return; // entrada do prédio: não tem emenda nem perda
     const d = Math.abs(acc[j] - acc[ref]);
     const fibra = (d - anterior) * aten;
     anterior = d;

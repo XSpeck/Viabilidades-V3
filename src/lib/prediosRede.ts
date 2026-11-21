@@ -32,9 +32,14 @@ export interface PontoPredio {
   atende_ate: number;
   /** Splitter da CDOI ("1:8", "1:16"…) quando ainda não está no diagrama da caixa nem na rota */
   splitter?: string;
-  /** CDOI ainda sem rota: cabo e fibra planejados (só para o desenho) */
+  /** CDOI ainda sem rota: cabo planejado (só para o desenho) */
   cabo?: string;
+  /** Fibra que chega na CDOI (do cabo da entrada, ou planejada) */
   fibra?: number;
+  /** Entrada do prédio de onde vem a fibra: id da rota que leva o cabo até o prédio */
+  entrada?: string;
+  /** Sub-rota desta CDOI (criada e mantida pelo prédio) */
+  rota_id?: string;
 }
 
 export interface PredioRede {
@@ -127,7 +132,7 @@ export async function salvarPredio(p: PredioRede, usuario: string): Promise<Pred
     nome: p.nome.trim(),
     endereco: p.endereco?.trim() ?? "",
     blocos: p.blocos.map((b) => ({ id: b.id, nome: b.nome.trim() || "Bloco", andares: b.andares, subsolos: b.subsolos, aptos: b.aptos })),
-    pontos: p.pontos.map((o) => ({ id: o.id, chave: o.chave, nome: o.nome.trim(), bloco: o.bloco, andar: o.andar, atende_de: o.atende_de, atende_ate: o.atende_ate, ...(o.splitter ? { splitter: o.splitter } : {}), ...(o.cabo && o.fibra ? { cabo: o.cabo, fibra: o.fibra } : {}) })),
+    pontos: p.pontos.map((o) => ({ id: o.id, chave: o.chave, nome: o.nome.trim(), bloco: o.bloco, andar: o.andar, atende_de: o.atende_de, atende_ate: o.atende_ate, ...(o.splitter ? { splitter: o.splitter } : {}), ...(o.cabo ? { cabo: o.cabo } : {}), ...(o.fibra ? { fibra: o.fibra } : {}), ...(o.entrada ? { entrada: o.entrada } : {}), ...(o.rota_id ? { rota_id: o.rota_id } : {}) })),
     chaves: [...new Set(p.pontos.map((o) => o.chave).filter(Boolean))],
     obs: p.obs?.trim() ?? "",
     atualizado_por: usuario,

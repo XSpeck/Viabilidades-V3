@@ -1,17 +1,17 @@
 "use client";
 
-import { donoDoElemento, paraGravar } from "@/lib/subRotas";
+import { paraGravar } from "@/lib/subRotas";
 
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   atualizarRota,
-  CALCULO_PADRAO,
   capacidadeRegistrada,
   corFibra,
   criarRota,
   distanciaMetros,
-  perdaSplitter,
+  excluirRota,
+  reservaTecnica,
   tipoVisual,
   type ElementoRota,
   type RotaOptica,
@@ -22,6 +22,7 @@ import { chaveCabo } from "@/lib/cabosRede";
 import {
   andaresDoBloco,
   excluirPredio,
+  idPredioDoElemento,
   listarPredios,
   novoId,
   predioNovo,
@@ -73,19 +74,12 @@ interface Props {
   onRotasMudaram?: () => void;
   /** Splitters do cadastro (a CDOI nova usa o modelo com a relação escolhida) */
   modelosSplitter?: ItemCatalogo[];
+  /** Prédio aberto pelo nó Prédio da árvore (entrada do cabo) */
+  predioId?: string;
 }
 
-/** Formulário "Nova CDOI com rota" */
-interface NovaCdoi {
-  nome: string;
-  bloco: string;
-  andar: number;
-  de: number;
-  ate: number;
-  cabo: string;
-  fibra?: number;
-  splitter: string;
-}
+/** Subida da fibra dentro do prédio até a CDOI: ~3 m por andar */
+const METROS_POR_ANDAR = 3;
 
 const curto = (s: string, n = 26) => {
   const t = s.split(" - ")[0].split(" / ")[0].trim();
@@ -114,7 +108,8 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
       const i = r.elementos.findIndex((e) => chaveElemento(e) === o.chave);
       if (i <= 0) continue;
       const e = r.elementos[i];
-      const ant = r.elementos[i - 1];
+      // CDOI logo depois da entrada do prédio: o cabo vem da caixa antes da entrada (ex.: a HUB)
+      const ant = r.elementos[i - 1].tipo === "predio" && i > 1 ? r.elementos[i - 2] : r.elementos[i - 1];
       const cabo = e.cabo_entrada ?? "cabo não informado";
       // fibra que só passa por esta CDOI e segue no mesmo cabo para outra CDOI do prédio: não é desta
       const prox = r.elementos[i + 1];
@@ -162,9 +157,7 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
   return { cabos, internas, rotaDe };
 }
 
-export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram, modelosSplitter = [] }: Props) {
-  const [nova, setNova] = useState<NovaCdoi | null>(null);
-  const [criando, setCriando] = useState(false);
+export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram, modelosSplitter = [], predioId }: Props) {
   const [predios, setPredios] = useState<PredioRede[] | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<PredioRede | null>(null);
@@ -184,7 +177,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     return () => { vivo = false; };
   }, []);
 
-  const salvo = predios?.find((p) => p.chaves.includes(chave) || p.pontos.some((o) => o.chave === chave)) ?? null;
+  const salvo = (predioId ? predios?.find((p) => p.id === predioId) : undefined) ?? predios?.find((p) => p.chaves.includes(chave) || p.pontos.some((o) => o.chave === chave)) ?? null;
   const predio = rascunho ?? salvo;
   const editando = !!rascunho;
 
@@ -275,58 +268,100 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
   async function salvar() {
     if (!rascunho) return;
     if (!rascunho.nome.trim()) return setErro("Dê um nome ao prédio.");
-    if (!rascunho.pontos.length) return setErro("Coloque pelo menos uma CDOI.");
+    const ents = entradasDo(rascunho);
+    const entDe = (o: PontoPredio) => (o.entrada && ents.some((x) => x.rota.id === o.entrada) ? o.entrada : o.fibra && ents.length && !o.cabo ? ents[0].rota.id : undefined);
+    // fibra repetida no mesmo cabo de entrada
+    for (const o of rascunho.pontos) {
+      const eid = entDe(o);
+      if (!eid || !o.fibra) continue;
+      const outro = rascunho.pontos.find((x) => x.id !== o.id && x.fibra === o.fibra && entDe(x) === eid);
+      if (outro) return setErro(`${o.nome} e ${outro.nome} estão na mesma fibra F${o.fibra} do cabo de entrada.`);
+    }
+    const comRota = rascunho.pontos.filter((o) => entDe(o) && o.fibra);
+    const removidas = (salvo?.pontos ?? []).filter((o) => o.rota_id && !comRota.some((x) => x.id === o.id));
+    if (removidas.length && !confirm(`Excluir a rota de: ${removidas.map((o) => o.nome).join(", ")}? (CDOI tirada do prédio ou sem fibra)`)) return;
     setSalvando(true);
     setErro(null);
     try {
-      const s = await salvarPredio(rascunho, usuario);
+      let ultimo = Math.max(100000, ...rotas.flatMap((x) => x.elementos.map((e) => e.codigo ?? "")).filter((c) => /^\d+$/.test(c.trim())).map((c) => parseInt(c, 10)));
+      const pontos: PontoPredio[] = [];
+      const gerenciadas = new Set<string>();
+      for (const o of rascunho.pontos) {
+        const eid = entDe(o);
+        const ent = eid ? ents.find((x) => x.rota.id === eid) : undefined;
+        if (!ent || !o.fibra) {
+          pontos.push({ ...o, entrada: eid, rota_id: undefined });
+          continue;
+        }
+        const codigo = /^PT:\d+$/.test(o.chave) ? o.chave.slice(3) : String(++ultimo);
+        const pe = ent.elemento;
+        const el: ElementoRota = {
+          nome: o.nome.trim() || "CDOI",
+          tipo: "cdoi",
+          codigo,
+          lat: pe.lat,
+          lon: pe.lon,
+          cabo_entrada: ent.cabo,
+          fibra_entrada: o.fibra,
+          // subida dentro do prédio até o andar da CDOI + a reserva da CDOI
+          distancia_m: Math.max(0, o.andar) * METROS_POR_ANDAR + reservaTecnica("cdoi", ent.rota.calculo_potencia),
+          splitter: o.splitter,
+          splitter_modelo: o.splitter ? modelosSplitter.find((m) => m.relacao === o.splitter)?.id : undefined,
+        };
+        let raiz = ent.rota;
+        for (let g = 0; raiz.pai && g < 20; g++) raiz = rotas.find((x) => x.id === raiz.pai!.rota_id) ?? raiz;
+        const prefixo = raiz.nome.match(/^\d+\/\d+\/\d+/)?.[0];
+        const dados = paraGravar(
+          { pai: { rota_id: ent.rota.id, chave: chaveElemento(pe) }, tronco: ent.k + 1 },
+          {
+            nome: prefixo ? `${prefixo} ${el.nome}` : el.nome,
+            origem: "manual",
+            elementos: [...ent.rota.elementos.slice(0, ent.k + 1), el],
+            trechos: ent.rota.trechos.filter((t) => (t.ate ?? 0) <= ent.k),
+            calculo_potencia: ent.rota.calculo_potencia,
+            criado_por: usuario,
+          }
+        );
+        let rid = o.rota_id && rotas.some((x) => x.id === o.rota_id) ? o.rota_id : undefined;
+        if (rid) await atualizarRota(rid, dados);
+        else rid = await criarRota(dados);
+        gerenciadas.add(rid);
+        pontos.push({ ...o, nome: el.nome, chave: `PT:${codigo}`, entrada: eid, rota_id: rid, cabo: undefined });
+      }
+      for (const o of removidas) await excluirRota(o.rota_id!);
+      const s = await salvarPredio({ ...rascunho, pontos }, usuario);
       setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== s.id), s]);
-      // O nome dado à CDOI no prédio passa a valer também nas rotas (a ligação é pelo código, que não muda)
+      // CDOIs que vêm de rotas feitas fora do prédio: nome e splitter do prédio valem também na rota
       const pendentes: Promise<void>[] = [];
       for (const rt of rotas) {
+        if (gerenciadas.has(rt.id)) continue;
         let mudou = false;
-        const fibraTrocada: { i: number; fibra: number }[] = [];
         const elementos = rt.elementos.map((e, idx) => {
+          if (idx < (rt.tronco ?? 0)) return e;
+          // entrada do prédio: acompanha o nome do prédio
+          if (idPredioDoElemento(e) === s.id) {
+            if (e.nome === s.nome) return e;
+            mudou = true;
+            return { ...e, nome: s.nome };
+          }
           const o = s.pontos.find((x) => x.chave && x.chave === chaveElemento(e));
-          if (!o || !e.codigo) return e;
-          // nome e splitter da CDOI definidos no prédio valem também na rota (a potência da ponta depende do splitter)
+          if (!o || !e.codigo || o.rota_id) return e;
           const nomeNovo = o.nome.trim() && o.nome.trim() !== e.nome ? o.nome.trim() : e.nome;
           const splNovo = o.splitter && o.splitter !== e.splitter ? o.splitter : e.splitter;
-          // fibra escolhida no prédio: só na rota desta CDOI (onde ela é a ponta da fibra)
-          const fibNova = o.fibra && rotaDe.get(o.id) === rt.id && o.fibra !== e.fibra_entrada ? o.fibra : e.fibra_entrada;
-          if (fibNova !== e.fibra_entrada) fibraTrocada.push({ i: idx, fibra: fibNova! });
-          if (nomeNovo === e.nome && splNovo === e.splitter && fibNova === e.fibra_entrada) return e;
+          if (nomeNovo === e.nome && splNovo === e.splitter) return e;
           mudou = true;
-          return {
-            ...e,
-            nome: nomeNovo,
-            fibra_entrada: fibNova,
-            splitter: splNovo,
-            splitter_modelo: splNovo !== e.splitter ? modelosSplitter.find((m) => m.relacao === splNovo)?.id : e.splitter_modelo,
-          };
+          return { ...e, nome: nomeNovo, splitter: splNovo, splitter_modelo: splNovo !== e.splitter ? modelosSplitter.find((m) => m.relacao === splNovo)?.id : e.splitter_modelo };
         });
         if (!mudou) continue;
-        // a caixa anterior sai na mesma fibra; o traçado do trecho ganha a cor dela
-        let trechosRt = rt.trechos;
-        for (const t of fibraTrocada) {
-          if (t.i > 0) elementos[t.i - 1] = { ...elementos[t.i - 1], fibra_saida: t.fibra };
-          const cb = elementos[t.i].cabo_entrada;
-          trechosRt = trechosRt.map((x) => (x.ate === t.i ? { ...x, cor: corFibra(t.fibra, cb).hex } : x));
-        }
-        const ult = rt.elementos[rt.elementos.length - 1];
-        const novoUlt = elementos[elementos.length - 1];
-        const nomeRota = ult.nome !== novoUlt.nome && rt.nome.endsWith(ult.nome) ? rt.nome.slice(0, -ult.nome.length) + novoUlt.nome : rt.nome;
         pendentes.push(
           atualizarRota(rt.id, paraGravar(rt, {
-            nome: nomeRota, origem: rt.origem, elementos, trechos: trechosRt,
+            nome: rt.nome, origem: rt.origem, elementos, trechos: rt.trechos,
             calculo_potencia: rt.calculo_potencia, obs: rt.obs, criado_por: rt.criado_por,
           })),
         );
       }
-      if (pendentes.length) {
-        await Promise.all(pendentes);
-        onRotasMudaram?.();
-      }
+      await Promise.all(pendentes);
+      onRotasMudaram?.();
       setRascunho(null);
     } catch (e) {
       setErro(/permission/i.test(String(e)) ? "Sem permissão: publique a regra predios_rede no Firebase." : "Não foi possível salvar.");
@@ -334,6 +369,18 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       setSalvando(false);
     }
   }
+
+  /** Entradas do prédio: rotas que levam um cabo até o elemento Prédio (ele é a ponta delas, não o tronco) */
+  function entradasDo(p: PredioRede) {
+    return rotas.flatMap((r) => {
+      const k = r.elementos.findIndex((e) => idPredioDoElemento(e) === p.id);
+      if (k <= 0 || k < (r.tronco ?? 0)) return [];
+      const e = r.elementos[k];
+      if (!e.cabo_entrada) return [];
+      return [{ rota: r, k, cabo: e.cabo_entrada, de: r.elementos[k - 1].nome, elemento: e }];
+    });
+  }
+
   async function excluir() {
     if (!salvo || !confirm(`Excluir o prédio "${salvo.nome}"? As CDOIs e rotas continuam.`)) return;
     await excluirPredio(salvo.id);
@@ -407,15 +454,8 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     }
     return null;
   };
-  // ---------- Nova CDOI com rota: copia o caminho de uma CDOI do prédio até a caixa de onde sai o cabo ----------
-  const refsPorCabo = new Map<string, { rota: RotaOptica; i: number; cabo: string }>();
-  for (const o of predio.pontos) {
-    const rid = rotaDe.get(o.id);
-    const rt = rid ? rotas.find((x) => x.id === rid) : undefined;
-    const i = rt ? rt.elementos.findIndex((e) => chaveElemento(e) === o.chave) : -1;
-    const cb = rt && i > 0 ? rt.elementos[i].cabo_entrada : undefined;
-    if (rt && cb && !refsPorCabo.has(chaveCabo(cb))) refsPorCabo.set(chaveCabo(cb), { rota: rt, i, cabo: cb });
-  }
+  // ---------- Entradas de cabo e fibras ----------
+  const entradas = entradasDo(predio);
   /** Fibras já usadas neste cabo (rede toda + planejadas no prédio) e por quem */
   const usadasNoCabo = (cabo: string) => {
     const k = chaveCabo(cabo);
@@ -430,91 +470,42 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     return m;
   };
   const capCabo = (cabo: string) => capacidadeRegistrada(cabo) ?? 12;
-  function abrirNova() {
-    if (!rascunho) return;
-    const ref = [...refsPorCabo.values()][0];
-    if (!ref) return;
-    const qtd = (id: string) => rascunho.pontos.filter((o) => o.bloco === id).length;
-    const b = rascunho.blocos.find((x) => qtd(x.id) < MAX_POR_BLOCO) ?? rascunho.blocos[0];
-    const usadas = usadasNoCabo(ref.cabo);
-    let fibra: number | undefined;
-    for (let f = 1; f <= capCabo(ref.cabo); f++) if (!usadas.has(f)) { fibra = f; break; }
-    setErro(null);
-    setNova({ nome: `CDOI ${b.nome.replace(/^Bloco\s*/i, "")} ${rotuloAndarCurto(0)}`, bloco: b.id, andar: 0, de: Math.min(1, b.andares), ate: b.andares, cabo: ref.cabo, fibra, splitter: "" });
+  /** Fibras ocupadas no cabo de uma entrada (rede toda + outras CDOIs do prédio), sem contar a própria CDOI */
+  function ocupadas(cabo: string, o: PontoPredio): Map<number, string> {
+    const k = chaveCabo(cabo);
+    const m = new Map<number, string>();
+    // sub-rotas das CDOIs deste prédio contam pelo que está no rascunho (a fibra pode ter mudado)
+    const doPredio = new Set(predio!.pontos.map((x) => x.rota_id).filter(Boolean));
+    rotas.forEach((rt) => {
+      if (doPredio.has(rt.id)) return;
+      rt.elementos.forEach((e, idx) => {
+        if (idx < (rt.tronco ?? 0)) return;
+        if (e.cabo_entrada && e.fibra_entrada && chaveCabo(e.cabo_entrada) === k && !m.has(e.fibra_entrada)) m.set(e.fibra_entrada, e.nome);
+      });
+    });
+    predio!.pontos.forEach((x) => {
+      if (x.id === o.id || !x.fibra) return;
+      const ex = entradas.find((en) => en.rota.id === (x.entrada ?? entradas[0]?.rota.id));
+      if (ex && chaveCabo(ex.cabo) === k) m.set(x.fibra, x.nome);
+    });
+    return m;
   }
-  async function criarCdoiComRota() {
-    if (!rascunho || !nova) return;
-    const ref = refsPorCabo.get(chaveCabo(nova.cabo));
-    if (!ref) return setErro("Escolha o cabo.");
-    if (!nova.nome.trim()) return setErro("Dê um nome à CDOI.");
-    if (!nova.fibra) return setErro("Escolha a fibra.");
-    if (usadasNoCabo(nova.cabo).has(nova.fibra)) return setErro(`A fibra ${nova.fibra} já está em uso neste cabo.`);
-    if (rascunho.pontos.filter((o) => o.bloco === nova.bloco).length >= MAX_POR_BLOCO) return setErro(`Este bloco já tem ${MAX_POR_BLOCO} CDOIs.`);
-    const { rota: rt, i } = ref;
-    const base = rt.elementos[i];
-    const codigos = rotas.flatMap((x) => x.elementos.map((e) => e.codigo ?? "")).filter((c) => /^\d+$/.test(c.trim())).map((c) => parseInt(c, 10));
-    const codigo = String(Math.max(100000, ...codigos) + 1);
-    const perda = nova.splitter ? perdaSplitter(nova.splitter) + CALCULO_PADRAO.conector_db : 0;
-    const pin = base.potencia_entrada;
-    const el: ElementoRota = {
-      nome: nova.nome.trim(),
-      tipo: "cdoi",
-      codigo,
-      // no mesmo prédio, um pouco ao lado da CDOI de referência
-      lat: base.lat !== undefined ? base.lat + 0.00002 : undefined,
-      lon: base.lon,
-      cabo_entrada: ref.cabo,
-      fibra_entrada: nova.fibra,
-      distancia_m: base.distancia_m,
-      potencia_entrada: pin,
-      potencia_saida: pin !== undefined ? Math.round((pin - perda) * 100) / 100 : undefined,
-      splitter: nova.splitter || undefined,
-      splitter_modelo: nova.splitter ? modelosSplitter.find((m) => m.relacao === nova.splitter)?.id : undefined,
-    };
-    const cor = corFibra(nova.fibra, ref.cabo).hex;
-    const trechos = rt.origem === "geogrid"
-      ? rt.trechos
-      : [
-          ...rt.trechos.filter((t) => t.ate !== undefined && t.ate < i),
-          ...rt.trechos.filter((t) => t.ate === i).map((t) => ({
-            ...t,
-            nome: ref.cabo,
-            cor,
-            pontos: el.lat !== undefined && el.lon !== undefined ? [...t.pontos.slice(0, -1), { lat: el.lat, lon: el.lon }] : t.pontos,
-          })),
-        ];
-    // nome da sub-rota: porta PON (ex.: "0/6/0") + nome da CDOI — a porta vem da rota principal da família
-    let raiz = rt;
-    for (let g = 0; raiz.pai && g < 20; g++) raiz = rotas.find((x) => x.id === raiz.pai!.rota_id) ?? raiz;
-    const prefixo = rt.nome.match(/^\d+\/\d+\/\d+/)?.[0] ?? raiz.nome.match(/^\d+\/\d+\/\d+/)?.[0];
-    setCriando(true);
-    setErro(null);
-    try {
-      // sub-rota: sai da caixa de onde o cabo vem (ex.: a HUB); o tronco continua sendo da rota dona dela
-      const pai = { rota_id: donoDoElemento(rt, i - 1, rotas).id, chave: chaveElemento(rt.elementos[i - 1]) };
-      await criarRota(paraGravar({ pai, tronco: i }, {
-        nome: prefixo ? `${prefixo} ${el.nome}` : el.nome,
-        origem: "manual",
-        elementos: [...rt.elementos.slice(0, i), el],
-        trechos,
-        calculo_potencia: rt.calculo_potencia,
-        criado_por: usuario,
-      }));
-      const o: PontoPredio = {
-        id: novoId(), chave: chaveElemento(el), nome: el.nome, bloco: nova.bloco, andar: nova.andar,
-        atende_de: nova.de, atende_ate: nova.ate, ...(nova.splitter ? { splitter: nova.splitter } : {}),
-      };
-      const salvoNovo = await salvarPredio({ ...rascunho, pontos: [...rascunho.pontos, o] }, usuario);
-      setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== salvoNovo.id), salvoNovo]);
-      setRascunho(salvoNovo);
-      setSelPonto(o.id);
-      setNova(null);
-      onRotasMudaram?.();
-    } catch (e) {
-      setErro(/permission/i.test(String(e)) ? "Sem permissão para salvar." : "Não foi possível criar a CDOI.");
-    } finally {
-      setCriando(false);
+  /** ＋ CDOI: no bloco com menos CDOIs, na primeira fibra livre do cabo de entrada */
+  function novaCdoi() {
+    if (!rascunho) return;
+    const qtd = (id: string) => rascunho.pontos.filter((o) => o.bloco === id).length;
+    const b = [...rascunho.blocos].filter((x) => qtd(x.id) < MAX_POR_BLOCO).sort((a, c) => qtd(a.id) - qtd(c.id))[0];
+    if (!b) return setErro(`Todos os blocos já têm ${MAX_POR_BLOCO} CDOIs. Crie outro bloco.`);
+    const ent = entradas[0];
+    const base: PontoPredio = { id: novoId(), chave: "", nome: `CDOI ${rascunho.pontos.length + 1}`, bloco: b.id, andar: 0, atende_de: Math.min(1, b.andares), atende_ate: b.andares, entrada: ent?.rota.id };
+    let fibra: number | undefined;
+    if (ent) {
+      const oc = ocupadas(ent.cabo, base);
+      for (let f = 1; f <= capCabo(ent.cabo); f++) if (!oc.has(f)) { fibra = f; break; }
     }
+    setErro(null);
+    mudar((p) => ({ ...p, pontos: [...p.pontos, { ...base, fibra }] }));
+    setSelPonto(base.id);
   }
 
   const repetidas = new Set<string>();
@@ -1041,7 +1032,45 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                         </div>
                       );
                     })()}
-                    {(() => {
+                    {entradas.length > 0 && !(rotaDe.get(o.id) && !o.rota_id) ? (() => {
+                      const ent = entradas.find((x) => x.rota.id === o.entrada) ?? entradas[0];
+                      const oc = ocupadas(ent.cabo, o);
+                      const capE = capCabo(ent.cabo);
+                      const c = corFibra(o.fibra, ent.cabo);
+                      return (
+                        <div className="mt-1 space-y-1 rounded-md bg-sky-50/70 px-2 py-1.5 text-[10px] text-slate-700" onClick={(e) => e.stopPropagation()}>
+                          {entradas.length > 1 && (
+                            <select className={campo} value={ent.rota.id} onChange={(e) => mudarPonto(o.id, { entrada: e.target.value, fibra: undefined })}>
+                              {entradas.map((x) => <option key={x.rota.id} value={x.rota.id}>{curto(x.cabo, 30)} · de {curto(x.de, 18)}</option>)}
+                            </select>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: o.fibra ? c.hex : "#cbd5e1" }} />
+                            <span className="shrink-0 font-semibold">Fibra</span>
+                            <select className={`${campo} w-auto ${!o.fibra ? "border-amber-400" : ""}`} value={o.fibra ?? ""} onChange={(e) => mudarPonto(o.id, { entrada: ent.rota.id, fibra: e.target.value ? +e.target.value : undefined })}>
+                              <option value="">sem fibra (só desenho)</option>
+                              {Array.from({ length: capE }, (_, k) => k + 1).map((fb) => {
+                                const dono = oc.get(fb);
+                                return (
+                                  <option key={fb} value={fb} disabled={!!dono}>
+                                    F{fb} {corFibra(fb, ent.cabo).nome.toLowerCase()}{dono ? ` → ${curto(dono, 12)}` : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <span className="min-w-0 flex-1 truncate text-slate-500">{entradas.length === 1 ? `do cabo ${curto(ent.cabo, 24)}` : ""}</span>
+                          </div>
+                          <p className="text-slate-500">
+                            {o.fibra
+                              ? o.rota_id ? "Sub-rota desta CDOI: atualizada ao salvar o prédio." : "Ao salvar o prédio, esta CDOI ganha a sua sub-rota (da caixa de origem até aqui)."
+                              : "Sem fibra: a CDOI só aparece no desenho."}
+                            {o.rota_id && onAbrirRota && (
+                              <button type="button" onClick={() => onAbrirRota(o.rota_id!)} className="ml-1 font-semibold text-sky-700 hover:underline">ver rota</button>
+                            )}
+                          </p>
+                        </div>
+                      );
+                    })() : (() => {
                       const f = fibraDe(o.id);
                       const rotaId = rotaDe.get(o.id);
                       if (rotaId && f) {
@@ -1110,125 +1139,30 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                 );
               })}
             </div>
-            <select
-              className={`${campo} mt-2`}
-              value=""
-              onChange={(e) => { if (e.target.value === "__nova") addPonto(""); else if (e.target.value) addPonto(e.target.value); }}
-            >
-              <option value="">+ Colocar outra CDOI…</option>
-              {(() => {
-                const ancoras = [chave, ...predio.pontos.map((o) => o.chave).filter(Boolean)];
-                const livres = [...cdoisRede.entries()].filter(([k]) => !predio.pontos.some((o) => o.chave === k) && !emOutroPredio.has(k));
-                const perto = livres.filter(([k]) => pertoDe(k, ancoras));
-                return perto.length ? (
-                  <optgroup label={`CDOIs perto deste prédio (até ${RAIO_PREDIO} m)`}>
-                    {perto.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
-                  </optgroup>
-                ) : null;
-              })()}
-              <option value="__nova">CDOI ainda sem rota (só desenho)</option>
-            </select>
-
-            {/* Nova CDOI com rota */}
-            {!nova ? (
-              refsPorCabo.size > 0 ? (
-                <button
-                  type="button"
-                  onClick={abrirNova}
-                  className="mt-2 w-full rounded-lg border-2 border-dashed border-sky-300 bg-sky-50 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"
-                >
-                  ＋ Nova CDOI com rota (mesmo cabo, outra fibra)
-                </button>
-              ) : (
-                <p className="mt-2 text-[10px] text-slate-500">Para criar CDOIs com rota aqui, o prédio precisa de pelo menos uma CDOI que já tenha rota.</p>
-              )
+            {entradas.length > 0 ? (
+              <button
+                type="button"
+                onClick={novaCdoi}
+                className="mt-2 w-full rounded-lg border-2 border-dashed border-sky-300 bg-sky-50 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+              >
+                ＋ CDOI (na próxima fibra livre do cabo de entrada)
+              </button>
             ) : (
-              (() => {
-                const b = predio.blocos.find((x) => x.id === nova.bloco) ?? predio.blocos[0];
-                const lista = andaresDoBloco(b);
-                const usadas = usadasNoCabo(nova.cabo);
-                const ref = refsPorCabo.get(chaveCabo(nova.cabo));
-                const set = (m: Partial<NovaCdoi>) => setNova((x) => (x ? { ...x, ...m } : x));
-                return (
-                  <div className="mt-2 space-y-1.5 rounded-xl border-2 border-sky-300 bg-white p-2.5">
-                    <p className="text-[11px] font-bold text-sky-800">Nova CDOI com rota</p>
-                    <input className={campo} value={nova.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="Nome da CDOI (ex.: AND 9_Majestoso_CDOI)" />
-                    <div className="grid grid-cols-4 gap-1">
-                      <div>
-                        <label className={rot}>Bloco</label>
-                        <select className={campo} value={nova.bloco} onChange={(e) => {
-                          const nb = predio.blocos.find((x) => x.id === e.target.value)!;
-                          set({ bloco: nb.id, andar: Math.min(nova.andar, nb.andares), de: Math.min(nova.de, nb.andares), ate: Math.min(nova.ate, nb.andares) });
-                        }}>
-                          {predio.blocos.map((x) => {
-                            const cheio = predio.pontos.filter((y) => y.bloco === x.id).length >= MAX_POR_BLOCO;
-                            return <option key={x.id} value={x.id} disabled={cheio}>{x.nome}{cheio ? " (4)" : ""}</option>;
-                          })}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={rot}>Fica no</label>
-                        <select className={campo} value={nova.andar} onChange={(e) => set({ andar: +e.target.value })}>
-                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={rot}>Atende do</label>
-                        <select className={campo} value={nova.de} onChange={(e) => set({ de: +e.target.value })}>
-                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={rot}>até o</label>
-                        <select className={campo} value={nova.ate} onChange={(e) => set({ ate: +e.target.value })}>
-                          {lista.map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-[1fr_96px_70px] gap-1">
-                      <div>
-                        <label className={rot}>Cabo</label>
-                        <select className={campo} value={nova.cabo} onChange={(e) => set({ cabo: e.target.value, fibra: undefined })}>
-                          {[...refsPorCabo.values()].map((x) => <option key={x.cabo} value={x.cabo}>{curto(x.cabo, 34)}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={rot}>Fibra</label>
-                        <select className={campo} value={nova.fibra ?? ""} onChange={(e) => set({ fibra: e.target.value ? +e.target.value : undefined })}>
-                          <option value="">—</option>
-                          {Array.from({ length: capCabo(nova.cabo) }, (_, k) => k + 1).map((f) => {
-                            const dono = usadas.get(f);
-                            return (
-                              <option key={f} value={f} disabled={!!dono}>
-                                F{f} {corFibra(f, nova.cabo).nome.toLowerCase()}{dono ? ` → ${curto(dono, 10)}` : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={rot}>Splitter</label>
-                        <select className={campo} value={nova.splitter} onChange={(e) => set({ splitter: e.target.value })}>
-                          <option value="">—</option>
-                          {["1:4", "1:8", "1:16", "1:32"].map((x) => <option key={x} value={x}>{x}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    {ref && (
-                      <p className="text-[10px] text-slate-500">
-                        A rota copia o caminho da <b>{curto(ref.rota.elementos[ref.i].nome, 24)}</b> até {curto(ref.rota.elementos[ref.i - 1]?.nome ?? "", 24)} e segue no mesmo cabo, na fibra escolhida.
-                      </p>
-                    )}
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setNova(null)} className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Cancelar</button>
-                      <button type="button" disabled={criando} onClick={criarCdoiComRota} className="rounded-lg bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
-                        {criando ? "Criando…" : "Criar CDOI e rota"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()
+              <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800">
+                Nenhum cabo chega neste prédio ainda. Leve o cabo numa rota (Nova rota → caixa de origem → ferramenta Prédio) e volte aqui para montar as CDOIs.
+              </p>
             )}
+            {(() => {
+              const ancoras = [chave, ...predio.pontos.map((o) => o.chave).filter(Boolean)];
+              const livres = [...cdoisRede.entries()].filter(([k]) => !predio.pontos.some((o) => o.chave === k) && !emOutroPredio.has(k));
+              const perto = livres.filter(([k]) => pertoDe(k, ancoras));
+              return perto.length ? (
+                <select className={`${campo} mt-1.5`} value="" onChange={(e) => e.target.value && addPonto(e.target.value)}>
+                  <option value="">Colocar uma CDOI que já tem rota (perto do prédio)…</option>
+                  {perto.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+                </select>
+              ) : null;
+            })()}
           </div>
 
           {erro && <p className="text-xs text-red-600">{erro}</p>}
