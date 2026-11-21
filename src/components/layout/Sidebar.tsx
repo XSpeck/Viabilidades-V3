@@ -24,6 +24,7 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { canAccess, getCargo, CARGO_LABEL } from "@/lib/access";
+import { ouvirEstruturasNovas } from "@/lib/firestore";
 import type { UserCargo, PapelFinanceiro } from "@/types";
 
 interface NavItem {
@@ -83,6 +84,14 @@ export default function Sidebar() {
   const soAberto = recolhido ? "md:hidden" : "";
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  // Estruturas de prédio que chegaram na Análise da Rede e ainda não foram agendadas
+  const [estruturasNovas, setEstruturasNovas] = useState(0);
+  const veAnalise = canAccess(user ?? null, "analise-rede");
+  useEffect(() => {
+    if (!veAnalise) return;
+    return ouvirEstruturasNovas(setEstruturasNovas);
+  }, [veAnalise]);
 
   async function handleLogout() {
     await signOut();
@@ -175,8 +184,18 @@ export default function Sidebar() {
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
               >
-                {item.icon}
-                <span className={soAberto}>{item.label}</span>
+                <span className="relative">
+                  {item.icon}
+                  {item.page === "analise-rede" && estruturasNovas > 0 && recolhido && (
+                    <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-gray-900" />
+                  )}
+                </span>
+                <span className={`${soAberto} flex-1`}>{item.label}</span>
+                {item.page === "analise-rede" && estruturasNovas > 0 && (
+                  <span className={`${soAberto} rounded-full bg-amber-400 px-1.5 text-xs font-bold text-gray-900`} title={`${estruturasNovas} estrutura(s) de prédio para agendar`}>
+                    {estruturasNovas}
+                  </span>
+                )}
               </Link>
             );
           })}

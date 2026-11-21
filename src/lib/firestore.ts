@@ -1435,6 +1435,24 @@ export async function getDemandas(): Promise<DemandaRede[]> {
   return data;
 }
 
+/** Demandas da rede ao vivo (aparecem e mudam na hora para todos) */
+export function ouvirDemandas(aoMudar: (lista: DemandaRede[]) => void, aoErrar: (e: Error) => void): () => void {
+  return onSnapshot(
+    query(collection(db, "demandas_rede"), orderBy("data_criacao", "desc")),
+    (snap) => aoMudar(snap.docs.map((d) => fromFirestoreDemanda(d))),
+    aoErrar,
+  );
+}
+
+/** Quantas estruturas de prédio chegaram e ainda não foram agendadas (número no menu) */
+export function ouvirEstruturasNovas(aoMudar: (n: number) => void): () => void {
+  return onSnapshot(
+    query(collection(db, "demandas_rede"), where("tipo", "==", "Estruturação de Rede"), where("status", "==", "aberta")),
+    (snap) => aoMudar(snap.size),
+    () => aoMudar(0),
+  );
+}
+
 export async function createDemanda(data: Omit<DemandaRede, "id">): Promise<void> {
   await addDoc(collection(db, "demandas_rede"), stripUndefined(data as Record<string, unknown>));
   bustCache("viab_demandas_rede_v1", "viab_demandas_agendadas_v1", "viab_demandas_arquivadas_v1");

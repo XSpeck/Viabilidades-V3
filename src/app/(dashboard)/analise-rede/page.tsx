@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
 import { MODULOS } from "@/lib/modulos";
 import PainelEstrutura from "@/components/analise-rede/PainelEstrutura";
-import { getDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
+import { ouvirDemandas, createDemanda, updateDemanda, agendarDemanda, deleteDemanda, getDemandasArquivadas, arquivarDemanda, desarquivarDemanda, reabrirDemanda, addNotaDemanda, bustCacheAnaliseRede, getBairros } from "@/lib/firestore";
 import { uploadFoto, deleteFotos } from "@/lib/cloudinary";
 import { listTecnicos } from "@/lib/users";
 import { formatDateTime, locationToPlusCode, validatePlusCode } from "@/lib/pluscode";
@@ -78,19 +78,28 @@ export default function AnaliseRedePage() {
   const [statusFiltro, setStatusFiltro] = useState<"todas" | "aberta" | "agendada" | "em_andamento" | "concluida">("todas");
   const [bairroFiltro, setBairroFiltro] = useState<"todos" | string>("todos");
 
-  const load = useCallback(async () => {
-    bustCacheAnaliseRede();
-    setLoading(true);
-    try {
-      const [dem, bai, tec] = await Promise.all([getDemandas(), getBairros(), listTecnicos("rede")]);
-      setDemandas(dem);
-      setBairros(bai);
-      setTecnicosRede(tec.map((t) => t.nome));
-    }
-    finally { setLoading(false); }
+  const [erroLista, setErroLista] = useState("");
+
+  // Demandas ao vivo: estrutura nova, agendamento de outro auditor etc. aparecem na hora
+  useEffect(() => {
+    return ouvirDemandas(
+      (dem) => { setDemandas(dem); setErroLista(""); setLoading(false); },
+      (e) => { setErroLista(`Não foi possível carregar as demandas: ${e.message}`); setLoading(false); },
+    );
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Bairros e técnicos (o resto chega pela escuta ao vivo)
+  const load = useCallback(async () => {
+    bustCacheAnaliseRede();
+    const [bai, tec] = await Promise.all([getBairros(), listTecnicos("rede")]);
+    setBairros(bai);
+    setTecnicosRede(tec.map((t) => t.nome));
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => { load().catch(() => {}); }, 0);
+    return () => clearTimeout(t);
+  }, [load]);
 
   if (!canAccess(user ?? null, "analise-rede")) return (
     <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>
@@ -236,6 +245,7 @@ export default function AnaliseRedePage() {
         )}
 
         {/* Lista */}
+        {erroLista && <p className="mb-3 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-700">{erroLista}</p>}
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-indigo-600" /></div>
         ) : filtradas.length === 0 ? (
