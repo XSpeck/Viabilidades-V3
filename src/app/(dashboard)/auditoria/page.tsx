@@ -10,10 +10,16 @@ import { semAcento } from "@/lib/localizacao";
 import type { Viabilizacao } from "@/types";
 import { MODULOS } from "@/lib/modulos";
 import CartaoAuditoria from "@/components/auditoria/CartaoAuditoria";
+import { corEspera, minutosDesde, tempoTexto } from "@/components/viabilidades/CardFila";
+import { dataBr } from "@/components/comum/ui";
 import HistoricoAuditor from "@/components/auditoria/HistoricoAuditor";
 import type { Auditor, Tecnicos } from "@/components/auditoria/tipos";
 
 type Filtro = "todos" | "urgentes" | "casa" | "predios" | "aguardando" | "agendar" | "contestado";
+
+/** Sem o módulo de agendamento: prédio com o atendente (dados do síndico) ou com a equipe de rede não é trabalho do auditor */
+const ESPERANDO_OUTROS = ["aguardando_dados", "pronto_auditoria", "agendado", "proposta_visita"];
+const comOutros = (v: Viabilizacao) => !MODULOS.agendamento && ESPERANDO_OUTROS.includes(v.status_predio ?? "");
 
 const FILTROS: { k: Filtro; rotulo: string; teste: (v: Viabilizacao) => boolean }[] = [
   { k: "urgentes", rotulo: "Urgentes", teste: (v) => !!v.urgente },
@@ -62,13 +68,16 @@ export default function AuditoriaPage() {
     return () => clearTimeout(t);
   }, [aviso]);
 
+  const meus = useMemo(() => (itens ?? []).filter((v) => !comOutros(v)), [itens]);
+  const acompanhando = useMemo(() => (itens ?? []).filter(comOutros), [itens]);
+
   const lista = useMemo(() => {
     const q = semAcento(busca.trim());
     const f = FILTROS.find((x) => x.k === filtro);
-    return (itens ?? [])
+    return meus
       .filter((v) => !f || f.teste(v))
       .filter((v) => !q || semAcento([v.nome_cliente, v.plus_code_cliente, v.predio_ftta, v.usuario, v.telefone_cliente].filter(Boolean).join(" ")).includes(q));
-  }, [itens, filtro, busca]);
+  }, [meus, filtro, busca]);
 
   if (!pode || !auditor) return <div className="py-20 text-center text-red-500">🚫 Acesso restrito.</div>;
 
@@ -80,7 +89,7 @@ export default function AuditoriaPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Auditoria</h1>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
-          <Radio className="h-3.5 w-3.5 text-green-600" /> {itens ? `${itens.length} pedido(s) com você` : "Carregando…"} · atualiza sozinho
+          <Radio className="h-3.5 w-3.5 text-green-600" /> {itens ? `${meus.length} pedido(s) com você` : "Carregando…"} · atualiza sozinho
         </p>
       </div>
 
@@ -99,9 +108,9 @@ export default function AuditoriaPage() {
             className="w-full rounded-lg border py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setFiltro("todos")} className={chip(filtro === "todos")}>Todos ({itens?.length ?? 0})</button>
+          <button type="button" onClick={() => setFiltro("todos")} className={chip(filtro === "todos")}>Todos ({meus.length})</button>
           {FILTROS.map((f) => {
-            const n = (itens ?? []).filter(f.teste).length;
+            const n = meus.filter(f.teste).length;
             if (!n) return null;
             return <button key={f.k} type="button" onClick={() => setFiltro(filtro === f.k ? "todos" : f.k)} className={chip(filtro === f.k, f.k === "urgentes")}>{f.rotulo} ({n})</button>;
           })}
@@ -110,7 +119,7 @@ export default function AuditoriaPage() {
 
       {itens === null ? (
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>
-      ) : itens.length === 0 ? (
+      ) : meus.length === 0 ? (
         <div className="rounded-xl border bg-white py-20 text-center text-gray-400">Nenhum pedido com você. Pegue o próximo na fila.</div>
       ) : lista.length === 0 ? (
         <div className="rounded-xl border bg-white py-12 text-center text-gray-400">Nenhum pedido com esses filtros.</div>
@@ -122,7 +131,57 @@ export default function AuditoriaPage() {
         </div>
       )}
 
+      {acompanhando.length > 0 && (
+        <Acompanhando itens={acompanhando} auditor={auditor} tecnicos={tecnicos} erroTecnicos={erroTecnicos} agora={agora} onFeito={setAviso} />
+      )}
+
       <HistoricoAuditor auditor={auditor} />
     </div>
+  );
+}
+
+/** Prédios que saíram da mão do auditor (atendente preenchendo o síndico ou equipe de rede), só para acompanhar */
+function Acompanhando({ itens, auditor, tecnicos, erroTecnicos, agora, onFeito }: {
+  itens: Viabilizacao[]; auditor: Auditor; tecnicos: Tecnicos; erroTecnicos: boolean; agora: number; onFeito: (m: string) => void;
+}) {
+  const [aberto, setAberto] = useState<string | null>(null);
+  const comAtendente = itens.filter((v) => v.status_predio === "aguardando_dados").length;
+  const comRede = itens.length - comAtendente;
+  const situacao = (v: Viabilizacao) =>
+    v.status_predio === "aguardando_dados" ? "Atendente preenchendo o síndico"
+    : v.status_predio === "agendado" ? `Visita ${dataBr(v.data_visita)}${v.tecnico_responsavel ? ` · ${v.tecnico_responsavel}` : ""}`
+    : "Com a equipe de rede";
+
+  return (
+    <details className="rounded-xl border bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm">
+        <span className="font-semibold text-gray-700">Acompanhando ({itens.length})</span>
+        <span className="text-xs text-gray-500">
+          {[comAtendente && `${comAtendente} com o atendente`, comRede && `${comRede} com a equipe de rede`].filter(Boolean).join(" · ")}
+        </span>
+      </summary>
+      <ul className="divide-y border-t">
+        {itens.map((v) => {
+          const min = minutosDesde(v.status_atualizado_em ?? v.data_solicitacao, agora);
+          return (
+            <li key={v.id}>
+              <button type="button" onClick={() => setAberto(aberto === v.id ? null : v.id)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-sm hover:bg-gray-50">
+                <span className="min-w-0 flex-1 truncate">
+                  <strong className="font-medium text-gray-800">{v.predio_ftta ?? v.nome_cliente ?? "Prédio"}</strong>
+                  <span className="text-gray-500"> · {v.nome_cliente}</span>
+                </span>
+                <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">{situacao(v)}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${corEspera(min)}`}>{tempoTexto(min)}</span>
+              </button>
+              {aberto === v.id && (
+                <div className="px-3 pb-3">
+                  <CartaoAuditoria v={v} auditor={auditor} tecnicos={tecnicos} erroTecnicos={erroTecnicos} agora={agora} onFeito={onFeito} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }

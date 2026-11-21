@@ -79,7 +79,7 @@ export function statusDe(v: Viabilizacao): StatusInfo {
     case "pronto_auditoria": return { chave: "ag_visita", rotulo: MODULOS.agendamento ? "Aguardando visita" : "Com a equipe de rede", cor: AZUL, grupo: "predio" };
     case "proposta_visita": return { chave: "confirmar_visita", rotulo: "Confirmar visita", cor: LARANJA, grupo: "predio", acao: "Confirme a data da visita técnica" };
     case "agendado": return { chave: "visita_agendada", rotulo: "Visita agendada", cor: VERDE, grupo: "predio" };
-    case "estruturado": return { chave: "estruturado", rotulo: "Estruturado", cor: VERDE, grupo: "aprovado", acao: "Estrutura pronta: dê ciência" };
+    case "estruturado": return { chave: "estruturado", rotulo: "Estruturado", cor: VERDE, grupo: "aprovado", acao: "Prédio estruturado: faça a viabilidade do cliente" };
   }
 
   switch (v.status) {

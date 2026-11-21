@@ -152,8 +152,8 @@ export default function EtapaPredio({ r, onRefresh }: { r: Viabilizacao; onRefre
 
     case "estruturado":
       return (
-        <Caixa tom="verde" titulo="Estrutura instalada!">
-          <p className="text-xs text-green-700">A estrutura foi concluída. Faça um novo pedido de viabilidade para a instalação do cliente.</p>
+        <Caixa tom="verde" titulo="Prédio estruturado!">
+          <p className="text-xs text-green-700">{MODULOS.agendamento ? "A estrutura foi concluída. Faça um novo pedido de viabilidade para a instalação do cliente." : "A estrutura foi concluída. Faça a viabilidade do cliente aqui e agende a instalação com ele pela ferramenta de agendamento. Depois clique em Ciente."}</p>
           <Linha r="Tecnologia" v={r.tecnologia_predio} />
           <Linha r="Técnico" v={r.tecnico_responsavel} />
           {r.notas_visita && r.notas_visita.length > 0 && (
