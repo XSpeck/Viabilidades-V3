@@ -483,14 +483,17 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
             pontos: el.lat !== undefined && el.lon !== undefined ? [...t.pontos.slice(0, -1), { lat: el.lat, lon: el.lon }] : t.pontos,
           })),
         ];
-    const prefixo = rt.nome.match(/^\d+\/\d+\/\d+/)?.[0];
+    // nome da sub-rota: porta PON (ex.: "0/6/0") + nome da CDOI — a porta vem da rota principal da família
+    let raiz = rt;
+    for (let g = 0; raiz.pai && g < 20; g++) raiz = rotas.find((x) => x.id === raiz.pai!.rota_id) ?? raiz;
+    const prefixo = rt.nome.match(/^\d+\/\d+\/\d+/)?.[0] ?? raiz.nome.match(/^\d+\/\d+\/\d+/)?.[0];
     setCriando(true);
     setErro(null);
     try {
       // sub-rota: sai da caixa de onde o cabo vem (ex.: a HUB); o tronco continua sendo da rota dona dela
       const pai = { rota_id: donoDoElemento(rt, i - 1, rotas).id, chave: chaveElemento(rt.elementos[i - 1]) };
       await criarRota(paraGravar({ pai, tronco: i }, {
-        nome: prefixo ? `${prefixo} ${el.nome}` : `${rt.nome} → ${el.nome}`,
+        nome: prefixo ? `${prefixo} ${el.nome}` : el.nome,
         origem: "manual",
         elementos: [...rt.elementos.slice(0, i), el],
         trechos,
