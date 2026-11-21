@@ -675,9 +675,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             <span className="ml-auto text-slate-400 transition group-open:rotate-180">▾</span>
           </summary>
           <ol className="mt-1.5 list-decimal space-y-1 pl-4">
-            <li>Cada CDOI fica numa fibra diferente, então cada uma é a ponta de uma rota. Esta rota leva o cabo e a fibra da <b>primeira</b> CDOI.</li>
-            <li>Dê o nome do prédio, escolha a fibra no cabo que chega e salve a rota.</li>
-            <li>Na <b>Árvore</b>, abra o prédio: coloque bloco, andar e splitter desta CDOI e use <b>＋ Nova CDOI com rota</b> para as outras (nome, andar e fibra; o caminho até a HUB é copiado sozinho).</li>
+            <li>Aqui você só leva o <b>cabo</b> até o prédio: dê o nome do prédio, escolha o cabo que chega e salve a rota.</li>
+            <li>Na <b>Árvore</b>, abra o prédio: nesta primeira CDOI escolha nome, bloco, andar, <b>fibra</b> e splitter.</li>
+            <li>Para as outras CDOIs use <b>＋ Nova CDOI com rota</b> (nome, andar e fibra; o caminho até a HUB é copiado sozinho). Cada CDOI vira uma sub-rota com a sua fibra.</li>
             <li>Se o cabo que entra no prédio for outro: <b>Nova rota</b>, clique no prédio no mapa e siga com a ferramenta Prédio.</li>
           </ol>
         </details>
