@@ -32,6 +32,16 @@ const VERMELHO = "bg-red-100 text-red-700";
 const ROXO = "bg-purple-100 text-purple-700";
 const CINZA = "bg-gray-100 text-gray-600";
 
+/**
+ * Como o pedido deve ser mostrado: com o módulo de agendamento desligado, a etapa antiga de
+ * agendamento da instalação (propor data, proposta enviada, agendado) é ignorada — o pedido aparece
+ * como aprovado. Os dados no Firebase não mudam (voltam a valer se o módulo for religado).
+ */
+export function vistaDoPedido<T extends Pick<Viabilizacao, "status_instalacao">>(v: T): T {
+  if (MODULOS.agendamento || !v.status_instalacao || v.status_instalacao === "instalado") return v;
+  return { ...v, status_instalacao: undefined };
+}
+
 export const ehUtp = (v: Pick<Viabilizacao, "status" | "motivo_rejeicao">) =>
   v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
@@ -68,7 +78,8 @@ function fim(v: Viabilizacao): StatusInfo {
   return { ...base, rotulo: "Finalizado", cor: CINZA };
 }
 
-export function statusDe(v: Viabilizacao): StatusInfo {
+export function statusDe(original: Viabilizacao): StatusInfo {
+  const v = vistaDoPedido(original);
   const cond = v.tipo_instalacao === "Condomínio";
   if (v.status === "finalizado" || v.data_finalizacao) return fim(v);
 

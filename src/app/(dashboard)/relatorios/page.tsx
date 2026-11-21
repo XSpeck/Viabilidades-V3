@@ -8,7 +8,8 @@ import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import type { Viabilizacao, PredioAtendido, PredioSemViabilidade } from "@/types";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Loader2, Download, Search, RefreshCw, MapPin } from "lucide-react";
-import { canAccess } from "@/lib/access";
+import { canAccess, getCargo } from "@/lib/access";
+import { foiAprovado, vistaDoPedido } from "@/lib/statusViabilizacao";
 import dynamic from "next/dynamic";
 import type { MapPoint } from "@/components/relatorios/RelatorioMapa";
 
@@ -64,8 +65,8 @@ export default function RelatoriosPage() {
   const [semViab, setSemViab] = useState<PredioSemViabilidade[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
+  const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; });
+  const [dataFim, setDataFim] = useState(() => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); });
   const [activeTab, setActiveTab] = useState<TabKey>("ftth_ap");
   const [searches, setSearches] = useState<Record<TabKey, string>>({ ftth_ap: "", ftth_rej: "", predios: "", condominios: "", ftta_rej: "", utp: "", estruturados: "", sem_viab: "" });
   const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
@@ -104,10 +105,7 @@ export default function RelatoriosPage() {
     const isUTP = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
 
     // FTTH aprovadas (excluindo UTP e rejeitadas arquivadas)
-    viabs.filter((v) => v.tipo_instalacao === "FTTH" && !isUTP(v) && (
-      v.status === "aprovado" ||
-      (v.status === "finalizado" && !v.motivo_rejeicao)
-    )).forEach((v) => {
+    viabs.filter((v) => v.tipo_instalacao === "FTTH" && !isUTP(v) && foiAprovado(v)).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftth_ap_${v.id}`, ...geo, category: "ftth_ap", cliente: v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.status === "finalizado" ? (v.data_finalizacao ?? v.data_auditoria) : v.data_auditoria), extra: v.auditado_por ? `Auditor: ${v.auditado_por}` : undefined });
     });
@@ -127,8 +125,8 @@ export default function RelatoriosPage() {
       if (geo) points.push({ id: `utp_${v.id}`, ...geo, category: "utp", cliente: v.nome_cliente ?? v.predio_ftta ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_auditoria ?? v.data_solicitacao) });
     });
 
-    // FTTA aprovados (Prédio ou Condomínio estruturado)
-    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado").forEach((v) => {
+    // FTTA aprovados (viabilizado direto com CDOI ou estruturado)
+    viabs.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && !isUTP(v) && (v.status_predio === "estruturado" || (foiAprovado(v) && !v.status_predio))).forEach((v) => {
       const geo = decode(v.plus_code_cliente);
       if (geo) points.push({ id: `ftta_ap_${v.id}`, ...geo, category: "ftta_ap", cliente: v.predio_ftta ?? v.nome_cliente ?? "-", plusCode: locationToPlusCode(v.plus_code_cliente), data: formatDateTime(v.data_estruturacao ?? v.data_auditoria) });
     });
@@ -192,6 +190,13 @@ export default function RelatoriosPage() {
     } finally { setActionPending(null); }
   }
 
+  // abre já carregado com o mês atual
+  useEffect(() => {
+    const t = setTimeout(() => load(), 0);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (showMap && !loading && loaded) {
       buildMapPoints(filtrado, semViab);
@@ -202,13 +207,13 @@ export default function RelatoriosPage() {
   if (!canAccess(user ?? null, "relatorios")) return <div className="text-center py-20 text-red-500">🚫 Acesso restrito.</div>;
 
   const filtrado = viabilizacoes;
+  const ehAdm = !!user && getCargo(user) === "adm";
 
   // ── Derived data ─────────────────────────────────────────────
   // FTTH
-  const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
-    v.status === "aprovado" ||
-    (v.status === "finalizado" && !v.motivo_rejeicao)
-  ));
+  const ehUtpRel = (v: Viabilizacao) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP";
+  // aprovada = teve CTO/CDOI aprovada (pedido cancelado ou desistido sem aprovação não conta)
+  const ftthAprovadas  = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && !ehUtpRel(v) && foiAprovado(v));
   const ftthRejeitadas = filtrado.filter((v) => v.tipo_instalacao === "FTTH" && (
     v.status === "rejeitado" ||
     (v.status === "finalizado" && !!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")
@@ -219,9 +224,8 @@ export default function RelatoriosPage() {
     : "0.0";
 
   // FTTA (Prédio + Condomínio estruturados/rejeitados)
-  const fttaAprovados  = filtrado.filter((v) =>
-    ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && v.status_predio === "estruturado"
-  );
+  const aprovadoPredio = (v: Viabilizacao) => !ehUtpRel(v) && (v.status_predio === "estruturado" || (foiAprovado(v) && !v.status_predio));
+  const fttaAprovados  = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && aprovadoPredio(v));
   const fttaRejeitados = filtrado.filter((v) => ["Prédio", "Condomínio"].includes(v.tipo_instalacao) && (
     v.status === "rejeitado" ||
     (v.status === "finalizado" && (v.status_predio === "rejeitado" || (!!v.motivo_rejeicao && v.motivo_rejeicao !== "Atendemos UTP")))
@@ -236,8 +240,8 @@ export default function RelatoriosPage() {
   );
 
   // Tabs de detalhe FTTA: aprovados = estruturados; rejeitados = tab separado
-  const prediosViab     = prediosEstruturados;
-  const condominiosViab = condominiosEstruturados;
+  const prediosViab     = filtrado.filter((v) => v.tipo_instalacao === "Prédio" && aprovadoPredio(v));
+  const condominiosViab = filtrado.filter((v) => v.tipo_instalacao === "Condomínio" && aprovadoPredio(v));
   const utpFiltrado     = filtrado.filter((v) => v.status === "utp" || v.motivo_rejeicao === "Atendemos UTP");
 
   const atendidosFiltrados = atendidos;
@@ -252,7 +256,8 @@ export default function RelatoriosPage() {
     utp:          "UTP",
     finalizado:   "Finalizado",
   };
-  const labelForStatus = (v: Viabilizacao): string => {
+  const labelForStatus = (original: Viabilizacao): string => {
+    const v = vistaDoPedido(original);
     if (v.status === "aprovado") {
       if (v.status_instalacao === "instalado") return "Instalado";
       if (v.status_predio === "estruturado") return "Estruturado";
@@ -389,12 +394,12 @@ export default function RelatoriosPage() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: "ftth_ap",      label: "✅ FTTH Aprovadas" },
     { key: "ftth_rej",     label: "❌ FTTH Rejeitadas" },
-    { key: "predios",      label: "🏢 FTTA Prédios" },
-    { key: "condominios",  label: "🏘️ FTTA Condomínios" },
+    { key: "predios",      label: "🏢 Prédios aprovados" },
+    { key: "condominios",  label: "🏘️ Condomínios aprovados" },
     { key: "ftta_rej",     label: "❌ FTTA Rejeitados" },
     { key: "utp",          label: "🔌 UTPs" },
-    { key: "estruturados", label: "🏗️ Estruturados" },
-    { key: "sem_viab",     label: "🚫 Sem Viabilidade" },
+    { key: "estruturados", label: "🏗️ Cadastro: prédios atendidos" },
+    { key: "sem_viab",     label: "🚫 Cadastro: sem viabilidade" },
   ];
 
   const barTecnologias = [
@@ -641,7 +646,7 @@ export default function RelatoriosPage() {
                           <span className="text-xs text-gray-400">Aguarde...</span>
                         ) : confirmDelete === String(row._id) ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-red-600 font-medium">Excluir?</span>
+                            <span className="text-xs text-red-600 font-medium">Apagar de vez?</span>
                             <button onClick={() => handleExcluir(String(row._id))} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-700">Sim</button>
                             <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 border rounded text-gray-500 hover:bg-gray-50">Não</button>
                           </div>
@@ -652,9 +657,11 @@ export default function RelatoriosPage() {
                                 📦 Arquivar
                               </button>
                             )}
-                            <button onClick={() => setConfirmDelete(String(row._id))} className="text-xs px-2 py-0.5 border border-red-200 rounded text-red-500 hover:bg-red-50">
-                              🗑️ Excluir
-                            </button>
+                            {ehAdm && (
+                              <button onClick={() => setConfirmDelete(String(row._id))} className="text-xs px-2 py-0.5 border border-red-200 rounded text-red-500 hover:bg-red-50" title="Apaga de vez, inclusive do histórico do atendente">
+                                🗑️ Excluir
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>

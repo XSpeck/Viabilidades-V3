@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { AlertCircle, Building2, ChevronDown, Home, Radio, Users } from "lucide-react";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
-import { ehUtp, statusDe } from "@/lib/statusViabilizacao";
+import { ehUtp, statusDe, vistaDoPedido } from "@/lib/statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 import FluxoStepper from "./FluxoStepper";
 import TempoDecorrido from "@/components/TempoDecorrido";
@@ -29,7 +29,8 @@ function IconeTipo({ r }: { r: Viabilizacao }) {
 }
 
 /** Um pedido em Meus Resultados: cabeçalho com a situação e, aberto, cada etapa do fluxo */
-export default function ResultadoCard({ r, usuario, onRefresh }: { r: Viabilizacao; usuario: string; onRefresh: () => void }) {
+export default function ResultadoCard({ r: original, usuario, onRefresh }: { r: Viabilizacao; usuario: string; onRefresh: () => void }) {
+  const r = vistaDoPedido(original);
   const st = statusDe(r);
   const [aberto, setAberto] = useState(false);
   const ativo = r.status !== "finalizado" && r.status !== "rejeitado";

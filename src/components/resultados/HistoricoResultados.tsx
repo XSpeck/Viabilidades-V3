@@ -4,12 +4,13 @@ import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, Download, History, Loader2, Search } from "lucide-react";
 import { formatDateTime, locationToPlusCode } from "@/lib/pluscode";
 import { semAcento } from "@/lib/localizacao";
-import { ehUtp, statusDe } from "@/lib/statusViabilizacao";
+import { ehUtp, statusDe, vistaDoPedido } from "@/lib/statusViabilizacao";
 import type { TipoInstalacao, Viabilizacao } from "@/types";
 import DadosAprovados from "./DadosAprovados";
 
 /** Detalhe de um pedido do histórico: dados da viabilidade, motivo, auditor e conversa */
-function Detalhe({ v }: { v: Viabilizacao }) {
+function Detalhe({ v: original }: { v: Viabilizacao }) {
+  const v = vistaDoPedido(original);
   return (
     <div className="space-y-2 pt-2 text-sm text-gray-700">
       <DadosAprovados r={v} />

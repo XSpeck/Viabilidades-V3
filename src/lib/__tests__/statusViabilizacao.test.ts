@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decisaoDoAuditor, ordenarResultados, podeMexerNaFila, statusDe } from "../statusViabilizacao";
+import { decisaoDoAuditor, ordenarResultados, podeMexerNaFila, statusDe, vistaDoPedido } from "../statusViabilizacao";
 import type { Viabilizacao } from "@/types";
 
 const v = (x: Partial<Viabilizacao>): Viabilizacao =>
@@ -17,15 +17,18 @@ describe("statusDe", () => {
     expect(statusDe(v({ status: "em_revisao", revisao_tipo: "contestado" })).acao).toBeUndefined();
   });
 
-  it("instalação vence a estrutura do prédio", () => {
-    const s = statusDe(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "estruturado", status_instalacao: "aguardando_proposta" }));
-    expect(s.chave).toBe("propor_inst");
-    expect(s.acao).toBeTruthy();
+  // O módulo de agendamento está desligado (lib/modulos.ts): a etapa antiga de instalação é ignorada
+  it("sem o módulo, etapa antiga de agendamento vira aprovado", () => {
+    const casa = statusDe(v({ status: "aprovado", status_instalacao: "aguardando_proposta" }));
+    expect(casa.rotulo).toBe("Aprovado");
+    expect(casa.acao).toBeUndefined();
+    expect(statusDe(v({ status: "aprovado", status_instalacao: "agendado" })).rotulo).toBe("Aprovado");
+    expect(statusDe(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "estruturado", status_instalacao: "aguardando_proposta" })).chave).toBe("estruturado");
+    expect(vistaDoPedido({ status_instalacao: "instalado" as const }).status_instalacao).toBe("instalado");
   });
 
-  it("visita e instalação agendadas têm nomes diferentes", () => {
+  it("visita agendada tem nome próprio", () => {
     expect(statusDe(v({ status: "aprovado", tipo_instalacao: "Prédio", status_predio: "agendado" })).rotulo).toBe("Visita agendada");
-    expect(statusDe(v({ status: "aprovado", status_instalacao: "agendado" })).rotulo).toBe("Instalação agendada");
   });
 
   it("dados do síndico ou do responsável", () => {
