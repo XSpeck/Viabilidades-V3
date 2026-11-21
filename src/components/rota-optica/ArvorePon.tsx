@@ -111,6 +111,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [janelas, setJanelas] = useState<JanelaArv[]>([]);
+  /** Fibra clicada no quadro de um cabo (k = chave do cabo): a árvore destaca o caminho dela */
+  const [fibraVista, setFibraVista] = useState<{ k: string; fibra: number } | null>(null);
   /** Elemento escolhido na busca: a área rola até ele */
   const [foco, setFoco] = useState<{ id: string; vez: number } | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -123,32 +125,12 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
       return [...js, { ...j, x: cx + 28 + desloc, y: cy - 60 + desloc } as JanelaArv];
     });
   }
-  /** Caixas que este cabo alcança (primeiro) e as demais caixas da rede, para o destino de uma fibra */
-  function destinosDoCabo(k: string) {
-    const doCabo = new Set<string>();
-    const todas = new Set<string>();
-    for (const r of rotas) {
-      r.elementos.forEach((e, i) => {
-        if (i === 0 || e.tipo === "olt" || e.tipo === "dio" || e.tipo === "onu") return;
-        todas.add(e.nome);
-        if (e.cabo_entrada && chaveCabo(e.cabo_entrada) === k) doCabo.add(e.nome);
-      });
-    }
-    // CDOIs dos prédios (inclusive as ainda sem rota, com fibra planejada neste cabo)
-    for (const p of predios) {
-      for (const o of p.pontos) {
-        todas.add(o.nome);
-        if (o.cabo && chaveCabo(o.cabo) === k) doCabo.add(o.nome);
-      }
-    }
-    return [
-      ...[...doCabo].sort().map((nome) => ({ nome, doCabo: true })),
-      ...[...todas].filter((x) => !doCabo.has(x)).sort().map((nome) => ({ nome, doCabo: false })),
-    ];
-  }
+
 
   function fecharJanela(id: string) {
     setJanelas((js) => js.filter((j) => j.id !== id));
+    // fechou o quadro do cabo: a árvore volta às fibras em uso
+    if (id.startsWith("cabo:")) setFibraVista((f) => (f && id === `cabo:${f.k}` ? null : f));
   }
 
   useEffect(() => {
@@ -241,7 +223,18 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   const sub = new Set<NoArvore>();
   const marcar = (n: NoArvore) => { sub.add(n); n.filhos.forEach(marcar); };
   marcar(sel);
-  const estado = (n: NoArvore) => (sel === arvore.raiz || caminho.has(n) ? 1 : sub.has(n) ? 0.6 : 0.18);
+  // fibra escolhida no quadro do cabo: o caminho das rotas que usam essa fibra fica em destaque
+  const rotasVista = fibraVista
+    ? new Set(
+        rotas
+          .filter((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === fibraVista.k && e.fibra_entrada === fibraVista.fibra))
+          .map((r) => r.id)
+      )
+    : null;
+  const estado = (n: NoArvore) =>
+    rotasVista && rotasVista.size
+      ? n.rotas.some((id) => rotasVista.has(id)) ? 1 : 0.18
+      : sel === arvore.raiz || caminho.has(n) ? 1 : sub.has(n) ? 0.6 : 0.18;
 
   return (
     <div className="space-y-4">
@@ -358,14 +351,18 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               const x1 = X(p.profundidade), y1 = Y(y.get(p)!), x2 = X(c.profundidade), y2 = Y(y.get(c)!);
               const mx = x1 + COL / 2;
               const d = `M${x1} ${y1}H${mx}V${y2}H${x2}`;
-              const cor = corFibra(c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
+              // trecho do cabo aberto no quadro: mostra a fibra clicada
+              const vista = fibraVista && c.elemento.cabo_entrada && chaveCabo(c.elemento.cabo_entrada) === fibraVista.k ? fibraVista.fibra : null;
+              const cor = corFibra(vista ?? c.elemento.fibra_entrada, c.elemento.cabo_entrada).hex;
               const temCabo = !!c.elemento.cabo_entrada;
               const nFibrasPredio = c.elemento.tipo === "predio" ? new Set(filhosReais(c).map((x) => x.elemento.fibra_entrada)).size : 0;
               // cabo de ida e volta (HUB → CTO → HUB): as duas fibras no mesmo trecho
               const volta = voltaDe(c);
               const corVolta = volta ? corFibra(volta.elemento.fibra_entrada, volta.elemento.cabo_entrada).hex : null;
               const eVolta = ehVolta(c);
-              const rot = eVolta
+              const rot = vista
+                ? TF(vista, c.elemento.cabo_entrada)
+                : eVolta
                 ? `↩ volta F${c.elemento.fibra_entrada ?? "?"}`
                 : volta
                   ? `F${c.elemento.fibra_entrada ?? "?"} ⇄ F${volta.elemento.fibra_entrada ?? "?"}`
@@ -382,9 +379,10 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 >
                   {temCabo && <title>{`${c.elemento.cabo_entrada} · fibra ${c.elemento.fibra_entrada ?? "?"} — clique para ver as fibras do cabo`}</title>}
                   <path d={d} fill="none" stroke="transparent" strokeWidth={16} strokeLinejoin="round" />
-                  {eVolta ? (
+                  {vista && <path d={d} fill="none" stroke="#fbbf24" strokeWidth={12} strokeLinejoin="round" strokeLinecap="round" opacity={0.55} />}
+                  {eVolta && !vista ? (
                     <path d={d} fill="none" stroke={cor} strokeWidth={2.2} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />
-                  ) : corVolta ? (
+                  ) : corVolta && !vista ? (
                     <>
                       <path d={d} fill="none" stroke="#0f172a" strokeWidth={10} strokeLinejoin="round" strokeLinecap="round" />
                       <path d={d} transform="translate(0 -1.8)" fill="none" stroke={cor} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />
@@ -400,7 +398,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                     <g transform={`translate(${ex - lw / 2} ${y2 - 9})`}>
                       <rect width={lw} height={18} rx={9} fill="#fff" stroke="#0f172a" strokeWidth={1.3} />
                       <svg x={2} y={2} width={14} height={14} viewBox="0 0 32 32" dangerouslySetInnerHTML={{ __html: DESENHO_CABO }} />
-                      {corVolta ? (
+                      {corVolta && !vista ? (
                         <>
                           <path d={`M${lw - 9} 5 A4 4 0 0 0 ${lw - 9} 13 Z`} fill={cor} stroke="#0f172a" strokeWidth={0.8} />
                           <path d={`M${lw - 9} 5 A4 4 0 0 1 ${lw - 9} 13 Z`} fill={corVolta} stroke="#0f172a" strokeWidth={0.8} />
@@ -538,12 +536,12 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 cabo={cabo}
                 uso={usoFibras.get(k)?.fibras ?? new Map()}
                 fibraDestaque={j.fibra}
+                onFibra={(n) => setFibraVista({ k, fibra: n })}
                 tipos={catalogo.filter((t) => t.categoria === "cabo")}
                 usuario={usuario}
                 onSalva={onCaboSalvo}
                 onFechar={() => fecharJanela(j.id)}
                 onAbrirRota={onAbrirRota}
-                destinos={destinosDoCabo(k)}
                 semMoldura
               />
             </Janela>

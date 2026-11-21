@@ -228,7 +228,7 @@ const CORES_FIBRA: [string, string][] = [
   ["Branco", "#f4f4f0"],
   ["Azul", "#1f6fd1"],
   ["Vermelho", "#d6322f"],
-  ["Violeta", "#7d4ec2"],
+  ["Lilás", "#b48ae6"],
   ["Marrom", "#7a4a2a"],
   ["Rosa", "#ee86b0"],
   ["Preto", "#222222"],
@@ -240,7 +240,7 @@ const CORES_FIBRA: [string, string][] = [
 // =====================
 // Tubos: depende da capacidade do cabo (padrão do GeoGrid)
 //   até 12 fibras → 1 tubo só (cores 1..12)
-//   24 a 72 fibras → tubos de 6 fibras (24 = 4 tubos, 48 = 8, 72 = 12), cores verde→violeta em cada tubo
+//   24 a 72 fibras → tubos de 6 fibras (24 = 4 tubos, 48 = 8, 72 = 12), cores verde→lilás em cada tubo
 //   acima de 72 → tubos de 12 fibras
 // O tubo também segue a sequência de cores (tubo 1 verde, 2 amarelo, 3 branco, 4 azul...).
 // =====================

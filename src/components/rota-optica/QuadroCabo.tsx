@@ -9,7 +9,6 @@ import {
   salvarCabo,
   STATUS_FIBRA_LABEL,
   type CaboRede,
-  type FibraCabo,
   type StatusFibra,
   type UsoFibra,
 } from "@/lib/cabosRede";
@@ -35,22 +34,21 @@ interface Props {
   semMoldura?: boolean;
   /** Caixas para escolher como destino de uma fibra marcada à mão (as deste cabo primeiro) */
   destinos?: { nome: string; doCabo: boolean }[];
+  /** Fibra clicada: a árvore mostra o caminho dela */
+  onFibra?: (n: number) => void;
 }
 
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, destinos = [] }: Props) {
-  /** Fibras com "Outro (digitar)…" escolhido */
-  const [textoLivre, setTextoLivre] = useState<Set<number>>(new Set());
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra }: Props) {
+  /** Fibra escolhida (clique): destacada aqui e na árvore */
+  const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
   const [capacidade, setCapacidade] = useState(capInicial);
   const [tipoId, setTipoId] = useState(cabo?.tipo_id ?? "");
-  const [manuais, setManuais] = useState<Record<number, FibraCabo>>(
-    Object.fromEntries((cabo?.fibras ?? []).map((f) => [f.numero, f]))
-  );
   const [obs, setObs] = useState(cabo?.obs ?? "");
   const [soOcupadas, setSoOcupadas] = useState(capInicial > 24);
   const [salvando, setSalvando] = useState(false);
@@ -73,13 +71,9 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
     if (t?.capacidade) setCapacidade(t.capacidade);
   }
 
+  /** Em uso ou livre: sempre pelas rotas (o que vai em cada fibra se define nas rotas e nas caixas) */
   function statusDe(n: number): StatusFibra {
-    const m = (editando ? manuais : Object.fromEntries((cabo?.fibras ?? []).map((f) => [f.numero, f])))[n];
-    if (m && m.status !== "livre") return m.status;
     return (uso.get(n)?.length ?? 0) > 0 ? "uso" : "livre";
-  }
-  function descricaoDe(n: number): string | undefined {
-    return editando ? manuais[n]?.descricao : cabo?.fibras.find((f) => f.numero === n)?.descricao;
   }
 
   const contagem = fibras.reduce(
@@ -96,7 +90,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
         nome,
         capacidade,
         tipo_id: tipoId || undefined,
-        fibras: Object.values(manuais),
+        fibras: [],
         obs,
         atualizado_por: usuario,
       });
@@ -109,7 +103,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
     }
   }
 
-  const visivel = (n: number) => !soOcupadas || n === fibraDestaque || statusDe(n) !== "livre" || !!descricaoDe(n);
+  const visivel = (n: number) => !soOcupadas || n === fibraSel || statusDe(n) !== "livre";
   const nTubos = Math.ceil(fibras.length / porTubo);
   const tubos = Array.from({ length: nTubos }, (_, t) => fibras.slice(t * porTubo, (t + 1) * porTubo));
   const nenhumaVisivel = !fibras.some(visivel);
@@ -152,7 +146,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             {tipo ? tipo.nome : !cabo?.capacidade && !editando ? "capacidade estimada pelas rotas" : "sem tipo cadastrado"}
           </p>
           <div className="grid grid-cols-2 gap-1">
-            {(["uso", "livre", "reservada", "rompida"] as const).map((k) => (
+            {(["uso", "livre"] as const).map((k) => (
               <span key={k} className={`flex items-center justify-between gap-1 rounded-md px-1.5 py-0.5 text-[11px] ${CHIP[k]}`}>
                 {STATUS_FIBRA_LABEL[k]} <b className="tabular-nums">{contagem[k]}</b>
               </span>
@@ -160,7 +154,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
           </div>
           {/* barra de ocupação do cabo */}
           <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-200" aria-hidden>
-            {(["uso", "reservada", "rompida"] as const).map((k) =>
+            {(["uso"] as const).map((k) =>
               contagem[k] ? <span key={k} className={BARRA[k]} style={{ width: `${(contagem[k] / fibras.length) * 100}%` }} /> : null
             )}
           </div>
@@ -249,13 +243,14 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                       const c = corFibraPorCapacidade(n, cap, porTubo);
                       const st = statusDe(n);
                       const usos = uso.get(n) ?? [];
-                      const desc = descricaoDe(n);
-                      const ativa = n === fibraDestaque;
+                      const ativa = n === fibraSel;
                       return (
                         <li
                           key={n}
-                          ref={ativa ? destaqueRef : undefined}
-                          className={`px-2 py-1.5 ${ativa ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : st === "livre" ? "bg-white" : "bg-white"}`}
+                          ref={n === fibraDestaque ? destaqueRef : undefined}
+                          onClick={() => { setFibraSel(n); onFibra?.(n); }}
+                          title="Clique para ver esta fibra na árvore"
+                          className={`cursor-pointer px-2 py-1.5 ${ativa ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : "bg-white hover:bg-slate-50"}`}
                         >
                           <div className="flex items-center gap-2">
                             <Fio hex={c.hex} apagada={st === "livre"} rompida={st === "rompida"} />
@@ -264,7 +259,6 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                             </span>
                             <span className={`text-xs flex-1 min-w-0 truncate ${st === "livre" ? "text-slate-400" : "text-slate-700"}`}>
                               {c.nome.toLowerCase()}
-                              {!editando && desc ? <span className="text-slate-500"> · {desc}</span> : null}
                             </span>
                             <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${CHIP[st]}`}>{STATUS_FIBRA_LABEL[st]}</span>
                           </div>
@@ -274,7 +268,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                                 <button
                                   key={u.rotaId}
                                   type="button"
-                                  onClick={() => onAbrirRota(u.rotaId)}
+                                  onClick={(e) => { e.stopPropagation(); onAbrirRota(u.rotaId); }}
                                   className="flex items-start gap-1 text-left text-[11px] leading-tight text-indigo-700 hover:underline"
                                   title="Abrir esta rota"
                                 >
@@ -285,66 +279,6 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                                   </span>
                                 </button>
                               ))}
-                            </div>
-                          )}
-                          {editando && (
-                            <div className="flex gap-1 mt-1 ml-[46px]">
-                              <select
-                                value={manuais[n]?.status ?? "livre"}
-                                onChange={(e) => setManuais((m) => ({ ...m, [n]: { numero: n, status: e.target.value as StatusFibra, descricao: m[n]?.descricao } }))}
-                                className="border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white"
-                                aria-label={`Status da fibra ${n}`}
-                              >
-                                <option value="livre">{usos.length ? "Pelas rotas" : "Livre"}</option>
-                                <option value="uso">Em uso</option>
-                                <option value="reservada">Reservada</option>
-                                <option value="rompida">Rompida</option>
-                              </select>
-                              {(() => {
-                                const st = manuais[n]?.status ?? "livre";
-                                const desc = manuais[n]?.descricao ?? "";
-                                const setDesc = (v: string) => setManuais((m) => ({ ...m, [n]: { numero: n, status: m[n]?.status ?? "livre", descricao: v } }));
-                                const usarLista = (st === "uso" || st === "reservada") && destinos.length > 0 && !textoLivre.has(n) && (!desc || destinos.some((d) => d.nome === desc));
-                                if (usarLista) {
-                                  const doCabo = destinos.filter((d) => d.doCabo);
-                                  const outros = destinos.filter((d) => !d.doCabo);
-                                  const ja = (v: string) => Object.values(manuais).find((x) => x.numero !== n && x.descricao === v)?.numero;
-                                  const opt = (d: { nome: string }) => {
-                                    const outra = ja(d.nome);
-                                    return (
-                                      <option key={d.nome} value={d.nome}>
-                                        {d.nome.split(" - ")[0].slice(0, 40)}{outra ? ` · já na F${outra}` : ""}
-                                      </option>
-                                    );
-                                  };
-                                  return (
-                                    <select
-                                      value={desc}
-                                      onChange={(e) => {
-                                        if (e.target.value === "__outro") {
-                                          setTextoLivre((t) => new Set(t).add(n));
-                                          setDesc("");
-                                        } else setDesc(e.target.value);
-                                      }}
-                                      className="flex-1 min-w-0 border border-amber-300 rounded px-1 py-0.5 text-[11px] bg-amber-50/60"
-                                      aria-label={`Destino da fibra ${n}`}
-                                    >
-                                      <option value="">Para onde vai esta fibra…</option>
-                                      {doCabo.length > 0 && <optgroup label="Caixas deste cabo">{doCabo.map(opt)}</optgroup>}
-                                      {outros.length > 0 && <optgroup label="Outras caixas da rede">{outros.map(opt)}</optgroup>}
-                                      <option value="__outro">Outro (digitar)…</option>
-                                    </select>
-                                  );
-                                }
-                                return (
-                                  <input
-                                    value={desc}
-                                    onChange={(e) => setDesc(e.target.value)}
-                                    placeholder="O que vai nesta fibra"
-                                    className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-0.5 text-[11px]"
-                                  />
-                                );
-                              })()}
                             </div>
                           )}
                         </li>
