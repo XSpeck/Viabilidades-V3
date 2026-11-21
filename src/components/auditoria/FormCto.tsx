@@ -9,7 +9,7 @@ import CtoBusca from "./CtoBusca";
 import SemViabilidade from "./SemViabilidade";
 import { avisoRx, type PropsEtapa } from "./tipos";
 
-type Campo = "cto" | "distancia" | "localizacao" | "portas" | "rx" | "rota";
+type Campo = "cto" | "olt" | "distancia" | "localizacao" | "portas" | "rx" | "rota";
 
 /** Casa (FTTH) e Condomínio: escolha da CTO, rota do cabo (só casa), dados e decisão */
 export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: PropsEtapa & {
@@ -43,6 +43,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
   function viabilizar() {
     const faltando: Campo[] = [];
     if (!cto.trim()) faltando.push("cto");
+    if (!olt.trim()) faltando.push("olt");
     if (!distancia.trim()) faltando.push("distancia");
     if (!localizacao.trim()) faltando.push("localizacao");
     if (!(Number(portas) > 0)) faltando.push("portas");
@@ -54,7 +55,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
     acao.rodar(() => aprovarFTTH(v.id, {
       cto_numero: cto.trim(), portas_disponiveis: Number(portas), menor_rx: rx.trim().replace(",", "."),
       distancia_cliente: distancia.trim(), localizacao_caixa: localizacao.trim(), observacoes: obs.trim(),
-      olt: olt.trim() || undefined, tipo_instalacao: tipo, nome_cliente: nome.trim() || undefined,
+      olt: olt.trim(), tipo_instalacao: tipo, nome_cliente: nome.trim() || undefined,
     }, auditor.nome, auditor.uid), () => onFeito(`${nome || "Pedido"}: viabilidade aprovada e enviada para o agendamento.`));
   }
 
@@ -113,7 +114,7 @@ export default function FormCto({ v, auditor, onFeito, tipo, nome, onMapa }: Pro
 
       <div className="grid grid-cols-2 gap-2">
         <input placeholder="Nº da CTO *" value={cto} onChange={mudar("cto", setCto)} className={`${campo(errado("cto"))} col-span-2`} />
-        <input placeholder="OLT" value={olt} onChange={(e) => setOlt(e.target.value)} className={`${campo()} col-span-2`} />
+        <input placeholder="OLT *" value={olt} onChange={mudar("olt", setOlt)} className={`${campo(errado("olt"))} col-span-2`} />
         <input placeholder="Distância *" value={distancia} onChange={mudar("distancia", setDistancia)} className={campo(errado("distancia"))} />
         <input placeholder="Localização da caixa *" value={localizacao} onChange={mudar("localizacao", setLocalizacao)} className={campo(errado("localizacao"))} />
         <input type="number" min={1} placeholder="Portas livres *" value={portas} onChange={mudar("portas", setPortas)} className={campo(errado("portas"))} />

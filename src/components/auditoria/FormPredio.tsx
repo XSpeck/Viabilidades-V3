@@ -8,7 +8,7 @@ import FttaMap from "./FttaMap";
 import SemViabilidade from "./SemViabilidade";
 import { avisoRx, type PropsEtapa } from "./tipos";
 
-type Campo = "cdoi" | "predio" | "portas" | "rx";
+type Campo = "cdoi" | "olt" | "predio" | "portas" | "rx";
 
 /** Prédio (FTTA): CDOI, dados e decisão (viabilizar, UTP, pedir estrutura ou sem viabilidade) */
 export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsEtapa & { nome: string; onMapa: (aberto: boolean) => void }) {
@@ -31,6 +31,7 @@ export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsE
   function viabilizar() {
     const faltando: Campo[] = [];
     if (!cdoi.trim()) faltando.push("cdoi");
+    if (!olt.trim()) faltando.push("olt");
     if (!predio.trim()) faltando.push("predio");
     if (!(Number(portas) > 0)) faltando.push("portas");
     if (!rx.trim()) faltando.push("rx");
@@ -39,7 +40,7 @@ export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsE
     if (aviso && !rxConfirmado) { setRxConfirmado(true); return; }
     acao.rodar(() => aprovarFTTA(v.id, {
       cdoi: cdoi.trim(), predio_ftta: predio.trim(), portas_disponiveis: Number(portas), media_rx: rx.trim().replace(",", "."),
-      observacoes: obs.trim(), olt: olt.trim() || undefined, tipo_instalacao: "Prédio", nome_cliente: nome.trim() || undefined,
+      observacoes: obs.trim(), olt: olt.trim(), tipo_instalacao: "Prédio", nome_cliente: nome.trim() || undefined,
     }, auditor.nome, auditor.uid), () => onFeito(`${quem}: viabilidade aprovada e enviada para o agendamento.`));
   }
 
@@ -58,7 +59,7 @@ export default function FormPredio({ v, auditor, onFeito, nome, onMapa }: PropsE
 
       <div className="grid grid-cols-2 gap-2">
         <input placeholder="CDOI *" value={cdoi} onChange={mudar("cdoi", setCdoi)} className={`${campo(errado("cdoi"))} col-span-2`} />
-        <input placeholder="OLT" value={olt} onChange={(e) => setOlt(e.target.value)} className={`${campo()} col-span-2`} />
+        <input placeholder="OLT *" value={olt} onChange={mudar("olt", setOlt)} className={`${campo(errado("olt"))} col-span-2`} />
         <input placeholder="Nome do prédio *" value={predio} onChange={mudar("predio", setPredio)} className={`${campo(errado("predio"))} col-span-2`} />
         <input type="number" min={1} placeholder="Portas livres *" value={portas} onChange={mudar("portas", setPortas)} className={campo(errado("portas"))} />
         <input inputMode="decimal" placeholder="Média RX (dBm) *" value={rx} onChange={(e) => { setRx(e.target.value); setRxConfirmado(false); setErros((x) => x.filter((y) => y !== "rx")); }} className={campo(errado("rx") || !!aviso)} />
