@@ -35,8 +35,8 @@ interface Props {
   onSalva: (c: CaixaRede) => void;
   /** Fibras que seguem para a frente (porta Ramal) */
   saidas: { nome: string; cabo?: string; fibra?: number }[];
-  /** "CTO" (padrão) ou "HUB" — muda só os textos */
-  tipoCaixa?: "CTO" | "HUB";
+  /** "CTO" (padrão), "HUB" ou "CDOI" — muda os textos e as cores */
+  tipoCaixa?: "CTO" | "HUB" | "CDOI";
   /** Abre direto na edição; Salvar/Cancelar chamam onFechar */
   soEdicao?: boolean;
   onFechar?: () => void;
@@ -264,7 +264,11 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
         <p className="text-[11px] text-slate-500">
-          {tipoCaixa === "HUB" ? "Splitters primários da HUB: um para cada porta PON (fibra que chega)." : "Splitters de atendimento da CTO e os clientes em cada porta."}
+          {tipoCaixa === "HUB"
+            ? "Splitters primários da HUB: um para cada porta PON (fibra que chega)."
+            : tipoCaixa === "CDOI"
+              ? "Splitter da CDOI e o apartamento / cliente em cada perna."
+              : "Splitters de atendimento da CTO e os clientes em cada porta."}
         </p>
         {!editando && (
           <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-emerald-400">
@@ -297,19 +301,21 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
       {/* Desenho */}
       {spls.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">
-          Esta CTO ainda não tem splitter. {editando ? "Adicione abaixo." : "Clique em Editar."}
+          Esta {tipoCaixa} ainda não tem splitter. {editando ? "Adicione abaixo." : "Clique em Editar."}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-emerald-900/40 bg-[#052e1f] shadow-lg">
+        <div className={`overflow-hidden rounded-2xl border shadow-lg ${tipoCaixa === "CDOI" ? "border-sky-900/40 bg-[#082f49]" : "border-emerald-900/40 bg-[#052e1f]"}`}>
           <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
             <defs>
               <pattern id="ctoGrade" width="14" height="14" patternUnits="userSpaceOnUse">
-                <path d="M14 0H0V14" fill="none" stroke="#064e3b" strokeWidth=".6" />
+                <path d="M14 0H0V14" fill="none" stroke={tipoCaixa === "CDOI" ? "#0c4a6e" : "#064e3b"} strokeWidth=".6" />
               </pattern>
             </defs>
             <rect width={W} height={H} fill="url(#ctoGrade)" />
-            <text x="8" y="14" fontSize="7.5" fill="#6ee7b7" fontWeight={800} letterSpacing=".08em">FIBRAS QUE CHEGAM</text>
-            <text x={W - 8} y="14" fontSize="7.5" fill="#6ee7b7" fontWeight={800} textAnchor="end" letterSpacing=".08em">PORTAS DE ATENDIMENTO</text>
+            <text x="8" y="14" fontSize="7.5" fill={tipoCaixa === "CDOI" ? "#7dd3fc" : "#6ee7b7"} fontWeight={800} letterSpacing=".08em">FIBRAS QUE CHEGAM</text>
+            <text x={W - 8} y="14" fontSize="7.5" fill={tipoCaixa === "CDOI" ? "#7dd3fc" : "#6ee7b7"} fontWeight={800} textAnchor="end" letterSpacing=".08em">
+              {tipoCaixa === "CDOI" ? "APARTAMENTOS / CLIENTES" : "PORTAS DE ATENDIMENTO"}
+            </text>
 
             {/* fibra que entra em cada splitter de 1º nível */}
             {spls.filter((s) => s.entrada.fibra).map((s) => {
@@ -426,7 +432,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                 <select className={`${campo} mb-1.5`} value={valorEntrada} onChange={(e) => trocarEntrada(s, e.target.value)}>
                   <option value="">Escolha…</option>
                   {entradas.length > 0 && (
-                    <optgroup label="Fibra que chega na CTO">
+                    <optgroup label={`Fibra que chega na ${tipoCaixa}`}>
                       {entradas.map((e) => (
                         <option key={`${e.cabo}${e.fibra}`} value={`f:${e.cabo}|${e.fibra}`}>
                           F{e.fibra} {corFibra(e.fibra, e.cabo).nome.toLowerCase()} · {curto(e.cabo, 26)}
@@ -480,7 +486,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                                 disabled={p.status === "livre"}
                                 value={p.descricao ?? ""}
                                 onChange={(e) => porta(s, p.numero, { descricao: e.target.value })}
-                                placeholder={p.status === "cliente" ? "Cliente / login" : p.status === "ramal" ? "Para onde vai (ex.: CT 12)" : "livre"}
+                                placeholder={p.status === "cliente" ? (tipoCaixa === "CDOI" ? "Apto / cliente (ex.: 302 · João)" : "Cliente / login") : p.status === "ramal" ? "Para onde vai (ex.: CT 12)" : "livre"}
                               />
                             )}
                           </>

@@ -76,6 +76,8 @@ interface Props {
   modelosSplitter?: ItemCatalogo[];
   /** Prédio aberto pelo nó Prédio da árvore (entrada do cabo) */
   predioId?: string;
+  /** Abre a janela de uma CDOI (splitter e clientes) pela chave */
+  onAbrirCdoi?: (chave: string) => void;
 }
 
 /** Subida da fibra dentro do prédio até a CDOI: ~3 m por andar */
@@ -157,7 +159,7 @@ function chegadas(p: PredioRede, rotas: RotaOptica[]) {
   return { cabos, internas, rotaDe };
 }
 
-export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram, modelosSplitter = [], predioId }: Props) {
+export default function PredioVertical({ chave, nome, rotas, caixas, usuario, onAbrirRota, onRotasMudaram, modelosSplitter = [], predioId, onAbrirCdoi }: Props) {
   const [predios, setPredios] = useState<PredioRede[] | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<PredioRede | null>(null);
@@ -294,6 +296,9 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
           continue;
         }
         const codigo = /^PT:\d+$/.test(o.chave) ? o.chave.slice(3) : String(++ultimo);
+        // splitter da CDOI: o do diagrama da caixa (aba CDOI), se já foi montado; senão o escolhido no prédio
+        const pernasCx = resumoPortas(caixas.find((c) => c.chave === o.chave))?.total;
+        const splCdoi = pernasCx ? `1:${pernasCx}` : o.splitter;
         const pe = ent.elemento;
         const el: ElementoRota = {
           nome: o.nome.trim() || "CDOI",
@@ -305,8 +310,8 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
           fibra_entrada: o.fibra,
           // subida dentro do prédio até o andar da CDOI + a reserva da CDOI
           distancia_m: Math.max(0, o.andar) * METROS_POR_ANDAR + reservaTecnica("cdoi", ent.rota.calculo_potencia),
-          splitter: o.splitter,
-          splitter_modelo: o.splitter ? modelosSplitter.find((m) => m.relacao === o.splitter)?.id : undefined,
+          splitter: splCdoi,
+          splitter_modelo: splCdoi ? modelosSplitter.find((m) => m.relacao === splCdoi)?.id : undefined,
         };
         let raiz = ent.rota;
         for (let g = 0; raiz.pai && g < 20; g++) raiz = rotas.find((x) => x.id === raiz.pai!.rota_id) ?? raiz;
@@ -915,11 +920,18 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                   )}
                   {repetidas.has(o.id) && <p className="font-semibold text-red-600">Fibra repetida: outra CDOI usa a mesma fibra deste cabo</p>}
                 </div>
-                {pr && (
-                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title={`${pr.livres} livres · ${pr.ramais} ramais`}>
-                    {pr.clientes}/{pr.total}
-                  </span>
-                )}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {pr && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title={`${pr.livres} livres · ${pr.ramais} ramais`}>
+                      {pr.clientes}/{pr.total}
+                    </span>
+                  )}
+                  {o.chave && onAbrirCdoi && (rotaDe.has(o.id) || o.rota_id) && (
+                    <button type="button" onClick={() => onAbrirCdoi(o.chave)} className="rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
+                      clientes →
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

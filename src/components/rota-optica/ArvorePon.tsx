@@ -605,9 +605,15 @@ function JanelaNo({
   const ehCeo = tipoVisual(no.elemento) === "ceo";
   const ehCt = tipoVisual(no.elemento) === "ct";
   const ehDio = no.elemento.tipo === "dio";
-  const [aba, setAba] = useState<"primario" | "cto" | "ceo" | "ct" | "dio" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCt ? "ct" : ehCdoi || ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+  const [aba, setAba] = useState<"primario" | "cto" | "cdoi" | "ceo" | "ct" | "dio" | "predio" | "emendas" | "diagrama" | "caminho">(
+    ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
   );
+  /** CDOIs do prédio (descendentes do nó) para abrir a janela de cada uma */
+  const abrirCdoi = (k: string) => {
+    const todos = (n: NoArvore): NoArvore[] => [n, ...n.filhos.flatMap(todos)];
+    const alvo = todos(no).find((x) => chaveElemento(x.elemento) === k);
+    if (alvo) onAbrirNo(alvo.id);
+  };
   /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
   const [editandoHub, setEditandoHub] = useState(false);
   return (
@@ -616,12 +622,13 @@ function JanelaNo({
         {([
           ...(ehHub ? ([["primario", "Primário"]] as const) : []),
           ...(ehCto ? ([["cto", "CTO"]] as const) : []),
+          ...(ehCdoi ? ([["cdoi", "CDOI"]] as const) : []),
           ...(ehCeo ? ([["ceo", "Emendas (CEO)"]] as const) : []),
           ...(ehCt ? ([["ct", "CT"]] as const) : []),
           ...(ehDio ? ([["dio", "DIO"]] as const) : []),
           ...(ehCdoi || ehPredio ? ([["predio", "Prédio"]] as const) : []),
           ...(ehPredio || ehCeo || ehDio ? [] : ([["emendas", "Emendas"]] as const)),
-          ...(ehHub || ehPredio || ehCto || ehCt || ehDio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
+          ...(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio ? [] : ([["diagrama", "Splitter e portas"]] as const)),
           ["caminho", "Caminho e potência"],
         ] as const).map(([k, r]) => (
           <button
@@ -669,10 +676,21 @@ function JanelaNo({
           onSalva={onCaixaSalva}
           saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
         />
+      ) : aba === "cdoi" ? (
+        <CaixaCto
+          key={`cdoi-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
+          no={no}
+          rotas={todasRotas}
+          modelos={catalogo.filter((m) => m.categoria === "splitter")}
+          usuario={usuario}
+          onSalva={onCaixaSalva}
+          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
+          tipoCaixa="CDOI"
+        />
       ) : aba === "predio" ? (
         <PredioVertical
           chave={ehPredio ? chaveElemento((filhosReais(no)[0] ?? no).elemento) : chaveElemento(no.elemento)}
-          nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} predioId={idPredioDoElemento(no.elemento) ?? undefined} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} />
+          nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} predioId={idPredioDoElemento(no.elemento) ?? undefined} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} onAbrirCdoi={abrirCdoi} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
       ) : aba === "diagrama" ? (
@@ -697,7 +715,7 @@ function JanelaNo({
         />
       ) : (
         <div className="p-3">
-          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba(ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "diagrama")} />
+          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba(ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "diagrama")} />
         </div>
       )}
     </div>
