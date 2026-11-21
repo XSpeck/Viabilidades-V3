@@ -32,6 +32,8 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
     const prox = r.elementos[j + 1];
     const inCabo = e.cabo_entrada ?? "cabo não informado";
     const inFibra = e.fibra_entrada;
+    // cabo que só leva até a entrada de um prédio (as fibras são escolhidas no prédio): não é uma ligação
+    if (prox && prox.tipo === "predio" && prox.fibra_entrada === undefined) continue;
     if (e.splitter && prox) {
       const k = `${chaveCabo(inCabo)}|${inFibra}`;
       const g = splitters.get(k) ?? { inCabo, inFibra, splitter: e.splitter, saidas: [] };
@@ -56,6 +58,12 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
     const l = simples.get(k);
     if (l) l.rotas.push(r.nome);
     else simples.set(k, { tipo: passa ? "passa" : "fusao", inCabo, inFibra, outCabo, outFibra, destino: prox.nome, rotas: [r.nome] });
+  }
+  // "termina aqui" só quando nenhuma outra rota segue com a mesma fibra (ex.: o tronco termina na HUB, mas as sub-rotas continuam)
+  for (const [k, l] of [...simples.entries()]) {
+    if (l.tipo !== "termina") continue;
+    const kIn = `${chaveCabo(l.inCabo)}|${l.inFibra}`;
+    if (splitters.has(kIn) || [...simples.values()].some((x) => x !== l && x.tipo !== "termina" && `${chaveCabo(x.inCabo)}|${x.inFibra}` === kIn)) simples.delete(k);
   }
   const lista = [...simples.values()].sort((a, b) => a.inCabo.localeCompare(b.inCabo) || (a.inFibra ?? 0) - (b.inFibra ?? 0));
   return { simples: lista, splitters: [...splitters.values()] };

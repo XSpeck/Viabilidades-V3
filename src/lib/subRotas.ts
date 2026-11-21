@@ -87,6 +87,12 @@ export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => 
       ...(r.pai.meia_porta ? { via_meia_porta: true } : {}),
     };
     const elementos = [...mae.elementos.slice(0, k), ancora, ...proprios];
+    // entrada de prédio: o cabo chega inteiro; nesta sub-rota a fibra é a da CDOI (vale também na saída da caixa anterior)
+    const p0 = proprios[0];
+    if (ancora.tipo === "predio" && ancora.fibra_entrada === undefined && p0?.fibra_entrada !== undefined) {
+      elementos[k] = { ...ancora, fibra_entrada: p0.fibra_entrada };
+      if (k > 0) elementos[k - 1] = { ...elementos[k - 1], fibra_saida: p0.fibra_entrada };
+    }
     // traçado: o da mãe até a caixa + o da sub-rota (índices deslocados)
     const trechos: TrechoCabo[] = [
       ...mae.trechos.filter((t) => t.ate === undefined || t.ate <= k),
