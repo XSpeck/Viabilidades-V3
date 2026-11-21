@@ -69,8 +69,6 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
   async function salvar() {
     if (!form) return;
     if (!form.nome.trim()) return setErro("Informe o nome (ou a razão social).");
-    if (!form.codigo.trim()) return setErro("Informe o código do cliente.");
-    if (clientes.some((c) => c.id !== form.id && c.codigo.trim().toUpperCase() === form.codigo.trim().toUpperCase())) return setErro(`O código ${form.codigo} já é de outro cliente.`);
     if (form.documento && !documentoValido(form.documento)) return setErro("CPF/CNPJ inválido: confira os números.");
     if (form.documento && clientes.some((c) => c.id !== form.id && c.documento && soDigitos(c.documento) === soDigitos(form.documento!))) return setErro("Já existe um cliente com este CPF/CNPJ.");
     if (form.cep && soDigitos(form.cep).length !== 8) return setErro("CEP precisa ter 8 números.");
@@ -79,7 +77,9 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
     setErro(null);
     try {
       const antes = clientes.find((c) => c.id === form.id);
-      const salvo = await salvarCliente(form, usuario);
+      // código: automático e fixo — o cliente novo pega o próximo livre na hora de salvar; o existente mantém o dele
+      const codigo = form.id ? (antes?.codigo || form.codigo) : proximoCodigoCliente(clientes);
+      const salvo = await salvarCliente({ ...form, codigo }, usuario);
       onClientes([...clientes.filter((c) => c.id !== salvo.id), salvo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
       // o nome mudou e ele está ligado: a perna passa a mostrar o nome novo
       const atual = ligacoes.get(salvo.id);
@@ -129,8 +129,13 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
             <input className={campo} value={form.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="Nome completo ou razão social" />
           </div>
           <div>
-            <label className={rot}>Código *</label>
-            <input className={`${campo} font-mono`} value={form.codigo} onChange={(e) => set({ codigo: e.target.value })} />
+            <label className={rot}>Código 🔒</label>
+            <input
+              className={`${campo} cursor-not-allowed bg-slate-50 font-mono text-slate-600`}
+              value={form.id ? form.codigo : `${proximoCodigoCliente(clientes)} (ao salvar)`}
+              readOnly
+              title="Código automático e único: não pode ser mudado"
+            />
           </div>
           <div>
             <label className={rot}>{pj ? "CNPJ" : "CPF / CNPJ"}</label>
