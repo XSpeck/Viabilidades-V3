@@ -213,6 +213,8 @@ export function calcularPotencias(elementos: EntradaPotencia[], tx: number, p: C
       saida -= spl;
       partes.push(`splitter ${e.splitter} ${fmt(spl)} dB`);
       if (e.tipo === "cto" || e.tipo === "cdoi") { saida -= p.conector_db; partes.push(`conector de saída ${fmt(p.conector_db)} dB`); }
+      // HUB: o primário é fundido (sem conector); a perna de saída também leva uma fusão
+      else if (e.tipo === "hub") { saida -= p.emenda_db; partes.push(`fusão de saída ${fmt(p.emenda_db)} dB`); }
     }
     out.push({ entrada: r2(entrada), saida: r2(saida), detalhe: partes.join(" + ") });
   });

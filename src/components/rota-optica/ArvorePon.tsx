@@ -637,7 +637,7 @@ function JanelaNo({
           if (ehDio) abas.push(["dio", "DIO"]);
           if (ehPredio) abas.push(["predio", "Prédio"]);
           if (!(ehPredio || ehCeo || ehDio || ehCdoi)) abas.push(["emendas", "Emendas"]);
-          if (!(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio)) abas.push(["diagrama", "Splitter e portas"]);
+          if (!(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio || ehCeo)) abas.push(["diagrama", "Splitter e portas"]);
           if (!ehCdoi) abas.push(["caminho", "Caminho e potência"]);
           return abas;
         })().map(([k, r]) => (
@@ -851,6 +851,8 @@ function curtoNome(nome: string) {
  * quantas rotas e pontas ele leva, a pior potência e a ponta mais longe. Embaixo, as rotas de cada ramo.
  */
 function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica[]; onAbrirRota: (id: string) => void }) {
+  /** Rotas com as sub-rotas abertas (por padrão recolhidas embaixo da rota tronco) */
+  const [abertas, setAbertas] = useState<Set<string>>(new Set());
   const ids = new Set([...no.filhos.flatMap((f) => f.rotas), ...no.fimDe]);
   if (!ids.size) return null;
   const doNo = rotas.filter((r) => ids.has(r.id));
@@ -858,6 +860,8 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
   const filhasDe = (id: string) => doNo.filter((r) => r.pai?.rota_id === id);
   const raizes = doNo.filter((r) => !r.pai || !ids.has(r.pai.rota_id));
   const linha = (r: RotaOptica, nivel: number): React.ReactNode => {
+    const filhas = filhasDe(r.id);
+    const aberta = abertas.has(r.id);
     const els = r.elementos;
     const proprio = r.tronco ? els[r.tronco] : els[1];
     const fim = els[els.length - 1];
@@ -908,7 +912,19 @@ function RamosAqui({ no, rotas, onAbrirRota }: { no: NoArvore; rotas: RotaOptica
             <p className="text-[10px] text-slate-400">{formatMetros(metros)}</p>
           </div>
         </button>
-        {filhasDe(r.id).length > 0 && <ul>{filhasDe(r.id).map((x) => linha(x, nivel + 1))}</ul>}
+        {filhas.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setAbertas((x) => { const y = new Set(x); if (y.has(r.id)) y.delete(r.id); else y.add(r.id); return y; })}
+            className="flex w-full items-center gap-1 pb-1.5 pr-2.5 text-left text-[10px] font-semibold text-slate-500 hover:text-indigo-700"
+            style={{ paddingLeft: 32 + nivel * 18 }}
+            aria-expanded={aberta}
+          >
+            <span className={`inline-block transition-transform ${aberta ? "rotate-90" : ""}`}>▸</span>
+            {aberta ? "esconder sub-rotas" : `${filhas.length} sub-rota${filhas.length !== 1 ? "s" : ""}`}
+          </button>
+        )}
+        {filhas.length > 0 && aberta && <ul>{filhas.map((x) => linha(x, nivel + 1))}</ul>}
       </li>
     );
   };

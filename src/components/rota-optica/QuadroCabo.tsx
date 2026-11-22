@@ -42,6 +42,8 @@ interface Props {
 export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra }: Props) {
   /** Fibra escolhida (clique): destacada aqui e na árvore */
   const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
+  /** Fibras com as sub-rotas abertas (por padrão ficam recolhidas embaixo da rota tronco) */
+  const [subAbertas, setSubAbertas] = useState<Set<number>>(new Set());
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
@@ -262,7 +264,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                           </div>
                           {usos.length > 0 && (
                             <div className="mt-1 ml-[46px] space-y-0.5">
-                              {usos.map((u) => (
+                              {[...usos.filter((u) => !u.herdado), ...(subAbertas.has(n) ? usos.filter((u) => u.herdado) : [])].map((u) => (
                                 <button
                                   key={u.rotaId}
                                   type="button"
@@ -270,13 +272,24 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                                   className="flex items-start gap-1 text-left text-[11px] leading-tight text-indigo-700 hover:underline"
                                   title="Abrir esta rota"
                                 >
-                                  <RouteIcon className="w-3 h-3 mt-px shrink-0" />
+                                  {u.herdado ? <span className="mt-px w-3 shrink-0 text-center text-slate-300">└</span> : <RouteIcon className="w-3 h-3 mt-px shrink-0" />}
                                   <span>
                                     {u.rotaNome}
                                     <span className="block text-slate-500 no-underline">{u.de.split(" - ")[0]} → {u.para.split(" - ")[0]}</span>
                                   </span>
                                 </button>
                               ))}
+                              {usos.some((u) => u.herdado) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setSubAbertas((x) => { const y = new Set(x); if (y.has(n)) y.delete(n); else y.add(n); return y; }); }}
+                                  className="flex items-center gap-1 rounded px-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-indigo-700"
+                                  aria-expanded={subAbertas.has(n)}
+                                >
+                                  <span className={`inline-block transition-transform ${subAbertas.has(n) ? "rotate-90" : ""}`}>▸</span>
+                                  {subAbertas.has(n) ? "esconder sub-rotas" : `${usos.filter((u) => u.herdado).length} sub-rota${usos.filter((u) => u.herdado).length !== 1 ? "s" : ""} seguem nesta fibra`}
+                                </button>
+                              )}
                             </div>
                           )}
                         </li>

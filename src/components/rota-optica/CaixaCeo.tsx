@@ -7,6 +7,7 @@ import { chaveElemento, type NoArvore } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
 import { salvarCaixa, type CaixaRede, type EmendaCaixa, type PontaFibra, type RegraEmenda } from "@/lib/caixasRede";
 import { cortar } from "@/lib/textoCompleto";
+import DiagramaEmendas from "./DiagramaEmendas";
 
 /**
  * CEO (caixa de emenda) por dentro: o mapa de emendas. O normal é emendar cor com cor (fibra N do cabo
@@ -28,8 +29,6 @@ interface Sinal {
   rota: string;
 }
 
-const ROW = 20;
-const W = 440;
 /** Nome curto do cabo que ainda diferencia um do outro: "12 FO · HUB → CE 9786" */
 const curto = (s: string, n = 20) => {
   const [tipo, ...resto] = s.split(" · ");
@@ -109,7 +108,6 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
   // fusões das rotas que o mapa não tem: aparecem como "pela rota"
   conf.filter((c) => c.st === "fora").forEach((c) => linhas.push({ de: c.s.de, para: c.s.para!, sinal: true, origem: "rota", ruim: temMapa, destino: c.s.destino }));
   linhas.sort((a, b) => a.de.cabo.localeCompare(b.de.cabo) || a.de.fibra - b.de.fibra);
-  const H = 30 + Math.max(1, linhas.length) * ROW + 8;
 
   // ---------- Edição ----------
   function addRegra() {
@@ -196,47 +194,8 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva }: Props) {
         ))}
       </div>
 
-      {/* Desenho: bandeja de emendas */}
-      <div className="overflow-hidden rounded-2xl border border-blue-900/40 bg-[#0b1a33] shadow-lg">
-        <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto select-none">
-          <defs>
-            <pattern id="ceoGrade" width="14" height="14" patternUnits="userSpaceOnUse">
-              <path d="M14 0H0V14" fill="none" stroke="#172554" strokeWidth=".6" />
-            </pattern>
-          </defs>
-          <rect width={W} height={H} fill="url(#ceoGrade)" />
-          <text x="8" y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} letterSpacing=".08em">CHEGA</text>
-          <text x={W / 2} y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} textAnchor="middle" letterSpacing=".08em">BANDEJA</text>
-          <text x={W - 8} y="16" fontSize="7.5" fill="#93c5fd" fontWeight={800} textAnchor="end" letterSpacing=".08em">SAI</text>
-          {linhas.length === 0 && (
-            <text x={W / 2} y={42} fontSize="9" fill="#a8a29e" textAnchor="middle">Nenhuma emenda. Clique em Editar para montar o mapa.</text>
-          )}
-          {linhas.map((l, i) => {
-            const y = 30 + i * ROW + ROW / 2;
-            const cIn = corFibra(l.de.fibra, l.de.cabo);
-            const cOut = corFibra(l.para.fibra, l.para.cabo);
-            const op = l.sinal ? 1 : 0.38;
-            const x1 = 160, xm = W / 2, x2 = W - 160;
-            return (
-              <g key={i} opacity={op}>
-                <title>{`${l.de.cabo} F${l.de.fibra} → ${l.para.cabo} F${l.para.fibra}${l.destino ? ` (segue para ${l.destino})` : ""}${l.origem === "rota" ? " — só na rota, falta no mapa" : ""}`}</title>
-                <text x="6" y={y + 3} fontSize="6.8" fill="#dbeafe" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.de)}</text>
-                <path d={`M${x1} ${y} H${xm - 9}`} stroke={cIn.hex} strokeWidth={l.sinal ? 2.4 : 1.4} />
-                <path d={`M${xm + 9} ${y} H${x2}`} stroke={cOut.hex} strokeWidth={l.sinal ? 2.4 : 1.4} />
-                <rect x={xm - 9} y={y - 4} width="18" height="8" rx="4" fill={l.ruim ? "#dc2626" : l.origem === "rota" ? "#78716c" : "#e7e5e4"} stroke="#fff" strokeWidth=".8" strokeDasharray={l.origem === "rota" ? "2 1.5" : undefined} />
-                {l.sinal && (
-                  <circle r="1.8" fill="#fff">
-                    <animateMotion dur="2.6s" repeatCount="indefinite" path={`M${x1} ${y} H${x2}`} />
-                  </circle>
-                )}
-                <circle cx={x1} cy={y} r="2.6" fill={cIn.hex} stroke="#000" strokeWidth=".6" />
-                <circle cx={x2} cy={y} r="2.6" fill={cOut.hex} stroke="#000" strokeWidth=".6" />
-                <text x={W - 6} y={y + 3} fontSize="6.8" fill="#dbeafe" textAnchor="end" fontWeight={l.sinal ? 700 : 400}>{rotuloPonta(l.para)}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+      {/* Desenho: o mesmo da HUB e da CTO (cabos que chegam, bandeja, cabos que saem) */}
+      <DiagramaEmendas chave={chave} nome={el.nome} rotas={rotas} mapa={linhas} semResumo />
       {regras.length > 0 && (
         <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
           <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} /> Mostrar todas as fibras emendadas cor com cor (as sem sinal ficam apagadas)

@@ -89,29 +89,11 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
 
   // ---------- HUB só de passagem nesta porta ----------
   if (el.passagem) {
-    const cIn = corFibra(el.fibra_entrada, el.cabo_entrada);
     return (
       <div className="p-3 space-y-3">
         <div className="rounded-2xl border border-slate-300 bg-gradient-to-b from-slate-50 to-white p-3">
           <p className="text-sm font-bold text-slate-800">Nesta porta PON, a HUB é só passagem</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">A fibra atravessa a caixa (emenda) sem dividir; o splitter desta HUB é de outra porta.</p>
-          <div className="mt-2 space-y-1 text-[11px]">
-            <p className="flex items-center gap-1.5">
-              <span className="w-12 text-slate-500">Chega</span>
-              <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/20" style={{ background: cIn.hex }} />
-              {el.fibra_entrada ? `F${el.fibra_entrada} ${cIn.nome.toLowerCase()}` : "fibra ?"} · {curto(el.cabo_entrada ?? "cabo ?", 30)}
-            </p>
-            {filhos.map((f) => {
-              const c = corFibra(f.elemento.fibra_entrada, f.elemento.cabo_entrada);
-              return (
-                <p key={f.id} className="flex items-center gap-1.5">
-                  <span className="w-12 text-slate-500">Segue</span>
-                  <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                  {f.elemento.fibra_entrada ? `F${f.elemento.fibra_entrada} ${c.nome.toLowerCase()}` : "fibra ?"} · {curto(f.elemento.cabo_entrada ?? "cabo ?", 26)} → {curto(f.elemento.nome, 20)}
-                </p>
-              );
-            })}
-          </div>
+          <p className="mt-0.5 text-[11px] text-slate-500">A fibra atravessa a caixa (emenda) sem dividir; o splitter desta HUB é de outra porta. Em que fibra chega e por onde segue: aba <b>Emendas</b>.</p>
         </div>
         {listaOutros}
       </div>
@@ -124,7 +106,8 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
   const perda = perdaSplitter(relacao, modelo?.perda_db);
   const conector = CALCULO_PADRAO.conector_db;
   const potIn = el.potencia_entrada;
-  const potSaida = potIn !== undefined && total ? potIn - perda - conector : undefined;
+  // mesma conta da rota (aba Caminho e potência): primário fundido, sem conector na saída
+  const potSaida = el.potencia_saida ?? (potIn !== undefined && total ? potIn - perda - CALCULO_PADRAO.emenda_db : undefined);
 
   if (!total || !relacao) {
     return (
@@ -184,8 +167,6 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
   const pernasSec = secs.map((s) => pernasSplitter(s)).filter((x): x is NonNullable<typeof x> => !!x);
   const capSec = pernasSec.reduce((a, p) => a + p.total, 0);
   const cliSec = pernasSec.reduce((a, p) => a + p.clientes, 0) + saidas.filter((s) => s.tipo === "cliente").length;
-  const relSec = pernasSec[0]?.splitter;
-  const maxSec = Math.max(0, ...pernasSec.map((p) => p.total));
   const potPonta = (s: NoArvore) => {
     const ps = pernasSplitter(s);
     const e = s.elemento;
@@ -424,18 +405,6 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
       )}
 
       {listaOutros}
-
-      {/* Cascata */}
-      <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 px-3 py-2 text-[11px] text-yellow-900">
-        <p className="font-semibold">
-          Cascata: primário {relacao}
-          {relSec ? ` × secundário ${relSec}` : ""} = até {total * (maxSec || 1)} clientes nesta porta PON
-        </p>
-        <p className="mt-0.5 text-yellow-700">
-          {dbm(potIn)} dBm na entrada → {dbm(potSaida)} dBm em cada saída
-          {pior !== undefined ? ` → pior ponta ${dbm(pior)} dBm` : ""}
-        </p>
-      </div>
 
       {(saidas.some((s) => s.tipo === "ramo" && s.sugerida) || sobrando.length > 0) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">

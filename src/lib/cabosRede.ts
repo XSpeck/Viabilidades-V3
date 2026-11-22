@@ -96,6 +96,8 @@ export interface UsoFibra {
   rotaNome: string;
   de: string;
   para: string;
+  /** Sub-rota passando no tronco herdado da rota-mãe (aparece recolhida embaixo da mãe) */
+  herdado?: boolean;
 }
 
 /**
@@ -114,7 +116,7 @@ export function usoDasFibras(rotas: RotaOptica[]): Map<string, { nome: string; f
       // Mesma rota pode passar por várias caixas no mesmo cabo/fibra: junta num trecho só (primeira → última)
       const existente = lista.find((u) => u.rotaId === r.id);
       if (existente) existente.para = e.nome;
-      else lista.push({ rotaId: r.id, rotaNome: r.nome, de, para: e.nome });
+      else lista.push({ rotaId: r.id, rotaNome: r.nome, de, para: e.nome, ...(r.pai && r.tronco && i < r.tronco ? { herdado: true } : {}) });
       cabo.fibras.set(e.fibra_entrada, lista);
       mapa.set(k, cabo);
     });

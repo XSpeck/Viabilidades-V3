@@ -241,30 +241,12 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
 
   // Só passagem nesta porta: não há o que configurar aqui (splitters, se houver, são da porta que usa); só mostra a fibra atravessando
   if (no.elemento.passagem && !editando) {
-    const cEnt = corFibra(el.fibra_entrada, el.cabo_entrada);
     return (
       <div className="p-3 space-y-2.5">
         <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5">
           <p className="text-xs font-semibold text-slate-800">Só passagem nesta porta</p>
-          <p className="mt-0.5 text-[11px] text-slate-600">A fibra atravessa a {tipoCaixa} sem usar splitter (como numa caixa de emenda).</p>
+          <p className="mt-0.5 text-[11px] text-slate-600">A fibra atravessa a {tipoCaixa} sem usar splitter (como numa caixa de emenda). Em que fibra chega e por onde segue: aba <b>Emendas</b>.</p>
         </div>
-        <ul className="space-y-1 text-[11px] text-slate-700">
-          <li className="flex items-center gap-1.5">
-            <span className="w-12 shrink-0 text-slate-400">Chega</span>
-            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: cEnt.hex }} />
-            <span className="truncate">F{el.fibra_entrada ?? "?"} {cEnt.nome.toLowerCase()} · {el.cabo_entrada ?? "cabo ?"}</span>
-          </li>
-          {saidas.map((sd, k) => {
-            const c = corFibra(sd.fibra, sd.cabo);
-            return (
-              <li key={k} className="flex items-center gap-1.5">
-                <span className="w-12 shrink-0 text-slate-400">Segue</span>
-                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                <span className="truncate">F{sd.fibra ?? "?"} {c.nome.toLowerCase()} · {sd.cabo ?? "cabo ?"} → {sd.nome}</span>
-              </li>
-            );
-          })}
-        </ul>
         {spls.length > 0 && (
           <p className="text-[10px] text-slate-400">Os splitters desta {tipoCaixa} são de outra porta: veja e edite na árvore da porta que usa.</p>
         )}

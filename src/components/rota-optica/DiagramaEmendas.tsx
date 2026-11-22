@@ -11,9 +11,21 @@ import { cortar } from "@/lib/textoCompleto";
  * Monta tudo a partir das rotas salvas que passam pela caixa.
  */
 
+/** Marcas do mapa de emendas da CEO: sem sinal (apagada), diferente da rota (ruim), só na rota (falta no mapa) */
+interface Marcas { apagada?: boolean; ruim?: boolean; pelaRota?: boolean }
 type Ligacao =
-  | { tipo: "fusao" | "passa"; inCabo: string; inFibra?: number; outCabo: string; outFibra?: number; destino: string; rotas: string[] }
-  | { tipo: "termina"; inCabo: string; inFibra?: number; rotas: string[] };
+  | ({ tipo: "fusao" | "passa"; inCabo: string; inFibra?: number; outCabo: string; outFibra?: number; destino: string; rotas: string[] } & Marcas)
+  | ({ tipo: "termina"; inCabo: string; inFibra?: number; rotas: string[] } & Marcas);
+
+/** Linha do mapa de emendas da CEO (regras cor com cor, avulsas e as fusões que só a rota tem) */
+export interface LinhaMapaEmenda {
+  de: { cabo: string; fibra: number };
+  para: { cabo: string; fibra: number };
+  sinal: boolean;
+  origem: "regra" | "avulsa" | "rota";
+  ruim: boolean;
+  destino?: string;
+}
 
 interface GrupoSplitter {
   inCabo: string;
@@ -77,8 +89,33 @@ export function ligacoesDaCaixa(chave: string, rotas: RotaOptica[]) {
 const curto = (t: string, n: number) => cortar(t, n);
 const nomeCabo = (t: string) => t.split(" - ")[0].trim() || t;
 
-export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string; nome: string; rotas: RotaOptica[] }) {
-  const { simples, splitters } = ligacoesDaCaixa(chave, rotas);
+/** Cor do texto sobre uma cor de fibra (fibra clara → texto escuro) */
+function textoSobre(hex: string): string {
+  const h = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0f172a" : "#ffffff";
+}
+
+export default function DiagramaEmendas({ chave, nome, rotas, mapa, semResumo }: {
+  chave: string;
+  nome: string;
+  rotas: RotaOptica[];
+  /** CEO: as fusões vêm do mapa de emendas (com sinal ou não); passagens e pontas seguem as rotas */
+  mapa?: LinhaMapaEmenda[];
+  /** Esconde os números e o resumo em texto (quem usa já mostra os seus) */
+  semResumo?: boolean;
+}) {
+  const doRotas = ligacoesDaCaixa(chave, rotas);
+  const splitters = doRotas.splitters;
+  const simples: Ligacao[] = mapa
+    ? [
+        ...doRotas.simples.filter((l) => l.tipo !== "fusao"),
+        ...mapa.map((m): Ligacao => ({
+          tipo: "fusao", inCabo: m.de.cabo, inFibra: m.de.fibra, outCabo: m.para.cabo, outFibra: m.para.fibra,
+          destino: m.destino ?? "", rotas: [], apagada: !m.sinal, ruim: m.ruim, pelaRota: m.origem === "rota",
+        })),
+      ].sort((a, b) => a.inCabo.localeCompare(b.inCabo) || (a.inFibra ?? 0) - (b.inFibra ?? 0))
+    : doRotas.simples;
 
   // Linhas do desenho: cada ligação simples ocupa 1 linha; cada splitter ocupa uma linha por saída
   type Linha =
@@ -135,20 +172,31 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
     );
   }
 
-  /** Tubo + fibra de um lado (pílula do tubo e etiqueta da fibra) */
+  /**
+   * Etiqueta da fibra de um lado: "T3 | F15" — o tubo na cor do tubo e a fibra na cor da fibra,
+   * com o nome das cores embaixo (igual nos cabos que chegam e nos que saem).
+   */
   function fibraLado(cabo: string, fibra: number | undefined, y: number, lado: "e" | "d", semFibra?: [string, string]) {
     const c = corFibra(fibra, cabo);
-    const xt = lado === "e" ? xTuboE : xTuboD;
+    const x0 = lado === "e" ? xTuboE : xTuboD - 30;
+    if (!fibra) {
+      return (
+        <g>
+          <rect x={x0} y={y - 6} width={48} height={12} rx={6} fill="#f1f5f9" stroke="#94a3b8" strokeDasharray="2 1.5" />
+          <text x={x0 + 24} y={y + 3} fontSize={7} textAnchor="middle" fontWeight={700} fill="#475569">{semFibra ? semFibra[0].slice(0, 12) : "fibra ?"}</text>
+          {semFibra && <text x={x0 + 24} y={y + 14} fontSize={6.5} textAnchor="middle" fill="#64748b">{semFibra[1]}</text>}
+        </g>
+      );
+    }
+    const tuboHex = c.corTubo?.hex ?? "#cbd5e1";
     return (
       <g>
-        <rect x={xt} y={y - 6} width={18} height={12} rx={6} fill={c.corTubo?.hex ?? "#cbd5e1"} stroke="#0f172a" strokeWidth={0.8} />
-        <text x={xt + 9} y={y + 3} fontSize={7} textAnchor="middle" fontWeight={800} fill="#0f172a">{c.tubo ? `T${c.tubo}` : "–"}</text>
-        <text x={lado === "e" ? xt + 24 : xt - 6} y={y - 5} fontSize={8.5} fontWeight={700} textAnchor={lado === "e" ? "start" : "end"} fill="#0f172a">
-          {fibra ? `F${String(fibra).padStart(2, "0")}` : semFibra ? semFibra[0] : "F?"}
-        </text>
-        <text x={lado === "e" ? xt + 24 : xt - 6} y={y + 11} fontSize={7} textAnchor={lado === "e" ? "start" : "end"} fill="#64748b">
-          {!fibra && semFibra ? semFibra[1] : c.nome.toLowerCase()}
-        </text>
+        <title>{`Tubo ${c.tubo ?? "?"} (${c.corTubo?.nome.toLowerCase() ?? "?"}) · fibra ${fibra} (${c.nome.toLowerCase()})`}</title>
+        <rect x={x0} y={y - 6} width={48} height={12} rx={6} fill={c.hex} stroke="#0f172a" strokeWidth={0.8} />
+        <path d={`M${x0 + 6} ${y - 6} H${x0 + 20} V${y + 6} H${x0 + 6} A6 6 0 0 1 ${x0 + 6} ${y - 6} Z`} fill={tuboHex} stroke="#0f172a" strokeWidth={0.8} />
+        <text x={x0 + 11} y={y + 2.7} fontSize={7} textAnchor="middle" fontWeight={800} fill={textoSobre(tuboHex)}>{c.tubo ? `T${c.tubo}` : "–"}</text>
+        <text x={x0 + 34} y={y + 2.7} fontSize={7.5} textAnchor="middle" fontWeight={800} fill={textoSobre(c.hex)}>{`F${String(fibra).padStart(2, "0")}`}</text>
+        <text x={x0 + 24} y={y + 14} fontSize={6.5} textAnchor="middle" fill="#64748b">{c.nome.toLowerCase()}</text>
       </g>
     );
   }
@@ -164,12 +212,12 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
     );
   }
 
-  const fimFibraE = xTuboE + 58;
-  const inicioFibraD = xTuboD - 40;
+  const fimFibraE = xTuboE + 50;
+  const inicioFibraD = xTuboD - 32;
 
   return (
-    <div className="p-2 space-y-2">
-      <div className="flex flex-wrap gap-1.5 text-[11px]">
+    <div className={semResumo ? "space-y-2" : "p-2 space-y-2"}>
+      <div className={`flex flex-wrap gap-1.5 text-[11px] ${semResumo ? "hidden" : ""}`}>
         <span className="rounded-full bg-slate-800 text-white px-2 py-0.5 font-semibold">{linhas.length} ligaç{linhas.length !== 1 ? "ões" : "ão"}</span>
         {fusoes > 0 && <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 font-medium">{fusoes} fus{fusoes !== 1 ? "ões" : "ão"}</span>}
         {passas > 0 && <span className="rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 font-medium">{passas} passa{passas !== 1 ? "m" : ""} direto</span>}
@@ -215,8 +263,8 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
             }
             const cOut = corFibra(l.outFibra, l.outCabo);
             return (
-              <g key={`s${i}`}>
-                <title>{`${l.tipo === "passa" ? "Passa direto" : "Fusão"} → ${l.destino} · ${titulo}`}</title>
+              <g key={`s${i}`} opacity={l.apagada ? 0.35 : 1}>
+                <title>{`${l.tipo === "passa" ? "Passa direto" : "Fusão"}${l.destino ? ` → ${l.destino}` : ""}${titulo ? ` · ${titulo}` : ""}${l.apagada ? " · sem sinal" : ""}${l.pelaRota ? " · só na rota, falta no mapa" : ""}${l.ruim ? " · diferente da rota" : ""}`}</title>
                 <line x1={xStubE + 20} y1={y} x2={xTuboE} y2={y} stroke="#0f172a" strokeWidth={3} />
                 <line x1={xTuboD + 18} y1={y} x2={xStubD} y2={y} stroke="#0f172a" strokeWidth={3} />
                 {fibraLado(l.inCabo, l.inFibra, y, "e")}
@@ -232,7 +280,7 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
                     {fio(fimFibraE, y, xMeio - 12, y, cIn.hex)}
                     {fio(xMeio + 12, y, inicioFibraD, y, cOut.hex)}
                     {/* protetor de emenda */}
-                    <rect x={xMeio - 14} y={y - 5} width={28} height={10} rx={5} fill="#f1f5f9" stroke="#64748b" />
+                    <rect x={xMeio - 14} y={y - 5} width={28} height={10} rx={5} fill={l.ruim ? "#fee2e2" : "#f1f5f9"} stroke={l.ruim ? "#dc2626" : "#64748b"} strokeDasharray={l.pelaRota ? "2 1.5" : undefined} />
                     <line x1={xMeio - 9} y1={y} x2={xMeio + 9} y2={y} stroke="#94a3b8" strokeWidth={1.4} />
                     <circle cx={xMeio} cy={y} r={2.6} fill="#f59e0b" stroke="#92400e" strokeWidth={0.6} />
                   </>
@@ -289,7 +337,7 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
       </div>
 
       {/* resumo em texto, com destino de cada ligação */}
-      <ul className="text-[11px] text-slate-600 space-y-0.5 px-1">
+      <ul className={`text-[11px] text-slate-600 space-y-0.5 px-1 ${semResumo ? "hidden" : ""}`}>
         {simples.map((l, i) => (
           <li key={i} className="truncate" title={l.rotas.join(", ")}>
             {l.tipo === "termina" ? (
@@ -309,7 +357,7 @@ export default function DiagramaEmendas({ chave, nome, rotas }: { chave: string;
           </li>
         ))}
       </ul>
-      <p className="text-[10px] text-slate-400 px-1">
+      <p className={`text-[10px] text-slate-400 px-1 ${semResumo ? "hidden" : ""}`}>
         Montado pelas rotas salvas que passam por esta caixa. Passe o mouse numa ligação para ver as rotas.
       </p>
     </div>

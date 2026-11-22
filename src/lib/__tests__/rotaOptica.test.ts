@@ -32,7 +32,7 @@ describe("potência", () => {
     const p = calcularPotencias([OLT, DIO, HUB].map((e) => entradaPotencia(e)), 6, CALCULO_PADRAO);
     expect(p[1].entrada).toBeCloseTo(5.4, 2); // conector 0,5 + fusão 0,1
     expect(p[2].entrada).toBeCloseTo(4.95, 2); // 1 km × 0,35 + fusão 0,1
-    expect(p[2].saida).toBeCloseTo(-5.55, 2); // 1:8 = 10,5 dB
+    expect(p[2].saida).toBeCloseTo(-5.65, 2); // 1:8 = 10,5 dB + fusão de saída 0,1 (primário fundido, sem conector)
   });
 
   it("entrada do prédio não tem perda", () => {
@@ -62,8 +62,8 @@ describe("sub-rotas", () => {
   });
 
   it("potência da CDOI é recalculada pelo tronco", () => {
-    // −5,58 no prédio − 11 m de fibra − fusão 0,1 − splitter 10,5 − conector 0,5 (arredondado a cada caixa)
-    expect(porId("cdoi").elementos[4].potencia_saida).toBeCloseTo(-16.68, 2);
+    // −5,68 no prédio − 11 m de fibra − fusão 0,1 − splitter 10,5 − conector 0,5 (arredondado a cada caixa)
+    expect(porId("cdoi").elementos[4].potencia_saida).toBeCloseTo(-16.78, 2);
   });
 
   it("gravam só o trecho próprio (a caixa de origem vira referência)", () => {
