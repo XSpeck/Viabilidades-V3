@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { exigirLogin, respostaDeErro } from "@/lib/servidor/exigirAdm";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,8 @@ function extractPublicId(url: string): string | null {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    // só quem está logado pode apagar fotos
+    try { await exigirLogin(request); } catch (e) { const { error, status } = respostaDeErro(e); return NextResponse.json({ error }, { status }); }
     const { urls } = await request.json() as { urls: string[] };
     if (!Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json({ ok: true });

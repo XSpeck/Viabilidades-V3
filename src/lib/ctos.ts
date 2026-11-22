@@ -22,6 +22,29 @@ export interface CtoWithRoute extends Cto {
 // =====================
 // Haversine (linha reta)
 // =====================
+/** O que muda ao trocar a base de CTOs pela de um arquivo novo (comparação por nome) */
+export interface DiferencaCtos {
+  novas: string[];
+  removidas: string[];
+  /** mesmo nome, mas mudou de lugar (mais de 10 m) */
+  movidas: string[];
+  iguais: number;
+}
+
+export function compararCtos(atuais: Cto[], novas: Cto[]): DiferencaCtos {
+  const porNome = new Map(atuais.map((c) => [c.name, c]));
+  const nomesNovos = new Set(novas.map((c) => c.name));
+  const d: DiferencaCtos = { novas: [], removidas: [], movidas: [], iguais: 0 };
+  for (const c of novas) {
+    const antes = porNome.get(c.name);
+    if (!antes) d.novas.push(c.name);
+    else if (haversineDistance(antes.lat, antes.lon, c.lat, c.lon) > 10) d.movidas.push(c.name);
+    else d.iguais++;
+  }
+  for (const c of atuais) if (!nomesNovos.has(c.name)) d.removidas.push(c.name);
+  return d;
+}
+
 export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -76,7 +99,8 @@ const CTOS_DOC = "ctos_data/all";
 
 export async function importCtosToFirestore(
   ctos: Cto[],
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
+  importadoPor?: string
 ): Promise<void> {
   const { db } = await import("./firebase");
   const { doc, setDoc } = await import("firebase/firestore");
@@ -86,6 +110,7 @@ export async function importCtosToFirestore(
     ctos,
     total: ctos.length,
     atualizado_em: new Date().toISOString(),
+    ...(importadoPor ? { importado_por: importadoPor } : {}),
   });
   onProgress?.(ctos.length, ctos.length);
 }
@@ -101,6 +126,16 @@ export async function getCtosFromFirestore(): Promise<Cto[]> {
   const snap = await getDoc(doc(db, CTOS_DOC));
   if (!snap.exists()) return [];
   return (snap.data().ctos as Cto[]) ?? [];
+}
+
+/** Total e última importação (quem e quando) */
+export async function infoCtosNoFirestore(): Promise<{ total: number; atualizado_em?: string; importado_por?: string }> {
+  const { db } = await import("./firebase");
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, CTOS_DOC));
+  if (!snap.exists()) return { total: 0 };
+  const x = snap.data();
+  return { total: (x.total as number) ?? 0, atualizado_em: x.atualizado_em as string | undefined, importado_por: x.importado_por as string | undefined };
 }
 
 export async function countCtosInFirestore(): Promise<number> {

@@ -24,6 +24,7 @@ export async function getUserData(uid: string): Promise<AppUser | null> {
     cargo: data.cargo ?? (data.nivel === 1 ? "auditor" : "usuario"),
     funcoes_tecnico: inferFuncoesTecnico(data),
     papel_financeiro: data.papel_financeiro,
+    ativo: data.ativo === false ? false : undefined,
   };
   _userCache.set(uid, user);
   return user;
@@ -33,6 +34,10 @@ export async function signIn(email: string, password: string): Promise<AppUser> 
   const cred = await signInWithEmailAndPassword(auth, email, password);
   const userData = await getUserData(cred.user.uid);
   if (!userData) throw new Error("Usuário não encontrado no sistema.");
+  if (userData.ativo === false) {
+    await firebaseSignOut(auth);
+    throw new Error("Usuário desativado. Fale com o administrador.");
+  }
   return userData;
 }
 

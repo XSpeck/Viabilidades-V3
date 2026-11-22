@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
 import type { AppUser, UserCargo, PapelFinanceiro, FuncaoTecnico } from "@/types";
 
@@ -47,6 +47,7 @@ export async function listUsers(): Promise<AppUser[]> {
       cargo: u.cargo ?? (u.nivel === 1 ? "auditor" : "usuario"),
       funcoes_tecnico: inferFuncoesTecnico(u),
       papel_financeiro: u.papel_financeiro,
+      ativo: u.ativo === false ? false : undefined,
     };
   });
   setUsersCache(data);
@@ -56,7 +57,7 @@ export async function listUsers(): Promise<AppUser[]> {
 export async function listTecnicos(funcao?: FuncaoTecnico): Promise<AppUser[]> {
   const users = await listUsers();
   return users
-    .filter((u) => u.cargo === "tecnico" && (!funcao || u.funcoes_tecnico?.includes(funcao)))
+    .filter((u) => u.cargo === "tecnico" && u.ativo !== false && (!funcao || u.funcoes_tecnico?.includes(funcao)))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
@@ -135,19 +136,28 @@ export async function updateUser(
   bustUsersCache();
 }
 
-export async function deleteUser(uid: string): Promise<void> {
-  await deleteDoc(doc(db, "users", uid));
-  bustUsersCache();
-}
-
-export async function changeUserPassword(uid: string, newPassword: string, callerUid: string): Promise<void> {
-  const res = await fetch("/api/admin/change-password", {
+/** Chama uma rota de administração mandando o token de login (o servidor confere se é ADM) */
+async function chamarAdmin(caminho: string, corpo: Record<string, unknown>): Promise<void> {
+  const { auth } = await import("./firebase");
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Faça login de novo.");
+  const res = await fetch(caminho, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uid, newPassword, callerUid }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(corpo),
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error ?? "Erro ao alterar senha.");
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Não foi possível concluir.");
   }
+}
+
+export async function changeUserPassword(uid: string, newPassword: string): Promise<void> {
+  await chamarAdmin("/api/admin/change-password", { uid, newPassword });
+}
+
+/** Desativa (bloqueia o login) ou reativa um usuário */
+export async function definirUsuarioAtivo(uid: string, ativo: boolean): Promise<void> {
+  await chamarAdmin("/api/admin/usuario-ativo", { uid, ativo });
+  bustUsersCache();
 }

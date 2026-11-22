@@ -1274,24 +1274,6 @@ export async function deletePredioAtendido(id: string): Promise<void> {
   bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
 }
 
-export async function batchImportViabilizacoes(
-  items: Viabilizacao[],
-  onProgress?: (done: number, total: number) => void,
-): Promise<void> {
-  const CHUNK = 400;
-  for (let i = 0; i < items.length; i += CHUNK) {
-    const batch = writeBatch(db);
-    items.slice(i, i + CHUNK).forEach((item) => {
-      const { id, ...data } = item;
-      const ref = doc(db, "viabilizacoes", id);
-      batch.set(ref, stripUndefined(data as Record<string, unknown>));
-    });
-    await batch.commit();
-    onProgress?.(Math.min(i + CHUNK, items.length), items.length);
-  }
-  bustCache("viab_all_viabilizacoes_v1", "viab_user_v1", "viab_audit_v1", "viab_instalacoes_pendentes_v1", "viab_instalacoes_arquivadas_v1");
-}
-
 export async function deleteAllPrediosAtendidos(): Promise<void> {
   const snap = await getDocs(collection(db, "predios_atendidos"));
   const CHUNK = 400;

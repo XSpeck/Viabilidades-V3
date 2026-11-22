@@ -57,9 +57,11 @@ export async function uploadFoto(file: File): Promise<string> {
 export async function deleteFotos(urls: string[]): Promise<void> {
   if (urls.length === 0) return;
   try {
+    const { auth } = await import("./firebase");
+    const token = await auth.currentUser?.getIdToken();
     await fetch("/api/cloudinary/delete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ urls }),
     });
   } catch {

@@ -15,6 +15,8 @@ export interface AppUser {
   login: string;
   nivel: UserNivel;
   cargo?: UserCargo;
+  /** false = desativado (não faz login; continua no histórico) */
+  ativo?: boolean;
   /** Só usado quando cargo === "tecnico"; um técnico pode acumular as duas funções. */
   funcoes_tecnico?: FuncaoTecnico[];
   papel_financeiro?: PapelFinanceiro;
