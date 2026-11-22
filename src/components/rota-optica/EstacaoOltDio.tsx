@@ -36,6 +36,9 @@ interface Props {
   ponEmUso?: (placa: number, porta: number) => string | undefined;
   /** Nome da rota que já usa esta porta do DIO, se alguma */
   dioEmUso?: (porta: number) => string | undefined;
+  /** OLT / DIO usados por outras rotas: nome e modelo só mudam "em todas" */
+  oltTravada?: boolean;
+  dioTravado?: boolean;
 }
 
 const pad2 = (v: number) => String(v).padStart(2, "0");
@@ -43,7 +46,7 @@ const campo = "w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-
 const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
 
 /** Estação (POP): OLT → cordão → DIO → cabo para fora, desenhada como um rack clicável. */
-export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, onVerSaida, ponEmUso, dioEmUso }: Props) {
+export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, onVerSaida, ponEmUso, dioEmUso, oltTravada, dioTravado }: Props) {
   const olt = olts.find((o) => o.id === dados.oltEquip);
   const dio = dios.find((d) => d.id === dados.dioEquip);
   const tipoSaida = tiposCabo.find((t) => t.id === dados.saidaTipo);
@@ -269,7 +272,8 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
             <label className={rot}><span className="inline-flex items-center gap-1"><IconeElemento tipo="olt" tamanho={12} /> OLT</span></label>
             {olts.length ? (
               <select
-                className={campo}
+                className={`${campo} ${oltTravada ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
+                disabled={oltTravada}
                 value={dados.oltEquip}
                 onChange={(e) => {
                   const o = olts.find((x) => x.id === e.target.value);
@@ -288,15 +292,13 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
             <input className={campo} inputMode="decimal" value={dados.oltPot} onChange={(e) => onMudar({ oltPot: e.target.value })} placeholder="ex.: 5" />
           </div>
           <div>
-            <label className={rot}><span className="inline-flex items-center gap-1"><IconeElemento tipo="dio" tamanho={12} /> DIO</span></label>
+            <label className={rot}><span className="inline-flex items-center gap-1"><IconeElemento tipo="dio" tamanho={12} /> Modelo do DIO</span></label>
             {dios.length ? (
               <select
-                className={campo}
+                className={`${campo} ${dioTravado ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
+                disabled={dioTravado}
                 value={dados.dioEquip}
-                onChange={(e) => {
-                  const d = dios.find((x) => x.id === e.target.value);
-                  onMudar({ dioEquip: e.target.value, ...(d && /^DIO( \d+)?$/.test(dados.dioNome) ? { dioNome: d.nome } : {}) });
-                }}
+                onChange={(e) => onMudar({ dioEquip: e.target.value })}
               >
                 <option value="">— escolha —</option>
                 {dios.map((d) => <option key={d.id} value={d.id}>{d.nome} · {resumoItem(d)}</option>)}
@@ -304,6 +306,18 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
             ) : (
               <p className="text-[11px] text-red-600 leading-tight">Nenhum DIO cadastrado. Cadastre em Cadastros → DIOs.</p>
             )}
+          </div>
+          <div className="col-span-2">
+            <label className={rot}>Nome do DIO{dioTravado ? " 🔒" : ""}</label>
+            <input
+              className={`${campo} ${!dados.dioNome.trim() ? "border-red-400" : ""} ${dioTravado ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
+              readOnly={dioTravado}
+              title={dioTravado ? "DIO compartilhado: use ✎ DIO (editar em todas)" : undefined}
+              value={dados.dioNome}
+              onChange={(e) => onMudar({ dioNome: e.target.value })}
+              placeholder="ex.: DIO 02 · Rack A"
+            />
+            <p className="mt-0.5 text-[10px] text-slate-500">Identifica este DIO na estação (pode haver vários do mesmo modelo).</p>
           </div>
           <div>
             <label className={rot}>Cordão (m)</label>

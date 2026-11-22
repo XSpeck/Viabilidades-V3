@@ -204,18 +204,30 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
    * Sub-rotas ficam de fora: elas herdam a porta da rota-mãe.
    */
   const estacoesRede = useMemo(() => {
-    const m = new Map<string, { chave: string; olt: ElementoRota; dio: ElementoRota; rota: RotaOptica; portas: string[] }>();
+    type DioEst = { chave: string; dio: ElementoRota; rota: RotaOptica; portas: string[] };
+    const m = new Map<string, { chave: string; olt: ElementoRota; rota: RotaOptica; portas: string[]; dios: Map<string, DioEst> }>();
     for (const r of rede) {
       if (r.pai) continue;
       const [o, d] = r.elementos;
-      if (o?.tipo !== "olt" || d?.tipo !== "dio" || o.lat === undefined) continue;
-      const k = `${chaveElemento(o)}|${chaveElemento(d)}`;
-      const e = m.get(k) ?? { chave: k, olt: o, dio: d, rota: r, portas: [] };
+      if (o?.tipo !== "olt" || o.lat === undefined) continue;
+      const k = chaveElemento(o);
+      const e = m.get(k) ?? { chave: k, olt: o, rota: r, portas: [], dios: new Map<string, DioEst>() };
       const pon = portaPonDaRota(r).rotulo.match(/PON\s+(\S+)/)?.[1];
       if (pon) e.portas.push(pon);
+      if (d?.tipo === "dio") {
+        const kd = chaveElemento(d);
+        const x = e.dios.get(kd) ?? { chave: kd, dio: d, rota: r, portas: [] };
+        if (pon) x.portas.push(pon);
+        e.dios.set(kd, x);
+      }
       m.set(k, e);
     }
-    return [...m.values()].map((e) => ({ ...e, portas: [...new Set(e.portas)].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })) }));
+    const ord = (l: string[]) => [...new Set(l)].sort((a0, b0) => a0.localeCompare(b0, "pt-BR", { numeric: true }));
+    return [...m.values()].map((e) => ({
+      ...e,
+      portas: ord(e.portas),
+      dios: [...e.dios.values()].map((x) => ({ ...x, portas: ord(x.portas) })).sort((a0, b0) => a0.dio.nome.localeCompare(b0.dio.nome, "pt-BR", { numeric: true })),
+    }));
   }, [rede]);
   /** Rota principal que já usa cada porta PON / cada porta de DIO */
   const usoPortas = useMemo(() => {
@@ -642,7 +654,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const dio = dios.length === 1 ? dios[0] : undefined;
     const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`));
     const nomeOlt = olt?.nome ?? "OLT";
-    const nomeDio = dio?.nome ?? "DIO 1";
+    const nomeDio = "DIO 01";
     const nomeCordao = `Cordão ${nomeOlt} → ${nomeDio}`;
     if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
     mudar(() => [
@@ -724,19 +736,44 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
    * Outra porta PON numa estação que já existe: rota NOVA (não sub-rota) com a mesma OLT e o
    * mesmo DIO (mesmo código), portas em branco para escolher no cartão Estação.
    */
-  function montarNaEstacao(est: (typeof estacoesRede)[number]) {
-    const r = est.rota;
+  function montarNaEstacao(est: (typeof estacoesRede)[number], dioEscolhido: (typeof estacoesRede)[number]["dios"][number] | null) {
     const copia = (e: ElementoRota): Linha => ({ ...paraLinha(e), porta: "", dist_auto: false, cabo_saida: "", fibra_saida: "", potencia_entrada: "" });
-    mudar(() => [
-      { ...copia(est.olt), potencia_saida: s(est.olt.potencia_saida) },
-      { ...copia(est.dio), potencia_saida: "" },
-    ]);
-    if (r.calculo_potencia) setCalc(r.calculo_potencia);
+    const olt: Linha = { ...copia(est.olt), potencia_saida: s(est.olt.potencia_saida) };
+    let dio: Linha;
+    let rotaBase: RotaOptica = est.rota;
+    if (dioEscolhido) {
+      dio = { ...copia(dioEscolhido.dio), potencia_saida: "" };
+      rotaBase = dioEscolhido.rota;
+    } else {
+      // DIO novo na mesma estação: nome próprio ("DIO 02"), código novo, mesmo local; o modelo se escolhe no cartão
+      const usados = new Set(est.dios.map((x) => x.dio.nome.trim().toUpperCase()));
+      let k = est.dios.length + 1;
+      while (usados.has(`DIO ${pad2(k)}`)) k++;
+      const nomeDio = `DIO ${pad2(k)}`;
+      const nomeCordao = `Cordão ${curtoNome(est.olt.nome)} → ${nomeDio}`;
+      const cordao = tiposDeCabo.find((t) => t.capacidade === 1 && /cord/i.test(`${t.nome} ${t.construcao ?? ""}`));
+      if (cordao) setTiposCabo((t) => ({ ...t, [chaveCabo(nomeCordao)]: cordao.id }));
+      dio = {
+        ...linhaVazia("dio"),
+        nome: nomeDio,
+        codigo: proximoCodigo([]),
+        coords: olt.coords,
+        equipamento_id: dios.length === 1 ? dios[0].id : "",
+        cabo_entrada: nomeCordao,
+        fibra_entrada: "1",
+        distancia_m: "3",
+        dist_auto: false,
+      };
+    }
+    mudar(() => [olt, dio]);
+    if (rotaBase.calculo_potencia) setCalc(rotaBase.calculo_potencia);
     setPai(undefined);
     setTronco(0);
     setSel(null); // nada selecionado: a próxima caixa entra no fim (depois do DIO)
     setFerramenta("ceo");
-    setAviso(`Estação ${est.olt.nome} carregada (mesma OLT e mesmo ${est.dio.nome}). Escolha a porta PON e a porta do DIO no cartão (as amarelas já estão em uso) e clique na primeira caixa fora da estação.`);
+    setAviso(dioEscolhido
+      ? `Estação ${est.olt.nome} com o ${dioEscolhido.dio.nome}. Escolha a porta PON e a porta do DIO no cartão (as amarelas já estão em uso) e clique na primeira caixa fora da estação.`
+      : `Estação ${est.olt.nome} com um DIO novo (${dio.nome}). Dê o nome do DIO, escolha o modelo, a porta PON e a porta do DIO no cartão.`);
   }
 
   /** Clique numa caixa da rede existente */
@@ -754,8 +791,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (ferramenta === "poste") { clicarMapa(e.lat!, e.lon!); return; }
     if (!linhas.length && (e.tipo === "olt" || e.tipo === "dio")) {
       // OLT ou DIO: outra porta da estação (sub-rota daqui travaria a porta da rota-mãe)
-      const est = estacoesRede.find((x) => x.chave.split("|").includes(chaveElemento(e)));
-      if (est) { montarNaEstacao(est); return; }
+      const k = chaveElemento(e);
+      const est = estacoesRede.find((x) => x.chave === k || x.dios.some((d) => d.chave === k));
+      if (est) {
+        const d = est.dios.find((x) => x.chave === k) ?? (est.dios.length === 1 ? est.dios[0] : null);
+        if (d || e.tipo === "dio") { montarNaEstacao(est, d); return; }
+        setAviso(`A ${est.olt.nome} tem ${est.dios.length} DIOs: escolha no painel ao lado em qual DIO a nova porta entra (ou DIO novo).`);
+        return;
+      }
     }
     if (!linhas.length) {
       // Rota vazia: começa copiando o caminho da rota existente da OLT até esta caixa (vira um ramo na árvore)
@@ -2235,28 +2278,47 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 </button>
                 <p className="mt-1 text-[11px] text-slate-500">depois clique no mapa onde ela fica</p>
                 {estacoesRede.length > 0 && (
-                  <div className="mt-4 w-full max-w-[300px] text-left">
+                  <div className="mt-4 w-full max-w-[310px] text-left">
                     <p className="mb-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">ou outra porta numa estação que já existe</p>
-                    <ul className="space-y-1.5">
+                    <ul className="space-y-2">
                       {estacoesRede.map((est) => (
-                        <li key={est.chave}>
-                          <button
-                            type="button"
-                            onClick={() => montarNaEstacao(est)}
-                            className="group flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50"
-                          >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100"><IconeElemento tipo="olt" tamanho={22} /></span>
+                        <li key={est.chave} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                          <div className="flex items-center gap-2.5 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200"><IconeElemento tipo="olt" tamanho={20} /></span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold text-slate-800">{est.olt.nome}</span>
-                              <span className="block truncate text-[11px] text-slate-500">{est.dio.nome}</span>
-                              <span className="mt-1 flex flex-wrap gap-1">
-                                {est.portas.map((pt) => (
-                                  <span key={pt} className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800">PON {pt} em uso</span>
-                                ))}
-                              </span>
+                              <span className="block truncate text-[10px] text-slate-500">PON em uso: {est.portas.join(", ") || "nenhuma"}</span>
                             </span>
-                            <span className="shrink-0 rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white opacity-90 group-hover:opacity-100">+ porta</span>
-                          </button>
+                          </div>
+                          <p className="px-3 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Em qual DIO?</p>
+                          <div className="space-y-1 p-2 pt-1">
+                            {est.dios.map((d) => (
+                              <button
+                                key={d.chave}
+                                type="button"
+                                onClick={() => montarNaEstacao(est, d)}
+                                className="group flex w-full items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 text-left transition hover:border-indigo-400 hover:bg-indigo-50"
+                              >
+                                <IconeElemento tipo="dio" tamanho={18} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-xs font-semibold text-slate-800">{d.dio.nome}{d.dio.codigo ? <span className="ml-1 font-mono text-[10px] font-normal text-slate-400">#{d.dio.codigo}</span> : null}</span>
+                                  <span className="mt-0.5 flex flex-wrap gap-1">
+                                    {d.portas.map((pt) => (
+                                      <span key={pt} className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold text-amber-800">PON {pt}</span>
+                                    ))}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 rounded-md bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white opacity-90 group-hover:opacity-100">+ porta</span>
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => montarNaEstacao(est, null)}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700"
+                            >
+                              <Plus className="h-3.5 w-3.5" /> DIO novo nesta estação
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -2283,6 +2345,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     dados={estacao}
                     ponEmUso={ponEmUso}
                     dioEmUso={dioEmUso}
+                    oltTravada={outrasComCaixa(0).length > 0}
+                    dioTravado={outrasComCaixa(1).length > 0}
                     olts={olts}
                     dios={dios}
                     tiposCabo={tiposDeCabo}
