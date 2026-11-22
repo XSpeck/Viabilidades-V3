@@ -167,7 +167,7 @@ export default function GestaoUsuarios() {
             <Users className="w-5 h-5 text-indigo-600" />
             <div>
               <h3 className="font-semibold text-gray-800">Gestão de Usuários</h3>
-              <p className="text-xs text-gray-500">Criar, editar e remover usuários do sistema</p>
+              <p className="text-xs text-gray-500">Criar, editar e desativar usuários do sistema</p>
             </div>
           </div>
           <button
