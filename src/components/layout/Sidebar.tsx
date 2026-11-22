@@ -1,5 +1,6 @@
 "use client";
 
+import { NOME_SISTEMA } from "@/lib/marca";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -111,7 +112,7 @@ export default function Sidebar() {
         >
           <Menu className="w-6 h-6" />
         </button>
-        <span className="font-semibold text-sm">🔍 Validador V3</span>
+        <span className="font-semibold text-sm">🔍 {NOME_SISTEMA}</span>
         <div className="w-9" />
       </div>
 
@@ -131,10 +132,9 @@ export default function Sidebar() {
         {/* Logo */}
         <div className={`flex items-center justify-between border-b border-gray-700 ${recolhido ? "p-6 md:justify-center md:px-2 md:py-5" : "p-6"}`}>
           <div className={soAberto}>
-            <h1 className="text-lg font-bold text-white">🔍 Validador V3</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Sistema de Viabilização</p>
+            <h1 className="text-lg font-bold text-white">🔍 {NOME_SISTEMA}</h1>
           </div>
-          {recolhido && <span className="hidden md:block text-xl" title="Validador V3">🔍</span>}
+          {recolhido && <span className="hidden md:block text-xl" title={NOME_SISTEMA}>🔍</span>}
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"

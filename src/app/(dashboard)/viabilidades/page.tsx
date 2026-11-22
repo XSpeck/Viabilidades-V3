@@ -1,5 +1,6 @@
 "use client";
 
+import { NOME_SISTEMA } from "@/lib/marca";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, BellOff, ChevronDown, ClipboardList, Flame, Loader2, PlayCircle, Radio } from "lucide-react";
@@ -87,7 +88,7 @@ export default function ViabilidadesPage() {
   useEffect(() => {
     const n = fila?.length ?? 0;
     document.title = n ? `(${n}) ${TITULO}` : TITULO;
-    return () => { document.title = "Validador de Projetos"; };
+    return () => { document.title = NOME_SISTEMA; };
   }, [fila]);
 
   const visiveis = useMemo(() => (fila ?? []).filter((v) => tipo === "todos" || v.tipo_instalacao === tipo), [fila, tipo]);

@@ -1,5 +1,6 @@
 "use client";
 
+import { NOME_SISTEMA } from "@/lib/marca";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth";
@@ -36,7 +37,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">🔐 Validador de Projetos</h1>
+          <h1 className="text-3xl font-bold text-white">🔐 {NOME_SISTEMA}</h1>
           <p className="text-indigo-200 mt-2">Faça login para acessar o sistema</p>
         </div>
 
@@ -107,7 +108,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-indigo-200 text-xs mt-4">
-          Validador de Projetos V3
+          {NOME_SISTEMA}
         </p>
       </div>
     </div>

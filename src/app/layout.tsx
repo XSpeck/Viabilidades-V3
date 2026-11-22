@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { NOME_SISTEMA } from "@/lib/marca";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -6,8 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Validador de Projetos",
-  description: "Sistema de viabilização de projetos de rede",
+  title: NOME_SISTEMA,
+  description: "Gestão de rede de fibra óptica",
 };
 
 export default function RootLayout({
