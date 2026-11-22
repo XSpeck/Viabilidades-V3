@@ -31,7 +31,8 @@ import PaletaFerramentas from "./editor/PaletaFerramentas";
 import CartaoPredio from "./editor/CartaoPredio";
 import BarraTopo from "./editor/BarraTopo";
 import { comparavel, elementoDaLinha, garantirCodigosCabos } from "./editor/salvar";
-import { chaveCabo, codigoDoCabo, comCodigo, normalizar, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
+import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
+import { aplicarNaRota, caboComCodigoNovo, rotasComCabo, rotasComCaixa, type MudancaGlobal } from "@/lib/compartilhados";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
@@ -148,6 +149,14 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** Pede ao mapa para enquadrar um trecho (ex.: cabo curto que sai da estação) */
   const [focoTrecho, setFocoTrecho] = useState<{ i: number; vez: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** "Editar em todas as rotas": gravado nas outras rotas junto com esta (ao salvar) */
+  const [globais, setGlobais] = useState<MudancaGlobal[]>([]);
+  /** Janela "Editar em todas" aberta: de uma caixa ou do cabo que chega numa caixa */
+  const [editarTodas, setEditarTodas] = useState<{ tipo: "caixa" | "cabo"; i: number; nome: string; tipoEl: TipoElementoRota; tipoCabo: string } | null>(null);
+  /** Caixa compartilhada arrastada no mapa: espera confirmar "mover em todas" */
+  const [moverTodas, setMoverTodas] = useState<{ i: number; lat: number; lon: number } | null>(null);
+  /** Confirmação do "Separar só nesta rota" ("caixa-3", "cabo-3") */
+  const [confirmaSeparar, setConfirmaSeparar] = useState<string | null>(null);
   /** Nome da caixa antes de começar a editar (para renomear os cabos ao terminar) */
   const nomeAntes = useRef("");
   /** Cabo sendo renomeado (lápis no quadro do cabo) */
@@ -662,7 +671,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   }
 
   /** Mudanças vindas do cartão Estação (elementos 1 = OLT, 2 = DIO e 3 = primeira caixa fora) */
-  function aplicarEstacao(p: Partial<DadosEstacao>) {
+  function aplicarEstacao(p0: Partial<DadosEstacao>) {
+    // OLT e DIO usados por outras rotas: nome e equipamento só mudam "em todas" (o resto segue livre)
+    const p = { ...p0 };
+    const travouOlt = outrasComCaixa(0).length > 0 && (p.oltNome !== undefined || p.oltEquip !== undefined);
+    const travouDio = outrasComCaixa(1).length > 0 && (p.dioNome !== undefined || p.dioEquip !== undefined);
+    if (travouOlt) { delete p.oltNome; delete p.oltEquip; }
+    if (travouDio) { delete p.dioNome; delete p.dioEquip; }
+    if (travouOlt || travouDio) setAviso(`${travouOlt ? "A OLT" : "O DIO"} desta estação é compartilhad${travouOlt ? "a" : "o"} com outras rotas: use "Editar em todas" abaixo do cartão.`);
+    if (!Object.keys(p).length) return;
     // Tipo do cabo de saída: mesma regra do painel do elemento (cabo compartilhado com outro trecho vira cabo novo)
     const tSaida = p.saidaTipo ? tiposDeCabo.find((t) => t.id === p.saidaTipo) : undefined;
     if (tSaida && linhas[2] && Object.keys(p).length === 1) return usarTipoCabo(2, tSaida);
@@ -780,6 +797,84 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setPendentes([]);
     setSel(novoIndice);
     if (viaCabo) setAviso(`${e.nome}: seguindo pelo cabo que já liga as duas caixas (${curtoNome(viaCabo.cabo)}). Confira a fibra no painel.`);
+  }
+
+  // ---------- Caixas e cabos compartilhados (uma informação, um dono) ----------
+  /** Outras rotas que também têm esta caixa como dela */
+  const outrasComCaixa = (i: number) => (travada(i) || !linhas[i] ? [] : rotasComCaixa(chaveLinha(linhas[i]), rede));
+  /** Outras rotas por onde passa o cabo que chega nesta caixa */
+  const outrasComCabo = (i: number) => (i < 1 || travada(i) || !linhas[i]?.cabo_entrada.trim() ? [] : rotasComCabo(linhas[i].cabo_entrada, rede));
+  const listaRotas = (rs: RotaOptica[]) => {
+    const nomes = [...new Set(rs.map((r) => r.nome))];
+    return `${nomes.slice(0, 3).join(", ")}${nomes.length > 3 ? ` e mais ${nomes.length - 3}` : ""}`;
+  };
+
+  /** Grava nas outras rotas o que foi mudado com "Editar em todas" */
+  async function gravarGlobais() {
+    if (!globais.length) return;
+    for (const r of rede) {
+      const novo = aplicarNaRota(r, globais);
+      if (!novo) continue;
+      await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
+        nome: r.nome, origem: r.origem, elementos: novo.elementos, trechos: novo.trechos,
+        calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
+      }));
+    }
+    setGlobais([]);
+  }
+
+  function abrirEditarTodas(tipo: "caixa" | "cabo", i: number) {
+    const l = linhas[i];
+    if (tipo === "cabo" && !codigoDoCabo(l.cabo_entrada)) {
+      return setAviso("Este cabo ainda não tem código: salve a rota uma vez e depois edite em todas.");
+    }
+    setEditarTodas({ tipo, i, nome: tipo === "caixa" ? l.nome : semCodigo(l.cabo_entrada), tipoEl: l.tipo, tipoCabo: tiposCabo[chaveCabo(l.cabo_entrada)] ?? "" });
+  }
+
+  function aplicarEditarTodas() {
+    if (!editarTodas) return;
+    const { tipo, i } = editarTodas;
+    const l = linhas[i];
+    const novoNome = editarTodas.nome.trim();
+    if (!novoNome) return;
+    if (tipo === "caixa") {
+      const chave = chaveLinha(l);
+      const tipoEl = editarTodas.tipoEl !== l.tipo ? editarTodas.tipoEl : undefined;
+      mudar((ls) => ls.map((x) => (chaveLinha(x) === chave ? { ...x, nome: novoNome, ...(tipoEl ? { tipo: tipoEl } : {}) } : x)));
+      if (novoNome !== l.nome) renomearCabos(l.nome, novoNome);
+      setGlobais((g) => [...g, { tipo: "caixa", chave, nomeVelho: l.nome, ...(novoNome !== l.nome ? { nome: novoNome } : {}), ...(tipoEl ? { tipoEl } : {}) }]);
+    } else {
+      const cod = codigoDoCabo(l.cabo_entrada)!;
+      const v = comCodigo(novoNome, cod);
+      mudar((ls) => ls.map((x) => (codigoDoCabo(x.cabo_entrada) === cod ? { ...x, cabo_entrada: v } : x)));
+      // o tipo é do cabo (cadastro de cabos, pelo código): vale para todas as rotas ao salvar
+      if (editarTodas.tipoCabo) setTiposCabo((t) => ({ ...t, [cod]: editarTodas.tipoCabo }));
+      setGlobais((g) => [...g, { tipo: "cabo", codigo: cod, nome: novoNome }]);
+    }
+    setEditarTodas(null);
+    setAviso("Mudança feita aqui; as outras rotas recebem quando você salvar esta.");
+  }
+
+  /** Separar só nesta rota: a caixa ganha código novo e deixa de ser a mesma das outras rotas */
+  function separarCaixa(i: number) {
+    const cod = proximoCodigo(linhas);
+    alterar(i, { codigo: cod });
+    setConfirmaSeparar(null);
+    setAviso(`${linhas[i].nome}: agora é uma caixa só desta rota (código ${cod}). Pode mudar nome, tipo e local à vontade.`);
+  }
+
+  /** Separar só nesta rota: o cabo ganha código novo (nesta rota inteira) e fica com o tipo atual */
+  function separarCabo(i: number) {
+    const l = linhas[i];
+    const codAntigo = codigoDoCabo(l.cabo_entrada);
+    const todosNomes = [...rede.flatMap((r) => r.elementos.map((e) => e.cabo_entrada ?? "")), ...linhas.map((x) => x.cabo_entrada)];
+    const codNovo = proximoCodigoCabo(todosNomes);
+    const nomeNovo = caboComCodigoNovo(l.cabo_entrada, codNovo);
+    const tipoAtual = tiposCabo[chaveCabo(l.cabo_entrada)];
+    if (tipoAtual) setTiposCabo((t) => ({ ...t, [codNovo]: tipoAtual }));
+    mudar((ls) => ls.map((x, j) => ((codAntigo ? codigoDoCabo(x.cabo_entrada) === codAntigo : j === i) ? { ...x, cabo_entrada: nomeNovo } : x)));
+    setConfirmaSeparar(null);
+    setAviso(`Cabo separado: nesta rota ele agora é o ${codNovo}. Pode trocar nome e tipo sem mexer nas outras rotas.`);
   }
 
   /** Cabo (e postes) que já liga a caixa a → b em alguma rota da rede */
@@ -1237,6 +1332,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           }));
         }
       }
+      await gravarGlobais();
       await onSalvar(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: nome.trim(),
         origem: inicial?.origem ?? "manual",
@@ -1313,6 +1409,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     setSalvandoItem(i);
     try {
       await gravarCabos([ls[i]], tc);
+      await gravarGlobais();
       await onSalvarParcial(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: inicial?.nome ?? nome.trim(),
         origem: inicial?.origem ?? "manual",
@@ -1576,6 +1673,45 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     );
   }
 
+  /** Selo da caixa compartilhada: em que rotas ela está e as duas saídas */
+  function seloCaixa(i: number) {
+    const outras = outrasComCaixa(i);
+    if (!outras.length) return null;
+    const l = linhas[i];
+    return (
+      <SeloCompartilhado
+        titulo={`${TIPO_ELEMENTO_LABEL[l.tipo] ?? "Caixa"} compartilhada`}
+        texto={<>Também está em <b>{listaRotas(outras)}</b>. Nome, tipo e local valem para todas.</>}
+        onEditar={() => abrirEditarTodas("caixa", i)}
+        onSeparar={l.tipo === "olt" ? undefined : () => setConfirmaSeparar(`caixa-${i}`)}
+        confirmando={confirmaSeparar === `caixa-${i}`}
+        textoConfirma="Vira uma caixa só desta rota, com código novo. As outras rotas continuam com a atual."
+        onConfirmar={() => separarCaixa(i)}
+        onCancelar={() => setConfirmaSeparar(null)}
+      />
+    );
+  }
+
+  /** Selo do cabo compartilhado */
+  function seloCabo(i: number) {
+    const outras = outrasComCabo(i);
+    if (!outras.length) return null;
+    return (
+      <div className="mb-2">
+        <SeloCompartilhado
+          titulo="Cabo compartilhado"
+          texto={<>Também passa em <b>{listaRotas(outras)}</b>. Nome e tipo valem para todas; a fibra é desta rota.</>}
+          onEditar={() => abrirEditarTodas("cabo", i)}
+          onSeparar={() => setConfirmaSeparar(`cabo-${i}`)}
+          confirmando={confirmaSeparar === `cabo-${i}`}
+          textoConfirma="Nesta rota vira outro cabo, com código novo (ex.: o cabo aqui é outro de verdade)."
+          onConfirmar={() => separarCabo(i)}
+          onCancelar={() => setConfirmaSeparar(null)}
+        />
+      </div>
+    );
+  }
+
   function painelTronco(i: number) {
     const l = linhas[i];
     const ancora = i === troncoEf - 1;
@@ -1617,17 +1753,23 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const kCabo = l.cabo_entrada.trim() ? chaveCabo(l.cabo_entrada) : "";
     // CDOI de prédio: aqui só o prédio e o cabo que chega (o resto fica na janela do prédio)
     const soPredio = l.tipo === "predio";
+    /** Caixa também usada em outra rota: nome e tipo só mudam "em todas" (ou separando) */
+    const caixaTravada = outrasComCaixa(i).length > 0;
+    const caboTravado = outrasComCabo(i).length > 0;
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
         {barraSalvarItem(i)}
+        {seloCaixa(i)}
         {l.tipo === "hub" && botaoSeparar(i)}
         {l.tipo === "predio" && campoPredio(i)}
         {!soPredio && <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">
             <label className={rot}>{l.tipo === "cdoi" ? "Nome da CDOI" : "Nome"}</label>
             <input
-              className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""}`}
+              className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""} ${caixaTravada ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`}
               value={l.nome}
+              readOnly={caixaTravada}
+              title={caixaTravada ? "Caixa compartilhada: use Editar em todas" : undefined}
               onFocus={() => { nomeAntes.current = l.nome; }}
               onChange={(e) => alterar(i, { nome: e.target.value })}
               onBlur={() => renomearCabos(nomeAntes.current, l.nome)}
@@ -1635,8 +1777,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             />
           </div>
           <div>
-            <label className={rot}>Tipo</label>
-            <select className={campo} value={l.tipo} onChange={(e) => alterar(i, { tipo: e.target.value as TipoElementoRota })}>
+            <label className={rot}>Tipo{caixaTravada ? " 🔒" : ""}</label>
+            <select className={`${campo} ${caixaTravada ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`} disabled={caixaTravada} value={l.tipo} onChange={(e) => alterar(i, { tipo: e.target.value as TipoElementoRota })}>
               {Object.entries(TIPO_ELEMENTO_LABEL).filter(([k]) => k !== "predio").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -1708,6 +1850,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               <IconeCabo tamanho={16} /> Cabo que chega aqui
               <span className="ml-auto font-normal text-amber-700">em amarelo no mapa</span>
             </p>
+            {seloCabo(i)}
             {(() => {
               const existentes = cabosSaindoDe(i);
               if (!existentes.length) return null;
@@ -1760,8 +1903,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => usarTipoCabo(i, t)}
-                        className={`text-[11px] rounded-full border px-2 py-0.5 ${ativo ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400"}`}
+                        onClick={() => (caboTravado && !ativo
+                          ? setAviso("Cabo compartilhado: para trocar o tipo use Editar em todas, ou Separar só nesta rota.")
+                          : usarTipoCabo(i, t))}
+                        className={`text-[11px] rounded-full border px-2 py-0.5 ${ativo ? "bg-indigo-600 border-indigo-600 text-white" : caboTravado ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400"}`}
                         title={resumoItem(t)}
                       >
                         {t.nome}
@@ -1812,9 +1957,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                       ) : !/^Cordão /i.test(l.cabo_entrada) && (
                         <span className="shrink-0 rounded border border-dashed border-slate-300 px-1 text-[10px] text-slate-400" title="O código do cabo é gerado ao salvar a rota">código ao salvar</span>
                       )}
-                      <button type="button" onClick={() => setRenomear({ i, antigo: l.cabo_entrada })} className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600" title="Renomear o cabo">
-                        ✎
-                      </button>
+                      {caboTravado ? (
+                        <span className="shrink-0 px-1 text-slate-400" title="Cabo compartilhado: use Editar em todas">🔒</span>
+                      ) : (
+                        <button type="button" onClick={() => setRenomear({ i, antigo: l.cabo_entrada })} className="shrink-0 rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600" title="Renomear o cabo">
+                          ✎
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -1957,7 +2106,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             centroPadrao={centroPadrao}
             onSelect={(i) => setSel(i)}
             onClicarMapa={clicarMapa}
-            onMoverElemento={(i, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { coords: fmtCoord({ lat, lon }) }))}
+            onMoverElemento={(i, lat, lon) => (
+              travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.")
+              : outrasComCaixa(i).length ? setMoverTodas({ i, lat, lon })
+              : alterar(i, { coords: fmtCoord({ lat, lon }) })
+            )}
             onMoverVertice={(i, k, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { vertices: linhas[i].vertices.map((v, j) => (j === k ? { lat, lon } : v)) }))}
             onRemoverVertice={(i, k) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : alterar(i, { vertices: linhas[i].vertices.filter((_, j) => j !== k) }))}
             onInserirCurva={(i, lat, lon) => (travada(i) ? setAviso("O tronco é da rota-mãe: mexa nele lá.") : inserirCurva(i, lat, lon))}
@@ -2136,6 +2289,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                     onMudar={troncoEf >= 2 ? () => setAviso("A estação é do tronco: edite na rota-mãe.") : aplicarEstacao}
                     onVerSaida={linhas[2] ? () => { setSel(2); setFerramenta("selecionar"); setFocoTrecho((f) => ({ i: 2, vez: (f?.vez ?? 0) + 1 })); } : undefined}
                   />
+                  {troncoEf < 2 && (outrasComCaixa(0).length > 0 || outrasComCaixa(1).length > 0) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900">
+                      <span>🔒 Estação compartilhada com <b>{listaRotas([...outrasComCaixa(0), ...outrasComCaixa(1)])}</b>: OLT e DIO só mudam em todas.</span>
+                      <span className="ml-auto flex gap-1">
+                        {outrasComCaixa(0).length > 0 && <button type="button" onClick={() => abrirEditarTodas("caixa", 0)} className="rounded-md bg-sky-600 px-2 py-0.5 font-semibold text-white hover:bg-sky-700">✎ OLT</button>}
+                        {outrasComCaixa(1).length > 0 && <button type="button" onClick={() => abrirEditarTodas("caixa", 1)} className="rounded-md bg-sky-600 px-2 py-0.5 font-semibold text-white hover:bg-sky-700">✎ DIO</button>}
+                      </span>
+                    </div>
+                  )}
                   {linhas.length > 2 && <p className="mt-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fora da estação</p>}
                 </div>
               )}
@@ -2260,6 +2422,146 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         </aside>
       </div>
+
+      {/* Editar em todas as rotas */}
+      {editarTodas && (() => {
+        const { tipo, i } = editarTodas;
+        const l = linhas[i];
+        const afetadas = tipo === "caixa" ? outrasComCaixa(i) : outrasComCabo(i);
+        const mostraTipo = tipo === "caixa" && l.tipo !== "olt" && l.tipo !== "dio";
+        return (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setEditarTodas(null)}>
+            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 bg-sky-700 px-4 py-3 text-white">
+                {tipo === "caixa" ? <IconeElemento tipo={l.tipo} tamanho={22} /> : <IconeCabo tamanho={22} />}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">Editar em todas as rotas</p>
+                  <p className="truncate text-[11px] text-sky-100">{tipo === "caixa" ? l.nome : semCodigo(l.cabo_entrada)}{l.codigo && tipo === "caixa" ? ` · código ${l.codigo}` : ""}{tipo === "cabo" ? ` · ${codigoDoCabo(l.cabo_entrada)}` : ""}</p>
+                </div>
+              </div>
+              <div className="space-y-3 p-4">
+                <div>
+                  <label className={rot}>{tipo === "caixa" ? "Nome da caixa" : "Nome do cabo"}</label>
+                  <input
+                    autoFocus
+                    className={campo}
+                    value={editarTodas.nome}
+                    onChange={(e) => setEditarTodas({ ...editarTodas, nome: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === "Enter") aplicarEditarTodas(); }}
+                  />
+                  {tipo === "cabo" && <p className="mt-0.5 text-[10px] text-slate-500">O código {codigoDoCabo(l.cabo_entrada)} continua o mesmo: é ele que diz que o cabo é o mesmo.</p>}
+                </div>
+                {mostraTipo && (
+                  <div>
+                    <label className={rot}>Tipo</label>
+                    <select className={campo} value={editarTodas.tipoEl} onChange={(e) => setEditarTodas({ ...editarTodas, tipoEl: e.target.value as TipoElementoRota })}>
+                      {Object.entries(TIPO_ELEMENTO_LABEL).filter(([k]) => k !== "predio" && k !== "olt").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                )}
+                {tipo === "cabo" && (
+                  <div>
+                    <label className={rot}>Tipo do cabo</label>
+                    <select className={campo} value={editarTodas.tipoCabo} onChange={(e) => setEditarTodas({ ...editarTodas, tipoCabo: e.target.value })}>
+                      <option value="">— escolha —</option>
+                      {tiposDeCabo.map((t) => <option key={t.id} value={t.id}>{t.nome} · {resumoItem(t)}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Muda também em {afetadas.length} rota{afetadas.length !== 1 ? "s" : ""}</p>
+                  <ul className="max-h-32 space-y-0.5 overflow-auto text-xs text-slate-700">
+                    {[...new Map(afetadas.map((r) => [r.id, r])).values()].map((r) => (
+                      <li key={r.id} className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-500" />{r.nome}</li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="text-[11px] text-slate-500">A mudança aparece aqui na hora; as outras rotas são gravadas quando você salvar esta.</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={aplicarEditarTodas} disabled={!editarTodas.nome.trim()} className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
+                    Aplicar em todas
+                  </button>
+                  <button type="button" onClick={() => setEditarTodas(null)} className="rounded-lg border px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Caixa compartilhada arrastada no mapa */}
+      {moverTodas && linhas[moverTodas.i] && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl">
+            <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
+              <IconeElemento tipo={linhas[moverTodas.i].tipo} tamanho={20} /> Mover {linhas[moverTodas.i].nome}?
+            </p>
+            <p className="mt-1.5 text-xs text-slate-600">
+              Esta caixa também está em <b>{listaRotas(outrasComCaixa(moverTodas.i))}</b>. É a mesma caixa no poste: o local muda em todas as rotas.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const { i, lat, lon } = moverTodas;
+                  const l = linhas[i];
+                  alterar(i, { coords: fmtCoord({ lat, lon }) });
+                  setGlobais((g) => [...g, { tipo: "caixa", chave: chaveLinha(l), nomeVelho: l.nome, lat, lon }]);
+                  setMoverTodas(null);
+                  setAviso("Local mudado aqui; as outras rotas recebem quando você salvar esta.");
+                }}
+                className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+              >
+                Mover em todas
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMoverTodas(null); setLinhas((ls) => [...ls]); }}
+                className="rounded-lg border px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Não mover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Selo de caixa/cabo usado em mais de uma rota: o que é e as duas saídas (todas ou separar) */
+function SeloCompartilhado({ titulo, texto, onEditar, onSeparar, confirmando, textoConfirma, onConfirmar, onCancelar }: {
+  titulo: string;
+  texto: React.ReactNode;
+  onEditar: () => void;
+  onSeparar?: () => void;
+  confirmando: boolean;
+  textoConfirma: string;
+  onConfirmar: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-2.5 text-[11px] text-sky-950">
+      <p className="flex items-start gap-1.5">
+        <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-600 text-[9px] text-white">🔒</span>
+        <span><b>{titulo}.</b> {texto}</span>
+      </p>
+      {confirmando ? (
+        <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-amber-900">
+          <p>{textoConfirma}</p>
+          <div className="mt-1.5 flex gap-1.5">
+            <button type="button" onClick={onConfirmar} className="rounded-md bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700">Separar</button>
+            <button type="button" onClick={onCancelar} className="rounded-md px-2 py-1 text-amber-800 underline">Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <div className={`mt-2 grid gap-1.5 ${onSeparar ? "grid-cols-2" : "grid-cols-1"}`}>
+          <button type="button" onClick={onEditar} className="rounded-lg bg-sky-600 px-2 py-1.5 font-semibold text-white shadow-sm hover:bg-sky-700">✎ Editar em todas</button>
+          {onSeparar && (
+            <button type="button" onClick={onSeparar} className="rounded-lg border border-sky-300 bg-white px-2 py-1.5 font-semibold text-sky-800 hover:bg-sky-50">✂ Separar só nesta rota</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
