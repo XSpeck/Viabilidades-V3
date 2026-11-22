@@ -717,7 +717,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (r.calculo_potencia) setCalc(r.calculo_potencia);
     setPai(undefined);
     setTronco(0);
-    setSel(0);
+    setSel(null); // nada selecionado: a próxima caixa entra no fim (depois do DIO)
     setFerramenta("ceo");
     setAviso(`Estação ${est.olt.nome} carregada (mesma OLT e mesmo ${est.dio.nome}). Escolha a porta PON e a porta do DIO no cartão (as amarelas já estão em uso) e clique na primeira caixa fora da estação.`);
   }

@@ -63,12 +63,13 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
 
   const setPon = (pl: number, po: number) => onMudar({ oltPorta: textoPortaOlt(pl, po) });
   /** Portas já usadas por outras rotas (amarelas) e o aviso quando a escolhida é uma delas */
-  const placaVista = placa ?? listaPlacas[0] ?? 0;
+  const placasComUso = new Set(ponEmUso ? listaPlacas.filter((pl) => listaPortas.some((po) => ponEmUso(pl, po))) : []);
+  // sem placa escolhida, mostra a placa que já tem portas em uso (onde a nova porta costuma ficar)
+  const placaVista = placa ?? [...placasComUso][0] ?? listaPlacas[0] ?? 0;
   const usoPon = (po: number) => ponEmUso?.(placaVista, po);
   const usoDio = (p: number) => dioEmUso?.(p);
   const conflitoPon = placa !== null && pon !== null ? ponEmUso?.(placa, pon) : undefined;
   const conflitoDio = portaDio ? dioEmUso?.(portaDio) : undefined;
-  const placasComUso = new Set(ponEmUso ? listaPlacas.filter((pl) => listaPortas.some((po) => ponEmUso(pl, po))) : []);
   const temUso = !!(ponEmUso && placasComUso.size) || !!(dioEmUso && Array.from({ length: portasDio }, (_, k) => k + 1).some((p) => dioEmUso(p)));
   const setDio = (p: number) => onMudar({ dioPorta: `Porta ${pad2(p)}`, saidaFibra: String(p) });
 
@@ -161,17 +162,18 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
           const x = xO + 8 + (k % colsPl) * 19.5;
           const y = y0 + 22 + Math.floor(k / colsPl) * 18;
           const ativo = pl === placa;
+          const vista = placa === null && pl === placaVista;
           return (
             <g key={`pl${pl}`} className="cursor-pointer" onClick={() => setPon(pl, pon !== null && listaPortas.includes(pon) ? pon : listaPortas[0] ?? 0)}>
               <title>{`Placa PL ${pad2(pl)}`}</title>
-              <rect x={x} y={y} width={17} height={14} rx={2.5} fill={ativo ? "#4f46e5" : "#1e293b"} stroke={ativo ? "#c7d2fe" : "#475569"} />
+              <rect x={x} y={y} width={17} height={14} rx={2.5} fill={ativo ? "#4f46e5" : "#1e293b"} stroke={ativo ? "#c7d2fe" : vista ? "#fbbf24" : "#475569"} strokeDasharray={vista ? "2 1.5" : undefined} />
               <text x={x + 8.5} y={y + 10} fontSize={7.5} textAnchor="middle" fill={ativo ? "#fff" : "#94a3b8"} fontWeight={700}>{pl}</text>
               {placasComUso.has(pl) && <circle cx={x + 15} cy={y + 2} r={2.6} fill="#fbbf24" stroke="#0f172a" strokeWidth={0.6} />}
             </g>
           );
         })}
         {olt && (
-          <text x={xO + 8} y={yPortas - 3} fontSize={7.5} fill="#94a3b8">{placa !== null ? `portas PON da placa ${pad2(placa)}` : "escolha a placa"}</text>
+          <text x={xO + 8} y={yPortas - 3} fontSize={7.5} fill="#94a3b8">{placa !== null ? `portas PON da placa ${pad2(placa)}` : `placa ${pad2(placaVista)} · clique numa porta livre`}</text>
         )}
         {listaPortas.map((po, k) => {
           const { x, y } = posPon(k);
