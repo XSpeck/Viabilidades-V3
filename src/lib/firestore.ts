@@ -22,6 +22,7 @@ import { auth, db } from "./firebase";
 import { deleteFotos } from "./cloudinary";
 import { MODULOS } from "./modulos";
 import { descricaoEstrutura } from "./descricaoEstrutura";
+import { lerColecao, marcarMudanca } from "./colecaoVersionada";
 import type {
   Viabilizacao,
   PredioAtendido,
@@ -216,6 +217,45 @@ export async function getViabilizacoesUsuario(usernames: string[]): Promise<Viab
   const ids = [...new Set(usernames.filter(Boolean))];
   const all = await _fetchViabilizacoesUsuario(ids);
   return all.filter((v) => !v.data_finalizacao);
+}
+
+/** Status de quem ainda aparece no Meus Resultados (arquivado = "finalizado" fica só no histórico) */
+const STATUS_EM_ABERTO: StatusViabilizacao[] = ["pendente", "em_auditoria", "em_revisao", "aprovado", "rejeitado", "utp"];
+
+/**
+ * Meus Resultados ao vivo: lê só os pedidos ainda não arquivados e depois só o que muda
+ * (antes eram todos os pedidos do atendente, duas vezes, a cada 3 min).
+ */
+export function ouvirMeusPedidos(
+  nomes: string[], uid: string,
+  aoMudar: (lista: Viabilizacao[]) => void, aoErrar: (e: Error) => void,
+): () => void {
+  const porNome = new Map<string, Viabilizacao>();
+  const porId = new Map<string, Viabilizacao>();
+  let prontos = 0;
+  const emitir = () => {
+    if (prontos < 2) return;
+    const todos = new Map([...porNome, ...porId]);
+    aoMudar([...todos.values()].filter((v) => !v.data_finalizacao)
+      .sort((a, b) => (a.data_solicitacao ?? "") > (b.data_solicitacao ?? "") ? -1 : 1));
+  };
+  const ouvir = (campo: string, valores: string[], mapa: Map<string, Viabilizacao>) => {
+    let primeira = true;
+    return onSnapshot(
+      query(collection(db, "viabilizacoes"), where(campo, "in", valores), where("status", "in", STATUS_EM_ABERTO)),
+      (snap) => {
+        mapa.clear();
+        for (const d of snap.docs) mapa.set(d.id, fromFirestore<Viabilizacao>(d));
+        if (primeira) { primeira = false; prontos++; }
+        emitir();
+      },
+      aoErrar,
+    );
+  };
+  // pedidos novos têm usuario_id; os antigos só o nome em "usuario"
+  const a = ouvir("usuario", [...new Set(nomes.filter(Boolean))].slice(0, 5), porNome);
+  const b = uid ? ouvir("usuario_id", [uid], porId) : (prontos++, () => {});
+  return () => { a(); b(); };
 }
 
 export async function getViabilizacoesHistorico(usernames: string[]): Promise<Viabilizacao[]> {
@@ -843,7 +883,7 @@ export async function finalizarEstruturado(
     giga: dados.giga,
     data_estruturacao: serverTimestamp(),
   });
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
   await updateViabilizacao(id, {
     status: "aprovado" as StatusViabilizacao,
     status_predio: "estruturado",
@@ -953,7 +993,7 @@ export async function rejeitarPredio(
     registrado_por: registradoPor,
     data_registro: serverTimestamp(),
   });
-  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
+  await marcarMudanca("predios_sem_viabilidade");
   // 2. Atualizar viabilização
   await updateViabilizacao(id, {
     status: "rejeitado",
@@ -1241,14 +1281,12 @@ export async function corrigirDadosViabilizacao(
 // Consultas (Home)
 // =====================
 
+/** Mais recente primeiro pelo campo de data (texto ISO) */
+const maisRecente = <T>(campo: keyof T) => (a: T, b: T) => String(b[campo] ?? "").localeCompare(String(a[campo] ?? ""));
+
 export async function getPrediosAtendidos(): Promise<PredioAtendido[]> {
-  const cached = getCached<PredioAtendido[]>("viab_predios_atendidos_v1");
-  if (cached) return cached;
-  const q = query(collection(db, "predios_atendidos"), orderBy("data_estruturacao", "desc"));
-  const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
-  setCache("viab_predios_atendidos_v1", data);
-  return data;
+  // cópia local com versão (colecaoVersionada.ts): 1 leitura em vez da coleção inteira
+  return [...await lerColecao<PredioAtendido>("predios_atendidos")].sort(maisRecente<PredioAtendido>("data_estruturacao"));
 }
 
 export async function createPredioAtendido(
@@ -1258,7 +1296,7 @@ export async function createPredioAtendido(
     ...stripUndefined(data as Record<string, unknown>),
     data_estruturacao: serverTimestamp(),
   });
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
 }
 
 export async function updatePredioAtendido(
@@ -1266,12 +1304,12 @@ export async function updatePredioAtendido(
   data: Partial<Omit<PredioAtendido, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_atendidos", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
 }
 
 export async function deletePredioAtendido(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_atendidos", id));
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
 }
 
 export async function deleteAllPrediosAtendidos(): Promise<void> {
@@ -1282,7 +1320,7 @@ export async function deleteAllPrediosAtendidos(): Promise<void> {
     snap.docs.slice(i, i + CHUNK).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
 }
 
 export async function batchCreatePrediosAtendidos(
@@ -1299,20 +1337,11 @@ export async function batchCreatePrediosAtendidos(
     await batch.commit();
     onProgress?.(Math.min(i + CHUNK, items.length), items.length);
   }
-  bustCache("viab_predios_atendidos_v1", "viab_predios_estruturados_v1");
+  await marcarMudanca("predios_atendidos");
 }
 
 export async function getPrediosSemViabilidade(): Promise<PredioSemViabilidade[]> {
-  const cached = getCached<PredioSemViabilidade[]>("viab_predios_sem_viab_v1");
-  if (cached) return cached;
-  const q = query(
-    collection(db, "predios_sem_viabilidade"),
-    orderBy("data_registro", "desc")
-  );
-  const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
-  setCache("viab_predios_sem_viab_v1", data);
-  return data;
+  return [...await lerColecao<PredioSemViabilidade>("predios_sem_viabilidade")].sort(maisRecente<PredioSemViabilidade>("data_registro"));
 }
 
 export async function createPredioSemViabilidade(
@@ -1322,7 +1351,7 @@ export async function createPredioSemViabilidade(
     ...stripUndefined(data as Record<string, unknown>),
     data_registro: serverTimestamp(),
   });
-  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
+  await marcarMudanca("predios_sem_viabilidade");
 }
 
 export async function updatePredioSemViabilidade(
@@ -1330,12 +1359,12 @@ export async function updatePredioSemViabilidade(
   data: Partial<Omit<PredioSemViabilidade, "id">>
 ): Promise<void> {
   await updateDoc(doc(db, "predios_sem_viabilidade", id), stripUndefined(data as Record<string, unknown>));
-  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
+  await marcarMudanca("predios_sem_viabilidade");
 }
 
 export async function deletePredioSemViabilidade(id: string): Promise<void> {
   await deleteDoc(doc(db, "predios_sem_viabilidade", id));
-  bustCache("viab_predios_sem_viab_v1", "viab_predios_sem_viab_viabilizacoes_v1");
+  await marcarMudanca("predios_sem_viabilidade");
 }
 
 // =====================
@@ -1384,42 +1413,20 @@ export async function getViabilizacoesRelatorio(
   return data;
 }
 
-export async function getPrediosAtendidosRelatorio(
-  dataInicio: string,
-  dataFim: string
-): Promise<PredioAtendido[]> {
-  const cacheKey = `viab_atendidos_relatorio_${dataInicio}_${dataFim}_v1`;
-  const cached = getCached<PredioAtendido[]>(cacheKey);
-  if (cached) return cached;
-  const q = query(
-    collection(db, "predios_atendidos"),
-    where("data_estruturacao", ">=", Timestamp.fromDate(new Date(dataInicio))),
-    where("data_estruturacao", "<=", Timestamp.fromDate(new Date(dataFim + "T23:59:59"))),
-    orderBy("data_estruturacao", "desc")
-  );
-  const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<PredioAtendido>(d));
-  setCache(cacheKey, data);
-  return data;
+/** Datas do relatório em ISO, do início do 1º dia ao fim do último */
+function intervaloIso(dataInicio: string, dataFim: string) {
+  return { de: new Date(dataInicio + "T00:00:00").toISOString(), ate: new Date(dataFim + "T23:59:59").toISOString() };
 }
 
-export async function getPrediosSemViabilidadeRelatorio(
-  dataInicio: string,
-  dataFim: string
-): Promise<PredioSemViabilidade[]> {
-  const cacheKey = `viab_sem_viab_relatorio_${dataInicio}_${dataFim}_v1`;
-  const cached = getCached<PredioSemViabilidade[]>(cacheKey);
-  if (cached) return cached;
-  const q = query(
-    collection(db, "predios_sem_viabilidade"),
-    where("data_registro", ">=", Timestamp.fromDate(new Date(dataInicio))),
-    where("data_registro", "<=", Timestamp.fromDate(new Date(dataFim + "T23:59:59"))),
-    orderBy("data_registro", "desc")
-  );
-  const snap = await getDocs(q);
-  const data = snap.docs.map((d) => fromFirestore<PredioSemViabilidade>(d));
-  setCache(cacheKey, data);
-  return data;
+// Relatórios de prédios filtram a cópia local (a coleção é pequena e quase não muda)
+export async function getPrediosAtendidosRelatorio(dataInicio: string, dataFim: string): Promise<PredioAtendido[]> {
+  const { de, ate } = intervaloIso(dataInicio, dataFim);
+  return (await getPrediosAtendidos()).filter((p) => !!p.data_estruturacao && p.data_estruturacao >= de && p.data_estruturacao <= ate);
+}
+
+export async function getPrediosSemViabilidadeRelatorio(dataInicio: string, dataFim: string): Promise<PredioSemViabilidade[]> {
+  const { de, ate } = intervaloIso(dataInicio, dataFim);
+  return (await getPrediosSemViabilidade()).filter((p) => !!p.data_registro && p.data_registro >= de && p.data_registro <= ate);
 }
 
 export async function arquivarViabilizacao(id: string): Promise<void> {
@@ -1454,8 +1461,9 @@ export async function getDemandas(): Promise<DemandaRede[]> {
 /** Demandas da rede ao vivo (aparecem e mudam na hora para todos) */
 export function ouvirDemandas(aoMudar: (lista: DemandaRede[]) => void, aoErrar: (e: Error) => void): () => void {
   return onSnapshot(
-    query(collection(db, "demandas_rede"), orderBy("data_criacao", "desc")),
-    (snap) => aoMudar(snap.docs.map((d) => fromFirestoreDemanda(d))),
+    // sem as arquivadas (vão crescendo para sempre e só aparecem no Arquivo, lido quando abre)
+    query(collection(db, "demandas_rede"), where("status", "in", ["aberta", "agendada", "em_andamento", "concluida"])),
+    (snap) => aoMudar(snap.docs.map((d) => fromFirestoreDemanda(d)).sort((a, b) => (b.data_criacao ?? "").localeCompare(a.data_criacao ?? ""))),
     aoErrar,
   );
 }

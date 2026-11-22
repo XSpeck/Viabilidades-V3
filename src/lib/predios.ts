@@ -1,14 +1,9 @@
-import { collection, getDocs, Timestamp } from "firebase/firestore";
-import { db } from "./firebase";
+import { lerColecao } from "./colecaoVersionada";
 import { haversineDistance } from "./ctos";
 import { plusCodeToCoords } from "./pluscode";
 import { nomeSimilar } from "./nomePredio";
 
-const CACHE_TTL = 5 * 60 * 1000;
-
-// ─── Prédios estruturados ──────────────────────────────────────────
-
-const CACHE_KEY_EST = "viab_predios_estruturados_v1";
+// As duas listas vêm da cópia local com versão (colecaoVersionada.ts)
 
 export interface PredioEstruturado {
   id: string;
@@ -18,51 +13,21 @@ export interface PredioEstruturado {
   data_auditoria: string | undefined;
 }
 
-function getCacheEst(): PredioEstruturado[] | null {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY_EST);
-    if (!raw) return null;
-    const { data, ts } = JSON.parse(raw) as { data: PredioEstruturado[]; ts: number };
-    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(CACHE_KEY_EST); return null; }
-    return data;
-  } catch { return null; }
-}
+/** Mantido por compatibilidade: a cópia local já se invalida sozinha a cada gravação */
+export function bustPrediosCache(): void {}
 
-export function bustPrediosCache(): void {
-  try {
-    sessionStorage.removeItem(CACHE_KEY_EST);
-    sessionStorage.removeItem(CACHE_KEY_SEM);
-  } catch {}
-}
-
-function tsToIso(v: unknown): string | undefined {
-  if (v instanceof Timestamp) return v.toDate().toISOString();
-  if (typeof v === "string") return v;
-  return undefined;
-}
+type Bruto = { id: string; condominio?: string; localizacao?: string; tecnologia?: string; observacao?: string; data_estruturacao?: string; data_registro?: string };
 
 export async function getPrediosEstruturados(): Promise<PredioEstruturado[]> {
-  const cached = getCacheEst();
-  if (cached) return cached;
-  const snap = await getDocs(collection(db, "predios_atendidos"));
-  const data: PredioEstruturado[] = snap.docs.flatMap((d) => {
-    const raw = d.data() as { condominio?: string; localizacao?: string; tecnologia?: string; data_estruturacao?: unknown };
-    if (!raw.condominio || !raw.localizacao) return [];
-    return [{
-      id: d.id,
-      predio_ftta: raw.condominio,
-      plus_code_cliente: raw.localizacao,
-      tipo_instalacao: raw.tecnologia ?? "Prédio",
-      data_auditoria: tsToIso(raw.data_estruturacao),
-    }];
-  });
-  try { sessionStorage.setItem(CACHE_KEY_EST, JSON.stringify({ data, ts: Date.now() })); } catch {}
-  return data;
+  const docs = await lerColecao<Bruto>("predios_atendidos");
+  return docs.flatMap((raw) => (!raw.condominio || !raw.localizacao) ? [] : [{
+    id: raw.id,
+    predio_ftta: raw.condominio,
+    plus_code_cliente: raw.localizacao,
+    tipo_instalacao: raw.tecnologia ?? "Prédio",
+    data_auditoria: raw.data_estruturacao,
+  }]);
 }
-
-// ─── Prédios sem viabilidade ───────────────────────────────────────
-
-const CACHE_KEY_SEM = "viab_predios_sem_viab_viabilizacoes_v1";
 
 export interface PredioSemViab {
   id: string;
@@ -73,34 +38,16 @@ export interface PredioSemViab {
   data_auditoria: string | undefined;
 }
 
-function getCacheSem(): PredioSemViab[] | null {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY_SEM);
-    if (!raw) return null;
-    const { data, ts } = JSON.parse(raw) as { data: PredioSemViab[]; ts: number };
-    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(CACHE_KEY_SEM); return null; }
-    return data;
-  } catch { return null; }
-}
-
 export async function getPrediosSemViab(): Promise<PredioSemViab[]> {
-  const cached = getCacheSem();
-  if (cached) return cached;
-  const snap = await getDocs(collection(db, "predios_sem_viabilidade"));
-  const data: PredioSemViab[] = snap.docs.flatMap((d) => {
-    const raw = d.data() as { condominio?: string; localizacao?: string; observacao?: string; data_registro?: unknown };
-    if (!raw.condominio || !raw.localizacao) return [];
-    return [{
-      id: d.id,
-      predio_ftta: raw.condominio,
-      plus_code_cliente: raw.localizacao,
-      tipo_instalacao: "Prédio",
-      motivo_rejeicao: raw.observacao,
-      data_auditoria: tsToIso(raw.data_registro),
-    }];
-  });
-  try { sessionStorage.setItem(CACHE_KEY_SEM, JSON.stringify({ data, ts: Date.now() })); } catch {}
-  return data;
+  const docs = await lerColecao<Bruto>("predios_sem_viabilidade");
+  return docs.flatMap((raw) => (!raw.condominio || !raw.localizacao) ? [] : [{
+    id: raw.id,
+    predio_ftta: raw.condominio,
+    plus_code_cliente: raw.localizacao,
+    tipo_instalacao: "Prédio",
+    motivo_rejeicao: raw.observacao,
+    data_auditoria: raw.data_registro,
+  }]);
 }
 
 // ─── Matching inteligente ──────────────────────────────────────────

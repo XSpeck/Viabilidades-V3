@@ -35,6 +35,11 @@ service cloud.firestore {
       allow write: if isAuth();
     }
 
+    // Versão das listas guardadas no aparelho (prédios): qualquer gravação sobe o número
+    match /meta/{id} {
+      allow read, write: if isAuth();
+    }
+
     // CTOs (documento único agrupado)
     match /ctos_data/{id} {
       allow read: if isAuth();

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import {
@@ -64,7 +64,6 @@ const PAPEL_FINANCEIRO_LABEL: Record<PapelFinanceiro, string> = {
 export default function Sidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   /** No computador o menu pode ficar recolhido (só ícones); a escolha fica guardada neste navegador */
   const [recolhido, setRecolhido] = useState(() => {
@@ -95,7 +94,8 @@ export default function Sidebar() {
 
   async function handleLogout() {
     await signOut();
-    router.push("/login");
+    // recarga inteira: o banco local foi encerrado no signOut
+    window.location.assign("/login");
   }
 
   const visibleItems = navItems.filter((item) => canAccess(user ?? null, item.page));

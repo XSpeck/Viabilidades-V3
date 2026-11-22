@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, Clock, Building2, Loader2, RefreshCw, Search, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, CheckCircle, Clock, Building2, Loader2, Radio, Search, XCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getViabilizacoesHistorico, getViabilizacoesUsuario, bustCacheResultados } from "@/lib/firestore";
+import { getViabilizacoesHistorico, ouvirMeusPedidos } from "@/lib/firestore";
 import { canAccess } from "@/lib/access";
 import { semAcento } from "@/lib/localizacao";
 import { DIAS_RESULTADO_NA_LISTA, ehResultadoFinal, ORDEM_CHAVES, ordenarResultados, resultadoVencido, statusDe, type ChaveStatus, type GrupoStatus } from "@/lib/statusViabilizacao";
@@ -13,9 +13,6 @@ import HistoricoResultados from "@/components/resultados/HistoricoResultados";
 
 /** Filtro de situação: um grupo (números do topo), uma situação (chips) ou "precisa de você" */
 type Filtro = { tipo: "todos" } | { tipo: "acao" } | { tipo: "grupo"; valor: GrupoStatus } | { tipo: "chave"; valor: ChaveStatus };
-
-/** De quanto em quanto tempo a lista se atualiza sozinha */
-const ATUALIZAR_MS = 3 * 60 * 1000;
 
 const KPIS: { grupo: GrupoStatus; rotulo: string; icone: typeof Clock; cor: string }[] = [
   { grupo: "analise", rotulo: "Em análise", icone: Clock, cor: "text-blue-600" },
@@ -38,40 +35,19 @@ export default function ResultadosPage() {
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>({ tipo: "todos" });
   const [tipo, setTipo] = useState<"todos" | TipoInstalacao>("todos");
-  const ultimaCarga = useRef(0);
+  const [erroAoVivo, setErroAoVivo] = useState(false);
 
   const ids = useMemo(() => (user ? [user.nome, user.login, user.uid, `${user.nome}@viabilidade.com`] : []), [user]);
 
-  /** silencioso = atualização automática, sem o spinner grande */
-  const load = useCallback(async (silencioso = false) => {
-    if (!ids.length) return;
-    bustCacheResultados();
-    if (!silencioso) setLoading(true);
-    try {
-      setResults(await getViabilizacoesUsuario(ids));
-      ultimaCarga.current = Date.now();
-    } catch (e) {
-      console.warn("Não foi possível atualizar Meus Resultados:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [ids]);
-
+  // Ao vivo: o Firebase manda só o que muda (sem recarregar tudo a cada X minutos)
   useEffect(() => {
-    // primeira carga fora do corpo do efeito (evita render em cascata)
-    const t = setTimeout(() => load(), 0);
-    // volta para a aba → atualiza (se a última carga tem mais de 30 s); e a cada 3 min com a aba aberta
-    const aoVoltar = () => { if (document.visibilityState === "visible" && Date.now() - ultimaCarga.current > 30_000) load(true); };
-    const intervalo = setInterval(() => { if (document.visibilityState === "visible") load(true); }, ATUALIZAR_MS);
-    document.addEventListener("visibilitychange", aoVoltar);
-    window.addEventListener("focus", aoVoltar);
-    return () => {
-      clearTimeout(t);
-      clearInterval(intervalo);
-      document.removeEventListener("visibilitychange", aoVoltar);
-      window.removeEventListener("focus", aoVoltar);
-    };
-  }, [load]);
+    if (!user) return;
+    const parar = ouvirMeusPedidos(ids, user.uid,
+      (l) => { setResults(l); setLoading(false); setErroAoVivo(false); },
+      (e) => { console.warn("Meus Resultados ao vivo falhou:", e); setErroAoVivo(true); setLoading(false); });
+    return parar;
+  }, [ids, user]);
+  const load = () => {};
 
   // Resultado final com mais de 7 dias sai da lista (fica no histórico) — só exibição, nada é gravado
   const visiveis = useMemo(() => results.filter((r) => !resultadoVencido(r)), [results]);
@@ -111,9 +87,11 @@ export default function ResultadosPage() {
           <h1 className="text-2xl font-bold text-gray-900">Meus resultados</h1>
           <p className="mt-1 text-sm text-gray-500">Pedidos de <strong>{user?.nome}</strong></p>
         </div>
-        <button type="button" onClick={() => load()} disabled={loading} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-        </button>
+        {erroAoVivo ? (
+          <button type="button" onClick={() => window.location.reload()} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">Sem conexão · recarregar</button>
+        ) : (
+          <span className="flex items-center gap-1.5 text-xs text-green-700"><Radio className="h-3.5 w-3.5" /> Ao vivo</span>
+        )}
       </div>
 
       {precisaDeVoce > 0 && (
@@ -196,7 +174,7 @@ export default function ResultadosPage() {
             <section key={b.titulo} className="space-y-3">
               <h2 className={`px-1 text-xs font-bold uppercase tracking-wide ${b.cor}`}>{b.titulo} ({b.itens.length})</h2>
               {b.itens.map((r) => (
-                <ResultadoCard key={r.id} r={r} usuario={user?.nome ?? "Usuário"} onRefresh={() => load(true)} />
+                <ResultadoCard key={r.id} r={r} usuario={user?.nome ?? "Usuário"} onRefresh={load} />
               ))}
             </section>
           ))}
@@ -204,7 +182,7 @@ export default function ResultadosPage() {
       ) : (
         <div className="space-y-3">
           {lista.map((r) => (
-            <ResultadoCard key={r.id} r={r} usuario={user?.nome ?? "Usuário"} onRefresh={() => load(true)} />
+            <ResultadoCard key={r.id} r={r} usuario={user?.nome ?? "Usuário"} onRefresh={load} />
           ))}
         </div>
       )}

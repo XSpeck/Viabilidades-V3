@@ -45,7 +45,15 @@ export async function signOut(): Promise<void> {
   _userCache.clear();
   // Os caches de tela (fila, resultados, CTOs…) ficam na sessão: limpa para o próximo login
   try { sessionStorage.clear(); } catch {}
+  try { (await import("./colecaoVersionada")).limparColecoesLocais(); } catch {}
   await firebaseSignOut(auth);
+  // apaga a cópia local do banco (computador compartilhado); quem chama recarrega a página
+  try {
+    const { db } = await import("./firebase");
+    const { terminate, clearIndexedDbPersistence } = await import("firebase/firestore");
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch {}
 }
 
 export function onAuthChange(callback: (user: User | null) => void) {
