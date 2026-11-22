@@ -185,6 +185,42 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
     return { itens: [...vistos.values()], cabos: cabosRede };
   }, [rede]);
+  /** Porta PON de uma OLT (mesma regra da árvore): "olt2_dc|6|0" */
+  const chavePon = (oltNome: string, porta: string) =>
+    portaPonDaRota({ elementos: [{ nome: oltNome, tipo: "olt", porta }] } as unknown as RotaOptica).chave;
+  const portaDoDio = (porta?: string) => { const m = porta?.match(/Porta\s*0*(\d+)/i); return m ? +m[1] : 0; };
+
+  /**
+   * Estações da rede (OLT + DIO no começo de uma rota principal) e as portas PON já usadas.
+   * Sub-rotas ficam de fora: elas herdam a porta da rota-mãe.
+   */
+  const estacoesRede = useMemo(() => {
+    const m = new Map<string, { chave: string; olt: ElementoRota; dio: ElementoRota; rota: RotaOptica; portas: string[] }>();
+    for (const r of rede) {
+      if (r.pai) continue;
+      const [o, d] = r.elementos;
+      if (o?.tipo !== "olt" || d?.tipo !== "dio" || o.lat === undefined) continue;
+      const k = `${chaveElemento(o)}|${chaveElemento(d)}`;
+      const e = m.get(k) ?? { chave: k, olt: o, dio: d, rota: r, portas: [] };
+      const pon = portaPonDaRota(r).rotulo.match(/PON\s+(\S+)/)?.[1];
+      if (pon) e.portas.push(pon);
+      m.set(k, e);
+    }
+    return [...m.values()].map((e) => ({ ...e, portas: [...new Set(e.portas)].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })) }));
+  }, [rede]);
+  /** Rota principal que já usa cada porta PON / cada porta de DIO */
+  const usoPortas = useMemo(() => {
+    const pon = new Map<string, string>();
+    const dio = new Map<string, string>();
+    for (const r of rede) {
+      if (r.pai) continue;
+      const [o, d] = r.elementos;
+      if (o?.tipo === "olt" && o.porta) pon.set(chavePon(o.nome, o.porta), r.nome);
+      if (d?.tipo === "dio" && portaDoDio(d.porta)) dio.set(`${chaveElemento(d)}|${portaDoDio(d.porta)}`, r.nome);
+    }
+    return { pon, dio };
+  }, [rede]);
+
   /** Próximo código numérico livre (considera a rede toda e esta rota). Séries de 6 dígitos a partir de 100001. */
   function proximoCodigo(ls: Linha[], extra = 0): string {
     const usados = [
@@ -660,6 +696,30 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       return c;
     });
     renomearDepois.forEach(([a0, b0]) => renomearCabos(a0, b0));
+    // Rota nova: o nome segue a porta escolhida ("0/6/2 OLT2_DC"), como as outras da rede
+    const lp = p.oltPorta !== undefined ? lerPortaOlt(p.oltPorta) : null;
+    if (lp && !inicial?.id && (!nome.trim() || /^\d+\/\d+\/\d+(\s|$)/.test(nome.trim()))) {
+      setNome(`0/${lp.placa}/${lp.porta} ${p.oltNome ?? linhas[0]?.nome ?? ""}`.trim());
+    }
+  }
+
+  /**
+   * Outra porta PON numa estação que já existe: rota NOVA (não sub-rota) com a mesma OLT e o
+   * mesmo DIO (mesmo código), portas em branco para escolher no cartão Estação.
+   */
+  function montarNaEstacao(est: (typeof estacoesRede)[number]) {
+    const r = est.rota;
+    const copia = (e: ElementoRota): Linha => ({ ...paraLinha(e), porta: "", dist_auto: false, cabo_saida: "", fibra_saida: "", potencia_entrada: "" });
+    mudar(() => [
+      { ...copia(est.olt), potencia_saida: s(est.olt.potencia_saida) },
+      { ...copia(est.dio), potencia_saida: "" },
+    ]);
+    if (r.calculo_potencia) setCalc(r.calculo_potencia);
+    setPai(undefined);
+    setTronco(0);
+    setSel(0);
+    setFerramenta("ceo");
+    setAviso(`Estação ${est.olt.nome} carregada (mesma OLT e mesmo ${est.dio.nome}). Escolha a porta PON e a porta do DIO no cartão (as amarelas já estão em uso) e clique na primeira caixa fora da estação.`);
   }
 
   /** Clique numa caixa da rede existente */
@@ -675,6 +735,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const ja = linhas.findIndex((l) => chaveLinha(l) === chaveElemento(e));
     if (ja >= 0) { setSel(ja); return; }
     if (ferramenta === "poste") { clicarMapa(e.lat!, e.lon!); return; }
+    if (!linhas.length && (e.tipo === "olt" || e.tipo === "dio")) {
+      // OLT ou DIO: outra porta da estação (sub-rota daqui travaria a porta da rota-mãe)
+      const est = estacoesRede.find((x) => x.chave.split("|").includes(chaveElemento(e)));
+      if (est) { montarNaEstacao(est); return; }
+    }
     if (!linhas.length) {
       // Rota vazia: começa copiando o caminho da rota existente da OLT até esta caixa (vira um ramo na árvore)
       const r = it.rota;
@@ -698,9 +763,36 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const ant = linhas[linhas.length - 1];
     const base: ElementoRota = { ...e, cabo_entrada: undefined, fibra_entrada: undefined, cabo_saida: undefined, fibra_saida: undefined, distancia_m: undefined, potencia_entrada: undefined, potencia_saida: undefined };
     const novoIndice = linhas.length;
-    mudar((ls) => [...ls, { ...paraLinha(base), vertices: pendentes, dist_auto: true, cabo_entrada: herdaCabo(ant) ? ant.cabo_entrada : "", fibra_entrada: herdaCabo(ant) ? ant.fibra_entrada : "" }]);
+    // Essas duas caixas já são ligadas por um cabo noutra rota: segue nele (e pelo mesmo traçado)
+    const dioAnt = ant?.tipo === "dio" ? portaDoDio(ant.porta) : 0;
+    const viaCabo = herdaCabo(ant) ? null : caboEntre(chaveLinha(ant), chaveElemento(e));
+    const caboNovo = herdaCabo(ant) ? ant.cabo_entrada : viaCabo?.cabo ?? "";
+    // depois do DIO, a fibra do cabo é a porta do DIO
+    const fibraNova = herdaCabo(ant) ? ant.fibra_entrada : dioAnt ? String(dioAnt) : "";
+    mudar((ls) => [...ls, {
+      ...paraLinha(base),
+      vertices: pendentes.length ? pendentes : viaCabo?.vertices ?? [],
+      mesmoPoste: !pendentes.length && !!viaCabo?.mesmoPoste,
+      dist_auto: true,
+      cabo_entrada: caboNovo,
+      fibra_entrada: fibraNova,
+    }]);
     setPendentes([]);
     setSel(novoIndice);
+    if (viaCabo) setAviso(`${e.nome}: seguindo pelo cabo que já liga as duas caixas (${curtoNome(viaCabo.cabo)}). Confira a fibra no painel.`);
+  }
+
+  /** Cabo (e postes) que já liga a caixa a → b em alguma rota da rede */
+  function caboEntre(a: string, b: string): { cabo: string; vertices: Ponto[]; mesmoPoste: boolean } | null {
+    for (const r of rede) {
+      for (let j = 1; j < r.elementos.length; j++) {
+        const el = r.elementos[j];
+        if (!el.cabo_entrada?.trim() || chaveElemento(r.elementos[j - 1]) !== a || chaveElemento(el) !== b) continue;
+        const t = r.origem !== "geogrid" ? r.trechos.find((x) => x.ate === j) : undefined;
+        return { cabo: el.cabo_entrada.trim(), vertices: t ? t.pontos.slice(1, -1) : [], mesmoPoste: !!el.mesmo_poste };
+      }
+    }
+    return null;
   }
 
   /**
@@ -891,7 +983,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (l.tipo === "olt" && i === 0 && !lerPortaOlt(l.porta)) pendencias.push({ i, msg: `${nome}: escolha a placa e a porta PON` });
     if (l.tipo === "dio" && !dios.some((d) => d.id === l.equipamento_id)) pendencias.push({ i, msg: `${nome}: escolha o DIO do cadastro` });
     // fibra já usada por OUTRA porta PON no mesmo cabo (mesma porta pode dividir a fibra no tronco)
-    if (i > 0 && l.cabo_entrada.trim() && n(l.fibra_entrada)) {
+    // (o cordão OLT → DIO não entra: cada porta PON tem o seu, mesmo com o mesmo nome)
+    const cordaoDaEstacao = l.tipo === "dio" && linhas[i - 1]?.tipo === "olt";
+    if (i > 0 && !cordaoDaEstacao && l.cabo_entrada.trim() && n(l.fibra_entrada)) {
       const conflito = usoOutraPorta(l.cabo_entrada, n(l.fibra_entrada)!);
       if (conflito) pendencias.push({ i, msg: `${nome}: a fibra F${l.fibra_entrada} do cabo "${curtoNome(l.cabo_entrada)}" já é usada pela ${conflito.pon} (rota ${conflito.rota})` });
     }
@@ -947,6 +1041,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         destino: linhas[2] ? linhas[2].nome : undefined,
       }
     : null;
+  /** Cartão Estação: qual rota já usa cada porta (PON da OLT e porta do DIO) */
+  const ponEmUso = (placa: number, porta: number) => (temEstacao ? usoPortas.pon.get(chavePon(linhas[0].nome, textoPortaOlt(placa, porta))) : undefined);
+  const dioEmUso = (porta: number) => (temEstacao ? usoPortas.dio.get(`${chaveLinha(linhas[1])}|${porta}`) : undefined);
 
   /** Metragem desde a OLT em cada elemento (soma dos trechos, já com as reservas) — é a que o OTDR mostra */
   const acumulado = linhas.reduce<number[]>((acc, l, i) => [...acc, (acc[i - 1] ?? 0) + (i > 0 ? n(l.distancia_m) ?? 0 : 0)], []);
@@ -1796,7 +1893,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const depoisDe = tipoDaFerramenta(ferramenta) && sel !== null && sel < linhas.length - 1 ? linhas[sel] : null;
   const dica =
     ferramenta === "estacao"
-      ? "Clique no mapa onde fica a estação: entram a OLT, o DIO e o cordão entre eles."
+      ? estacoesRede.length
+        ? "Clique no mapa onde fica a estação nova, ou na estação que já existe para usar outra porta PON."
+        : "Clique no mapa onde fica a estação: entram a OLT, o DIO e o cordão entre eles."
       : depoisDe
         ? `O novo ${nomeFerramenta} entra logo depois de "${depoisDe.nome}" (selecionado).`
         : ferramenta === "selecionar"
@@ -1982,6 +2081,34 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   <IconeElemento tipo="olt" tamanho={20} /> Montar estação (OLT + DIO)
                 </button>
                 <p className="mt-1 text-[11px] text-slate-500">depois clique no mapa onde ela fica</p>
+                {estacoesRede.length > 0 && (
+                  <div className="mt-4 w-full max-w-[300px] text-left">
+                    <p className="mb-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">ou outra porta numa estação que já existe</p>
+                    <ul className="space-y-1.5">
+                      {estacoesRede.map((est) => (
+                        <li key={est.chave}>
+                          <button
+                            type="button"
+                            onClick={() => montarNaEstacao(est)}
+                            className="group flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100"><IconeElemento tipo="olt" tamanho={22} /></span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-slate-800">{est.olt.nome}</span>
+                              <span className="block truncate text-[11px] text-slate-500">{est.dio.nome}</span>
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {est.portas.map((pt) => (
+                                  <span key={pt} className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800">PON {pt} em uso</span>
+                                ))}
+                              </span>
+                            </span>
+                            <span className="shrink-0 rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white opacity-90 group-hover:opacity-100">+ porta</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {pontosRede.length > 0 && (
                   <p className="mt-2 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 max-w-[280px]">
                     <b>Ramo de uma rota existente?</b> Clique na caixa da rede (ícones claros no mapa) de onde ele sai: o caminho desde a OLT é
@@ -2001,6 +2128,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 <div className={`mb-3 ${sel === 0 || sel === 1 ? "ring-2 ring-indigo-300 rounded-2xl" : ""}`}>
                   <EstacaoOltDio
                     dados={estacao}
+                    ponEmUso={ponEmUso}
+                    dioEmUso={dioEmUso}
                     olts={olts}
                     dios={dios}
                     tiposCabo={tiposDeCabo}

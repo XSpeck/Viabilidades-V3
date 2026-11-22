@@ -32,6 +32,10 @@ interface Props {
   onMudar: (p: Partial<DadosEstacao>) => void;
   /** Mostra no mapa o cabo que sai do DIO */
   onVerSaida?: () => void;
+  /** Nome da rota que já usa esta porta PON (placa/porta), se alguma */
+  ponEmUso?: (placa: number, porta: number) => string | undefined;
+  /** Nome da rota que já usa esta porta do DIO, se alguma */
+  dioEmUso?: (porta: number) => string | undefined;
 }
 
 const pad2 = (v: number) => String(v).padStart(2, "0");
@@ -39,7 +43,7 @@ const campo = "w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-
 const rot = "block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5";
 
 /** Estação (POP): OLT → cordão → DIO → cabo para fora, desenhada como um rack clicável. */
-export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, onVerSaida }: Props) {
+export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, onVerSaida, ponEmUso, dioEmUso }: Props) {
   const olt = olts.find((o) => o.id === dados.oltEquip);
   const dio = dios.find((d) => d.id === dados.dioEquip);
   const tipoSaida = tiposCabo.find((t) => t.id === dados.saidaTipo);
@@ -58,6 +62,14 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
   const portaDio = md ? +md[1] : n(dados.saidaFibra) ?? 0;
 
   const setPon = (pl: number, po: number) => onMudar({ oltPorta: textoPortaOlt(pl, po) });
+  /** Portas já usadas por outras rotas (amarelas) e o aviso quando a escolhida é uma delas */
+  const placaVista = placa ?? listaPlacas[0] ?? 0;
+  const usoPon = (po: number) => ponEmUso?.(placaVista, po);
+  const usoDio = (p: number) => dioEmUso?.(p);
+  const conflitoPon = placa !== null && pon !== null ? ponEmUso?.(placa, pon) : undefined;
+  const conflitoDio = portaDio ? dioEmUso?.(portaDio) : undefined;
+  const placasComUso = new Set(ponEmUso ? listaPlacas.filter((pl) => listaPortas.some((po) => ponEmUso(pl, po))) : []);
+  const temUso = !!(ponEmUso && placasComUso.size) || !!(dioEmUso && Array.from({ length: portasDio }, (_, k) => k + 1).some((p) => dioEmUso(p)));
   const setDio = (p: number) => onMudar({ dioPorta: `Porta ${pad2(p)}`, saidaFibra: String(p) });
 
   // ---------- Desenho ----------
@@ -112,6 +124,13 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
         </div>
         <span className="ml-auto text-[10px] text-slate-300">clique nas portas</span>
       </div>
+      {temUso && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-white px-3 py-1.5 text-[10px] text-slate-600">
+          <span className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm border border-slate-500 bg-slate-800" /> livre</span>
+          <span className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-600 bg-amber-400" /> em uso por outra rota</span>
+          <span className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm border border-green-800 bg-green-600" /> esta rota</span>
+        </div>
+      )}
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Rack da estação: OLT, cordão e DIO">
         <defs>
@@ -147,6 +166,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
               <title>{`Placa PL ${pad2(pl)}`}</title>
               <rect x={x} y={y} width={17} height={14} rx={2.5} fill={ativo ? "#4f46e5" : "#1e293b"} stroke={ativo ? "#c7d2fe" : "#475569"} />
               <text x={x + 8.5} y={y + 10} fontSize={7.5} textAnchor="middle" fill={ativo ? "#fff" : "#94a3b8"} fontWeight={700}>{pl}</text>
+              {placasComUso.has(pl) && <circle cx={x + 15} cy={y + 2} r={2.6} fill="#fbbf24" stroke="#0f172a" strokeWidth={0.6} />}
             </g>
           );
         })}
@@ -156,11 +176,17 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
         {listaPortas.map((po, k) => {
           const { x, y } = posPon(k);
           const ativo = po === pon && placa !== null;
+          const uso = usoPon(po);
           return (
-            <g key={`po${po}`} className="cursor-pointer" onClick={() => setPon(placa ?? listaPlacas[0] ?? 0, po)}>
-              <title>{`PON ${placa ?? listaPlacas[0] ?? 0}/${po}`}</title>
-              <rect x={x - 7.5} y={y - 6.5} width={15} height={13} rx={2} fill={ativo ? "#16a34a" : "#0b1220"} stroke={ativo ? "#bbf7d0" : "#334155"} />
-              <text x={x} y={y + 3} fontSize={7} textAnchor="middle" fill={ativo ? "#fff" : "#64748b"} fontWeight={700}>{po}</text>
+            <g key={`po${po}`} className="cursor-pointer" onClick={() => setPon(placaVista, po)}>
+              <title>{`PON 0/${placaVista}/${po}${uso ? ` · em uso: ${uso}` : " · livre"}`}</title>
+              <rect
+                x={x - 7.5} y={y - 6.5} width={15} height={13} rx={2}
+                fill={ativo ? (uso ? "#dc2626" : "#16a34a") : uso ? "#fbbf24" : "#0b1220"}
+                stroke={ativo ? "#fff" : uso ? "#b45309" : "#334155"}
+                strokeWidth={ativo ? 1.4 : 1}
+              />
+              <text x={x} y={y + 3} fontSize={7} textAnchor="middle" fill={ativo ? "#fff" : uso ? "#451a03" : "#64748b"} fontWeight={700}>{po}</text>
             </g>
           );
         })}
@@ -178,10 +204,16 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
           const p = k + 1;
           const { x, y } = posDio(p);
           const ativo = p === portaDio;
+          const uso = usoDio(p);
           return (
             <g key={`d${p}`} className="cursor-pointer" onClick={() => setDio(p)}>
-              <title>{`Porta ${p} do DIO = fibra ${p} do cabo de saída`}</title>
-              <rect x={x - 5} y={y - 5} width={10} height={10} rx={1.5} fill={ativo ? "#16a34a" : "#e2e8f0"} stroke={ativo ? "#052e16" : "#475569"} strokeWidth={0.8} />
+              <title>{`Porta ${p} do DIO = fibra ${p} do cabo de saída${uso ? ` · em uso: ${uso}` : ""}`}</title>
+              <rect
+                x={x - 5} y={y - 5} width={10} height={10} rx={1.5}
+                fill={ativo ? (uso ? "#dc2626" : "#16a34a") : uso ? "#fbbf24" : "#e2e8f0"}
+                stroke={ativo ? "#052e16" : uso ? "#b45309" : "#475569"}
+                strokeWidth={0.8}
+              />
             </g>
           );
         })}
@@ -220,6 +252,13 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
         </text>
         <text x={W - 8} y={ySaida + 28} fontSize={8} textAnchor="end" fill="#64748b">para fora ➜</text>
       </svg>
+
+      {(conflitoPon || conflitoDio) && (
+        <div className="mx-3 mt-1 space-y-0.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-800">
+          {conflitoPon && <p>A PON 0/{placa}/{pon} já é da rota <b>{conflitoPon}</b>. Para outra porta, escolha uma livre.</p>}
+          {conflitoDio && <p>A porta {portaDio} do DIO já é da rota <b>{conflitoDio}</b>.</p>}
+        </div>
+      )}
 
       {/* Campos */}
       <div className="p-3 space-y-2.5 border-t border-slate-200">
