@@ -1297,11 +1297,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }
     const g0 = garantirCodigos();
     const tc = g0.tc;
-    // cordão da estação: o nome acompanha a OLT e o DIO de agora ("Cordão OLT2_DC → DIO 72 Portas")
+    // cordão da estação: o nome acompanha a porta PON, a OLT e o DIO de agora ("Cordão 0/6/2 OLT2_DC → DIO 05")
     const lsCordao = g0.ls.map((l, i) => {
       const ant = g0.ls[i - 1];
       if (l.tipo !== "dio" || ant?.tipo !== "olt" || !/^Cordão /i.test(l.cabo_entrada)) return l;
-      const nomeC = `Cordão ${ant.nome.split(" / ")[0]} → ${l.nome}`;
+      // cada porta PON tem o seu cordão físico: a PON entra no nome ("Cordão 0/6/2 OLT2_DC → DIO 05")
+      const lp = lerPortaOlt(ant.porta);
+      const nomeC = `Cordão ${lp ? `0/${lp.placa}/${lp.porta} ` : ""}${ant.nome.split(" / ")[0]} → ${l.nome}`;
       if (nomeC === l.cabo_entrada) return l;
       const t0 = tc[chaveCabo(l.cabo_entrada)];
       if (t0 && !tc[chaveCabo(nomeC)]) tc[chaveCabo(nomeC)] = t0;
