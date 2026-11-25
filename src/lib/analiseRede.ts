@@ -105,7 +105,7 @@ export function analisarRede(rotas: RotaOptica[], caixasCad: CaixaRede[], predio
       const tipo = pr ? "predio" : tipoVisual(e);
       const c = caixas.get(k) ?? {
         chave: k, nome: pr ? pr.nome : e.nome, tipo, lat: e.lat, lon: e.lon, rotas: [], pons: [], metrosOlt: 0, alertas: [],
-        metros: [], pons0: new Set<string>(), usaSplitter: false, soPassa: true, chavesEl: new Set<string>(), cdois: pr?.cdois,
+        metros: [], pons0: new Set<string>(), usaSplitter: false, soPassa: true, chavesEl: new Set<string>(), cdois: pr?.cdois, atende: false,
       };
       if (!c.rotas.includes(r)) c.rotas.push(r);
       c.metros.push(acc);
