@@ -825,10 +825,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     const novoIndice = linhas.length;
     // Essas duas caixas já são ligadas por um cabo noutra rota: segue nele (e pelo mesmo traçado)
     const dioAnt = ant?.tipo === "dio" ? portaDoDio(ant.porta) : 0;
-    const viaCabo = herdaCabo(ant) ? null : caboEntre(chaveLinha(ant), chaveElemento(e));
-    const caboNovo = herdaCabo(ant) ? ant.cabo_entrada : viaCabo?.cabo ?? "";
-    // depois do DIO, a fibra do cabo é a porta do DIO
-    const fibraNova = herdaCabo(ant) ? ant.fibra_entrada : dioAnt ? String(dioAnt) : "";
+    // O cabo que já liga as duas caixas manda (ex.: da CEO sai um 4FO até a HUB, outro cabo do que chega na CEO)
+    const viaCabo = caboEntre(chaveLinha(ant), chaveElemento(e));
+    const herda = herdaCabo(ant) && (!viaCabo || chaveCabo(viaCabo.cabo) === chaveCabo(ant.cabo_entrada));
+    const caboNovo = herda ? ant.cabo_entrada : viaCabo?.cabo ?? "";
+    // depois do DIO, a fibra do cabo é a porta do DIO; num cabo que já existe, a próxima fibra livre dele
+    const fibraNova = herda ? ant.fibra_entrada : dioAnt ? String(dioAnt) : viaCabo ? String(fibraLivre(viaCabo.cabo) ?? "") : "";
     mudar((ls) => [...ls, {
       ...paraLinha(base),
       vertices: pendentes.length ? pendentes : viaCabo?.vertices ?? [],
@@ -839,7 +841,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     }]);
     setPendentes([]);
     setSel(novoIndice);
-    if (viaCabo) setAviso(`${e.nome}: seguindo pelo cabo que já liga as duas caixas (${curtoNome(viaCabo.cabo)}). Confira a fibra no painel.`);
+    if (viaCabo && !herda) setAviso(`${e.nome}: seguindo pelo cabo que já liga as duas caixas (${curtoNome(viaCabo.cabo)}). Confira a fibra no painel.`);
   }
 
   // ---------- Caixas e cabos compartilhados (uma informação, um dono) ----------
@@ -918,6 +920,17 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     mudar((ls) => ls.map((x, j) => ((codAntigo ? codigoDoCabo(x.cabo_entrada) === codAntigo : j === i) ? { ...x, cabo_entrada: nomeNovo } : x)));
     setConfirmaSeparar(null);
     setAviso(`Cabo separado: nesta rota ele agora é o ${codNovo}. Pode trocar nome e tipo sem mexer nas outras rotas.`);
+  }
+
+  /** Menor fibra deste cabo que nenhuma rota (nem esta) usa, dentro da capacidade dele */
+  function fibraLivre(cabo: string): number | undefined {
+    const k = chaveCabo(cabo);
+    const usadas = new Set<number>();
+    for (const r of rede) r.elementos.forEach((x) => { if (x.cabo_entrada && x.fibra_entrada && chaveCabo(x.cabo_entrada) === k) usadas.add(x.fibra_entrada); });
+    linhas.forEach((x) => { const f = n(x.fibra_entrada); if (x.cabo_entrada.trim() && f && chaveCabo(x.cabo_entrada) === k) usadas.add(f); });
+    const cap = tipoDoCabo(cabo)?.capacidade ?? Math.max(12, ...usadas);
+    for (let f = 1; f <= cap; f++) if (!usadas.has(f)) return f;
+    return undefined;
   }
 
   /** Cabo (e postes) que já liga a caixa a → b em alguma rota da rede */
