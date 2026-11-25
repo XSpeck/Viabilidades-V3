@@ -547,6 +547,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 onFechar={() => fecharJanela(j.id)}
                 onAbrirRota={onAbrirRota}
                 semMoldura
+                rotas={rotas}
+                onRotasMudaram={onRotasMudaram}
               />
             </Janela>
           );

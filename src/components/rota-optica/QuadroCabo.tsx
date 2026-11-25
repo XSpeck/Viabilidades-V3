@@ -15,6 +15,8 @@ import {
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { codigoDoCabo } from "@/lib/cabosRede";
 import EtiquetaCabo from "./EtiquetaCabo";
+import TrocaFibra from "./TrocaFibra";
+import type { RotaOptica } from "@/lib/rotaOptica";
 
 interface Props {
   chave: string;
@@ -34,16 +36,23 @@ interface Props {
   semMoldura?: boolean;
   /** Fibra clicada: a árvore mostra o caminho dela */
   onFibra?: (n: number) => void;
+  /** Todas as rotas montadas: liga o "Trocar fibra" (várias rotas de uma vez) */
+  rotas?: RotaOptica[];
+  /** As rotas foram gravadas (recarregar) */
+  onRotasMudaram?: () => void;
 }
 
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram }: Props) {
   /** Fibra escolhida (clique): destacada aqui e na árvore */
   const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
   /** Fibras com as sub-rotas abertas (por padrão ficam recolhidas embaixo da rota tronco) */
   const [subAbertas, setSubAbertas] = useState<Set<number>>(new Set());
+  /** Fibra sendo trocada (painel "Trocar fibra") e o resumo da última troca */
+  const [trocando, setTrocando] = useState<number | null>(null);
+  const [feito, setFeito] = useState<string | null>(null);
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
   const [editando, setEditando] = useState(false);
@@ -73,7 +82,9 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
 
   /** Em uso ou livre: sempre pelas rotas (o que vai em cada fibra se define nas rotas e nas caixas) */
   function statusDe(n: number): StatusFibra {
-    return (uso.get(n)?.length ?? 0) > 0 ? "uso" : "livre";
+    if ((uso.get(n)?.length ?? 0) > 0) return "uso";
+    const an = cabo?.fibras.find((f) => f.numero === n)?.status;
+    return an === "rompida" || an === "reservada" ? an : "livre";
   }
 
   const contagem = fibras.reduce(
@@ -90,7 +101,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
         nome,
         capacidade,
         tipo_id: tipoId || undefined,
-        fibras: [],
+        fibras: cabo?.fibras ?? [],
         obs,
         atualizado_por: usuario,
       });
@@ -262,6 +273,38 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                             </span>
                             <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${CHIP[st]}`}>{STATUS_FIBRA_LABEL[st]}</span>
                           </div>
+                          {ativa && st === "uso" && rotas && trocando !== n && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setTrocando(n); setFeito(null); }}
+                              className="mt-1 ml-[46px] rounded-md border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                              title="Passar esta fibra para outra em várias rotas de uma vez"
+                            >
+                              ⇄ Trocar fibra
+                            </button>
+                          )}
+                          {trocando === n && rotas && (
+                            <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                              <TrocaFibra
+                                rotas={rotas}
+                                caboChave={chave}
+                                caboNome={nome}
+                                cabo={cabo}
+                                velha={n}
+                                capacidade={cap}
+                                porTubo={porTubo}
+                                uso={uso}
+                                usuario={usuario}
+                                onCancelar={() => setTrocando(null)}
+                                onFeito={(resumo, caboSalvo) => {
+                                  setTrocando(null);
+                                  setFeito(resumo);
+                                  if (caboSalvo) onSalva(caboSalvo);
+                                  onRotasMudaram?.();
+                                }}
+                              />
+                            </div>
+                          )}
                           {usos.length > 0 && (
                             <div className="mt-1 ml-[46px] space-y-0.5">
                               {[...usos.filter((u) => !u.herdado), ...(subAbertas.has(n) ? usos.filter((u) => u.herdado) : [])].map((u) => (
@@ -301,6 +344,12 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             );
           })}
           {nenhumaVisivel && <p className="py-3 text-center text-xs text-gray-400">Nenhuma fibra ocupada neste cabo.</p>}
+          {feito && (
+            <p className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900">
+              ✓ {feito}
+              <button type="button" onClick={() => setFeito(null)} className="ml-1 text-emerald-700 underline">ok</button>
+            </p>
+          )}
           {soOcupadas && nTubos > 1 && (() => {
             const vazios = tubos.filter((l) => !l.some(visivel)).length;
             return vazios > 0 ? (
