@@ -182,7 +182,7 @@ export default function TrocaFibra({ rotas, caboChave, caboNome, cabo, velha, ca
           <div className="mt-1">
             <button type="button" onClick={() => setVerHerdadas((v) => !v)} className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 hover:text-indigo-700" aria-expanded={verHerdadas}>
               <span className={`inline-block transition-transform ${verHerdadas ? "rotate-90" : ""}`}>▸</span>
-              {herdadas.length} sub-rota{herdadas.length !== 1 ? "s" : ""} vão junto com a rota-mãe
+              {herdadas.length} sub-rota{herdadas.length !== 1 ? "s vão" : " vai"} junto com a rota-mãe
             </button>
             {verHerdadas && (
               <ul className="ml-4 mt-0.5 text-[10px] text-slate-500">
