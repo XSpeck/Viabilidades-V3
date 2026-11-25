@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
-import { caminhoAte, chaveElemento, dentroDePredio, ehVolta, filhosReais, voltaDe, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore } from "@/lib/arvorePon";
+import { caminhoAte, chaveElemento, dentroDePredio, ehVolta, filhosReais, voltaDe, montarArvoresPon, pernasSplitter, splittersDoNo, type ArvorePon, type NoArvore, juntarArvores } from "@/lib/arvorePon";
 import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
@@ -19,6 +19,7 @@ import DiagramaEmendas from "./DiagramaEmendas";
 import QuadroCabo from "./QuadroCabo";
 import { Janela } from "./Janelas";
 import BuscaRede from "./BuscaRede";
+import SeletorPortas from "./SeletorPortas";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
@@ -43,7 +44,7 @@ interface Props {
 type JanelaArv =
   | { id: string; tipo: "no"; noId: string; x: number; y: number }
   | { id: string; tipo: "cabo"; cabo: string; fibra?: number; x: number; y: number }
-  | { id: string; tipo: "resumo"; x: number; y: number };
+  | { id: string; tipo: "resumo"; x: number; y: number; chave?: string };
 /** Janela ainda sem posição (Omit distribuído pela união). */
 type JanelaNova = JanelaArv extends infer T ? (T extends JanelaArv ? Omit<T, "x" | "y"> : never) : never;
 
@@ -110,7 +111,15 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   }, [rotas]);
   const arvores = useMemo(() => montarArvoresPon(rotasComPredios(rotas, predios), caixas), [rotas, caixas, predios]);
   const usoFibras = useMemo(() => usoDasFibras(rotas), [rotas]);
-  const [chave, setChave] = useState<string | null>(null);
+  /** Portas PON abertas na árvore (uma ou várias, que ramificam a partir da OLT); fica guardado no aparelho */
+  const [chaves, setChavesEstado] = useState<string[]>(() => {
+    try { const v = JSON.parse(localStorage.getItem("arvore_pons") ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  const setChaves = (l: string[]) => {
+    setChavesEstado(l);
+    try { localStorage.setItem("arvore_pons", JSON.stringify(l)); } catch {}
+  };
+  const setChave = (k: string) => setChaves([k]);
   const [selId, setSelId] = useState<string>("0");
   const [cheia, setCheia] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -188,7 +197,14 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
     arraste.current = null;
   }
 
-  const arvore = arvores.find((a) => a.chave === chave) ?? arvores[0];
+  const escolhidas = arvores.filter((a) => chaves.includes(a.chave));
+  const arvoresSel = escolhidas.length ? escolhidas : arvores.slice(0, 1);
+  const chavesSel = arvoresSel.map((a) => a.chave);
+  const multi = arvoresSel.length > 1;
+  // várias portas: uma árvore só, com a OLT em cima e um ramo por porta
+  const arvore = arvoresSel.length ? juntarArvores(arvoresSel) : undefined;
+  /** id do nó na árvore aberta (com várias portas, os ids levam o prefixo da porta) */
+  const idNaArvore = (ch: string, noId: string) => (multi ? `${ch}~${noId}` : noId);
 
   if (!arvore) {
     return (
@@ -214,7 +230,8 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
   function selecionar(n: NoArvore, cx?: number, cy?: number) {
     setSelId(n.id);
     const p = cx !== undefined && cy !== undefined ? { x: cx, y: cy } : pontoNaTela(X(n.profundidade), Y(y.get(n)!));
-    if (n === arvore.raiz) abrirJanela({ id: "resumo", tipo: "resumo" }, p.x, p.y);
+    if (n === arvore!.raiz) abrirJanela({ id: "resumo", tipo: "resumo" }, p.x, p.y);
+    else if (n.pon) abrirJanela({ id: `resumo:${n.pon}`, tipo: "resumo", chave: n.pon }, p.x, p.y);
     else abrirJanela({ id: `no:${n.id}`, tipo: "no", noId: n.id }, p.x, p.y);
   }
   function abrirCabo(n: NoArvore, cx: number, cy: number) {
@@ -246,42 +263,26 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
         rotas={rotas}
         arvores={arvores}
         onRota={(id, ch) => {
-          if (ch && ch !== arvore.chave) { setChave(ch); setSelId("0"); setJanelas([]); }
+          if (ch && !chavesSel.includes(ch)) { setChave(ch); setSelId("0"); setJanelas([]); }
           onAbrirRota(id);
         }}
         onElemento={(ch, noId) => {
-          if (ch !== arvore.chave) { setChave(ch); setJanelas([]); }
-          setSelId(noId);
-          setFoco((f) => ({ id: noId, vez: (f?.vez ?? 0) + 1 }));
-          abrirJanela({ id: `no:${noId}`, tipo: "no", noId }, Math.max(20, window.innerWidth - 480), 120);
+          // porta fora da árvore aberta: abre só ela; dentro: acha o nó (com o prefixo da porta)
+          const id = chavesSel.includes(ch) ? idNaArvore(ch, noId) : noId;
+          if (!chavesSel.includes(ch)) { setChave(ch); setJanelas([]); }
+          setSelId(id);
+          setFoco((f) => ({ id, vez: (f?.vez ?? 0) + 1 }));
+          abrirJanela({ id: `no:${id}`, tipo: "no", noId: id }, Math.max(20, window.innerWidth - 480), 120);
         }}
         onCabo={(nome) => abrirJanela({ id: `cabo:${chaveCabo(nome)}`, tipo: "cabo", cabo: nome }, Math.max(20, window.innerWidth / 2 - 200), 140)}
       />
 
-      {/* Portas PON */}
-      <div className="flex flex-wrap gap-2">
-        {arvores.map((a) => {
-          const ativo = a === arvore;
-          return (
-            <button
-              key={a.chave}
-              type="button"
-              onClick={() => { setChave(a.chave); setSelId("0"); setJanelas([]); }}
-              className={`flex items-center gap-2 text-left rounded-lg border-2 px-3 py-1.5 text-sm leading-tight ${
-                ativo ? "bg-slate-900 border-slate-900 text-white" : "border-slate-300 bg-white text-gray-900 hover:border-slate-500"
-              }`}
-            >
-              <IconeElemento tipo="olt" tamanho={22} />
-              <span>
-                <span className="font-semibold">{a.rotulo}</span>
-                <span className={`block text-xs ${ativo ? "text-slate-300" : "text-gray-500"}`}>
-                  {a.rotas.length} rota{a.rotas.length > 1 ? "s" : ""} · {a.raiz.pontas} ponta{a.raiz.pontas > 1 ? "s" : ""}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Portas PON: uma ou várias (ramificam a partir da OLT) */}
+      <SeletorPortas
+        arvores={arvores}
+        selecionadas={chavesSel}
+        onMudar={(l) => { setChaves(l); setSelId("0"); setJanelas([]); }}
+      />
 
       <section
         className={`bg-white border border-gray-200 overflow-hidden flex flex-col ${
@@ -316,7 +317,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
             onClick={(e) => abrirJanela({ id: "resumo", tipo: "resumo" }, e.clientX, e.clientY + 40)}
             className="ml-2 flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
           >
-            <Info className="w-3.5 h-3.5" /> Resumo da porta
+            <Info className="w-3.5 h-3.5" /> {multi ? "Resumo das portas" : "Resumo da porta"}
           </button>
           <span className="hidden md:inline text-xs text-gray-400 ml-2">Arraste para mover · clique numa caixa ou num cabo para abrir a janela</span>
           <button
@@ -506,16 +507,18 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
       {janelas.map((j) => {
         if (j.tipo === "resumo") {
+          // resumo de uma porta (clicada no ramo dela) ou do que está aberto
+          const alvo = (j.chave && arvores.find((a) => a.chave === j.chave)) || arvore;
           return (
             <Janela
               key={j.id}
               inicial={{ x: j.x, y: j.y }}
-              titulo={arvore.rotulo}
-              subtitulo="Resumo da porta PON"
+              titulo={alvo.rotulo}
+              subtitulo={alvo === arvore && multi ? "Resumo das portas abertas" : "Resumo da porta PON"}
               icone={<IconeElemento tipo="olt" tamanho={22} />}
               onFechar={() => fecharJanela(j.id)}
             >
-              <div className="p-3"><ResumoPon arvore={arvore} onAbrirRota={onAbrirRota} /></div>
+              <div className="p-3"><ResumoPon arvore={alvo} onAbrirRota={onAbrirRota} /></div>
             </Janela>
           );
         }

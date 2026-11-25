@@ -27,6 +27,8 @@ export interface NoArvore {
   pontas: number;
   /** Elementos abaixo deste nó (sem contar ele) */
   abaixo: number;
+  /** Árvore de várias portas: este nó é a porta PON (chave da porta) */
+  pon?: string;
 }
 
 export interface ArvorePon {
@@ -152,6 +154,67 @@ export function montarArvoresPon(rotas: RotaOptica[], caixas: CaixaRede[] = []):
   return [...grupos.entries()]
     .map(([chave, g]) => montar(chave, g.rotulo, g.olt, g.rotas, mapaCaixas))
     .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true }));
+}
+
+/** "PON 0/6/2" a partir do rótulo "OLT2_DC · PON 0/6/2" */
+export function rotuloCurtoPon(a: Pick<ArvorePon, "rotulo" | "olt">): string {
+  return a.rotulo.startsWith(`${a.olt} · `) ? a.rotulo.slice(a.olt.length + 3) : a.rotulo;
+}
+
+/**
+ * Várias portas PON numa árvore só: a OLT em cima e cada porta como um ramo (com várias OLTs, uma raiz
+ * "Seleção" com as OLTs embaixo). Os nós de cada porta ganham o prefixo "<chave da porta>~" no id.
+ */
+export function juntarArvores(arvores: ArvorePon[]): ArvorePon {
+  if (arvores.length === 1) return arvores[0];
+  const nos: NoArvore[] = [];
+  const sintetico = (nome: string, tipo: ElementoRota["tipo"], pai: NoArvore | null, id: string): NoArvore => {
+    const n = criarNo({ nome, tipo }, pai, id, 0);
+    nos.push(n);
+    return n;
+  };
+  const clonar = (n: NoArvore, pai: NoArvore, prefixo: string, desloc: number): NoArvore => {
+    const c: NoArvore = { ...n, id: `${prefixo}${n.id}`, pai, filhos: [], profundidade: n.profundidade + desloc };
+    nos.push(c);
+    c.filhos = n.filhos.map((f) => clonar(f, c, prefixo, desloc));
+    return c;
+  };
+  const olts = [...new Set(arvores.map((a) => a.olt))];
+  const variasOlts = olts.length > 1;
+  const raiz = sintetico(variasOlts ? "Seleção" : olts[0], variasOlts ? "outro" : "olt", null, "0");
+  const raizOlt = new Map<string, NoArvore>();
+  for (const o of olts) {
+    if (!variasOlts) { raizOlt.set(o, raiz); continue; }
+    const n = sintetico(o, "olt", raiz, `olt~${o}`);
+    raiz.filhos.push(n);
+    raizOlt.set(o, n);
+  }
+  for (const a of arvores) {
+    const pai = raizOlt.get(a.olt)!;
+    const p = clonar(a.raiz, pai, `${a.chave}~`, pai.profundidade + 1);
+    p.elemento = { ...a.raiz.elemento, nome: rotuloCurtoPon(a) };
+    p.pon = a.chave;
+    pai.filhos.push(p);
+  }
+  // números dos nós criados aqui: somam os ramos
+  const somar = (n: NoArvore): void => {
+    if (n.pon) return;
+    n.filhos.forEach(somar);
+    n.pontas = n.filhos.reduce((s, f) => s + f.pontas, 0);
+    n.clientes = n.filhos.reduce((s, f) => s + f.clientes, 0);
+    n.abaixo = n.filhos.reduce((s, f) => s + 1 + f.abaixo, 0);
+    n.rotas = [...new Set(n.filhos.flatMap((f) => f.rotas))];
+  };
+  somar(raiz);
+  const rotas = [...new Map(arvores.flatMap((a) => a.rotas).map((r) => [r.id, r])).values()];
+  return {
+    chave: `multi:${arvores.map((a) => a.chave).join(",")}`,
+    rotulo: `${arvores.length} portas PON`,
+    olt: variasOlts ? "várias OLTs" : olts[0],
+    raiz,
+    nos,
+    rotas,
+  };
 }
 
 /** Filhos de verdade de um nó: o nó agrupador de prédio é atravessado (as CDOIs dele contam como filhas). */
