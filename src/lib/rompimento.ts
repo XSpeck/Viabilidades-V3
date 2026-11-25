@@ -3,7 +3,9 @@
 // acha onde fica a distância medida — no traçado do cabo ou dentro da reserva técnica de uma caixa.
 // A metragem de cada trecho já inclui as reservas (15 m por lado em CTO/CEO/CT/HUB, 2 m na CDOI).
 // =====================
-import { CALCULO_PADRAO, distanciaMetros, reservaTecnica, type CalculoPotencia, type RotaOptica } from "./rotaOptica";
+import { CALCULO_PADRAO, distanciaMetros, reservaTecnica, tipoVisual, type CalculoPotencia, type ElementoRota, type RotaOptica } from "./rotaOptica";
+import { chaveElemento } from "./arvorePon";
+import { chaveCabo } from "./cabosRede";
 
 type Ponto = { lat: number; lon: number };
 
@@ -119,4 +121,89 @@ export function localizarRompimento(r: RotaOptica, ref: number, sentido: Sentido
   }
   const frac = tracado ? (dentro - t.resIni) / tracado : 0.5;
   return { ...base, tipo: "tracado", ponto: pontoNoTracado(t.pts, frac) ?? undefined };
+}
+
+// =====================
+// Rompimento clicado no mapa: o cabo mais perto do clique é cortado ali (todas as fibras dele),
+// e tudo que vem depois desse trecho, em todas as rotas que passam por ele, fica sem sinal.
+// =====================
+
+/** Um trecho físico de cabo da rede (cabo + par de caixas), com as rotas que passam nele */
+export interface TrechoRede {
+  chave: string;
+  cabo: string;
+  de: ElementoRota;
+  para: ElementoRota;
+  pts: Ponto[];
+  /** rota e índice do elemento onde o trecho chega nela */
+  usos: { rota: RotaOptica; i: number }[];
+}
+
+export function trechosDaRede(rotas: RotaOptica[]): TrechoRede[] {
+  const m = new Map<string, TrechoRede>();
+  for (const r of rotas) {
+    trechosDaRota(r).forEach((t) => {
+      if (t.pts.length < 2) return;
+      const a = r.elementos[t.i - 1], b = r.elementos[t.i];
+      const cabo = b.cabo_entrada ?? "";
+      const k = `${chaveCabo(cabo || `trecho${t.i}`)}|${[chaveElemento(a), chaveElemento(b)].sort().join("|")}`;
+      const tr = m.get(k) ?? { chave: k, cabo, de: a, para: b, pts: t.pts, usos: [] };
+      if (!tr.usos.some((u) => u.rota.id === r.id && u.i === t.i)) tr.usos.push({ rota: r, i: t.i });
+      m.set(k, tr);
+    });
+  }
+  return [...m.values()];
+}
+
+/** Ponto do traçado mais perto do clique (projeção num plano local, em metros) */
+export function maisPerto(pts: Ponto[], p: Ponto): { ponto: Ponto; metros: number } {
+  const k = Math.cos((p.lat * Math.PI) / 180) * 111320;
+  const xy = (q: Ponto) => ({ x: q.lon * k, y: q.lat * 110540 });
+  const P = xy(p);
+  let melhor = { ponto: pts[0], metros: Infinity };
+  for (let s = 0; s < pts.length - 1; s++) {
+    const A = xy(pts[s]), B = xy(pts[s + 1]);
+    const dx = B.x - A.x, dy = B.y - A.y;
+    const t = Math.max(0, Math.min(1, ((P.x - A.x) * dx + (P.y - A.y) * dy) / (dx * dx + dy * dy || 1)));
+    const X = A.x + t * dx, Y = A.y + t * dy;
+    const d = Math.hypot(P.x - X, P.y - Y);
+    if (d < melhor.metros) melhor = { ponto: { lat: pts[s].lat + t * (pts[s + 1].lat - pts[s].lat), lon: pts[s].lon + t * (pts[s + 1].lon - pts[s].lon) }, metros: d };
+  }
+  return melhor;
+}
+
+/** Trecho de cabo mais perto do clique, até a tolerância (metros) */
+export function trechoNoClique(trechos: TrechoRede[], p: Ponto, tolerancia = 40): { trecho: TrechoRede; ponto: Ponto; metros: number } | null {
+  let melhor: { trecho: TrechoRede; ponto: Ponto; metros: number } | null = null;
+  for (const t of trechos) {
+    const mp = maisPerto(t.pts, p);
+    if (mp.metros <= tolerancia && (!melhor || mp.metros < melhor.metros)) melhor = { trecho: t, ...mp };
+  }
+  return melhor;
+}
+
+/** Caixa de atendimento sem sinal: em quais rotas e portas PON ela atende */
+export interface AfetadaCorte {
+  chave: string;
+  elemento: ElementoRota;
+  rotas: RotaOptica[];
+}
+
+/** CTOs e CDOIs que atendem (não só passagem) depois do corte, em todas as rotas que passam no trecho */
+export function afetadasPeloCorte(trecho: TrechoRede): { caixas: AfetadaCorte[]; rotas: RotaOptica[]; trechos: Set<string> } {
+  const m = new Map<string, AfetadaCorte>();
+  const trechosSem = new Set<string>();
+  for (const { rota, i } of trecho.usos) {
+    for (let j = i; j < rota.elementos.length; j++) {
+      const e = rota.elementos[j];
+      trechosSem.add(`${rota.id}|${j}`);
+      const t = tipoVisual(e);
+      if ((t !== "cto" && t !== "cdoi") || e.passagem) continue;
+      const k = chaveElemento(e);
+      const a = m.get(k) ?? { chave: k, elemento: e, rotas: [] };
+      if (!a.rotas.includes(rota)) a.rotas.push(rota);
+      m.set(k, a);
+    }
+  }
+  return { caixas: [...m.values()], rotas: [...new Set(trecho.usos.map((u) => u.rota))], trechos: trechosSem };
 }

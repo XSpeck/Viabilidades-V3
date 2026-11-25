@@ -13,6 +13,15 @@ import { cortar } from "@/lib/textoCompleto";
 import CertificacaoRota from "./CertificacaoRota";
 import EnviarTecnico from "./EnviarTecnico";
 
+const RompimentoMapa = dynamic(() => import("./RompimentoMapa"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-[420px] items-center justify-center rounded-xl bg-slate-100">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+    </div>
+  ),
+});
+
 const MapaRompimento = dynamic(() => import("./MapaRompimento"), {
   ssr: false,
   loading: () => (
@@ -71,7 +80,26 @@ export default function SimuladorRompimento(props: Props) {
   return (
     <div>
       <AbasOtdr aba={aba} onAba={setAba} />
-      {aba === "rompimento" ? <Rompimento {...props} /> : <CertificacaoRota rotas={props.rotas} usuario={props.usuario} />}
+      {aba === "rompimento" ? <ModosRompimento {...props} /> : <CertificacaoRota rotas={props.rotas} usuario={props.usuario} />}
+    </div>
+  );
+}
+
+/** Rompimento: clicando no lugar no mapa (todas as rotas) ou pela distância do OTDR numa rota */
+function ModosRompimento(props: Props) {
+  const [modo, setModo] = useState<"mapa" | "otdr">(props.inicio ? "otdr" : "mapa");
+  return (
+    <div>
+      <div className="flex justify-center px-3 pt-3">
+        <div className="inline-grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+          {([["mapa", "Clicar no mapa"], ["otdr", "Pela distância do OTDR"]] as const).map(([k, r]) => (
+            <button key={k} type="button" onClick={() => setModo(k)} className={`rounded-lg px-3 py-1.5 ${modo === k ? "bg-white text-red-700 shadow" : "text-slate-500 hover:text-slate-800"}`}>
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
+      {modo === "mapa" ? <RompimentoMapa rotas={props.rotas} caixas={props.caixas} onAbrirRota={props.onAbrirRota} /> : <Rompimento {...props} />}
     </div>
   );
 }
