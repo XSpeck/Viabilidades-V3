@@ -199,19 +199,29 @@ export async function getWalkingRoute(
   endLon: number,
   straightLineM: number
 ): Promise<RouteResult> {
+  // O servidor de demonstração do OSRM só tem o perfil de CARRO (ignora o "foot": respeita contramão);
+  // o routing.openstreetmap.de tem o perfil a pé de verdade. O antigo fica só de reserva.
+  const coords = `${startLon},${startLat};${endLon},${endLat}`;
+  const servidores = [
+    { nome: "rota a pé (openstreetmap.de)", url: `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${coords}?overview=full&geometries=geojson` },
+    { nome: "OSRM demo (perfil de carro)", url: `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson` },
+  ];
+  const falhas: string[] = [];
   try {
-    const url =
-      `https://router.project-osrm.org/route/v1/foot/` +
-      `${startLon},${startLat};${endLon},${endLat}` +
-      `?overview=full&geometries=geojson`;
-
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`OSRM retornou ${res.status}`);
-
-    const data = await res.json();
-    if (data.code !== "Ok" || !data.routes?.length) throw new Error("OSRM sem rota");
-
-    const route = data.routes[0];
+    let route: { distance: number; duration: number; geometry: { coordinates: [number, number][] } } | undefined;
+    for (const sv of servidores) {
+      try {
+        const res = await fetch(sv.url, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(`retornou ${res.status}`);
+        const data = await res.json();
+        if (data.code !== "Ok" || !data.routes?.length) throw new Error("sem rota");
+        route = data.routes[0];
+        break;
+      } catch (e) {
+        falhas.push(`${sv.nome}: ${e instanceof Error ? e.message : "timeout"}`);
+      }
+    }
+    if (!route) throw new Error(falhas.join(" · "));
     const distance: number = route.distance;
 
     // Verificação de sanidade: se rota > 5x linha reta, provável erro de dado

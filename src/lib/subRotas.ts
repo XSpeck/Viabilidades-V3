@@ -199,3 +199,28 @@ export function candidatasSubRota(todas: RotaOptica[], chaveCabo: (c: string) =>
   }
   return saida;
 }
+
+/**
+ * De quais portas uma sub-rota pode sair desta caixa. Numa HUB com splitters de várias portas
+ * (ex.: 0/6/2 e 0/2/15), cada rota onde ela usa splitter é uma opção; a sub-rota sai da rota dona.
+ * Se em nenhuma rota a caixa usa splitter, valem todas onde ela aparece.
+ */
+export function portasDaCaixa(rotas: RotaOptica[], chave: string): { rota: RotaOptica; i: number; dona: RotaOptica }[] {
+  const achadas: { rota: RotaOptica; i: number; dona: RotaOptica; usaSplitter: boolean }[] = [];
+  for (const r of rotas) {
+    const ini = r.pai && r.tronco ? r.tronco : 0;
+    r.elementos.forEach((e, i) => {
+      if (i < ini || chaveElemento(e) !== chave) return;
+      achadas.push({ rota: r, i, dona: donoDoElemento(r, i, rotas), usaSplitter: !e.passagem && (!!e.splitter || e.tipo === "hub" || e.tipo === "cto") });
+    });
+  }
+  const comSplitter = achadas.filter((a) => a.usaSplitter);
+  const lista = comSplitter.length ? comSplitter : achadas;
+  const porDona = new Map<string, (typeof lista)[number]>();
+  for (const a of lista) {
+    const ja = porDona.get(a.dona.id);
+    // prefere a própria rota dona (e não uma sub-rota dela que passa ali)
+    if (!ja || (a.rota.id === a.dona.id && ja.rota.id !== ja.dona.id)) porDona.set(a.dona.id, a);
+  }
+  return [...porDona.values()].map(({ rota, i, dona }) => ({ rota, i, dona }));
+}

@@ -140,11 +140,16 @@ function FocarTrecho({ pts, vez }: { pts: [number, number][] | null; vez: number
   return null;
 }
 
-function Centralizar({ alvo }: { alvo: [number, number] | null }) {
+/**
+ * Leva o mapa até o elemento só quando a SELEÇÃO muda (escolhido na lista, por exemplo).
+ * Criar poste, arrastar ou inserir caixa redesenha o mapa mas não mexe na vista.
+ */
+function Centralizar({ alvo, selecionado }: { alvo: [number, number] | null; selecionado: number | null }) {
   const map = useMap();
   useEffect(() => {
     if (alvo && !map.getBounds().pad(-0.1).contains(alvo)) map.panTo(alvo);
-  }, [map, alvo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, selecionado]);
   return null;
 }
 
@@ -210,7 +215,7 @@ export default function RotaEditorMapa({
         <ZoomComCtrl />
         <Cliques onClicar={onClicarMapa} />
         <Enquadrar pontos={todos.length ? todos : pontosRede} />
-        <Centralizar alvo={alvo} />
+        <Centralizar alvo={alvo} selecionado={selecionado} />
         <FocarTrecho pts={focoTrecho ? trechos.find((t) => t.i === focoTrecho.i)?.pts ?? null : null} vez={focoTrecho?.vez ?? 0} />
         <IrPara alvo={achado} />
         {achado && (

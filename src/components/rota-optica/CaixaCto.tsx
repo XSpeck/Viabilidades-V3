@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Loader2, Plus, Save, X } from "lucide-react";
 import { CALCULO_PADRAO, corFibra, perdaSplitter, type RotaOptica } from "@/lib/rotaOptica";
-import { chaveElemento, type NoArvore } from "@/lib/arvorePon";
+import { chaveElemento, portaPonDaRota, type NoArvore } from "@/lib/arvorePon";
 import {
   portasFinais,
   portasPara,
@@ -75,21 +75,38 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
   const el = no.elemento;
   const chave = chaveElemento(el);
   const [editando, setEditando] = useState(!!soEdicao);
-  const [spls, setSpls] = useState<SplitterCaixa[]>(() =>
-    splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada }),
-  );
+  const [spls, setSpls] = useState<SplitterCaixa[]>(() => {
+    const l = splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada });
+    // um splitter só sem entrada e a fibra desta porta (que usa splitter) ainda sem splitter: liga sozinho
+    const semEntrada = l.filter((x) => !x.entrada.fibra && !x.entrada.splitter);
+    const minhaUsada = l.some((x) => !!x.entrada.fibra && !!el.cabo_entrada && chaveCabo(x.entrada.fibra.cabo) === chaveCabo(el.cabo_entrada) && x.entrada.fibra.fibra === el.fibra_entrada);
+    if (semEntrada.length === 1 && !el.passagem && el.cabo_entrada && el.fibra_entrada && !minhaUsada) {
+      return l.map((x) => (x === semEntrada[0] ? { ...x, entrada: { fibra: { cabo: el.cabo_entrada!, fibra: el.fibra_entrada! } } } : x));
+    }
+    return l;
+  });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   // ---------- Fibras que chegam nesta caixa (uma por rota/cor) ----------
-  const entradas: { cabo: string; fibra: number; pot?: number; rota: string }[] = [];
+  const entradas: { cabo: string; fibra: number; pot?: number; rota: string; pon: string; passagem: boolean }[] = [];
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
       if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada || !e.fibra_entrada) return;
-      if (entradas.some((x) => chaveCabo(x.cabo) === chaveCabo(e.cabo_entrada!) && x.fibra === e.fibra_entrada)) return;
-      entradas.push({ cabo: e.cabo_entrada, fibra: e.fibra_entrada, pot: e.potencia_entrada, rota: r.nome });
+      const ja = entradas.find((x) => chaveCabo(x.cabo) === chaveCabo(e.cabo_entrada!) && x.fibra === e.fibra_entrada);
+      // a mesma fibra numa rota que usa o splitter vale mais que numa que só passa
+      if (ja) { if (ja.passagem && !e.passagem) ja.passagem = false; return; }
+      entradas.push({ cabo: e.cabo_entrada, fibra: e.fibra_entrada, pot: e.potencia_entrada, rota: r.nome, pon: portaPonDaRota(r).rotulo.replace(/^.*· /, ""), passagem: !!e.passagem });
     });
   }
+  /** "PON 0/6/2 · T1 F03 branco · 04 FO…" */
+  const rotuloFibra = (cabo: string, fibra: number) => {
+    const e = entradas.find((x) => chaveCabo(x.cabo) === chaveCabo(cabo) && x.fibra === fibra);
+    const c = corFibra(fibra, cabo);
+    return `${e ? `${e.pon} · ` : ""}${c.rotulo} ${c.nome.toLowerCase()} · ${curto(cabo, 24)}`;
+  };
+  /** Splitters com a entrada aberta para trocar (o normal é só mostrar de onde vem) */
+  const [trocandoEntrada, setTrocandoEntrada] = useState<Set<string>>(new Set());
 
   // ---------- Potência e níveis ----------
   const modeloDe = (s: SplitterCaixa) => modelos.find((m) => m.id === s.modelo_id);
@@ -167,6 +184,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
     setSpls((l) => l.map((x) => (x.entrada.splitter?.id === s.id && x.entrada.splitter.porta > total ? { ...x, entrada: {} } : x)));
   }
   function trocarEntrada(s: SplitterCaixa, v: string) {
+    setTrocandoEntrada((t) => { const n = new Set(t); n.delete(s.id); return n; });
     if (v.startsWith("f:")) {
       const [cabo, fibra] = v.slice(2).split("|");
       mudar(s.id, { entrada: { fibra: { cabo, fibra: +fibra } } });
@@ -185,7 +203,10 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
     if (!m?.relacao) return setErro("Cadastre um splitter primeiro (Cadastros → Splitters).");
     // novo splitter: entra na primeira porta livre de um splitter existente (2º nível), ou numa fibra que chega
     const livre = finais.find((f) => f.porta.status === "livre");
-    const fibraLivre = entradas.find((e) => !spls.some((s) => !!s.entrada.fibra && chaveCabo(s.entrada.fibra.cabo) === chaveCabo(e.cabo) && s.entrada.fibra.fibra === e.fibra));
+    const livreDe = (e: { cabo: string; fibra: number }) => !spls.some((s) => !!s.entrada.fibra && chaveCabo(s.entrada.fibra.cabo) === chaveCabo(e.cabo) && s.entrada.fibra.fibra === e.fibra);
+    // a fibra da porta de onde a janela foi aberta vem primeiro; depois as que usam splitter; as que só passam por último
+    const daqui = entradas.find((e) => !!el.cabo_entrada && chaveCabo(e.cabo) === chaveCabo(el.cabo_entrada) && e.fibra === el.fibra_entrada && !el.passagem);
+    const fibraLivre = (daqui && livreDe(daqui) ? daqui : undefined) ?? entradas.find((e) => !e.passagem && livreDe(e));
     const entrada = fibraLivre ? { fibra: { cabo: fibraLivre.cabo, fibra: fibraLivre.fibra } } : livre ? { splitter: { id: livre.spl.id, porta: livre.porta.numero } } : {};
     setSpls((l) => [...l, { id: novoId(), relacao: m.relacao!, modelo_id: m.id, entrada, portas: portasPara(m.relacao, []) }]);
   }
@@ -397,7 +418,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
             return (
               <span key={`${e.cabo}${e.fibra}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600" title={e.rota}>
                 <span className="inline-block h-2 w-2 rounded-full ring-1 ring-black/20" style={{ background: c.hex }} />
-                {curto(e.cabo, 18)} F{e.fibra} → {usa.length ? usa.join(", ") : <b className="text-amber-700">sem splitter</b>}
+                <b className="font-semibold text-slate-700">{e.pon}</b> · {curto(e.cabo, 18)} F{e.fibra} → {usa.length ? usa.join(", ") : e.passagem ? <span className="text-slate-400">só passa</span> : <b className="text-amber-700">sem splitter</b>}
               </span>
             );
           })}
@@ -422,31 +443,61 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, saidas,
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <label className="block text-[10px] font-semibold text-slate-500">Entrada (de onde vem a fibra)</label>
-                <select className={`${campo} mb-1.5`} value={valorEntrada} onChange={(e) => trocarEntrada(s, e.target.value)}>
-                  <option value="">Escolha…</option>
-                  {entradas.length > 0 && (
-                    <optgroup label={`Fibra que chega na ${tipoCaixa}`}>
-                      {entradas.map((e) => (
-                        <option key={`${e.cabo}${e.fibra}`} value={`f:${e.cabo}|${e.fibra}`}>
-                          F{e.fibra} {corFibra(e.fibra, e.cabo).nome.toLowerCase()} · {curto(e.cabo, 26)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {spls.filter((x) => x.id !== s.id).map((x) => (
-                    <optgroup key={x.id} label={`Porta de ${nomeSpl(x)} (${x.relacao}) — 2º nível`}>
-                      {portasPara(x.relacao, x.portas).map((p) => {
-                        const k = `${x.id}|${p.numero}`;
-                        return (
-                          <option key={k} value={`s:${k}`} disabled={usadasPorOutros.has(k)}>
-                            {nomeSpl(x)} porta {p.numero}{usadasPorOutros.has(k) ? " (já usada)" : ""}
-                          </option>
-                        );
-                      })}
-                    </optgroup>
-                  ))}
-                </select>
+                {(() => {
+                  const semEntrada = !s.entrada.fibra && !s.entrada.splitter;
+                  const aberto = semEntrada || trocandoEntrada.has(s.id);
+                  const usadaPor = (cabo: string, fibra: number) => spls.find((x) => x.id !== s.id && !!x.entrada.fibra && chaveCabo(x.entrada.fibra.cabo) === chaveCabo(cabo) && x.entrada.fibra.fibra === fibra);
+                  const comSpl = entradas.filter((e) => !e.passagem);
+                  const soPassam = entradas.filter((e) => e.passagem);
+                  const opcao = (e: (typeof entradas)[number]) => {
+                    const u = usadaPor(e.cabo, e.fibra);
+                    return (
+                      <option key={`${e.cabo}${e.fibra}`} value={`f:${e.cabo}|${e.fibra}`} disabled={!!u}>
+                        {rotuloFibra(e.cabo, e.fibra)}{u ? ` (já em ${nomeSpl(u)})` : ""}
+                      </option>
+                    );
+                  };
+                  return (
+                    <div className="mb-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px]">
+                        <span className="shrink-0 font-semibold text-slate-500">Alimentado por:</span>
+                        {semEntrada ? (
+                          <span className="font-semibold text-amber-700">escolha de onde vem a fibra</span>
+                        ) : s.entrada.fibra ? (
+                          <span className="flex min-w-0 items-center gap-1 truncate text-slate-800">
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/25" style={{ background: corFibra(s.entrada.fibra.fibra, s.entrada.fibra.cabo).hex }} />
+                            <span className="truncate">{rotuloFibra(s.entrada.fibra.cabo, s.entrada.fibra.fibra)}</span>
+                          </span>
+                        ) : (
+                          <span className="truncate text-slate-800">porta {s.entrada.splitter!.porta} do {nomeSpl(spls.find((x) => x.id === s.entrada.splitter!.id) ?? s)} (2º nível)</span>
+                        )}
+                        {!semEntrada && (
+                          <button type="button" onClick={() => setTrocandoEntrada((t) => { const n = new Set(t); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })}
+                            className="ml-auto shrink-0 text-[10px] font-semibold text-indigo-600 underline">{aberto ? "fechar" : "trocar"}</button>
+                        )}
+                      </div>
+                      {aberto && (
+                        <select className={`${campo} mt-1`} value={valorEntrada} onChange={(e) => trocarEntrada(s, e.target.value)}>
+                          <option value="">Escolha…</option>
+                          {comSpl.length > 0 && <optgroup label={`Fibras que usam splitter nesta ${tipoCaixa}`}>{comSpl.map(opcao)}</optgroup>}
+                          {soPassam.length > 0 && <optgroup label="Fibras que só passam pela caixa">{soPassam.map(opcao)}</optgroup>}
+                          {spls.filter((x) => x.id !== s.id).map((x) => (
+                            <optgroup key={x.id} label={`Porta de ${nomeSpl(x)} (${x.relacao}) · 2º nível`}>
+                              {portasPara(x.relacao, x.portas).map((p) => {
+                                const k = `${x.id}|${p.numero}`;
+                                return (
+                                  <option key={k} value={`s:${k}`} disabled={usadasPorOutros.has(k)}>
+                                    {nomeSpl(x)} porta {p.numero}{usadasPorOutros.has(k) ? " (já usada)" : ""}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="grid grid-cols-1 gap-1">
                   {portasPara(s.relacao, s.portas).map((p) => {
                     const f = filhoDa(s, p.numero);

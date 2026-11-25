@@ -8,6 +8,7 @@ import {
 import {
   CALCULO_PADRAO,
   calcularPotencias,
+  corFibra,
   capacidadeDoCabo,
   comprimentoTracado,
   distanciaMetros,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/rotaOptica";
 import type { PaiRota } from "@/lib/rotaOptica";
 import { atualizarRota, criarRota } from "@/lib/rotaOptica";
-import { donoDoElemento, entradaPotencia, paraGravar, subRotasDe } from "@/lib/subRotas";
+import { donoDoElemento, entradaPotencia, paraGravar, portasDaCaixa, subRotasDe } from "@/lib/subRotas";
 import EtiquetaCabo from "./EtiquetaCabo";
 import PaletaFerramentas from "./editor/PaletaFerramentas";
 import CartaoPredio from "./editor/CartaoPredio";
@@ -155,6 +156,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   const [editarTodas, setEditarTodas] = useState<{ tipo: "caixa" | "cabo"; i: number; nome: string; tipoEl: TipoElementoRota; tipoCabo: string } | null>(null);
   /** Caixa compartilhada arrastada no mapa: espera confirmar "mover em todas" */
   const [moverTodas, setMoverTodas] = useState<{ i: number; lat: number; lon: number } | null>(null);
+  /** Caixa de várias portas (HUB 0/2/15_0/6/2): de qual porta sai a sub-rota */
+  const [escolhaPorta, setEscolhaPorta] = useState<{ nome: string; opcoes: ReturnType<typeof portasDaCaixa> } | null>(null);
   /** Confirmação do "Separar só nesta rota" ("caixa-3", "cabo-3") */
   const [confirmaSeparar, setConfirmaSeparar] = useState<string | null>(null);
   /** Nome da caixa antes de começar a editar (para renomear os cabos ao terminar) */
@@ -776,6 +779,24 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       : `Estação ${est.olt.nome} com um DIO novo (${dio.nome}). Dê o nome do DIO, escolha o modelo, a porta PON e a porta do DIO no cartão.`);
   }
 
+  /** Rota vazia: copia o caminho da rota r da OLT até a caixa i e vira sub-rota da dona dela (tronco travado) */
+  function comecarSubRota(r: RotaOptica, i: number) {
+    const manual = r.origem !== "geogrid";
+    const novas = r.elementos.slice(0, i + 1).map((x, j) => ({
+      ...paraLinha(x, manual ? r.trechos.find((t) => t.ate === j)?.pontos.slice(1, -1) ?? [] : []),
+      dist_auto: false,
+    }));
+    mudar(() => novas);
+    if (r.calculo_potencia) setCalc(r.calculo_potencia);
+    const dona = donoDoElemento(r, i, todas ?? rede);
+    setPai({ rota_id: dona.id, chave: chaveElemento(r.elementos[i]) });
+    setTronco(i + 1);
+    setSel(i);
+    setFerramenta("ceo");
+    setEscolhaPorta(null);
+    setAviso(`Sub-rota de "${dona.nome}" (${portaPonDaRota(dona).rotulo}), saindo de ${r.elementos[i].nome}. O tronco fica travado; coloque as próximas caixas.`);
+  }
+
   /** Clique numa caixa da rede existente */
   function usarDaRede(k: number, predioNome?: string) {
     const it = redeInfo.itens[k];
@@ -801,22 +822,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       }
     }
     if (!linhas.length) {
-      // Rota vazia: começa copiando o caminho da rota existente da OLT até esta caixa (vira um ramo na árvore)
-      const r = it.rota;
-      const manual = r.origem !== "geogrid";
-      const novas = r.elementos.slice(0, it.i + 1).map((x, j) => ({
-        ...paraLinha(x, manual ? r.trechos.find((t) => t.ate === j)?.pontos.slice(1, -1) ?? [] : []),
-        dist_auto: false,
-      }));
-      mudar(() => novas);
-      if (r.calculo_potencia) setCalc(r.calculo_potencia);
-      // vira sub-rota: o tronco (até esta caixa) continua sendo da rota dona dela
-      const dona = donoDoElemento(r, it.i, todas ?? rede);
-      setPai({ rota_id: dona.id, chave: chaveElemento(r.elementos[it.i]) });
-      setTronco(it.i + 1);
-      setSel(it.i);
-      setFerramenta("ceo");
-      setAviso(`Sub-rota de "${dona.nome}", saindo de ${e.nome}. O tronco fica travado; coloque as próximas caixas.`);
+      // Rota vazia: vira um ramo (sub-rota). Numa caixa com splitters de várias portas, pergunta de qual porta sai.
+      const opcoes = portasDaCaixa(todas ?? rede, chaveElemento(e));
+      if (opcoes.length > 1) { setEscolhaPorta({ nome: e.nome, opcoes }); return; }
+      const o = opcoes[0];
+      comecarSubRota(o ? o.rota : it.rota, o ? o.i : it.i);
       return;
     }
     // Rota em andamento: usa a caixa existente (mesmo nome/código/local/splitter), ligada pelo mesmo cabo do trecho anterior
@@ -2567,6 +2577,47 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         );
       })()}
+
+      {/* Caixa com splitters de várias portas: de qual porta sai a sub-rota */}
+      {escolhaPorta && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setEscolhaPorta(null)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
+              <IconeElemento tipo="hub" tamanho={22} />
+              <div className="min-w-0">
+                <p className="text-sm font-bold">De qual porta sai esta sub-rota?</p>
+                <p className="truncate text-[11px] text-slate-300">{escolhaPorta.nome} tem splitter de {escolhaPorta.opcoes.length} portas PON</p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 p-3">
+              {escolhaPorta.opcoes.map((o) => {
+                const el = o.rota.elementos[o.i];
+                const c = corFibra(el.fibra_entrada, el.cabo_entrada);
+                return (
+                  <li key={o.dona.id}>
+                    <button type="button" onClick={() => comecarSubRota(o.rota, o.i)}
+                      className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 px-3 py-2 text-left hover:border-indigo-400 hover:bg-indigo-50">
+                      <IconeElemento tipo="olt" tamanho={24} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-800">{portaPonDaRota(o.dona).rotulo}</span>
+                        <span className="block truncate text-[11px] text-slate-500">rota {o.dona.nome}</span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-600">
+                          {el.fibra_entrada ? <><span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/25" style={{ background: c.hex }} />chega na {c.rotulo} {c.nome.toLowerCase()}</> : "fibra não informada"}
+                          {el.splitter && <span className="ml-1 rounded bg-slate-900 px-1 text-[10px] font-bold text-white">{el.splitter}</span>}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white">Sair daqui</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="border-t border-slate-100 px-3 py-2 text-right">
+              <button type="button" onClick={() => setEscolhaPorta(null)} className="rounded-lg border px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Caixa compartilhada arrastada no mapa */}
       {moverTodas && linhas[moverTodas.i] && (
