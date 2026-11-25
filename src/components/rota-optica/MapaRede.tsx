@@ -156,7 +156,7 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota }: Props) {
   function corCaixa(c: CaixaAnalise): { anel: string | null; apagada: boolean } {
     if (tema === "pon") return { anel: c.pons.length === 1 ? corPon.get(c.pons[0]) ?? "#64748b" : "#64748b", apagada: false };
     if (tema === "potencia") {
-      const conta = c.tipo === "cto" || c.tipo === "cdoi" || c.tipo === "predio";
+      const conta = (c.tipo === "cto" || c.tipo === "cdoi" || c.tipo === "predio") && c.atende;
       return conta ? { anel: COR_NIVEL[nivelPotencia(c.potPonta)], apagada: false } : { anel: null, apagada: true };
     }
     if (tema === "ocupacao") {

@@ -66,4 +66,10 @@ describe("análise da rede", () => {
     expect(ind.niveis.boa).toBe(1);
     expect(ind.rotas).toBe(2);
   });
+
+  it("CTO só de passagem não entra na conta de potência", () => {
+    const a = analisarRede([rota("a", "PL 06 - Porta 00", [hub, cto(1, -22, { passagem: true, splitter: undefined, potencia_saida: undefined })])], []);
+    expect(a.caixas.find((x) => x.nome === "CTO 1")!.atende).toBe(false);
+    expect(indicadores(a.caixas, a.cabos).niveis.sem).toBe(0);
+  });
 });

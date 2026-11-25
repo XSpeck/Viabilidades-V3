@@ -52,6 +52,8 @@ export interface CaixaAnalise {
   ocupacao?: { total: number; clientes: number; ramais: number; livres: number };
   /** Prédio: quantas CDOIs foram juntadas aqui */
   cdois?: number;
+  /** Atende alguma porta PON (não é só passagem em todas as rotas) */
+  atende: boolean;
   alertas: Alerta[];
 }
 
@@ -150,7 +152,7 @@ export function analisarRede(rotas: RotaOptica[], caixasCad: CaixaRede[], predio
     if (ehAtendimento(c.tipo) && !c.soPassa && !c.usaSplitter) alertas.push({ gravidade: "cadastro", texto: "Sem splitter cadastrado" });
     return {
       chave: c.chave, nome: c.nome, tipo: c.tipo, lat: c.lat, lon: c.lon, rotas: c.rotas, pons: [...c.pons0], metrosOlt: Math.min(...c.metros),
-      potPonta: c.potPonta, ocupacao: oc, cdois: c.cdois, alertas,
+      potPonta: c.potPonta, ocupacao: oc, cdois: c.cdois, alertas, atende: !c.soPassa,
     };
   });
 
@@ -211,7 +213,8 @@ export function indicadores(caixas: CaixaAnalise[], cabos: CaboAnalise[], extras
   const portas = { total: 0, clientes: 0, ramais: 0, livres: 0 };
   caixas.forEach((c) => { if (c.ocupacao) { portas.total += c.ocupacao.total; portas.clientes += c.ocupacao.clientes; portas.ramais += c.ocupacao.ramais; portas.livres += c.ocupacao.livres; } });
   const niveis: Record<NivelPotencia, number> = { otima: 0, boa: 0, limite: 0, abaixo: 0, sem: 0 };
-  const pots = caixas.filter((c) => c.tipo === "cto" || c.tipo === "cdoi" || c.tipo === "predio").map((c) => c.potPonta);
+  // só as caixas que atendem (CTO/CDOI/prédio que não são só passagem)
+  const pots = caixas.filter((c) => (c.tipo === "cto" || c.tipo === "cdoi" || c.tipo === "predio") && c.atende).map((c) => c.potPonta);
   pots.forEach((p) => niveis[nivelPotencia(p)]++);
   const medidas = pots.filter((p): p is number => p !== undefined);
   const alertas: Record<Gravidade, number> = { critico: 0, atencao: 0, cadastro: 0 };
