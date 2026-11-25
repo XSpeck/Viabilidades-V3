@@ -413,7 +413,7 @@ export default function RotaOpticaPage() {
             ))}
           </div>
           {vista === "mapa" ? (
-            <MapaRede rotas={rotas} onAbrirRota={abrirRota} />
+            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} />
           ) : (
           <ArvorePonView
             rotas={rotas}

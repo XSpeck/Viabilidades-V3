@@ -2,6 +2,7 @@
 // Editor de rota: a "linha" do formulário (cada caixa da rota enquanto está sendo editada) e as contas
 // que não dependem da tela — coordenadas, distâncias pelo mapa, postes do KML, nomes automáticos.
 // =====================
+import { nivelPotencia } from "@/lib/analiseRede";
 import {
   CALCULO_PADRAO,
   comprimentoTracado,
@@ -223,10 +224,7 @@ export function nomeAuto(tipo: TipoElementoRota, ls: Linha[], outros: string[] =
   return `${PREFIXO[tipo]} ${k}`;
 }
 
+/** Cor do texto pelo nível de potência (mesmos limites do Mapa da rede: lib/analiseRede.ts) */
 export function nivelCor(v?: number) {
-  if (v === undefined) return "text-slate-500";
-  if (v >= -20) return "text-emerald-600";
-  if (v >= -25) return "text-lime-600";
-  if (v >= -27) return "text-amber-600";
-  return "text-red-600";
+  return { otima: "text-emerald-600", boa: "text-lime-600", limite: "text-amber-600", abaixo: "text-red-600", sem: "text-slate-500" }[nivelPotencia(v)];
 }
