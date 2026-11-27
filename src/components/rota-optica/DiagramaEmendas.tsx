@@ -328,8 +328,12 @@ export default function DiagramaEmendas({ chave, nome, rotas, mapa, semResumo }:
             <text x={26} y={3} fontSize={8} fill="#475569">fusão</text>
             <line x1={62} y1={0} x2={86} y2={0} stroke="#0284c7" strokeWidth={2.4} strokeDasharray="5 4" />
             <text x={92} y={3} fontSize={8} fill="#475569">passa direto (sem corte)</text>
-            <rect x={210} y={-6} width={20} height={12} rx={3} fill="#1e293b" />
-            <text x={236} y={3} fontSize={8} fill="#475569">splitter</text>
+            {splitters.length > 0 && (
+              <>
+                <rect x={210} y={-6} width={20} height={12} rx={3} fill="#1e293b" />
+                <text x={236} y={3} fontSize={8} fill="#475569">splitter</text>
+              </>
+            )}
             <rect x={282} y={-5} width={16} height={10} rx={5} fill="#16a34a" stroke="#0f172a" strokeWidth={0.6} />
             <text x={304} y={3} fontSize={8} fill="#475569">tubo</text>
           </g>

@@ -577,6 +577,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               caixas={caixas}
               onRotasMudaram={onRotasMudaram}
               onAbrirNo={(id) => abrirJanela({ id: `no:${id}`, tipo: "no", noId: id }, Math.max(20, window.innerWidth - 500), 140)}
+              onVerFibra={(cabo, fibra) => setFibraVista({ k: chaveCabo(cabo), fibra })}
               catalogo={catalogo}
               usuario={usuario}
               onCaixaSalva={onCaixaSalva}
@@ -593,8 +594,9 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram, clientes = [],
+  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram, clientes = [], onVerFibra,
 }: {
+  onVerFibra?: (cabo: string, fibra: number) => void;
   onRotasMudaram?: () => void;
   onAbrirNo: (id: string) => void;
   clientes?: ClienteRede[];
@@ -680,7 +682,7 @@ function JanelaNo({
       ) : aba === "ct" ? (
         <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} usuario={usuario} onSalva={onCaixaSalva} />
       ) : aba === "ceo" ? (
-        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} usuario={usuario} onSalva={onCaixaSalva} />
+        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} usuario={usuario} onSalva={onCaixaSalva} onVerFibra={onVerFibra} />
       ) : aba === "cto" ? (
         <CaixaCto
           key={`cto-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}

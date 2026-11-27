@@ -20,6 +20,8 @@ export interface PortaCaixa {
   descricao?: string;
   /** Cliente do cadastro ligado nesta perna */
   cliente_id?: string;
+  /** Ramal: a fibra que sai por esta perna (ligada no unifilar) */
+  saida?: PontaFibra;
 }
 
 /** Uma fibra de um cabo */
@@ -216,6 +218,7 @@ function gravarPorta(p: PortaCaixa): PortaCaixa {
     status: p.status,
     ...(p.descricao?.trim() ? { descricao: p.descricao.trim() } : {}),
     ...(p.status === "cliente" && p.cliente_id ? { cliente_id: p.cliente_id } : {}),
+    ...(p.status === "ramal" && p.saida ? { saida: { cabo: p.saida.cabo, fibra: p.saida.fibra } } : {}),
   };
 }
 
