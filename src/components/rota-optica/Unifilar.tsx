@@ -12,6 +12,9 @@ import {
   type CadastroLigacoes, type CaboUni, type LigacaoUni, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento } from "./IconesRede";
+import BuscaCliente from "./BuscaCliente";
+import type { ClienteRede } from "@/lib/clientesRede";
+import type { StatusPorta } from "@/lib/caixasRede";
 import { cortar } from "@/lib/textoCompleto";
 
 /**
@@ -31,13 +34,18 @@ interface Props {
   onCancelar: () => void;
   /** Fibra escolhida no "Traçar rota": a árvore destaca o caminho dela */
   onVerFibra?: (cabo: string, fibra: number) => void;
+  /** Clientes do cadastro (perna com cliente) e os já ligados em outras caixas */
+  clientes?: ClienteRede[];
+  clientesOcupados?: Set<string>;
+  /** CDOI: perna só livre ou cliente (não sai ramal) */
+  semRamal?: boolean;
 }
 
 const ROW = 15, HEAD = 30, BW = 158, GAPB = 16, PAD = 14;
 const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
 const LARANJA = "#f97316";
 
-export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelos = [], usuario, onSalva, onCancelar, onVerFibra }: Props) {
+export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelos = [], usuario, onSalva, onCancelar, onVerFibra, clientes = [], clientesOcupados, semRamal }: Props) {
   const inicial: CadastroLigacoes = useMemo(() => ({
     emendas: cad?.emendas ?? [],
     regras_emenda: cad?.regras_emenda ?? [],
@@ -49,7 +57,9 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
   }), [cad]);
   const [ed, setEd] = useState<CadastroLigacoes>(inicial);
   const [hist, setHist] = useState<CadastroLigacoes[]>([]);
-  const [modo, setModo] = useState<"editar" | "tracar">("editar");
+  const [modo, setModo] = useState<"editar" | "clientes" | "tracar">("editar");
+  /** Modo Clientes: a perna escolhida */
+  const [pernaSel, setPernaSel] = useState<{ spl: string; porta: number } | null>(null);
   const [sel, setSel] = useState<PontoUni | null>(null);
   const [selLig, setSelLig] = useState<string | null>(null);
   const [traco, setTraco] = useState<Set<string> | null>(null);
@@ -131,6 +141,10 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
   // ---------- ações ----------
   function clicarPonto(p: PontoUni) {
     setErro(null);
+    if (modo === "clientes") {
+      if (p.k === "porta") setPernaSel({ spl: p.spl, porta: p.porta });
+      return;
+    }
     if (modo === "tracar") {
       setTraco(caminhoNaCaixa(modelo, p));
       if (p.k === "fibra") {
@@ -171,6 +185,12 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
     mudar({ ...ed, splitters: [...ed.splitters, { id: `s${Date.now().toString(36)}`, relacao: m.relacao, modelo_id: m.id, entrada: {}, portas: portasPara(m.relacao, []) }] });
   }
   async function salvar() {
+    if (comSplitters) {
+      const semEntrada = ed.splitters.find((s) => !s.entrada.fibra && !s.entrada.splitter);
+      if (semEntrada) { setErro(`${nomeSpl(semEntrada)}: ligue a entrada (clique numa fibra que chega e depois na entrada do splitter).`); return; }
+      const semModelo = ed.splitters.find((s) => !modelosSpl.some((m) => m.id === s.modelo_id));
+      if (semModelo) { setErro(`${nomeSpl(semModelo)}: escolha o modelo do cadastro.`); return; }
+    }
     setSalvando(true);
     setErro(null);
     try {
@@ -229,8 +249,8 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
       {/* Barra */}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
-          {([["editar", "Editar conexões"], ["tracar", "Traçar rota"]] as const).map(([k, r]) => (
-            <button key={k} type="button" onClick={() => { setModo(k); setSel(null); setSelLig(null); if (k === "editar") { setTraco(null); setRotasTraco([]); } }}
+          {(comSplitters ? ([["editar", "Editar conexões"], ["clientes", "Clientes nas portas"], ["tracar", "Traçar rota"]] as const) : ([["editar", "Editar conexões"], ["tracar", "Traçar rota"]] as const)).map(([k, r]) => (
+            <button key={k} type="button" onClick={() => { setModo(k); setSel(null); setSelLig(null); setPernaSel(null); if (k !== "tracar") { setTraco(null); setRotasTraco([]); } }}
               className={`flex items-center gap-1 px-2.5 py-1.5 font-semibold ${modo === k ? (k === "tracar" ? "bg-orange-500 text-white" : "bg-slate-900 text-white") : "bg-white text-slate-600 hover:bg-slate-50"}`}>
               {k === "tracar" && <RouteIcon className="h-3.5 w-3.5" />} {r}
             </button>
@@ -252,6 +272,8 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
       <p className="text-[11px] text-slate-500">
         {modo === "tracar"
           ? "Clique numa fibra, porta ou ligação: o caminho acende em laranja e a rota inteira aparece embaixo."
+          : modo === "clientes"
+            ? "Clique numa porta de splitter para marcar o cliente (ou deixar livre). A porta em ramal é ligada no modo Editar conexões."
           : sel
             ? "Agora clique no destino (os pontos com anel verde aceitam a ligação). Clique de novo no mesmo ponto para cancelar."
             : "Clique num ponto (fibra, entrada ou porta do splitter) e depois no destino. Clique numa linha para desligar."}
@@ -370,6 +392,40 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
 
       {erro && <p className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700">{erro}</p>}
 
+      {/* Modo Clientes: a perna escolhida */}
+      {modo === "clientes" && pernaSel && (() => {
+        const s = ed.splitters.find((x) => x.id === pernaSel.spl);
+        if (!s) return null;
+        const pt = portasPara(s.relacao, s.portas).find((x) => x.numero === pernaSel.porta);
+        if (!pt) return null;
+        const mudarPorta = (m: Partial<typeof pt>) => mudar({
+          ...ed,
+          splitters: ed.splitters.map((x) => (x.id === s.id ? { ...x, portas: portasPara(x.relacao, x.portas).map((y) => (y.numero === pt.numero ? { ...y, ...m } : y)) } : x)),
+        });
+        const opcoes: StatusPorta[] = semRamal ? ["livre", "cliente"] : ["livre", "cliente"];
+        return (
+          <div className="space-y-1.5 rounded-xl border border-sky-200 bg-sky-50/60 p-2.5 text-[11px]">
+            <p className="font-semibold text-sky-900">{nomeSpl(s)} · porta {pt.numero}{pt.status === "ramal" ? " · em ramal (ligada a uma fibra que sai)" : ""}</p>
+            <div className="flex gap-1">
+              {opcoes.map((st) => (
+                <button key={st} type="button" onClick={() => mudarPorta(st === "livre" ? { status: "livre", cliente_id: undefined, descricao: undefined, saida: undefined } : { status: "cliente", saida: undefined })}
+                  className={`rounded-md px-2 py-1 font-semibold ${pt.status === st ? (st === "cliente" ? "bg-sky-600 text-white" : "bg-slate-700 text-white") : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+                  {st === "livre" ? "Livre" : "Cliente"}
+                </button>
+              ))}
+            </div>
+            {pt.status === "cliente" && (
+              <BuscaCliente
+                cadastro={clientes}
+                clienteId={pt.cliente_id}
+                ocupado={(id) => !!clientesOcupados?.has(id) || ed.splitters.some((x) => x.portas.some((y) => y.cliente_id === id && !(x.id === s.id && y.numero === pt.numero)))}
+                onEscolher={(c) => mudarPorta(c ? { cliente_id: c.id, descricao: c.nome } : { cliente_id: undefined, descricao: undefined })}
+              />
+            )}
+          </div>
+        );
+      })()}
+
       {/* Ligação selecionada */}
       {modo === "editar" && ligSel && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px]">
@@ -462,7 +518,7 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
       {modo === "tracar" && traco && !caminhoSel && <p className="text-[11px] text-slate-500">Esse ponto não está em nenhuma rota salva.</p>}
 
       {/* Salvar */}
-      {modo === "editar" && (
+      {modo !== "tracar" && (
         <div className="flex items-center justify-end gap-2">
           <button type="button" disabled={!hist.length} onClick={() => { setEd(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); }} className="mr-auto flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" /> Desfazer</button>
           <button type="button" onClick={onCancelar} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
