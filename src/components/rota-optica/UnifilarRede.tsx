@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Maximize2, Minimize2, MousePointerClick, Route as RouteIcon, Save, Search, Trash2, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
@@ -361,7 +362,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   }
   const traco = inicioTraco ? calcularTraco(inicioTraco) : null;
   const tracar = (inicio: Pt) => setTraco(inicio);
-  function clicarPonto(chave: string, p: PontoUni) {
+  async function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "clientes") {
       if (p.k === "porta") { setPernaSel({ chave, spl: p.spl, porta: p.porta }); setFibraCt(null); }
@@ -401,7 +402,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     if (!["fusao", "entrada", "perna", "nivel2"].includes(t)) { setErro(t); return; }
     const m = modelos.get(chave)!;
     const ocup = m.ligacoes.some((l) => l.tipo !== "passa" && l.origem !== "rota" && [idPonto(l.a), idPonto(l.b)].some((x) => x === idPonto(p) || x === idPonto(sel.p)));
-    if (ocup && !confirm("Um dos pontos já está ligado. Trocar a ligação?")) return;
+    if (ocup && !(await confirmar("Um dos pontos já está ligado. Trocar a ligação?", { ok: "Trocar" }))) return;
     const r = ligar(edDe(chave), sel.p, p);
     if (typeof r === "string") { setErro(r); return; }
     mudar(chave, r);
@@ -509,7 +510,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const caminho = rotasTraco[rotaIdx];
 
   return (
-    <div className={`overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
+    <div className={`rolagem-escura overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
       {/* Barra */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-[#0f1115] px-3 py-2 text-xs">
         <div className="relative">
@@ -819,7 +820,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                   {comCliente > 0 && <p className="text-amber-300">{comCliente} porta{comCliente !== 1 ? "s" : ""} com cliente: tirar o splitter solta esses clientes.</p>}
                   {alimenta.length > 0
                     ? <p className="text-amber-300">Alimenta {alimenta.length} splitter{alimenta.length !== 1 ? "s" : ""} de 2º nível: tire esses antes.</p>
-                    : <button type="button" onClick={() => { if (comCliente && !confirm(`Tirar o S${idx}? ${comCliente} cliente(s) ficam sem porta.`)) return; mudar(splSel.chave, { ...ed, splitters: ed.splitters.filter((x) => x.id !== sp.id) }); setSplSel(null); }}
+                    : <button type="button" onClick={async () => { if (comCliente && !(await confirmar(`Tirar o S${idx}? ${comCliente} cliente(s) ficam sem porta.`, { ok: "Tirar" }))) return; mudar(splSel.chave, { ...ed, splitters: ed.splitters.filter((x) => x.id !== sp.id) }); setSplSel(null); }}
                       className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 font-semibold text-white"><Trash2 className="h-3 w-3" /> Tirar este splitter</button>}
                   <p className="text-slate-500">Só vale depois de clicar em Salvar, no topo.</p>
                 </div>

@@ -1,4 +1,5 @@
 "use client";
+import { avisar } from "@/lib/dialogo";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import L from "leaflet";
@@ -421,7 +422,7 @@ export default function CtoMap({
       onTrajetoSalvo?.(link);
     } catch (err) {
       console.error("[CtoMap] Erro ao salvar trajeto:", err);
-      alert("Erro ao salvar rota. Tente novamente.");
+      void avisar("Erro ao salvar rota. Tente novamente.");
     } finally {
       setSalvandoTrajeto(false);
     }
@@ -507,7 +508,7 @@ export default function CtoMap({
       }, "image/png");
     } catch (err) {
       console.error("[CtoMap] Erro ao capturar imagem:", err);
-      alert("Não foi possível capturar a imagem. Tente um print manual.");
+      void avisar("Não foi possível capturar a imagem. Tente um print manual.");
     } finally {
       setSalvandoImagem(false);
     }

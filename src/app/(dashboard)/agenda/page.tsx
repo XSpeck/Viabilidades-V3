@@ -1,4 +1,5 @@
 "use client";
+import { avisar } from "@/lib/dialogo";
 
 import { useState, useEffect, useCallback, useContext, createContext } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -509,7 +510,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
   }
 
   async function handleEstruturar() {
-    if (!obsEstruturacao.trim()) { alert("Adicione observações!"); return; }
+    if (!obsEstruturacao.trim()) { void avisar("Adicione observações!"); return; }
     setBusy(true);
     try {
       await finalizarEstruturado(v.id, {
@@ -525,7 +526,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
   }
 
   async function handleReagendar() {
-    if (!novaData || !novoTecnico.trim()) { alert("Preencha data e técnico!"); return; }
+    if (!novaData || !novoTecnico.trim()) { void avisar("Preencha data e técnico!"); return; }
     setBusy(true);
     try {
       await reagendarVisita(v.id, novaData, novoPeriodo, novoTecnico, motivoRea, {
@@ -536,7 +537,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
   }
 
   async function handleRejeitar() {
-    if (!motivoRej.trim()) { alert("Informe o motivo!"); return; }
+    if (!motivoRej.trim()) { void avisar("Informe o motivo!"); return; }
     setBusy(true);
     try {
       await rejeitarPredio(v.id, v.predio_ftta ?? "Prédio", v.plus_code_cliente, motivoRej, userName);
@@ -550,7 +551,7 @@ function VisitaModal({ v, userName, onRefresh, onClose }: {
       await atualizarObsAgendamento(v.id, obsRasc.trim());
       setEditingObs(false);
       onRefresh();
-    } catch { alert("Erro ao salvar."); }
+    } catch { void avisar("Erro ao salvar."); }
     finally { setSavingObs(false); }
   }
 
@@ -789,14 +790,14 @@ function DemandaModal({ d, onRefresh, onClose }: {
   async function handleSaveEdit() {
     setSavingEdit(true);
     try {
-      if (editTecnicos.length === 0) { alert("Selecione ao menos um técnico!"); return; }
+      if (editTecnicos.length === 0) { void avisar("Selecione ao menos um técnico!"); return; }
       await editarInfoDemanda(d.id, {
         tipo: editTipo, prioridade: editPrior, descricao: editDesc,
         local: editLocal || undefined, tecnicos: editTecnicos,
       });
       setEditMode(false);
       onRefresh();
-    } catch { alert("Erro ao salvar."); }
+    } catch { void avisar("Erro ao salvar."); }
     finally { setSavingEdit(false); }
   }
 
@@ -811,17 +812,17 @@ function DemandaModal({ d, onRefresh, onClose }: {
     try {
       await concluirDemanda(d.id, obsConc || undefined);
       done("✅ Demanda concluída com sucesso!");
-    } catch { alert("Erro ao concluir."); }
+    } catch { void avisar("Erro ao concluir."); }
     finally { setSaving(false); }
   }
 
   async function handleReagendar() {
-    if (!novaData) { alert("Informe a data!"); return; }
+    if (!novaData) { void avisar("Informe a data!"); return; }
     setSaving(true);
     try {
       await agendarDemanda(d.id, novaData, novoPeriodo);
       done(`🔄 Reagendado para ${fDate(novaData)} — ${novoPeriodo}.`);
-    } catch { alert("Erro ao reagendar."); }
+    } catch { void avisar("Erro ao reagendar."); }
     finally { setSaving(false); }
   }
 
@@ -830,17 +831,17 @@ function DemandaModal({ d, onRefresh, onClose }: {
     try {
       await reabrirDemanda(d.id);
       done("↩️ Agendamento cancelado — demanda devolvida para a fila em Análise de Rede.");
-    } catch { alert("Erro ao cancelar agendamento."); }
+    } catch { void avisar("Erro ao cancelar agendamento."); }
     finally { setSaving(false); }
   }
 
   async function handleContinuar() {
-    if (!novaData) { alert("Informe a data!"); return; }
+    if (!novaData) { void avisar("Informe a data!"); return; }
     setSaving(true);
     try {
       await continuarDemanda(d.id, d.data_agendamento ?? "", novaData, novoPeriodo, user?.nome ?? "—");
       done(`➡️ Continuação registrada para ${fDate(novaData)} — ${novoPeriodo}.`);
-    } catch { alert("Erro ao registrar continuação."); }
+    } catch { void avisar("Erro ao registrar continuação."); }
     finally { setSaving(false); }
   }
 
@@ -1062,7 +1063,7 @@ function NotasAndamento({ notas, onAdd }: {
     try {
       await onAdd(texto.trim());
       setTexto("");
-    } catch { alert("Erro ao salvar nota."); }
+    } catch { void avisar("Erro ao salvar nota."); }
     finally { setSaving(false); }
   }
 

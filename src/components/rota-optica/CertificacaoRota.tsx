@@ -1,4 +1,5 @@
 "use client";
+import { avisar } from "@/lib/dialogo";
 
 import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -203,7 +204,7 @@ export default function CertificacaoRota({ rotas, usuario }: Props) {
       <script>window.onload=()=>{setTimeout(()=>window.print(),300)}</script>
       </body></html>`;
     const w = window.open("", "_blank");
-    if (!w) return alert("O navegador bloqueou a janela do PDF. Libere pop-ups para este site.");
+    if (!w) { void avisar("O navegador bloqueou a janela do PDF. Libere pop-ups para este site."); return; }
     w.document.open();
     w.document.write(html);
     w.document.close();

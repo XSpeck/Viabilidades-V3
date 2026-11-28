@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Building2, Cable as CableIcon, GitBranch, Loader2, Package, Trash2 } from "lucide-react";
@@ -88,7 +89,7 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
       onRotas?.();
     }, "converter");
   async function converterTodas() {
-    if (!confirm(`Converter ${candidatas.length} rota${candidatas.length > 1 ? "s" : ""} em sub-rota? O caminho continua igual; o tronco passa a ficar só na rota dona.`)) return;
+    if (!(await confirmar(`Converter ${candidatas.length} rota${candidatas.length > 1 ? "s" : ""} em sub-rota? O caminho continua igual; o tronco passa a ficar só na rota dona.`, { ok: "Converter" }))) return;
     await rodar("todas-sub", async () => {
       for (const c of candidatas) await converterUma(c);
       onRotas?.();
@@ -117,7 +118,7 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
       onCabos(cabos.filter((x) => x.id !== c.id));
     });
   async function apagarTudo() {
-    if (!confirm(`Apagar todos os ${total} resíduos? Prédios sem rota, CDOIs sem rota, diagramas de caixa e cabos sem rota. Não dá para desfazer.`)) return;
+    if (!(await confirmar(`Apagar todos os ${total} resíduos? Prédios sem rota, CDOIs sem rota, diagramas de caixa e cabos sem rota. Não dá para desfazer.`, { ok: "Apagar tudo", perigo: true }))) return;
     await rodar("tudo", async () => {
       for (const x of prediosSobra) {
         if (x.comRota.length === 0) await excluirPredio(x.p.id);
@@ -166,7 +167,7 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
               <button
                 type="button"
                 disabled={!!ocupado}
-                onClick={() => confirm(`Excluir a rota "${r.nome}"?`) && rodar(`o${r.id}`, async () => { await excluirRota(r.id); onRotas?.(); })}
+                onClick={async () => (await confirmar(`Excluir a rota "${r.nome}"?`, { ok: "Excluir" })) && rodar(`o${r.id}`, async () => { await excluirRota(r.id); onRotas?.(); })}
                 className={`${btn} border-red-200 bg-red-50 text-red-700`}
               >
                 {ocupado === `o${r.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Excluir
@@ -213,7 +214,7 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
                   {ocupado === `l${p.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Tirar CDOIs sem rota
                 </button>
               )}
-              <button type="button" disabled={!!ocupado} onClick={() => confirm(`Apagar o prédio "${p.nome}"?`) && apagarPredio(p)} className={`${btn} border-red-200 bg-red-50 text-red-700`}>
+              <button type="button" disabled={!!ocupado} onClick={async () => (await confirmar(`Apagar o prédio "${p.nome}"?`, { ok: "Apagar" })) && apagarPredio(p)} className={`${btn} border-red-200 bg-red-50 text-red-700`}>
                 {ocupado === `p${p.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Apagar prédio
               </button>
             </div>

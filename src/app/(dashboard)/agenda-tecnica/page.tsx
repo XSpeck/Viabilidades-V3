@@ -1,4 +1,5 @@
 "use client";
+import { avisar } from "@/lib/dialogo";
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -439,7 +440,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   }
 
   async function handleConfirmar() {
-    if (!agData) { alert("Preencha a data!"); return; }
+    if (!agData) { void avisar("Preencha a data!"); return; }
     setLoading(true);
     try {
       await confirmarAgendamentoTecnico(
@@ -467,7 +468,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   }
 
   async function handleReagendar() {
-    if (!reagData || !reagTecnico.trim()) { alert("Preencha data e técnico!"); return; }
+    if (!reagData || !reagTecnico.trim()) { void avisar("Preencha data e técnico!"); return; }
     setLoading(true);
     try {
       await reagendarInstalacao(
@@ -496,7 +497,7 @@ function AgendaTecnicaCard({ v, isFttaUtp = false, onRefresh }: { v: Viabilizaca
   }
 
   async function handleArquivar() {
-    if (!v.tecnico_instalacao?.trim()) { alert("Defina um técnico antes de arquivar!"); return; }
+    if (!v.tecnico_instalacao?.trim()) { void avisar("Defina um técnico antes de arquivar!"); return; }
     setLoading(true);
     try { await finalizarViabilizacao(v.id); onRefresh(); }
     finally { setLoading(false); }

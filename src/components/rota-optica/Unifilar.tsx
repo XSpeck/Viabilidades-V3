@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useMemo, useRef, useState } from "react";
 import { Loader2, Maximize2, Minimize2, Plus, Route as RouteIcon, Save, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
@@ -144,7 +145,7 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
   const H = Math.max(hE, hD, yS) + PAD;
 
   // ---------- ações ----------
-  function clicarPonto(p: PontoUni) {
+  async function clicarPonto(p: PontoUni) {
     setErro(null);
     if (modo === "clientes") {
       if (p.k === "porta") setPernaSel({ spl: p.spl, porta: p.porta });
@@ -166,7 +167,7 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
     if (!["fusao", "entrada", "perna", "nivel2"].includes(t)) { setErro(t); return; }
     const ocupA = ocupados.get(idPonto(sel)), ocupB = ocupados.get(idPonto(p));
     const ocupCad = [ocupA, ocupB].filter((l) => l && l.tipo !== "passa");
-    if (ocupCad.length && !confirm("Um dos pontos já está ligado. Trocar a ligação?")) return;
+    if (ocupCad.length && !(await confirmar("Um dos pontos já está ligado. Trocar a ligação?", { ok: "Trocar" }))) return;
     const r = ligar(ed, sel, p);
     if (typeof r === "string") { setErro(r); return; }
     mudar(r);

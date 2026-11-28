@@ -1,4 +1,5 @@
 "use client";
+import { avisar } from "@/lib/dialogo";
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1136,7 +1137,7 @@ function AuditorServicoView() {
       setServicoDetalhe(null);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao aprovar serviço.");
+      void avisar(e instanceof Error ? e.message : "Erro ao aprovar serviço.");
       setAprovando(null);
       setServicoDetalhe(null);
       await load();
@@ -1155,7 +1156,7 @@ function AuditorServicoView() {
       setServicoDetalhe(null);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao rejeitar serviço.");
+      void avisar(e instanceof Error ? e.message : "Erro ao rejeitar serviço.");
       setRejeitando(null);
       setServicoDetalhe(null);
       await load();
@@ -1559,7 +1560,7 @@ function CadastrosFinanceiro() {
       setConfirmDelete(null);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao excluir.");
+      void avisar(e instanceof Error ? e.message : "Erro ao excluir.");
     } finally {
       setSaving(false);
     }
@@ -1808,7 +1809,7 @@ function FechamentoPagamentoView() {
     if (!user) return;
     const tecnico = tecnicos.find((t) => t.uid === avTecnico);
     const valorNum = parseValorBR(avValor);
-    if (!tecnico || !avDescricao.trim() || !valorNum) { alert("Preencha técnico, descrição e valor!"); return; }
+    if (!tecnico || !avDescricao.trim() || !valorNum) { void avisar("Preencha técnico, descrição e valor!"); return; }
     setSalvandoAvulso(true);
     try {
       await criarEntradaAvulsa({
@@ -1825,7 +1826,7 @@ function FechamentoPagamentoView() {
       setAvTecnico(""); setAvDescricao(""); setAvValor(""); setAvObs("");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao lançar entrada avulsa.");
+      void avisar(e instanceof Error ? e.message : "Erro ao lançar entrada avulsa.");
     } finally {
       setSalvandoAvulso(false);
     }
@@ -1864,7 +1865,7 @@ function FechamentoPagamentoView() {
       });
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao fechar pagamento.");
+      void avisar(e instanceof Error ? e.message : "Erro ao fechar pagamento.");
       await load();
     } finally {
       setFechando(null);

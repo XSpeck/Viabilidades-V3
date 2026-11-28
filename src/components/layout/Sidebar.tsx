@@ -125,7 +125,7 @@ export default function Sidebar() {
       )}
 
       <aside
-        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 w-72 ${recolhido ? "md:w-16" : "md:w-64"} min-h-screen bg-gray-900 text-white flex flex-col shrink-0 transform transition-[transform,width] duration-200 ease-in-out md:translate-x-0 ${
+        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 w-72 ${recolhido ? "md:w-16" : "md:w-64"} rolagem-escura min-h-screen bg-gray-900 text-white flex flex-col shrink-0 transform transition-[transform,width] duration-200 ease-in-out md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

@@ -30,3 +30,40 @@ select:disabled {
   background-color: #f3f4f6;
   color: #6b7280;
 }
+
+/* Barras de rolagem no estilo do site: finas, arredondadas, cinza (escuras no Unifilar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.rolagem-escura,
+.rolagem-escura * {
+  scrollbar-color: #3b4048 transparent;
+}
+.rolagem-escura::-webkit-scrollbar-thumb,
+.rolagem-escura *::-webkit-scrollbar-thumb {
+  background-color: #3b4048;
+}
+.rolagem-escura::-webkit-scrollbar-thumb:hover,
+.rolagem-escura *::-webkit-scrollbar-thumb:hover {
+  background-color: #52575f;
+}

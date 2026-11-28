@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Save, Search, Trash2, UserRound } from "lucide-react";
@@ -96,7 +97,7 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
 
   async function excluir() {
     if (!form?.id) return;
-    if (!confirm(`Excluir o cliente "${form.nome}"? A perna onde ele está ligado fica livre.`)) return;
+    if (!(await confirmar(`Excluir o cliente "${form.nome}"? A perna onde ele está ligado fica livre.`, { ok: "Excluir" }))) return;
     setSalvando(true);
     try {
       if (ligacoes.has(form.id)) onCaixas(await ligarCliente({ id: form.id, nome: form.nome }, null, rotas, caixas, usuario));

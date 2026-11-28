@@ -1,4 +1,5 @@
 "use client";
+import { avisar, confirmar } from "@/lib/dialogo";
 
 import { paraGravar } from "@/lib/subRotas";
 
@@ -290,7 +291,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     }
     const comRota = rascunho.pontos.filter((o) => entDe(o) && o.fibra);
     const removidas = (salvo?.pontos ?? []).filter((o) => o.rota_id && !comRota.some((x) => x.id === o.id));
-    if (removidas.length && !confirm(`Excluir a rota de: ${removidas.map((o) => o.nome).join(", ")}? (CDOI tirada do prédio ou sem fibra)`)) return;
+    if (removidas.length && !(await confirmar(`Excluir a rota de: ${removidas.map((o) => o.nome).join(", ")}? (CDOI tirada do prédio ou sem fibra)`, { ok: "Excluir" }))) return;
     setSalvando(true);
     setErro(null);
     try {
@@ -399,10 +400,10 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     if (!salvo) return;
     const usam = rotas.filter((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && (idPredioDoElemento(e) === salvo.id || salvo.pontos.some((o) => o.chave && o.chave === chaveElemento(e)))));
     if (usam.length) {
-      alert(`O prédio "${salvo.nome}" ainda é usado por ${usam.length} rota${usam.length > 1 ? "s" : ""}:\n\n${usam.map((r) => `• ${r.nome}`).join("\n")}\n\nExclua antes as rotas das CDOIs e depois a do cabo até o prédio.`);
+      void avisar(`O prédio "${salvo.nome}" ainda é usado por ${usam.length} rota${usam.length > 1 ? "s" : ""}:\n\n${usam.map((r) => `• ${r.nome}`).join("\n")}\n\nExclua antes as rotas das CDOIs e depois a do cabo até o prédio.`);
       return;
     }
-    if (!confirm(`Excluir o prédio "${salvo.nome}"? Isso não pode ser desfeito.`)) return;
+    if (!(await confirmar(`Excluir o prédio "${salvo.nome}"? Isso não pode ser desfeito.`, { titulo: "Excluir prédio", ok: "Excluir" }))) return;
     await excluirPredio(salvo.id);
     setPredios((ps) => (ps ?? []).filter((p) => p.id !== salvo.id));
     setRascunho(null);

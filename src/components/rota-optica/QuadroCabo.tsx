@@ -44,7 +44,7 @@ interface Props {
   soLeitura?: boolean;
   onEditarNoMapa?: () => void;
   /** Antes de começar uma troca de fibra (o editor avisa que o não salvo se perde) */
-  antesDeTrocar?: () => boolean;
+  antesDeTrocar?: () => boolean | Promise<boolean>;
 }
 
 
@@ -281,7 +281,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                           {ativa && st === "uso" && rotas && trocando !== n && !soLeitura && (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); if (antesDeTrocar && !antesDeTrocar()) return; setTrocando(n); setFeito(null); }}
+                              onClick={async (e) => { e.stopPropagation(); if (antesDeTrocar && !(await antesDeTrocar())) return; setTrocando(n); setFeito(null); }}
                               className="mt-1 ml-[46px] rounded-md border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100"
                               title="Passar esta fibra para outra em várias rotas de uma vez"
                             >

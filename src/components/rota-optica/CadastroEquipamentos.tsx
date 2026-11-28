@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useState } from "react";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
@@ -89,7 +90,7 @@ export default function CadastroEquipamentos({ itens, usuario, onMudou }: Props)
   }
 
   async function excluir(i: ItemCatalogo) {
-    if (!confirm(`Excluir "${i.nome}" do cadastro? Cabos e caixas que usam este tipo ficam sem ele.`)) return;
+    if (!(await confirmar(`Excluir "${i.nome}" do cadastro? Cabos e caixas que usam este tipo ficam sem ele.`, { ok: "Excluir" }))) return;
     try {
       await excluirItemCatalogo(i.id);
       onMudou(itens.filter((x) => x.id !== i.id));

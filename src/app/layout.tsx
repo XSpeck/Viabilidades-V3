@@ -3,6 +3,7 @@ import { NOME_SISTEMA } from "@/lib/marca";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import DialogoHost from "@/components/comum/DialogoHost";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,6 +21,7 @@ export default function RootLayout({
     <html lang="pt-BR" className="h-full">
       <body className={`${inter.className} min-h-full bg-gray-50`}>
         <AuthProvider>{children}</AuthProvider>
+        <DialogoHost />
       </body>
     </html>
   );

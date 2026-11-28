@@ -1,4 +1,5 @@
 "use client";
+import { avisar, confirmar } from "@/lib/dialogo";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -234,7 +235,7 @@ export default function RotaOpticaPage() {
     const filhas = subRotasDe(r.id, rotas);
     if (filhas.length) {
       const lista = filhas.map((x) => `• ${x.nome}`).join("\n");
-      alert(`A rota "${r.nome}" tem ${filhas.length} sub-rota${filhas.length > 1 ? "s" : ""} saindo dela:\n\n${lista}\n\nExclua as sub-rotas antes.`);
+      void avisar(`A rota "${r.nome}" tem ${filhas.length} sub-rota${filhas.length > 1 ? "s" : ""} saindo dela:\n\n${lista}\n\nExclua as sub-rotas antes.`);
       return;
     }
     // rota de CDOI montada por um prédio: a CDOI continua no prédio, só que sem fibra (só no desenho)
@@ -242,7 +243,7 @@ export default function RotaOpticaPage() {
     const doPredio = prediosAgora.find((p) => p.pontos.some((o) => o.rota_id === r.id));
     const cdoi = doPredio?.pontos.find((o) => o.rota_id === r.id);
     const aviso = doPredio && cdoi ? `\n\nA ${cdoi.nome} continua no prédio ${doPredio.nome}, sem fibra (só no desenho).` : "";
-    if (!confirm(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.${aviso}`)) return;
+    if (!(await confirmar(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.${aviso}`, { titulo: "Excluir rota", ok: "Excluir" }))) return;
     try {
       await excluirRota(r.id);
       if (doPredio && cdoi) {
@@ -360,7 +361,7 @@ export default function RotaOpticaPage() {
           onSalvarParcial={modo.rota ? async (d) => { await atualizarRota(modo.rota!.id, d); await recarregar(); } : undefined}
           caixas={caixas}
           onRotasRegravadas={editorRegravado}
-          onAbrirNoUnifilar={(k) => { if (confirm("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.")) abrirNoUnifilar(k); }}
+          onAbrirNoUnifilar={async (k) => { if (await confirmar("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.", { ok: "Abrir no Unifilar" })) abrirNoUnifilar(k); }}
         />
       )}
 

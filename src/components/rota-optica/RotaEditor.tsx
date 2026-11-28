@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/dialogo";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -2580,7 +2581,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   onAbrirRota={() => setAviso("Para ver outra rota, salve ou cancele esta primeiro.")}
                   semMoldura
                   rotas={todas ?? rede}
-                  antesDeTrocar={() => confirm("A troca de fibra grava as rotas escolhidas na hora. O que você mudou aqui e ainda não salvou se perde (o editor reabre com a rota gravada). Continuar?")}
+                  antesDeTrocar={() => confirmar("A troca de fibra grava as rotas escolhidas na hora. O que você mudou aqui e ainda não salvou se perde (o editor reabre com a rota gravada). Continuar?")}
                   onRotasMudaram={() => { setPainelCabo(null); onRotasRegravadas?.(); }}
                 />
               </div>
