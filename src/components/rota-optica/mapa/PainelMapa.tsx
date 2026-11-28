@@ -247,10 +247,12 @@ function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: 
         </div>
       </div>
       {onAbrirNoUnifilar && (() => {
-        // as duas caixas que o cabo liga (pelas rotas)
+        // as duas caixas que este trecho do cabo liga (a chave do trecho é "cabo|caixa|caixa")
+        const [kCabo, ...par] = b.chave.split("|");
         const pontas: string[] = [];
         for (const r of b.rotas) {
-          const i = r.elementos.findIndex((e, k) => k > 0 && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === b.chave);
+          const i = r.elementos.findIndex((e, k) => k > 0 && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === kCabo
+            && par.includes(chaveElemento(e)) && par.includes(chaveElemento(r.elementos[k - 1])));
           if (i > 0) { pontas.push(chaveElemento(r.elementos[i - 1]), chaveElemento(r.elementos[i])); break; }
         }
         return pontas.length ? (
