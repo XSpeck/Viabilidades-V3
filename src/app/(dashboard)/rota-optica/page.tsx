@@ -399,6 +399,7 @@ export default function RotaOpticaPage() {
             onRotasMudaram={recarregar}
             modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")}
             onAbrirCdoi={(k) => abrirNoUnifilar(k)}
+            onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
           />
         </Janela>
       )}

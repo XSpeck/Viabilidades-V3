@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { completarPelasRotas, propagarNasRotas, trocarFibraNoCadastro, type CadastroLigacoes } from "../unifilar";
+import { completarPelasRotas, propagarNasRotas, trocarFibraNoCadastro, trocarFibrasNoCadastro, type CadastroLigacoes } from "../unifilar";
 import type { ElementoRota, RotaOptica } from "../rotaOptica";
 
 const A = "24 FO ASO · HUB → CEO 3 [CB-000006]";
@@ -133,5 +133,13 @@ describe("CTO onde a rota termina", () => {
   });
   it("se a rota não mudou (desmarcada), não monta outro splitter na F01", () => {
     expect(completarPelasRotas("PT:47", [cto], cad({ splitters: spl(2) })).splitters).toBe(0);
+  });
+});
+
+describe("várias trocas no mesmo cabo (prédio)", () => {
+  it("F1↔F3 ao mesmo tempo sem uma passar por cima da outra", () => {
+    const c = cad({ splitters: [{ id: "s", relacao: "1:8", entrada: {}, portas: [{ numero: 1, status: "ramal" as const, saida: { cabo: B, fibra: 1 } }, { numero: 2, status: "ramal" as const, saida: { cabo: B, fibra: 3 } }] }] });
+    const n = trocarFibrasNoCadastro(c, B, "sai", new Map([[1, 3], [3, 1]]));
+    expect(n.splitters[0].portas.map((p) => p.saida?.fibra)).toEqual([3, 1]);
   });
 });

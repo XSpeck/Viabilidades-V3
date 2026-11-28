@@ -438,6 +438,24 @@ function entradaNoCadastro(c: CadastroLigacoes, saida: PontaFibra): PontaFibra |
   return undefined;
 }
 
+/**
+ * Várias trocas de fibra no mesmo cabo de uma vez (ex.: no prédio a F1 vira F3 e a F3 vira F1):
+ * cada ponto muda pela fibra que tinha antes, sem uma troca passar por cima da outra.
+ */
+export function trocarFibrasNoCadastro(c: CadastroLigacoes, cabo: string, lado: Lado, mapa: Map<number, number>): CadastroLigacoes {
+  const k = chaveCabo(cabo);
+  const nova = (p?: PontaFibra) => (p && chaveCabo(p.cabo) === k && mapa.has(p.fibra) ? { cabo: p.cabo, fibra: mapa.get(p.fibra)! } : undefined);
+  return {
+    ...c,
+    emendas: c.emendas.map((m) => (lado === "chega" ? (nova(m.de) ? { ...m, de: nova(m.de)! } : m) : nova(m.para) ? { ...m, para: nova(m.para)! } : m)),
+    splitters: c.splitters.map((s) => ({
+      ...s,
+      entrada: lado === "chega" && nova(s.entrada.fibra) ? { fibra: nova(s.entrada.fibra)! } : s.entrada,
+      portas: lado === "sai" ? s.portas.map((p) => { const n = nova(p.saida); return n ? { ...p, saida: n, descricao: `F${n.fibra} · ${n.cabo}` } : p; }) : s.portas,
+    })),
+  };
+}
+
 /** Aplica a troca de fibra no cadastro da caixa da outra ponta */
 export function trocarFibraNoCadastro(c: CadastroLigacoes, cabo: string, lado: Lado, de: number, para: number): CadastroLigacoes {
   const k = chaveCabo(cabo);
