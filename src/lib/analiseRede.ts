@@ -5,7 +5,7 @@
 import { chaveElemento, portaPonDaRota } from "./arvorePon";
 import { chaveCabo } from "./cabosRede";
 import { resumoPortas, type CaixaRede } from "./caixasRede";
-import { capacidadeDoCabo, capacidadeRegistrada, CALCULO_PADRAO, perdaSplitter, tipoVisual, type RotaOptica, type TipoElementoRota } from "./rotaOptica";
+import { capacidadeDoCabo, capacidadeRegistrada, CALCULO_PADRAO, corFibra, perdaSplitter, tipoVisual, type RotaOptica, type TipoElementoRota } from "./rotaOptica";
 
 export type Gravidade = "critico" | "atencao" | "cadastro";
 export interface Alerta { gravidade: Gravidade; texto: string }
@@ -170,7 +170,7 @@ export function analisarRede(rotas: RotaOptica[], caixasCad: CaixaRede[], predio
         : a.lat !== undefined && a.lon !== undefined && e.lat !== undefined && e.lon !== undefined ? [[a.lat, a.lon], [e.lat, e.lon]] : [];
       if (pts.length < 2) return;
       const k = `${chaveCabo(e.cabo_entrada ?? `trecho${i}`)}|${[chaveElemento(a), chaveElemento(e)].sort().join("|")}`;
-      const c = cabos.get(k) ?? { chave: k, nome: e.cabo_entrada ?? "cabo", cor: t?.cor ?? "#3b82f6", pts, rotas: [], pons0: new Set<string>(), fibras0: new Set<number>(), capacidade: 0, metros: e.distancia_m ?? 0, alertas: [] };
+      const c = cabos.get(k) ?? { chave: k, nome: e.cabo_entrada ?? "cabo", cor: (e.fibra_entrada && e.cabo_entrada ? corFibra(e.fibra_entrada, e.cabo_entrada).hex : undefined) ?? t?.cor ?? "#3b82f6", pts, rotas: [], pons0: new Set<string>(), fibras0: new Set<number>(), capacidade: 0, metros: e.distancia_m ?? 0, alertas: [] };
       if (!c.rotas.includes(r)) c.rotas.push(r);
       c.pons0.add(pon);
       if (e.fibra_entrada) c.fibras0.add(e.fibra_entrada);

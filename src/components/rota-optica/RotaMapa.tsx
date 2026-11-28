@@ -6,7 +6,7 @@ import { MapContainer, TileLayer, Polyline, Marker, Tooltip, useMap } from "reac
 import "leaflet/dist/leaflet.css";
 import ZoomComCtrl from "./ZoomComCtrl";
 import { chaveElemento } from "@/lib/arvorePon";
-import { tipoVisual, type ElementoRota, type TipoElementoRota, type TrechoCabo } from "@/lib/rotaOptica";
+import { corFibra, tipoVisual, type ElementoRota, type TipoElementoRota, type TrechoCabo } from "@/lib/rotaOptica";
 import { iconeSvg } from "./IconesRede";
 
 interface Props {
@@ -50,6 +50,11 @@ function Centralizar({ alvo }: { alvo: [number, number] | null }) {
 }
 
 export default function RotaMapa({ elementos, trechos, selecionado, onSelect, chavesPredio }: Props) {
+  /** Cor do trecho: a da fibra que a rota usa nele hoje (a gravada no trecho pode ser de uma fibra antiga) */
+  const corDoTrecho = (t: TrechoCabo) => {
+    const e = t.ate !== undefined ? elementos[t.ate] : undefined;
+    return (e?.fibra_entrada && e.cabo_entrada ? corFibra(e.fibra_entrada, e.cabo_entrada).hex : undefined) ?? t.cor ?? "#3b82f6";
+  };
   const pontosEl = elementos
     .map((e, i) => ({ e, i }))
     .filter(({ e }) => e.lat !== undefined && e.lon !== undefined);
@@ -92,7 +97,7 @@ export default function RotaMapa({ elementos, trechos, selecionado, onSelect, ch
         <Polyline
           key={`t${i}`}
           positions={t.pontos.map((p) => [p.lat, p.lon] as [number, number])}
-          pathOptions={{ color: t.cor ?? "#3b82f6", weight: 4, opacity: 1, lineCap: "round", lineJoin: "round" }}
+          pathOptions={{ color: corDoTrecho(t), weight: 4, opacity: 1, lineCap: "round", lineJoin: "round" }}
         >
           <Tooltip sticky>{t.nome}</Tooltip>
         </Polyline>

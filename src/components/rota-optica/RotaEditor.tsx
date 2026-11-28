@@ -202,7 +202,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         if (!vistos.has(k)) vistos.set(k, { el: e, rota: r, i });
       });
       if (r.trechos.length) {
-        r.trechos.forEach((t) => cabosRede.push({ pts: t.pontos.map((p) => [p.lat, p.lon] as [number, number]), cor: t.cor }));
+        r.trechos.forEach((t) => {
+          // a cor da fibra que a rota usa hoje no trecho (a gravada pode ser de uma fibra antiga)
+          const e = t.ate !== undefined ? r.elementos[t.ate] : undefined;
+          const cor = e?.fibra_entrada && e.cabo_entrada ? corFibra(e.fibra_entrada, e.cabo_entrada).hex : t.cor;
+          cabosRede.push({ pts: t.pontos.map((p) => [p.lat, p.lon] as [number, number]), cor });
+        });
       } else {
         const pts = r.elementos.filter((e) => e.lat !== undefined && e.lon !== undefined).map((e) => [e.lat!, e.lon!] as [number, number]);
         if (pts.length > 1) cabosRede.push({ pts });
