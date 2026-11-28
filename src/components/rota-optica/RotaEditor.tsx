@@ -42,8 +42,8 @@ import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { CODIGO_PREDIO, idPredioDoElemento, listarPredios, novoId, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
-import { salvarCaixa, splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
-import { trocarFibrasNoCadastro, trocasNasPontas } from "@/lib/unifilar";
+import { splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
+import { gravarRotasEPontas } from "@/lib/gravarTroca";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
@@ -1458,20 +1458,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     return !!t && JSON.stringify(t.pontos.slice(1, -1)) !== JSON.stringify(l.vertices);
   }
 
-  /** A fibra trocada aqui vale no trecho inteiro: as caixas das duas pontas (fusão, entrada do splitter, perna) acompanham */
+  /** A fibra trocada aqui vale no trecho inteiro: as caixas das pontas do cabo (fusão, entrada do splitter, perna) acompanham */
   async function acompanharCaixas(antes: ElementoRota[], depois: ElementoRota[]) {
-    const porCaixa = new Map<string, CaixaRede>();
-    for (const t of trocasNasPontas(antes, depois)) {
-      const cad = porCaixa.get(t.chave) ?? caixas.find((c) => c.chave === t.chave);
-      if (!cad || (!cad.splitters?.length && !cad.emendas?.length)) continue;
-      const base = { emendas: cad.emendas ?? [], regras_emenda: cad.regras_emenda ?? [], splitters: cad.splitters ?? [] };
-      const novo = trocarFibrasNoCadastro(base, t.cabo, t.lado, t.mapa);
-      if (JSON.stringify(novo) !== JSON.stringify(base)) porCaixa.set(t.chave, { ...cad, ...novo });
-    }
-    for (const c of porCaixa.values()) {
-      const gravada = await salvarCaixa({ ...c, atualizado_por: usuario });
-      onCaixaSalva?.(gravada);
-    }
+    const gravadas = await gravarRotasEPontas([{ id: "_", nome: "", origem: "manual", trechos: [], elementos: antes }], [{ id: "_", nome: "", origem: "manual", trechos: [], elementos: depois }], caixas, usuario);
+    gravadas.forEach((c) => onCaixaSalva?.(c));
   }
 
   async function salvarElemento(i: number) {
@@ -2615,6 +2605,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   onAbrirRota={() => setAviso("Para ver outra rota, salve ou cancele esta primeiro.")}
                   semMoldura
                   rotas={todas ?? rede}
+                  caixas={caixas}
+                  onCaixaSalva={onCaixaSalva}
                   antesDeTrocar={() => confirmar("A troca de fibra grava as rotas escolhidas na hora. O que você mudou aqui e ainda não salvou se perde (o editor reabre com a rota gravada). Continuar?")}
                   onRotasMudaram={() => { setPainelCabo(null); onRotasRegravadas?.(); }}
                 />

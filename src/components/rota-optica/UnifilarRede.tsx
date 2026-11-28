@@ -6,19 +6,20 @@ import { Loader2, Maximize2, Minimize2, MousePointerClick, Route as RouteIcon, S
 import { corFibra, perdaSplitter, tipoVisual, TIPO_ELEMENTO_LABEL, type RotaOptica, type TipoElementoRota } from "@/lib/rotaOptica";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
-import { idCaixa, portasPara, salvarCaixa, salvarLayoutUnifilar, type CaixaRede, type LayoutUnifilar, type SplitterCaixa } from "@/lib/caixasRede";
+import { idCaixa, portasPara, salvarLayoutUnifilar, type CaixaRede, type LayoutUnifilar, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import {
-  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, propagarNasRotas, rotasDaFibra, tipoEntre, trocarFibraNoCadastro, trocarPortaDio,
-  type CadastroLigacoes, type MudancaRota, type TrocaNaPonta, type CaboUni, type ModeloUnifilar, type PontoUni,
+  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, trocarPortaDio,
+  type CadastroLigacoes, type CaboUni, type ModeloUnifilar, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
-import { atualizarRota, CALCULO_PADRAO } from "@/lib/rotaOptica";
+import { CALCULO_PADRAO } from "@/lib/rotaOptica";
 import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
 import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
-import { paraGravar } from "@/lib/subRotas";
 import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
+import { caixasDoPlano, planoPelaCaixa, planoPelasRotas, type PlanoTroca } from "@/lib/trocaFibra";
+import { gravarTroca } from "@/lib/gravarTroca";
 import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
 import type { PortaCaixa, StatusPorta } from "@/lib/caixasRede";
 import BuscaCliente from "./BuscaCliente";
@@ -570,75 +571,76 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     setDioPend((d) => ({ ...d, [`${chave}|${chaveCabo(cordao)}`]: { chave, cordao, n } }));
   }
 
-  /** Revisão antes de gravar: as rotas que passam a sair por outra fibra por causa das ligações mudadas */
-  const [revisao, setRevisao] = useState<{ mudancas: MudancaRota[]; bloqueadas: { rota: RotaOptica; motivo: string }[]; finais: Map<string, RotaOptica>; pontas: TrocaNaPonta[] } | null>(null);
+  /** Revisão antes de gravar: o plano da troca (rotas que mudam e caixas das pontas dos cabos) */
+  const [revisao, setRevisao] = useState<PlanoTroca | null>(null);
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  /** Rotas da revisão (as que mudam por causa de ligações mudadas nas caixas) */
+  const rotasDaRevisao = (p: PlanoTroca) => [...new Set(p.mudancas.map((m) => m.rota.id))];
+
+  /** Tudo o que está pendente vira um plano só: trocas de adaptador do DIO e ligações mudadas nas caixas */
+  function montarPlano(): PlanoTroca {
+    // DIO: outro adaptador = outra fibra no cabo que sai dele (a caixa da outra ponta acompanha)
+    const plano = planoPelasRotas(rotasBase, rotasMudadas);
+    // caixa por caixa, uma mudança em cima da outra
+    let atuais = rotas;
+    for (const chave of sujas) {
+      const p = planoPelaCaixa(chave, atuais, inicialDe(cadDe.get(chave)), edDe(chave));
+      p.rotas.forEach((r, id) => plano.rotas.set(id, r));
+      plano.mudancas.push(...p.mudancas);
+      plano.pontas.push(...p.pontas);
+      plano.bloqueadas.push(...p.bloqueadas);
+      if (p.rotas.size) atuais = atuais.map((x) => p.rotas.get(x.id) ?? x);
+    }
+    return plano;
+  }
 
   function revisarESalvar() {
     setErro(null);
-    // caixa por caixa: o que mudou no cadastro muda as rotas dali pra frente (uma mudança em cima da outra)
-    let atuais = rotas;
-    const mudancas: MudancaRota[] = [];
-    const bloqueadas: { rota: RotaOptica; motivo: string }[] = [];
-    const pontas: TrocaNaPonta[] = [];
-    for (const chave of sujas) {
-      const r = propagarNasRotas(chave, atuais, inicialDe(cadDe.get(chave)), edDe(chave));
-      mudancas.push(...r.mudancas);
-      bloqueadas.push(...r.bloqueadas);
-      pontas.push(...r.pontas);
-      const novas = new Map(r.mudancas.map((m) => [m.rota.id, { ...m.rota, elementos: m.elementos }]));
-      if (novas.size) atuais = atuais.map((x) => novas.get(x.id) ?? x);
-    }
-    if (!mudancas.length && !bloqueadas.length) { void salvarTudo(new Map(), []); return; }
-    const finais = new Map<string, RotaOptica>();
-    for (const m of mudancas) finais.set(m.rota.id, atuais.find((x) => x.id === m.rota.id)!);
-    setMarcadas(new Set(finais.keys()));
-    setRevisao({ mudancas, bloqueadas, finais, pontas });
+    const plano = montarPlano();
+    // nada muda nas rotas por causa das caixas: grava direto
+    if (!plano.mudancas.length && !plano.bloqueadas.length) { void salvar(plano, new Set()); return; }
+    setMarcadas(new Set(rotasDaRevisao(plano)));
+    setRevisao(plano);
   }
 
-  /** Grava as caixas e as rotas (troca do DIO + as rotas escolhidas na revisão) */
-  async function salvarTudo(propagadas: Map<string, RotaOptica>, pontas: TrocaNaPonta[]) {
+  /** Cadastro completo da caixa para gravar (o que o Unifilar mexe + o resto como está) */
+  function caixaParaGravar(chave: string, ed: CadastroLigacoes) {
+    const cad = cadDe.get(chave);
+    const temSpl = comSpl(chave);
+    if (temSpl && ed.splitters.some((s) => !s.entrada.fibra && !s.entrada.splitter)) throw new Error(`${infoDe.get(chave)?.nome}: um splitter está sem entrada.`);
+    return {
+      chave, nome: infoDe.get(chave)?.nome ?? cad?.nome ?? chave,
+      splitter: temSpl ? undefined : cad?.splitter, splitter_modelo: temSpl ? undefined : cad?.splitter_modelo,
+      portas: temSpl ? [] : cad?.portas ?? [], splitters: temSpl ? ed.splitters : cad?.splitters,
+      obs: cad?.obs, regras_emenda: ed.regras_emenda, emendas: ed.emendas, atendimento: atds[chave] ?? cad?.atendimento,
+      layout_unifilar: cad?.layout_unifilar, atualizado_por: usuario,
+    };
+  }
+
+  /** Grava o plano de uma vez (rotas e caixas juntas): as trocas do DIO sempre, as da revisão se marcadas */
+  async function salvar(plano: PlanoTroca, marcadasAgora: Set<string>) {
     setSalvando(true);
     setErro(null);
-    let mudouRota = false;
     try {
-      // rotas primeiro: a sincronização da CDOI parte delas já gravadas
-      const paraGravarRotas = new Map<string, RotaOptica>(rotasMudadas.map((r) => [r.id, r]));
-      propagadas.forEach((r, id) => paraGravarRotas.set(id, r));
-      for (const r of paraGravarRotas.values()) {
-        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
-          nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-        }));
-        mudouRota = true;
-      }
-      const rotasDepois = rotasBase.map((x) => paraGravarRotas.get(x.id) ?? x);
-      // a caixa da outra ponta de cada cabo trocado acompanha (fusão, entrada do splitter, perna)
-      const cadastros = new Map<string, CadastroLigacoes>(sujas.map((k) => [k, edDe(k)]));
-      for (const pt of pontas) {
-        const base = cadastros.get(pt.chave) ?? edDe(pt.chave);
-        cadastros.set(pt.chave, trocarFibraNoCadastro(base, pt.cabo, pt.lado, pt.de, pt.para));
-      }
-      for (const [chave, ed] of cadastros) {
-        const cad = cadDe.get(chave);
-        const temSpl = comSpl(chave);
-        const semEntrada = temSpl ? ed.splitters.find((s) => !s.entrada.fibra && !s.entrada.splitter) : undefined;
-        if (semEntrada) throw new Error(`${infoDe.get(chave)?.nome}: um splitter está sem entrada.`);
-        const salva = await salvarCaixa({
-          chave, nome: infoDe.get(chave)?.nome ?? cad?.nome ?? chave,
-          splitter: temSpl ? undefined : cad?.splitter, splitter_modelo: temSpl ? undefined : cad?.splitter_modelo,
-          portas: temSpl ? [] : cad?.portas ?? [], splitters: temSpl ? ed.splitters : cad?.splitters,
-          obs: cad?.obs, regras_emenda: ed.regras_emenda, emendas: ed.emendas, atendimento: atds[chave] ?? cad?.atendimento, layout_unifilar: cad?.layout_unifilar, atualizado_por: usuario,
-        });
-        onCaixaSalva(salva);
-        // CDOI: o splitter do Unifilar passa para o prédio e para a rota (conta de potência)
-        if (infoDe.get(chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(salva, rotasDepois, catalogo, usuario))) mudouRota = true;
+      const valem = new Set([...rotasMudadas.map((r) => r.id), ...marcadasAgora]);
+      const rotasGravar = [...plano.rotas.values()].filter((r) => valem.has(r.id));
+      // as caixas editadas + as das pontas dos cabos trocados (só caixa que já tem cadastro)
+      const cadastroDe = (k: string) => (cadDe.has(k) || eds[k] ? edDe(k) : undefined);
+      const cadastros = caixasDoPlano(plano.pontas, cadastroDe, new Map(sujas.map((k) => [k, edDe(k)])), valem);
+      const gravadas = await gravarTroca(rotasGravar, [...cadastros].map(([k, ed]) => caixaParaGravar(k, ed)));
+      gravadas.forEach(onCaixaSalva);
+      // CDOI: o splitter do Unifilar passa para o prédio e para a rota (conta de potência)
+      const rotasDepois = rotasBase.map((x) => rotasGravar.find((r) => r.id === x.id) ?? x);
+      let mudouRota = rotasGravar.length > 0;
+      for (const c of gravadas) {
+        if (infoDe.get(c.chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(c, rotasDepois, catalogo, usuario))) mudouRota = true;
       }
       setDioPend({});
-      if (mudouRota) onRotasMudaram?.();
       setEds({});
       setAtds({});
       setHist([]);
       setRevisao(null);
+      if (mudouRota) onRotasMudaram?.();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
@@ -1158,8 +1160,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
               <p className="mt-0.5 text-[11px] text-slate-400">As ligações mudadas trocam a fibra destas rotas, e a caixa da outra ponta do cabo acompanha. Desmarque a rota que não deve mudar (ela fica com a fibra antiga e a diferença aparece no Unifilar).</p>
             </div>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
-              {[...revisao.finais.keys()].map((id) => {
-                const r = revisao.finais.get(id)!;
+              {rotasDaRevisao(revisao).map((id) => {
+                const r = revisao.rotas.get(id) ?? revisao.mudancas.find((m) => m.rota.id === id)!.rota;
                 const ms = revisao.mudancas.filter((m) => m.rota.id === id);
                 return (
                   <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-xl border p-2 ${marcadas.has(id) ? "border-orange-500/60 bg-orange-500/10" : "border-slate-700"}`}>
@@ -1181,10 +1183,10 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                   </label>
                 );
               })}
-              {revisao.pontas.filter((pt) => pt.rotas.some((id) => marcadas.has(id))).length > 0 && (
+              {revisao.pontas.filter((pt) => pt.rotas.some((id) => marcadas.has(id) || rotasMudadas.some((r) => r.id === id))).length > 0 && (
                 <div className="rounded-xl border border-slate-700 p-2">
                   <p className="mb-1 font-semibold text-slate-300">E na caixa da outra ponta do cabo:</p>
-                  {revisao.pontas.filter((pt) => pt.rotas.some((id) => marcadas.has(id))).map((pt, k) => (
+                  {revisao.pontas.filter((pt) => pt.rotas.some((id) => marcadas.has(id) || rotasMudadas.some((r) => r.id === id))).map((pt, k) => (
                     <p key={k} className="text-[11px] text-slate-400">
                       <b className="text-slate-200">{curto(pt.nome, 26)}</b>: {curto(semCodigo(pt.cabo), 22)} {pt.lado === "sai" ? "sai" : "chega"} pela F{String(pt.para).padStart(2, "0")} no lugar da F{String(pt.de).padStart(2, "0")}
                     </p>
@@ -1197,7 +1199,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-800 bg-[#0f1115] px-4 py-3">
               <button type="button" disabled={salvando} onClick={() => setRevisao(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300">Voltar</button>
-              <button type="button" disabled={salvando} onClick={() => void salvarTudo(new Map([...revisao.finais].filter(([id]) => marcadas.has(id))), revisao.pontas.filter((pt) => pt.rotas.some((id) => marcadas.has(id))))} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60">
+              <button type="button" disabled={salvando} onClick={() => void salvar(revisao, marcadas)} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60">
                 {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar caixas{marcadas.size ? ` e ${marcadas.size} rota${marcadas.size !== 1 ? "s" : ""}` : ""}
               </button>
             </div>

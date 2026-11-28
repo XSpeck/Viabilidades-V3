@@ -248,6 +248,17 @@ function gravarPorta(p: PortaCaixa): PortaCaixa {
 export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">): Promise<CaixaRede> {
   const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
   const { db } = await import("./firebase");
+  const { id, registro, caixa } = registroCaixa(dados);
+  // merge: campos que esta tela não mexe (arrumação do Unifilar) continuam
+  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() }, { merge: true });
+  return caixa;
+}
+
+/** Coleção das caixas (para gravar em lote junto com as rotas) */
+export const COLECAO_CAIXAS = "caixas_rede";
+
+/** O que vai para o banco de uma caixa, e como ela fica na tela depois de gravada */
+export function registroCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">) {
   const id = idCaixa(dados.chave);
   const portas = portasPara(dados.splitter, dados.portas).map((p) =>
     gravarPorta(p)
@@ -275,12 +286,11 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
   };
-  // merge: campos que esta tela não mexe (arrumação do Unifilar) continuam
-  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() }, { merge: true });
-  return { id, ...registro, layout_unifilar: dados.layout_unifilar, splitters: splitters.length ? splitters : undefined,
+  const caixa: CaixaRede = { id, ...registro, layout_unifilar: dados.layout_unifilar, splitters: splitters.length ? splitters : undefined,
     regras_emenda: registro.regras_emenda.length ? registro.regras_emenda : undefined,
     emendas: registro.emendas.length ? registro.emendas : undefined,
     atendimento: registro.atendimento.length ? registro.atendimento : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+  return { id, registro, caixa };
 }
 
 /**

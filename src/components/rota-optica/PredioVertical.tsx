@@ -18,8 +18,8 @@ import {
   type RotaOptica,
 } from "@/lib/rotaOptica";
 import { chaveElemento } from "@/lib/arvorePon";
-import { resumoPortas, salvarCaixa, totalPernas, type CaixaRede } from "@/lib/caixasRede";
-import { trocarFibrasNoCadastro } from "@/lib/unifilar";
+import { resumoPortas, totalPernas, type CaixaRede } from "@/lib/caixasRede";
+import { gravarRotasEPontas } from "@/lib/gravarTroca";
 import { chaveCabo } from "@/lib/cabosRede";
 import {
   andaresDoBloco,
@@ -301,6 +301,8 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       let ultimo = Math.max(100000, ...rotas.flatMap((x) => x.elementos.map((e) => e.codigo ?? "")).filter((c) => /^\d+$/.test(c.trim())).map((c) => parseInt(c, 10)));
       const pontos: PontoPredio[] = [];
       const gerenciadas = new Set<string>();
+      /** Rotas de CDOI que já existiam: como eram e como ficam (para as caixas das pontas acompanharem) */
+      const trocadas: { antes: RotaOptica; depois: RotaOptica }[] = [];
       for (const o of rascunho.pontos) {
         const eid = entDe(o);
         const ent = eid ? ents.find((x) => x.rota.id === eid) : undefined;
@@ -341,33 +343,19 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
           }
         );
         let rid = o.rota_id && rotas.some((x) => x.id === o.rota_id) ? o.rota_id : undefined;
-        if (rid) await atualizarRota(rid, dados);
+        if (rid) {
+          const antes = rotas.find((x) => x.id === rid)!;
+          trocadas.push({ antes, depois: { ...antes, elementos: [...ent.rota.elementos.slice(0, ent.k + 1), el] } });
+          await atualizarRota(rid, dados);
+        }
         else rid = await criarRota(dados);
         gerenciadas.add(rid);
         pontos.push({ ...o, nome: el.nome, chave: `PT:${codigo}`, entrada: eid, rota_id: rid, cabo: undefined });
       }
       for (const o of removidas) await excluirRota(o.rota_id!);
-      // fibra da CDOI trocada: na caixa de onde sai o cabo do prédio (a HUB), a perna passa para a fibra nova
-      const trocasPorCaixa = new Map<string, { cabo: string; mapa: Map<number, number> }>();
-      for (const o of rascunho.pontos) {
-        const antes = salvo?.pontos.find((x) => x.id === o.id);
-        const eid = entDe(o);
-        const ent = eid ? ents.find((x) => x.rota.id === eid) : undefined;
-        if (!ent || !o.fibra || !antes?.fibra || antes.fibra === o.fibra || entDe(antes) !== eid) continue;
-        const kCx = chaveElemento(ent.rota.elementos[ent.k - 1]);
-        const t = trocasPorCaixa.get(`${kCx}|${chaveCabo(ent.cabo)}`) ?? { cabo: ent.cabo, mapa: new Map<number, number>() };
-        t.mapa.set(antes.fibra, o.fibra);
-        trocasPorCaixa.set(`${kCx}|${chaveCabo(ent.cabo)}`, t);
-      }
-      for (const [k, t] of trocasPorCaixa) {
-        const cad = caixas.find((c) => c.chave === k.split("|")[0]);
-        if (!cad?.splitters?.length && !cad?.emendas?.length) continue;
-        const base = { emendas: cad.emendas ?? [], regras_emenda: cad.regras_emenda ?? [], splitters: cad.splitters ?? [] };
-        const novo = trocarFibrasNoCadastro(base, t.cabo, "sai", t.mapa);
-        if (JSON.stringify(novo) === JSON.stringify(base)) continue;
-        const gravada = await salvarCaixa({ ...cad, ...novo, atualizado_por: usuario });
-        onCaixaSalva?.(gravada);
-      }
+      // fibra da CDOI trocada: as caixas das pontas do cabo (a HUB de onde ele sai, a CDOI) acompanham
+      const gravadas = await gravarRotasEPontas(trocadas.map((t) => t.antes), trocadas.map((t) => t.depois), caixas, usuario);
+      gravadas.forEach((c) => onCaixaSalva?.(c));
       const s = await salvarPredio({ ...rascunho, pontos }, usuario);
       setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== s.id), s]);
       // CDOIs que vêm de rotas feitas fora do prédio: nome e splitter do prédio valem também na rota

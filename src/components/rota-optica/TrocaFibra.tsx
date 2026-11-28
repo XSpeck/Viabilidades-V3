@@ -3,10 +3,9 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { corFibraPorCapacidade, type RotaOptica } from "@/lib/rotaOptica";
-import { atualizarRota } from "@/lib/rotaOptica";
-import { paraGravar } from "@/lib/subRotas";
+import { gravarRotasEPontas } from "@/lib/gravarTroca";
+import type { CaixaRede } from "@/lib/caixasRede";
 import { salvarCabo, semCodigo, type CaboRede, type UsoFibra } from "@/lib/cabosRede";
-import { chaveElemento } from "@/lib/arvorePon";
 import { conflitosTroca, trechosDaFibra, trocarFibraNaRota } from "@/lib/trocaFibra";
 import { cortar } from "@/lib/textoCompleto";
 
@@ -22,9 +21,11 @@ interface Props {
   porTubo: number;
   uso: Map<number, UsoFibra[]>;
   usuario: string;
+  /** Cadastro das caixas: as das pontas dos trechos trocados acompanham (fusão, splitter, perna) */
+  caixas?: CaixaRede[];
   onCancelar: () => void;
-  /** Terminou: recarregar as rotas e mostrar o resumo */
-  onFeito: (resumo: string, cabo?: CaboRede) => void;
+  /** Terminou: recarregar as rotas e mostrar o resumo (e as caixas que mudaram) */
+  onFeito: (resumo: string, cabo?: CaboRede, caixas?: CaixaRede[]) => void;
 }
 
 const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
@@ -33,7 +34,7 @@ const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].tr
  * Trocar a fibra em várias rotas de uma vez: escolhe a fibra nova, os trechos do cabo e as rotas
  * que mudam (as outras ficam na fibra antiga). Grava as rotas escolhidas na hora.
  */
-export default function TrocaFibra({ rotas, caboChave, caboNome, cabo, velha, capacidade, porTubo, uso, usuario, onCancelar, onFeito }: Props) {
+export default function TrocaFibra({ rotas, caboChave, caboNome, cabo, velha, capacidade, porTubo, uso, usuario, caixas = [], onCancelar, onFeito }: Props) {
   const trechos = useMemo(() => trechosDaFibra(rotas, caboChave, velha), [rotas, caboChave, velha]);
   const porId = useMemo(() => new Map(rotas.map((r) => [r.id, r])), [rotas]);
   const [nova, setNova] = useState<number | "">("");
@@ -63,35 +64,22 @@ export default function TrocaFibra({ rotas, caboChave, caboNome, cabo, velha, ca
   };
   const vo = rotulo(velha);
   const alternar = (s: Set<string>, k: string) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; };
-  /** CEOs/CTs nas pontas dos trechos escolhidos (o mapa de emendas delas pode precisar de ajuste) */
-  const caixasEmenda = useMemo(() => {
-    const nomes = new Set<string>();
-    for (const r of rotas) r.elementos.forEach((e, i) => {
-      if (!i) return;
-      const k = `${chaveElemento(r.elementos[i - 1])}>${chaveElemento(e)}`;
-      if (!selTrechos.has(k)) return;
-      [r.elementos[i - 1], e].forEach((x) => { if (x.tipo === "ceo" || x.tipo === "ct") nomes.add(x.nome); });
-    });
-    return [...nomes];
-  }, [rotas, selTrechos]);
-
   async function aplicar() {
     if (!pronto || typeof nova !== "number") return;
     setGravando(true);
     setErro(null);
-    let n = 0;
     try {
+      // as rotas escolhidas passam para a fibra nova nos trechos escolhidos
+      const antes: RotaOptica[] = [], depois: RotaOptica[] = [];
       for (const id of movidas) {
         const r = porId.get(id);
-        if (!r) continue;
-        const novo = trocarFibraNaRota(r, caboChave, velha, nova, selTrechos);
-        if (!novo) continue;
-        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
-          nome: r.nome, origem: r.origem, elementos: novo.elementos, trechos: novo.trechos,
-          calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-        }));
-        n++;
+        const novo = r ? trocarFibraNaRota(r, caboChave, velha, nova, selTrechos) : null;
+        if (!r || !novo) continue;
+        antes.push(r);
+        depois.push({ ...r, elementos: novo.elementos, trechos: novo.trechos });
       }
+      // rotas e caixas das pontas (fusão, entrada do splitter, perna) gravadas juntas
+      const gravadas = await gravarRotasEPontas(antes, depois, caixas, usuario, { gravarRotas: true });
       let caboSalvo: CaboRede | undefined;
       if (rompida && podeRompida) {
         const hoje = new Date().toLocaleDateString("pt-BR");
@@ -102,13 +90,15 @@ export default function TrocaFibra({ rotas, caboChave, caboNome, cabo, velha, ca
         });
       }
       const no = rotulo(nova);
+      const n = depois.length;
       onFeito(
-        `F${String(velha).padStart(2, "0")} → ${no.c.rotulo.split(" ")[1]} (${no.c.nome.toLowerCase()}) em ${n} rota${n !== 1 ? "s" : ""}, ${selTrechos.size} trecho${selTrechos.size !== 1 ? "s" : ""}.` +
-          (caixasEmenda.length ? ` Confira o mapa de emendas de: ${caixasEmenda.map((x) => curto(x, 30)).join(", ")}.` : ""),
+        `F${String(velha).padStart(2, "0")} → ${no.c.rotulo.split(" ")[1]} (${no.c.nome.toLowerCase()}) em ${n} rota${n !== 1 ? "s" : ""}, ${selTrechos.size} trecho${selTrechos.size !== 1 ? "s" : ""}` +
+          (gravadas.length ? `; ${gravadas.length} caixa${gravadas.length !== 1 ? "s" : ""} das pontas acompanharam (${gravadas.map((c) => curto(c.nome, 24)).join(", ")}).` : "."),
         caboSalvo,
+        gravadas,
       );
     } catch (e) {
-      setErro(`Parou depois de ${n} rota(s): ${e instanceof Error ? e.message : "erro ao gravar"}`);
+      setErro(`Nada foi gravado: ${e instanceof Error ? e.message : "erro ao gravar"}`);
     } finally {
       setGravando(false);
     }

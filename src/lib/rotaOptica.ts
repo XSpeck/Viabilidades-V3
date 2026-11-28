@@ -608,9 +608,17 @@ export async function criarRota(rota: RotaOpticaInput): Promise<string> {
 export async function atualizarRota(id: string, rota: RotaOpticaInput): Promise<void> {
   const { doc, updateDoc, serverTimestamp, deleteField } = await import("firebase/firestore");
   const { db } = await import("./firebase");
+  await updateDoc(doc(db, COLECAO, id), camposAtualizarRota(rota, { serverTimestamp, deleteField }));
+}
+
+/** Coleção das rotas (para gravar em lote junto com as caixas) */
+export const COLECAO_ROTAS = COLECAO;
+
+/** Campos de uma atualização de rota (o que não se grava sai; sub-rota que virou rota perde o pai) */
+export function camposAtualizarRota(rota: RotaOpticaInput, fs: { serverTimestamp: () => unknown; deleteField: () => unknown }): Record<string, unknown> {
   const { criado_por, tronco, orfa, ...resto } = rota as RotaOptica;
   void criado_por; void tronco; void orfa;
-  await updateDoc(doc(db, COLECAO, id), { ...semUndefined(resto), ...(resto.pai ? {} : { pai: deleteField() }), atualizado_em: serverTimestamp() });
+  return { ...semUndefined(resto), ...(resto.pai ? {} : { pai: fs.deleteField() }), atualizado_em: fs.serverTimestamp() };
 }
 
 export async function excluirRota(id: string): Promise<void> {

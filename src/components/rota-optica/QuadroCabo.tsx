@@ -16,6 +16,7 @@ import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
 import { chaveCabo, codigoDoCabo } from "@/lib/cabosRede";
 import EtiquetaCabo from "./EtiquetaCabo";
 import TrocaFibra from "./TrocaFibra";
+import type { CaixaRede } from "@/lib/caixasRede";
 import type { RotaOptica } from "@/lib/rotaOptica";
 
 interface Props {
@@ -43,6 +44,9 @@ interface Props {
   /** Só mostra (o cabo se edita no mapa da rota) */
   soLeitura?: boolean;
   onEditarNoMapa?: () => void;
+  /** Cadastro das caixas (na troca de fibra, as das pontas acompanham) */
+  caixas?: CaixaRede[];
+  onCaixaSalva?: (c: CaixaRede) => void;
   /** Antes de começar uma troca de fibra (o editor avisa que o não salvo se perde) */
   antesDeTrocar?: () => boolean | Promise<boolean>;
 }
@@ -50,7 +54,7 @@ interface Props {
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram, soLeitura, onEditarNoMapa, antesDeTrocar }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram, soLeitura, onEditarNoMapa, antesDeTrocar, caixas, onCaixaSalva }: Props) {
   /** Fibra escolhida (clique): destacada aqui */
   const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
   /** Fibras com as sub-rotas abertas (por padrão ficam recolhidas embaixo da rota tronco) */
@@ -305,11 +309,13 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                                 porTubo={porTubo}
                                 uso={uso}
                                 usuario={usuario}
+                                caixas={caixas}
                                 onCancelar={() => setTrocando(null)}
-                                onFeito={(resumo, caboSalvo) => {
+                                onFeito={(resumo, caboSalvo, caixasSalvas) => {
                                   setTrocando(null);
                                   setFeito(resumo);
                                   if (caboSalvo) onSalva(caboSalvo);
+                                  caixasSalvas?.forEach((c) => onCaixaSalva?.(c));
                                   onRotasMudaram?.();
                                 }}
                               />
