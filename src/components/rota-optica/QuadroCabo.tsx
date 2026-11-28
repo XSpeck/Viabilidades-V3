@@ -13,7 +13,7 @@ import {
   type UsoFibra,
 } from "@/lib/cabosRede";
 import { resumoItem, type ItemCatalogo } from "@/lib/catalogoRede";
-import { codigoDoCabo } from "@/lib/cabosRede";
+import { chaveCabo, codigoDoCabo } from "@/lib/cabosRede";
 import EtiquetaCabo from "./EtiquetaCabo";
 import TrocaFibra from "./TrocaFibra";
 import type { RotaOptica } from "@/lib/rotaOptica";
@@ -57,6 +57,8 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
   const [subAbertas, setSubAbertas] = useState<Set<number>>(new Set());
   /** Fibra sendo trocada (painel "Trocar fibra") e o resumo da última troca */
   const [trocando, setTrocando] = useState<number | null>(null);
+  /** Cabo que entra num prédio: a fibra de cada CDOI é do prédio */
+  const ehCaboPredio = !!rotas?.some((r) => r.elementos.some((e) => e.tipo === "predio" && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chave));
   const [feito, setFeito] = useState<string | null>(null);
   const maiorUsada = Math.max(0, ...uso.keys(), ...(cabo?.fibras.map((f) => f.numero) ?? []), fibraDestaque ?? 0);
   const capInicial = cabo?.capacidade ?? capacidadeSugerida(Math.max(1, maiorUsada));
@@ -278,7 +280,10 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                             </span>
                             <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${CHIP[st]}`}>{STATUS_FIBRA_LABEL[st]}</span>
                           </div>
-                          {ativa && st === "uso" && rotas && trocando !== n && !soLeitura && (
+                          {ativa && st === "uso" && rotas && ehCaboPredio && (
+                            <p className="mt-1 ml-[46px] text-[10px] text-sky-700">Cabo do prédio: a fibra de cada CDOI se troca na janela do prédio (Unifilar → prédio → Editar no prédio).</p>
+                          )}
+                          {ativa && st === "uso" && rotas && trocando !== n && !soLeitura && !ehCaboPredio && (
                             <button
                               type="button"
                               onClick={async (e) => { e.stopPropagation(); if (antesDeTrocar && !(await antesDeTrocar())) return; setTrocando(n); setFeito(null); }}

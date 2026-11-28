@@ -100,11 +100,13 @@ interface Props {
   caixas?: CaixaRede[];
   /** Abre a caixa na aba Unifilar (fecha o editor) */
   onAbrirNoUnifilar?: (chave: string) => void;
+  /** Abre a janela do prédio (fibra de cada CDOI); fecha o editor */
+  onEditarPredio?: (chave: string) => void;
   /** Troca de fibra gravou rotas: recarregar e reabrir o editor */
   onRotasRegravadas?: () => void;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar, onRotasRegravadas }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar, onRotasRegravadas, onEditarPredio }: Props) {
   /** Painel do cabo (tipo, capacidade, observação, fibras e troca de fibra) aberto para o elemento i */
   const [painelCabo, setPainelCabo] = useState<number | null>(null);
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
@@ -2075,9 +2077,15 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   )}
                 </div>
               )}
-              {l.tipo === "predio" ? (
+              {l.tipo === "predio" || (predioDono && l.tipo === "cdoi") ? (
                 <p className="col-span-2 rounded-lg bg-sky-50 px-2 py-1.5 text-[10px] text-sky-800">
-                  O cabo entra inteiro no prédio: a fibra de cada CDOI você escolhe na janela do prédio.
+                  {l.tipo === "predio" ? "O cabo entra inteiro no prédio: a fibra de cada CDOI você escolhe na janela do prédio." : `Fibra F${l.fibra_entrada || "?"} · definida no prédio ${predioDono?.nome ?? ""}.`}
+                  {onEditarPredio && (
+                    <button type="button" className="ml-1 font-semibold underline" onClick={() => {
+                      const k = l.tipo === "predio" ? chaveLinha(l) : predioDono ? `PT:${CODIGO_PREDIO}${predioDono.id}`.toUpperCase() : "";
+                      if (k) onEditarPredio(k);
+                    }}>Editar no prédio</button>
+                  )}
                 </p>
               ) : (
                 campoFibra(i)
