@@ -891,12 +891,13 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
               {blocos.filter((b) => b.c.lado === "sai" && b.c.outraChave && abertas.includes(b.c.outraChave)).map((b) => {
                 const dest = blocos.find((x) => x.chave === b.c.outraChave && x.c.lado === "chega" && x.c.chave === b.c.chave);
                 if (!dest) return null;
-                // só as fibras em uso: com sinal pelas rotas ou ligadas dentro de uma das duas caixas
+                // a fibra entre as caixas segue a ligação dentro da caixa de onde ela sai (desligou lá, apaga aqui).
+                // Se só a caixa de destino usa a fibra, ela aparece tracejada e apagada (sem sinal chegando).
                 const ligA = new Set(modelos.get(b.chave)?.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]) ?? []);
                 const ligB = new Set(modelos.get(dest.chave)?.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]) ?? []);
-                const emUso = (f: number) => b.c.sinal.has(f) || dest.c.sinal.has(f)
-                  || ligA.has(idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f }))
-                  || ligB.has(idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f }));
+                const comSinal = (f: number) => ligA.has(idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f }));
+                const semSinal = (f: number) => !comSinal(f) && ligB.has(idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f }));
+                const emUso = (f: number) => comSinal(f) || semSinal(f);
                 return (
                   <g key={`cab${b.chave}${b.c.id}`}>
                     {b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f)).map((f) => {
@@ -919,11 +920,17 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                             if (modo === "clientes") { setErro(`${cf.rotulo} do cabo ${curto(semCodigo(b.c.nome), 30)}. Clientes se marcam nas portas dos splitters.`); return; }
                             void clicarPonto(perto.chave, perto.p);
                           }}>
-                          <title>{`${cf.rotulo} ${cf.nome.toLowerCase()} · ${semCodigo(b.c.nome)}${modo === "editar" ? " · clique para escolher esta fibra na ponta mais perto" : " · clique para traçar"}`}</title>
+                          <title>{`${cf.rotulo} ${cf.nome.toLowerCase()} · ${semCodigo(b.c.nome)}${semSinal(f) ? " · sem sinal: nada ligado nela na caixa de onde sai" : ""}${modo === "editar" ? " · clique para escolher esta fibra na ponta mais perto" : " · clique para traçar"}`}</title>
                           <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                           {tr && <path d={d} fill="none" stroke={LAR} strokeWidth={5} opacity={0.85} strokeLinecap="round" />}
-                          <path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.4} />
-                          <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.9} />
+                          {semSinal(f) ? (
+                            <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.4} strokeDasharray="3 4" opacity={0.45} />
+                          ) : (
+                            <>
+                              <path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.4} />
+                              <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.9} />
+                            </>
+                          )}
                         </g>
                       );
                     })}
