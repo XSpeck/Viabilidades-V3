@@ -1002,7 +1002,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                     {pMeio && trR?.metros !== undefined && (
                       <g pointerEvents="none">
                         <rect x={pMeio[0] - 30} y={pMeio[1] - 22} width={60} height={15} rx={7.5} fill="#0f172a" stroke="#334155" />
-                        <text x={pMeio[0]} y={pMeio[1] - 11.5} fontSize={8} fontWeight={800} fill="#e2e8f0" textAnchor="middle">{trR.mesmo_poste ? "mesmo poste" : `${Math.round(trR.metros).toLocaleString("pt-BR")} m`}</text>
+                        <text x={pMeio[0]} y={pMeio[1] - 11.5} fontSize={8} fontWeight={800} fill="#e2e8f0" textAnchor="middle">{trR.mesmo_poste ? "mesmo local" : `${Math.round(trR.metros).toLocaleString("pt-BR")} m`}</text>
                       </g>
                     )}
                     {b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f)).map((f) => {
