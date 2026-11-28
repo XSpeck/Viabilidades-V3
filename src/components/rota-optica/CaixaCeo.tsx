@@ -4,10 +4,9 @@ import { useState } from "react";
 import { capacidadeDoCabo, capacidadeRegistrada, corFibra, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento, type NoArvore } from "@/lib/arvorePon";
 import { chaveCabo } from "@/lib/cabosRede";
-import { type CaixaRede, type EmendaCaixa, type PontaFibra, type RegraEmenda } from "@/lib/caixasRede";
+import { type EmendaCaixa, type PontaFibra, type RegraEmenda } from "@/lib/caixasRede";
 import { cortar } from "@/lib/textoCompleto";
 import DiagramaEmendas from "./DiagramaEmendas";
-import Unifilar from "./Unifilar";
 
 /**
  * CEO (caixa de emenda) por dentro: o mapa de emendas. O normal é emendar cor com cor (fibra N do cabo
@@ -18,10 +17,8 @@ import Unifilar from "./Unifilar";
 interface Props {
   no: NoArvore;
   rotas: RotaOptica[];
-  usuario: string;
-  onSalva: (c: CaixaRede) => void;
-  /** Traçar rota: a árvore destaca a fibra escolhida */
-  onVerFibra?: (cabo: string, fibra: number) => void;
+  /** Abre a caixa na aba Unifilar (onde se editam as emendas) */
+  onAbrirUnifilar?: () => void;
 }
 
 interface Sinal {
@@ -39,10 +36,9 @@ const curto = (s: string, n = 20) => {
 };
 const k = (p: PontaFibra) => `${chaveCabo(p.cabo)}|${p.fibra}`;
 
-export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Props) {
+export default function CaixaCeo({ no, rotas, onAbrirUnifilar }: Props) {
   const el = no.elemento;
   const chave = chaveElemento(el);
-  const [editando, setEditando] = useState(false);
   const regras: RegraEmenda[] = no.caixa?.regras_emenda ?? [];
   const avulsas: EmendaCaixa[] = no.caixa?.emendas ?? [];
   const [todas, setTodas] = useState(false);
@@ -107,9 +103,6 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Pr
   conf.filter((c) => c.st === "fora").forEach((c) => linhas.push({ de: c.s.de, para: c.s.para!, sinal: true, origem: "rota", ruim: temMapa, destino: c.s.destino }));
   linhas.sort((a, b) => a.de.cabo.localeCompare(b.de.cabo) || a.de.fibra - b.de.fibra);
 
-  function cancelar() {
-    setEditando(false);
-  }
 
   const rotuloPonta = (p: PontaFibra) => `${curto(p.cabo, 24)} ${corFibra(p.fibra, p.cabo).rotulo}`;
 
@@ -117,11 +110,9 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Pr
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
         <p className="text-[11px] text-slate-500">Mapa de emendas: cor com cor e as exceções.</p>
-        {!editando && (
-          <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-400">
-            ✎ Editar conexões (unifilar)
+          <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
+            Abrir no Unifilar
           </button>
-        )}
       </div>
 
       {/* Números */}
@@ -141,7 +132,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Pr
       </div>
 
       {/* Desenho: o mesmo da HUB e da CTO (cabos que chegam, bandeja, cabos que saem) */}
-      {!editando && <DiagramaEmendas chave={chave} nome={el.nome} rotas={rotas} mapa={linhas} semResumo />}
+      <DiagramaEmendas chave={chave} nome={el.nome} rotas={rotas} mapa={linhas} semResumo />
       {regras.length > 0 && (
         <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
           <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} /> Mostrar todas as fibras emendadas cor com cor (as sem sinal ficam apagadas)
@@ -149,7 +140,7 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Pr
       )}
 
       {/* Legenda e listas */}
-      {!editando && (
+      {(
         <div className="space-y-1.5 text-[11px]">
           {regras.map((r) => (
             <p key={r.de} className="rounded-lg bg-blue-50 px-2 py-1 text-blue-900">
@@ -169,20 +160,6 @@ export default function CaixaCeo({ no, rotas, usuario, onSalva, onVerFibra }: Pr
         </div>
       )}
 
-      {/* Edição: unifilar (clicar num ponto e depois no destino) */}
-      {editando && (
-        <Unifilar
-          chave={chave}
-          nome={el.nome}
-          rotas={rotas}
-          cad={no.caixa}
-          comSplitters={false}
-          usuario={usuario}
-          onSalva={(c) => { onSalva(c); setEditando(false); }}
-          onCancelar={cancelar}
-          onVerFibra={onVerFibra}
-        />
-      )}
     </div>
   );
 }

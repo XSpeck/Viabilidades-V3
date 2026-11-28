@@ -30,6 +30,7 @@ interface Props {
   rotas: RotaOptica[];
   caixas?: CaixaRede[];
   onAbrirRota: (id: string) => void;
+  onAbrirNoUnifilar?: (chave: string) => void;
 }
 
 const COR_GRAV: Record<Gravidade, string> = { critico: "#dc2626", atencao: "#f97316", cadastro: "#0284c7" };
@@ -79,7 +80,7 @@ function Controle({ onLimites, foco, cheia }: { onLimites: (b: L.LatLngBounds) =
   return null;
 }
 
-export default function MapaRede({ rotas, caixas = [], onAbrirRota }: Props) {
+export default function MapaRede({ rotas, caixas = [], onAbrirRota, onAbrirNoUnifilar }: Props) {
   const [pon, setPon] = useState<string>("");
   const [camada, setCamada] = useCamada();
   const [tema, setTema] = usePref<TemaMapa>("rota_mapa_tema", "tipo");
@@ -273,6 +274,7 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota }: Props) {
                 onSoVisivel={setSoVisivel}
                 onIrPara={irPara}
                 onAbrirRota={onAbrirRota}
+                onAbrirNoUnifilar={onAbrirNoUnifilar}
               />
             </div>
           )}

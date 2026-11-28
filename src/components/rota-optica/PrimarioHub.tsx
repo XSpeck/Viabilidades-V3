@@ -121,7 +121,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
         {outros.length > 0 && <div className="mt-2 text-left">{listaOutros}</div>}
         {onEditarPortas && (
           <button type="button" onClick={onEditarPortas} className="mt-3 rounded-xl bg-yellow-600 px-4 py-2 text-xs font-semibold text-white hover:bg-yellow-700">
-            Escolher o splitter primário
+            Abrir no Unifilar para colocar o splitter
           </button>
         )}
       </div>
@@ -217,9 +217,10 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           <button
             type="button"
             onClick={onEditarPortas}
-            className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-yellow-400"
+            className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900"
+            title="O que tem dentro da caixa se muda na aba Unifilar"
           >
-            ✎ Editar splitter e portas
+            Abrir no Unifilar
           </button>
         </div>
       )}
@@ -412,7 +413,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
           {sobrando.length > 0 && <p>Sem porta livre para: {sobrando.map((f) => curto(f.elemento.nome, 20)).join(", ")}.</p>}
           {onEditarPortas && (
             <button type="button" onClick={onEditarPortas} className="mt-1 font-semibold text-amber-800 underline">
-              Marcar portas
+              Marcar portas no Unifilar
             </button>
           )}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Maximize2, Minimize2, MousePointerClick, Route as RouteIcon, Save, Search, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, MousePointerClick, Route as RouteIcon, Save, Search, Trash2, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, perdaSplitter, tipoVisual, TIPO_ELEMENTO_LABEL, type RotaOptica, type TipoElementoRota } from "@/lib/rotaOptica";
 import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
@@ -15,6 +15,10 @@ import { IconeElemento, iconeSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 import { atualizarRota } from "@/lib/rotaOptica";
 import { paraGravar } from "@/lib/subRotas";
+import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
+import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
+import type { StatusPorta } from "@/lib/caixasRede";
+import BuscaCliente from "./BuscaCliente";
 
 /**
  * Unifilar da rede (estilo GeoGrid): uma janela escura onde as caixas vão abrindo em sequência.
@@ -28,8 +32,12 @@ interface Props {
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
   onAbrirRota: (id: string) => void;
-  /** Rotas gravadas (troca de porta do DIO): recarregar */
+  /** Rotas gravadas (troca de porta do DIO, splitter da CDOI): recarregar */
   onRotasMudaram?: () => void;
+  /** Clientes do cadastro (modo Clientes nas portas) */
+  clientes?: ClienteRede[];
+  /** Caixa que já abre (vindo da Árvore, do Mapa da rede ou do editor da rota) */
+  inicial?: string;
 }
 
 const ROW = 15, HEAD = 30, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
@@ -51,7 +59,25 @@ function inicialDe(cad?: CaixaRede): CadastroLigacoes {
   };
 }
 
-export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onRotasMudaram }: Props) {
+export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onRotasMudaram, clientes = [], inicial }: Props) {
+  /** Trocas de adaptador do DIO ainda não gravadas: chave do DIO | cordão → adaptador */
+  const [dioPend, setDioPend] = useState<Record<string, { chave: string; cordao: string; n: number }>>({});
+  /** As rotas como ficam com as trocas pendentes (o desenho já mostra o novo adaptador) */
+  const rotas = useMemo(() => {
+    const pend = Object.values(dioPend);
+    if (!pend.length) return rotasBase;
+    return rotasBase.map((r) => {
+      if (r.pai) return r;
+      let els = r.elementos;
+      for (const d of pend) {
+        const usa = els.some((e) => chaveElemento(e) === d.chave && e.tipo === "dio" && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(d.cordao));
+        if (!usa) continue;
+        els = trocarPortaDio({ ...r, elementos: els }, d.chave, d.n) ?? els;
+      }
+      return els === r.elementos ? r : { ...r, elementos: els };
+    });
+  }, [rotasBase, dioPend]);
+  const rotasMudadas = rotas.filter((r, i) => r !== rotasBase[i]);
   const cadDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
   /** Todas as caixas da rede (a OLT também), para começar */
   const todasCaixas = useMemo(() => {
@@ -61,9 +87,12 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   }, [rotas]);
   const infoDe = useMemo(() => new Map(todasCaixas.map((c) => [c.chave, c])), [todasCaixas]);
 
-  const [abertas, setAbertas] = useState<string[]>([]);
+  const [abertas, setAbertas] = useState<string[]>(() => (inicial ? [inicial] : []));
   const [busca, setBusca] = useState("");
-  const [modo, setModo] = useState<"navegar" | "editar">("navegar");
+  const [modo, setModo] = useState<"navegar" | "editar" | "clientes">("navegar");
+  /** Modo Clientes: a perna escolhida; Editar: o splitter escolhido (para remover) */
+  const [pernaSel, setPernaSel] = useState<{ chave: string; spl: string; porta: number } | null>(null);
+  const [splSel, setSplSel] = useState<{ chave: string; id: string } | null>(null);
   const [eds, setEds] = useState<Record<string, CadastroLigacoes>>({});
   const [hist, setHist] = useState<Record<string, CadastroLigacoes>[]>([]);
   const [sel, setSel] = useState<Pt | null>(null);
@@ -110,6 +139,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   }, [abertas, eds, rotas, cadDe, automatico]);
   /** caixas para gravar: as editadas e as montadas pelas rotas que ainda não estão no cadastro */
   const sujas = [...new Set([...Object.keys(eds), ...abertas.filter((k) => automatico.get(k)?.mudou)])];
+  const pendentes = sujas.length + rotasMudadas.length;
 
   function mudar(chave: string, n: CadastroLigacoes) {
     setHist((h) => [...h.slice(-49), eds]);
@@ -242,6 +272,11 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   const tracar = (inicio: Pt) => setTraco(inicio);
   function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
+    if (modo === "clientes") {
+      if (p.k === "porta") setPernaSel({ chave, spl: p.spl, porta: p.porta });
+      else setErro("No modo Clientes, clique numa porta (perna) de splitter.");
+      return;
+    }
     if (modo === "navegar") {
       // porta PON ou adaptador do DIO: segue pela fibra ligada a eles
       if (p.k === "pon" || p.k === "adaptador") {
@@ -269,7 +304,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     // DIO: cordão que chega + adaptador = a rota passa a usar aquele adaptador (grava na rota)
     const cordao = sel.p.k === "fibra" && sel.p.lado === "chega" ? sel.p : p.k === "fibra" && p.lado === "chega" ? p : null;
     const adapt = sel.p.k === "adaptador" ? sel.p : p.k === "adaptador" ? p : null;
-    if (cordao && adapt) { void moverPortaDio(chave, cordao.cabo, adapt.n); setSel(null); return; }
+    if (cordao && adapt) { moverPortaDio(chave, cordao.cabo, adapt.n); setSel(null); return; }
     const t = tipoEntre(sel.p, p);
     if (!["fusao", "entrada", "perna", "nivel2"].includes(t)) { setErro(t); return; }
     const m = modelos.get(chave)!;
@@ -280,33 +315,19 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     mudar(chave, r);
     setSel(null);
   }
-  /** Troca o adaptador do DIO das rotas que chegam por este cordão (grava nas rotas) */
-  async function moverPortaDio(chave: string, cordao: string, n: number) {
+  /** Troca o adaptador do DIO das rotas que chegam por este cordão (grava nas rotas no Salvar) */
+  function moverPortaDio(chave: string, cordao: string, n: number) {
     const donas = rotas.filter((r) => !r.pai && r.elementos.some((e) => chaveElemento(e) === chave && e.tipo === "dio" && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(cordao)));
     if (!donas.length) { setErro("Nenhuma rota chega por esse cordão."); return; }
     const ocupante = rotas.find((r) => !donas.includes(r) && !r.pai && r.elementos.some((e) => chaveElemento(e) === chave && e.tipo === "dio" && /Porta\s*0*(\d+)/i.exec(e.porta ?? "")?.[1] === String(n)));
-    const msg = `Passar ${donas.map((r) => r.nome).join(", ")} para o adaptador ${n} do DIO (fibra ${n} do cabo que sai)?${ocupante ? `\n\nAtenção: o adaptador ${n} já é usado por ${ocupante.nome}.` : ""}`;
-    if (!confirm(msg)) return;
-    setSalvando(true);
-    try {
-      for (const r of donas) {
-        const elementos = trocarPortaDio(r, chave, n);
-        if (!elementos) continue;
-        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
-          nome: r.nome, origem: r.origem, elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-        }));
-      }
-      onRotasMudaram?.();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível gravar a rota.");
-    } finally {
-      setSalvando(false);
-    }
+    if (ocupante) { setErro(`O adaptador ${n} já é usado por ${ocupante.nome}. Mude essa rota antes.`); return; }
+    setDioPend((d) => ({ ...d, [`${chave}|${chaveCabo(cordao)}`]: { chave, cordao, n } }));
   }
 
   async function salvarTudo() {
     setSalvando(true);
     setErro(null);
+    let mudouRota = false;
     try {
       for (const chave of sujas) {
         const ed = edDe(chave);
@@ -321,7 +342,18 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
           obs: cad?.obs, regras_emenda: ed.regras_emenda, emendas: ed.emendas, atendimento: cad?.atendimento, atualizado_por: usuario,
         });
         onCaixaSalva(salva);
+        // CDOI: o splitter do Unifilar passa para o prédio e para a rota (conta de potência)
+        if (infoDe.get(chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(salva, rotasBase, catalogo, usuario))) mudouRota = true;
       }
+      // DIO: a porta nova vai para as rotas
+      for (const r of rotasMudadas) {
+        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
+          nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
+        }));
+        mudouRota = true;
+      }
+      setDioPend({});
+      if (mudouRota) onRotasMudaram?.();
       setEds({});
       setHist([]);
     } catch (e) {
@@ -375,20 +407,20 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
           )}
         </div>
         <div className="inline-flex overflow-hidden rounded-lg border border-slate-700">
-          {([["navegar", "Navegar e traçar"], ["editar", "Editar conexões"]] as const).map(([k, r]) => (
-            <button key={k} type="button" onClick={() => { setModo(k); setSel(null); setSelLig(null); }}
-              className={`px-2.5 py-1.5 font-semibold ${modo === k ? (k === "navegar" ? "bg-orange-500 text-white" : "bg-indigo-600 text-white") : "bg-[#1b1d21] text-slate-400 hover:text-slate-200"}`}>
+          {([["navegar", "Navegar e traçar"], ["editar", "Editar conexões"], ["clientes", "Clientes nas portas"]] as const).map(([k, r]) => (
+            <button key={k} type="button" onClick={() => { setModo(k); setSel(null); setSelLig(null); setPernaSel(null); setSplSel(null); }}
+              className={`px-2.5 py-1.5 font-semibold ${modo === k ? (k === "navegar" ? "bg-orange-500 text-white" : k === "clientes" ? "bg-sky-600 text-white" : "bg-indigo-600 text-white") : "bg-[#1b1d21] text-slate-400 hover:text-slate-200"}`}>
               {r}
             </button>
           ))}
         </div>
         {abertas.length > 0 && <button type="button" onClick={() => { setAbertas([]); setTraco(null); setRotasTraco([]); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-400 hover:text-slate-200">Limpar</button>}
-        {sujas.length > 0 && (
+        {pendentes > 0 && (
           <>
             <button type="button" disabled={!hist.length} onClick={() => { setEds(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); }} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" /> Desfazer</button>
-            <button type="button" onClick={() => { setEds({}); setHist([]); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300">Descartar</button>
+            <button type="button" onClick={() => { setEds({}); setHist([]); setDioPend({}); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300">Descartar</button>
             <button type="button" disabled={salvando} onClick={salvarTudo} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 font-semibold text-white disabled:opacity-60">
-              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar {sujas.length} caixa{sujas.length !== 1 ? "s" : ""}
+              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar{sujas.length ? ` ${sujas.length} caixa${sujas.length !== 1 ? "s" : ""}` : ""}{rotasMudadas.length ? `${sujas.length ? " +" : ""} ${rotasMudadas.length} rota${rotasMudadas.length !== 1 ? "s" : ""} (DIO)` : ""}
             </button>
           </>
         )}
@@ -535,8 +567,12 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
                       return (
                         <g key={s.id}>
                           <rect x={x} y={y} width={w} height={h} rx={6} fill="#0f2a1c" stroke="#22c55e" strokeWidth={1.2} />
-                          <rect x={x} y={y} width={w} height={20} rx={6} fill="#14532d" />
-                          <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7">S{idx} · {s.relacao}</text>
+                          <rect x={x} y={y} width={w} height={20} rx={6} fill={splSel?.chave === cx.chave && splSel.id === s.id ? "#a16207" : "#14532d"}
+                            className={modo === "editar" ? "cursor-pointer" : undefined}
+                            onClick={(e) => { if (modo !== "editar") return; e.stopPropagation(); setSplSel({ chave: cx.chave, id: s.id }); setSelLig(null); setSel(null); }}>
+                            {modo === "editar" && <title>Clique para ver ou remover este splitter</title>}
+                          </rect>
+                          <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7" pointerEvents="none">S{idx} · {s.relacao}</text>
                           <text x={x + w - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : ent ? `F${String(ent.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
                           {!pon && ent && <rect x={x} y={y} width={w} height={h} rx={6} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="4 3"><title>Esta fibra não tem rota: confira ou tire o splitter</title></rect>}
                           <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill="#22c55e" opacity={0.18} />
@@ -552,6 +588,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
                                 <rect x={x + w - 26} y={yy - 6} width={20} height={12} rx={2} fill={cor} stroke="#0b0d10" />
                                 <text x={x + w - 16} y={yy + 3} fontSize={7} fontWeight={800} fill="#fff" textAnchor="middle">{p.numero}</text>
                                 {p.status === "cliente" && <text x={x + w - 32} y={yy + 3} fontSize={7} textAnchor="end">👤</text>}
+                                {pernaSel?.chave === cx.chave && pernaSel.spl === s.id && pernaSel.porta === p.numero && <rect x={x + w - 28} y={yy - 8} width={24} height={16} rx={3} fill="none" stroke="#38bdf8" strokeWidth={1.6} />}
                                 {ponto(cx.chave, { k: "porta", spl: s.id, porta: p.numero }, x + w + 6, yy, "#4ade80", ocup.has(idPonto({ k: "porta", spl: s.id, porta: p.numero })))}
                               </g>
                             );
@@ -610,8 +647,71 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
         </div>
 
         {/* Painel: rota traçada e a ligação escolhida */}
-        {(caminho || (modo === "editar" && selLig)) && (
+        {(caminho || (modo === "editar" && (selLig || splSel)) || (modo === "clientes" && pernaSel)) && (
           <aside className="w-72 shrink-0 overflow-y-auto border-l border-slate-800 bg-[#0f1115] p-3 text-[11px]">
+            {modo === "editar" && splSel && (() => {
+              const ed = edDe(splSel.chave);
+              const sp = ed.splitters.find((x) => x.id === splSel.id);
+              if (!sp) return null;
+              const idx = ed.splitters.indexOf(sp) + 1;
+              const alimenta = ed.splitters.filter((x) => x.entrada.splitter?.id === sp.id);
+              const comCliente = portasPara(sp.relacao, sp.portas).filter((p) => p.status === "cliente").length;
+              return (
+                <div className="mb-3 space-y-1.5 rounded-xl border border-slate-700 p-2">
+                  <p className="font-semibold">S{idx} · {sp.relacao} · {curto(infoDe.get(splSel.chave)?.nome ?? "", 22)}</p>
+                  <p className="text-slate-400">{sp.entrada.fibra ? `Entrada: ${curto(semCodigo(sp.entrada.fibra.cabo), 22)} F${String(sp.entrada.fibra.fibra).padStart(2, "0")}` : sp.entrada.splitter ? "Entrada: porta de outro splitter (2º nível)" : "Sem entrada"}</p>
+                  {comCliente > 0 && <p className="text-amber-300">{comCliente} porta{comCliente !== 1 ? "s" : ""} com cliente: tirar o splitter solta esses clientes.</p>}
+                  {alimenta.length > 0
+                    ? <p className="text-amber-300">Alimenta {alimenta.length} splitter{alimenta.length !== 1 ? "s" : ""} de 2º nível: tire esses antes.</p>
+                    : <button type="button" onClick={() => { if (comCliente && !confirm(`Tirar o S${idx}? ${comCliente} cliente(s) ficam sem porta.`)) return; mudar(splSel.chave, { ...ed, splitters: ed.splitters.filter((x) => x.id !== sp.id) }); setSplSel(null); }}
+                      className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 font-semibold text-white"><Trash2 className="h-3 w-3" /> Tirar este splitter</button>}
+                  <p className="text-slate-500">Só vale depois de clicar em Salvar, no topo.</p>
+                </div>
+              );
+            })()}
+            {modo === "clientes" && pernaSel && (() => {
+              const ed = edDe(pernaSel.chave);
+              const sp = ed.splitters.find((x) => x.id === pernaSel.spl);
+              if (!sp) return null;
+              const pt = portasPara(sp.relacao, sp.portas).find((x) => x.numero === pernaSel.porta);
+              if (!pt) return null;
+              const mudarPorta = (mm: Partial<typeof pt>) => mudar(pernaSel.chave, {
+                ...ed,
+                splitters: ed.splitters.map((x) => (x.id === sp.id ? { ...x, portas: portasPara(x.relacao, x.portas).map((y) => (y.numero === pt.numero ? { ...y, ...mm } : y)) } : x)),
+              });
+              const fora = new Set([...ligacoesDosClientes(rotasBase, caixas)].filter(([, l]) => l.chave !== pernaSel.chave).map(([id]) => id));
+              const ehRamal = pt.status === "ramal";
+              return (
+                <div className="mb-3 space-y-1.5 rounded-xl border border-sky-800 bg-sky-950/40 p-2">
+                  <p className="font-semibold text-sky-200">S{ed.splitters.indexOf(sp) + 1} · porta {pt.numero} · {curto(infoDe.get(pernaSel.chave)?.nome ?? "", 20)}</p>
+                  {ehRamal ? (
+                    <p className="text-slate-400">Esta porta está em ramal (ligada numa fibra que sai). Para mudar, use Editar conexões.</p>
+                  ) : (
+                    <>
+                      <div className="flex gap-1">
+                        {(["livre", "cliente"] as StatusPorta[]).map((st) => (
+                          <button key={st} type="button" onClick={() => mudarPorta(st === "livre" ? { status: "livre", cliente_id: undefined, descricao: undefined, saida: undefined } : { status: "cliente", saida: undefined })}
+                            className={`rounded-md px-2 py-1 font-semibold ${pt.status === st ? (st === "cliente" ? "bg-sky-600 text-white" : "bg-slate-600 text-white") : "bg-slate-800 text-slate-300"}`}>
+                            {st === "livre" ? "Livre" : "Cliente"}
+                          </button>
+                        ))}
+                      </div>
+                      {pt.status === "cliente" && (
+                        <div className="rounded-lg bg-white p-1.5 text-slate-800">
+                          <BuscaCliente
+                            cadastro={clientes}
+                            clienteId={pt.cliente_id}
+                            ocupado={(id) => fora.has(id) || ed.splitters.some((x) => x.portas.some((y) => y.cliente_id === id && !(x.id === sp.id && y.numero === pt.numero)))}
+                            onEscolher={(c) => mudarPorta(c ? { cliente_id: c.id, descricao: c.nome } : { cliente_id: undefined, descricao: undefined })}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <p className="text-slate-500">Só vale depois de clicar em Salvar, no topo.</p>
+                </div>
+              );
+            })()}
             {modo === "editar" && selLig && (() => {
               const m = modelos.get(selLig.chave);
               const l = m?.ligacoes.find((x) => x.id === selLig.id);
@@ -665,9 +765,11 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
         )}
       </div>
       <p className="border-t border-slate-800 bg-[#0f1115] px-3 py-1.5 text-[10px] text-slate-500">
-        {modo === "navegar"
+        {modo === "clientes"
+          ? "Clique numa porta (perna) de splitter para marcar o cliente ou deixar livre. Salve no topo."
+          : modo === "navegar"
           ? "Clique numa fibra: a caixa do outro lado do cabo abre ao lado e o caminho acende em laranja. O nome azul embaixo do cabo também abre a vizinha."
-          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar. Salve no topo."}
+          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar, e no nome de um splitter para tirá-lo. No DIO: cordão + adaptador muda a porta da rota. Salve no topo."}
       </p>
     </div>
   );

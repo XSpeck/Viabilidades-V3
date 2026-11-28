@@ -35,7 +35,15 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, Cable, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
+import { Boxes, Cable, FileUp, GitBranch, HelpCircle, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
+import ComoFunciona from "@/components/rota-optica/ComoFunciona";
+
+/** Para que serve cada aba (uma frase) */
+const FRASE_VISTA = {
+  mapa: "A rede inteira para análise. Para mudar posição ou cabo, abra a rota e clique em Editar.",
+  arvore: "Cada porta PON em detalhe: caminho, potência e ocupação. Só para ver.",
+  unifilar: "O que tem dentro de cada caixa: splitters, emendas, clientes nas portas e o DIO. É aqui que se muda.",
+} as const;
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -80,6 +88,10 @@ export default function RotaOpticaPage() {
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   /** Tela principal: árvore das portas PON ou mapa da rede */
   const [vista, setVista] = useState<"arvore" | "mapa" | "unifilar">("arvore");
+  /** Caixa que a aba Unifilar abre (vindo de outra tela); n muda a cada pedido */
+  const [uniInicial, setUniInicial] = useState<{ chave: string; n: number } | null>(null);
+  /** Janela "Como funciona" */
+  const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
   // Sub-rotas montadas com o tronco da rota-mãe: todas as telas usam o caminho completo
   const rotas = useMemo(
@@ -175,6 +187,13 @@ export default function RotaOpticaPage() {
         ? [...rs.filter((x) => x.id !== id), rs.find((x) => x.id === id)!]
         : [...rs, { id, x: Math.max(8, (window.innerWidth - 980) / 2) + (rs.length % 4) * 24, y: 48 + (rs.length % 4) * 24 }]
     );
+  }
+
+  /** Leva a caixa para a aba Unifilar (onde se muda o que tem dentro dela) */
+  function abrirNoUnifilar(chave: string) {
+    setModo({ tipo: "ver" });
+    setUniInicial((u) => ({ chave, n: (u?.n ?? 0) + 1 }));
+    setVista("unifilar");
   }
 
   async function salvarNova(dados: RotaOpticaInput) {
@@ -318,7 +337,23 @@ export default function RotaOpticaPage() {
           onCancelar={() => setModo({ tipo: "ver" })}
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
           onSalvarParcial={modo.rota ? async (d) => { await atualizarRota(modo.rota!.id, d); await recarregar(); } : undefined}
+          caixas={caixas}
+          onAbrirNoUnifilar={(k) => { if (confirm("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.")) abrirNoUnifilar(k); }}
         />
+      )}
+
+      {ajuda && (
+        <Janela
+          inicial={ajuda}
+          largura={Math.min(820, typeof window !== "undefined" ? window.innerWidth - 16 : 820)}
+          titulo="Como funciona"
+          subtitulo="Para que serve cada tela e onde se muda cada coisa"
+          icone={<HelpCircle className="w-5 h-5" />}
+          corBarra="bg-slate-800"
+          onFechar={() => setAjuda(null)}
+        >
+          <ComoFunciona />
+        </Janela>
       )}
 
       {cadastro && (
@@ -399,8 +434,9 @@ export default function RotaOpticaPage() {
           <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
         ) : (
           <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="inline-flex rounded-xl bg-slate-100 p-1" role="tablist">
-            {([["arvore", "Árvore", GitBranch], ["mapa", "Mapa da rede", MapIcon], ["unifilar", "Unifilar", Cable]] as const).map(([k, rot, Ic]) => (
+            {([["mapa", "Mapa da rede", MapIcon], ["arvore", "Árvore", GitBranch], ["unifilar", "Unifilar", Cable]] as const).map(([k, rot, Ic]) => (
               <button
                 key={k}
                 type="button"
@@ -413,8 +449,20 @@ export default function RotaOpticaPage() {
               </button>
             ))}
           </div>
+          <p className="min-w-0 flex-1 text-xs text-slate-500">{FRASE_VISTA[vista]}</p>
+          <button
+            type="button"
+            onClick={() => setAjuda({ x: Math.max(8, (window.innerWidth - 820) / 2), y: 72 })}
+            className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <HelpCircle className="h-4 w-4" /> Como funciona
+          </button>
+          </div>
           {vista === "unifilar" ? (
             <UnifilarRede
+              key={uniInicial?.n ?? 0}
+              inicial={uniInicial?.chave}
+              clientes={clientes}
               rotas={rotas}
               caixas={caixas}
               catalogo={catalogo}
@@ -424,7 +472,7 @@ export default function RotaOpticaPage() {
               onRotasMudaram={recarregar}
             />
           ) : vista === "mapa" ? (
-            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} />
+            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
           ) : (
           <ArvorePonView
             rotas={rotas}
@@ -437,6 +485,7 @@ export default function RotaOpticaPage() {
             onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             onAbrirRota={abrirRota}
             onRotasMudaram={recarregar}
+            onAbrirNoUnifilar={abrirNoUnifilar}
           />
           )}
           </div>

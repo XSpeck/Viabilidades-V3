@@ -8,14 +8,11 @@ import {
   portasPara,
   rotuloSplitters,
   splittersDaCaixa,
-  type CaixaRede,
   type PortaCaixa,
   type SplitterCaixa,
 } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { IconeElementoSvg } from "./IconesRede";
-import type { ClienteRede } from "@/lib/clientesRede";
-import Unifilar from "./Unifilar";
 import { chaveCabo } from "@/lib/cabosRede";
 import { cortar } from "@/lib/textoCompleto";
 
@@ -29,18 +26,10 @@ interface Props {
   /** Todas as rotas (as fibras que chegam nesta caixa) */
   rotas: RotaOptica[];
   modelos: ItemCatalogo[];
-  usuario: string;
-  onSalva: (c: CaixaRede) => void;
-  /** Fibras que seguem para a frente (porta Ramal) */
-  saidas: { nome: string; cabo?: string; fibra?: number }[];
   /** "CTO" (padrão), "HUB" ou "CDOI" — muda os textos e as cores */
   tipoCaixa?: "CTO" | "HUB" | "CDOI";
-  /** Abre direto na edição; Salvar/Cancelar chamam onFechar */
-  soEdicao?: boolean;
-  onFechar?: () => void;
-  /** Clientes do cadastro (para ligar numa perna) e os que já estão ligados em outra caixa */
-  clientes?: ClienteRede[];
-  clientesOcupados?: Set<string>;
+  /** Abre a caixa na aba Unifilar (onde se edita o que tem dentro dela) */
+  onAbrirUnifilar?: () => void;
 }
 
 const ROW = 22;
@@ -60,10 +49,9 @@ function nivel(v?: number) {
   if (v >= -27) return "#d97706";
   return "#dc2626";
 }
-export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCaixa = "CTO", soEdicao, onFechar, clientes: cadastro = [], clientesOcupados }: Props) {
+export default function CaixaCto({ no, rotas, modelos, tipoCaixa = "CTO", onAbrirUnifilar }: Props) {
   const el = no.elemento;
   const chave = chaveElemento(el);
-  const [editando, setEditando] = useState(!!soEdicao);
   const [spls] = useState<SplitterCaixa[]>(() => {
     const l = splittersDaCaixa(no.caixa, { splitter: el.splitter, splitter_modelo: el.splitter_modelo, cabo: el.cabo_entrada, fibra: el.fibra_entrada });
     // um splitter só sem entrada e a fibra desta porta (que usa splitter) ainda sem splitter: liga sozinho
@@ -148,9 +136,6 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
   const potsFinais = finais.map((f) => potSaida(f.spl)).filter((v): v is number => v !== undefined).map((v) => v - conector);
   const pior = potsFinais.length ? Math.min(...potsFinais) : undefined;
 
-  function cancelar() {
-    setEditando(false);
-  }
 
   // cores por tipo: CTO verde · CDOI laranja · HUB amarelo
   const tema =
@@ -161,7 +146,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
         : { caixa: "border-emerald-900/40 bg-[#052e1f]", grade: "#064e3b", texto: "#6ee7b7" };
 
   // Só passagem nesta porta: não há o que configurar aqui (splitters, se houver, são da porta que usa); só mostra a fibra atravessando
-  if (no.elemento.passagem && !editando) {
+  if (no.elemento.passagem) {
     return (
       <div className="p-3 space-y-2.5">
         <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5">
@@ -185,14 +170,12 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
               ? "Splitter da CDOI e o apartamento / cliente em cada perna."
               : "Splitters de atendimento da CTO e os clientes em cada porta."}
         </p>
-        {!editando && (
-          <button type="button" onClick={() => setEditando(true)} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-emerald-400">
-            ✎ Editar conexões (unifilar)
+          <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
+            Abrir no Unifilar
           </button>
-        )}
       </div>
 
-      {no.elemento.passagem && !editando && (
+      {no.elemento.passagem && (
         <p className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600">
           Nesta porta PON a {tipoCaixa} é <b>só passagem</b>: a fibra atravessa a caixa; os splitters abaixo atendem outra porta ou outra fibra.
         </p>
@@ -216,7 +199,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
       {/* Desenho */}
       {spls.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">
-          Esta {tipoCaixa} ainda não tem splitter. {editando ? "Adicione abaixo." : "Clique em Editar."}
+          Esta {tipoCaixa} ainda não tem splitter. Os splitters se colocam no Unifilar.
         </div>
       ) : (
         <div className={`overflow-hidden rounded-2xl border shadow-lg ${tema.caixa}`}>
@@ -310,7 +293,7 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
       )}
 
       {/* Fibras que chegam */}
-      {!editando && entradas.length > 0 && (
+      {entradas.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {entradas.map((e) => {
             const c = corFibra(e.fibra, e.cabo);
@@ -325,23 +308,6 @@ export default function CaixaCto({ no, rotas, modelos, usuario, onSalva, tipoCai
         </div>
       )}
 
-      {/* Edição: unifilar (cabos, splitters, entradas, pernas e clientes) */}
-      {editando && (
-        <Unifilar
-          chave={chave}
-          nome={el.nome}
-          rotas={rotas}
-          cad={{ ...(no.caixa ?? ({ id: "", chave, nome: el.nome, portas: [] } as CaixaRede)), splitters: spls }}
-          comSplitters
-          modelos={modelos}
-          usuario={usuario}
-          clientes={cadastro}
-          clientesOcupados={clientesOcupados}
-          semRamal={tipoCaixa === "CDOI"}
-          onSalva={(c) => { onSalva(c); setEditando(false); onFechar?.(); }}
-          onCancelar={() => { cancelar(); onFechar?.(); }}
-        />
-      )}
     </div>
   );
 }

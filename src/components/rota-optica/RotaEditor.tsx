@@ -40,6 +40,7 @@ import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { CODIGO_PREDIO, idPredioDoElemento, listarPredios, novoId, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
+import { splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
@@ -93,9 +94,13 @@ interface Props {
   onSalvarParcial?: (dados: RotaOpticaInput) => Promise<void>;
   /** Todas as rotas montadas (inclui esta): para achar a rota-mãe de uma sub-rota */
   todas?: RotaOptica[];
+  /** Cadastro das caixas: o splitter que o Unifilar define trava o campo aqui */
+  caixas?: CaixaRede[];
+  /** Abre a caixa na aba Unifilar (fecha o editor) */
+  onAbrirNoUnifilar?: (chave: string) => void;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar }: Props) {
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
   const trechosFixos: TrechoCabo[] = [];
   const [nome, setNome] = useState(inicial?.nome ?? "");
@@ -1693,6 +1698,29 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         <>
           {escolhaHub}
           <p className="col-span-2 text-[10px] text-slate-500">Nesta rota a fibra só atravessa a {l.tipo === "hub" ? "HUB" : "CTO"}, sem dividir. O cabo e a fibra seguem como numa CEO.</p>
+        </>
+      );
+    }
+    // O cadastro da caixa (Unifilar) manda no splitter: aqui só mostra
+    const cad = caixas.find((c) => c.chave === chaveLinha(l));
+    const doCad = ["hub", "cto", "cdoi"].includes(l.tipo) ? splitterDoCadastro(cad, l.cabo_entrada || undefined, +l.fibra_entrada || undefined) : null;
+    if (doCad) {
+      const difere = l.splitter !== doCad.relacao;
+      return (
+        <>
+        {escolhaHub}
+        <div className="col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-900">
+          <p><b>Splitter {doCad.relacao}</b> · definido no Unifilar (o que tem dentro da caixa se muda lá).</p>
+          {difere && (
+            <p className="mt-0.5 text-amber-800">
+              Esta rota está com {l.splitter || "nenhum"}.{" "}
+              <button type="button" className="font-semibold underline" onClick={() => alterar(i, { splitter: doCad.relacao, splitter_modelo: doCad.modelo_id ?? "" })}>Usar o {doCad.relacao}</button>
+            </p>
+          )}
+          {onAbrirNoUnifilar && (
+            <button type="button" className="mt-1 font-semibold text-emerald-800 underline" onClick={() => onAbrirNoUnifilar(chaveLinha(l))}>Abrir no Unifilar</button>
+          )}
+        </div>
         </>
       );
     }

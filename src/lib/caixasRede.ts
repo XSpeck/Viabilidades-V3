@@ -139,6 +139,23 @@ export function splittersDaFibra(spls: SplitterCaixa[], cabo?: string, fibra?: n
   return out;
 }
 
+/**
+ * O splitter que o cadastro da caixa (Unifilar) diz para a fibra que chega por esta rota.
+ * É ele que manda: no editor da rota o campo fica travado. null = o cadastro não diz (a rota escolhe).
+ */
+export function splitterDoCadastro(
+  caixa: CaixaRede | undefined,
+  cabo?: string,
+  fibra?: number,
+): { relacao: string; modelo_id?: string } | null {
+  if (caixa?.splitters?.length) {
+    const raiz = splittersDaFibra(caixa.splitters, cabo, fibra).find((x) => !x.entrada.splitter);
+    const s = raiz ?? (caixa.splitters.length === 1 ? caixa.splitters[0] : undefined);
+    return s ? { relacao: s.relacao, modelo_id: s.modelo_id } : null;
+  }
+  return caixa?.splitter && totalPernas(caixa.splitter) !== null ? { relacao: caixa.splitter, modelo_id: caixa.splitter_modelo } : null;
+}
+
 /** Portas de atendimento: as que não alimentam outro splitter da caixa */
 export function portasFinais(spls: SplitterCaixa[]): { spl: SplitterCaixa; porta: PortaCaixa }[] {
   const usadas = new Set(spls.map((x) => (x.entrada.splitter ? `${x.entrada.splitter.id}|${x.entrada.splitter.porta}` : "")));

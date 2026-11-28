@@ -33,10 +33,12 @@ interface Props {
   onSoVisivel: (v: boolean) => void;
   onIrPara: (alvo: AlvoMapa) => void;
   onAbrirRota: (id: string) => void;
+  /** Abre a caixa na aba Unifilar (o que tem dentro dela) */
+  onAbrirNoUnifilar?: (chave: string) => void;
 }
 
 /** Painel do lado do mapa: indicadores da seleção, alertas e detalhe do que foi clicado */
-export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, soVisivel, onSoVisivel, onIrPara, onAbrirRota }: Props) {
+export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, soVisivel, onSoVisivel, onIrPara, onAbrirRota, onAbrirNoUnifilar }: Props) {
   const totalAlertas = alertas.length;
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-[12px] text-slate-700">
@@ -51,7 +53,7 @@ export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, so
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {aba === "indicadores" && <Indicadores_ ind={ind} soVisivel={soVisivel} onSoVisivel={onSoVisivel} />}
         {aba === "alertas" && <Alertas_ alertas={alertas} onIrPara={onIrPara} />}
-        {aba === "detalhe" && <Detalhe_ detalhe={detalhe} pons={pons} onAbrirRota={onAbrirRota} />}
+        {aba === "detalhe" && <Detalhe_ detalhe={detalhe} pons={pons} onAbrirRota={onAbrirRota} onAbrirNoUnifilar={onAbrirNoUnifilar} />}
       </div>
     </div>
   );
@@ -191,7 +193,7 @@ function ListaRotas({ rotas, onAbrirRota }: { rotas: RotaOptica[]; onAbrirRota: 
   );
 }
 
-function Detalhe_({ detalhe, pons, onAbrirRota }: { detalhe: Props["detalhe"]; pons: Props["pons"]; onAbrirRota: (id: string) => void }) {
+function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: Props["detalhe"]; pons: Props["pons"]; onAbrirRota: (id: string) => void; onAbrirNoUnifilar?: (chave: string) => void }) {
   if (!detalhe?.caixa && !detalhe?.cabo) return <p className="py-6 text-center text-slate-400">Clique numa caixa ou num cabo do mapa.</p>;
   const corPon = (k: string) => pons.find((p) => p.chave === k);
   const chipsPon = (ks: string[]) => (
@@ -223,6 +225,11 @@ function Detalhe_({ detalhe, pons, onAbrirRota }: { detalhe: Props["detalhe"]; p
           <Cartao rotulo="Pior ponta" valor={dbm(c.potPonta)} sub={ROTULO_NIVEL[nivelPotencia(c.potPonta)]} cor={COR_NIVEL[nivelPotencia(c.potPonta)]} />
         </div>
         {alertasDe(c.alertas)}
+        {onAbrirNoUnifilar && (
+          <button type="button" onClick={() => onAbrirNoUnifilar(c.chave)} className="w-full rounded-lg bg-slate-800 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-900">
+            Abrir no Unifilar (o que tem dentro da caixa)
+          </button>
+        )}
         <ListaRotas rotas={c.rotas} onAbrirRota={onAbrirRota} />
       </div>
     );

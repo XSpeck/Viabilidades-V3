@@ -7,7 +7,6 @@ import { caminhoAte, chaveElemento, dentroDePredio, ehVolta, filhosReais, voltaD
 import { rotuloSplitters, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
-import EditorCaixa from "./EditorCaixa";
 import PredioVertical from "./PredioVertical";
 import { idPredioDoElemento, listarPredios, rotasComPredios, type PredioRede } from "@/lib/prediosRede";
 import PrimarioHub from "./PrimarioHub";
@@ -22,8 +21,7 @@ import BuscaRede from "./BuscaRede";
 import SeletorPortas from "./SeletorPortas";
 import { DESENHO_CABO, IconeCabo, IconeElemento, IconeElementoSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
-import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
-import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
+import type { ClienteRede } from "@/lib/clientesRede";
 
 interface Props {
   rotas: RotaOptica[];
@@ -38,6 +36,8 @@ interface Props {
   onAbrirRota: (id: string) => void;
   /** Rotas criadas fora do editor (ex.: CDOI nova no prédio): recarregar */
   onRotasMudaram?: () => void;
+  /** Abre a caixa na aba Unifilar (a árvore só mostra) */
+  onAbrirNoUnifilar?: (chave: string) => void;
 }
 
 /** Janela aberta sobre a árvore (posição inicial na tela). */
@@ -60,12 +60,6 @@ function nomeCurto(nome: string): string {
 
 function TF(fibra?: number, cabo?: string) {
   return corFibra(fibra, cabo).rotulo;
-}
-
-/** Tem splitter/portas para mostrar no diagrama da caixa */
-function temDiagrama(n: NoArvore) {
-  const t = tipoVisual(n.elemento);
-  return !!(n.caixa?.splitter || n.elemento.splitter || t === "hub" || t === "cto" || t === "cdoi");
 }
 
 interface Folha { tipo: "livre" | "cliente"; pai: NoArvore; y: number; rotulo?: string }
@@ -100,7 +94,7 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram, clientes = [] }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram, clientes = [], onAbrirNoUnifilar }: Props) {
   /** Prédios: agrupam as CDOIs na árvore e entram como destino das fibras de um cabo */
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
@@ -576,6 +570,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
               todasRotas={rotas}
               caixas={caixas}
               onRotasMudaram={onRotasMudaram}
+              onAbrirNoUnifilar={onAbrirNoUnifilar}
               onAbrirNo={(id) => abrirJanela({ id: `no:${id}`, tipo: "no", noId: id }, Math.max(20, window.innerWidth - 500), 140)}
               onVerFibra={(cabo, fibra) => setFibraVista({ k: chaveCabo(cabo), fibra })}
               catalogo={catalogo}
@@ -594,8 +589,9 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onFechar, onAbrirNo, onRotasMudaram, clientes = [], onVerFibra,
+  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onAbrirNo, onRotasMudaram, onAbrirNoUnifilar,
 }: {
+  onAbrirNoUnifilar?: (chave: string) => void;
   onVerFibra?: (cabo: string, fibra: number) => void;
   onRotasMudaram?: () => void;
   onAbrirNo: (id: string) => void;
@@ -618,17 +614,16 @@ function JanelaNo({
   const ehCt = tipoVisual(no.elemento) === "ct";
   const ehDio = no.elemento.tipo === "dio";
   const [aba, setAba] = useState<"primario" | "cto" | "cdoi" | "ceo" | "ct" | "dio" | "predio" | "emendas" | "diagrama" | "caminho">(
-    ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : temDiagrama(no) ? "diagrama" : "emendas",
+    ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "emendas",
   );
-  const ocupadosFora = new Set([...ligacoesDosClientes(todasRotas, caixas)].filter(([, l]) => l.chave !== chaveElemento(no.elemento)).map(([id]) => id));
   /** CDOIs do prédio (descendentes do nó) para abrir a janela de cada uma */
   const abrirCdoi = (k: string) => {
     const todos = (n: NoArvore): NoArvore[] => [n, ...n.filhos.flatMap(todos)];
     const alvo = todos(no).find((x) => chaveElemento(x.elemento) === k);
     if (alvo) onAbrirNo(alvo.id);
   };
-  /** HUB: o Primário mostra; "Editar" troca, no mesmo lugar, pelo editor do splitter e das portas */
-  const [editandoHub, setEditandoHub] = useState(false);
+  /** O que tem dentro da caixa se edita no Unifilar */
+  const abrirUnifilar = onAbrirNoUnifilar ? () => onAbrirNoUnifilar(chaveElemento(no.elemento)) : undefined;
   return (
     <div>
       {/* CDOI: só a aba dela (a barra de abas some) */}
@@ -644,7 +639,6 @@ function JanelaNo({
           if (ehDio) abas.push(["dio", "DIO"]);
           if (ehPredio) abas.push(["predio", "Prédio"]);
           if (!(ehPredio || ehCeo || ehDio || ehCdoi)) abas.push(["emendas", "Emendas"]);
-          if (!(ehHub || ehPredio || ehCto || ehCdoi || ehCt || ehDio || ehCeo)) abas.push(["diagrama", "Splitter e portas"]);
           if (!ehCdoi) abas.push(["caminho", "Caminho e potência"]);
           return abas;
         })().map(([k, r]) => (
@@ -661,56 +655,21 @@ function JanelaNo({
         ))}
       </div>
       {aba === "primario" ? (
-        editandoHub ? (
-          <CaixaCto
-            key={`edhub-${chaveElemento(no.elemento)}`}
-            no={no}
-            rotas={todasRotas}
-            modelos={catalogo.filter((m) => m.categoria === "splitter")}
-            usuario={usuario}
-            onSalva={onCaixaSalva}
-            saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
-            tipoCaixa="HUB"
-            soEdicao
-            onFechar={() => setEditandoHub(false)}
-          />
-        ) : (
-          <PrimarioHub no={no} rotas={todasRotas} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={() => setEditandoHub(true)} />
-        )
+        <PrimarioHub no={no} rotas={todasRotas} catalogo={catalogo} onAbrirNo={onAbrirNo} onEditarPortas={abrirUnifilar} />
       ) : aba === "dio" ? (
         <CaixaDio no={no} rotas={todasRotas} catalogo={catalogo} />
       ) : aba === "ct" ? (
         <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} usuario={usuario} onSalva={onCaixaSalva} />
       ) : aba === "ceo" ? (
-        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} usuario={usuario} onSalva={onCaixaSalva} onVerFibra={onVerFibra} />
-      ) : aba === "cto" ? (
+        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} onAbrirUnifilar={abrirUnifilar} />
+      ) : aba === "cto" || aba === "cdoi" ? (
         <CaixaCto
-          key={`cto-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
+          key={`${aba}-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
           no={no}
           rotas={todasRotas}
           modelos={catalogo.filter((m) => m.categoria === "splitter")}
-          usuario={usuario}
-          onSalva={onCaixaSalva}
-          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
-          clientes={clientes}
-          clientesOcupados={ocupadosFora}
-        />
-      ) : aba === "cdoi" ? (
-        <CaixaCto
-          key={`cdoi-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
-          no={no}
-          rotas={todasRotas}
-          modelos={catalogo.filter((m) => m.categoria === "splitter")}
-          usuario={usuario}
-          onSalva={(c) => {
-            onCaixaSalva(c);
-            // o splitter do diagrama da CDOI passa para o prédio e para a rota (potência)
-            sincronizarSplitterCdoi(c, todasRotas, catalogo, usuario).then((mudou) => mudou && onRotasMudaram?.()).catch(() => {});
-          }}
-          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
-          tipoCaixa="CDOI"
-          clientes={clientes}
-          clientesOcupados={ocupadosFora}
+          tipoCaixa={aba === "cdoi" ? "CDOI" : "CTO"}
+          onAbrirUnifilar={abrirUnifilar}
         />
       ) : aba === "predio" ? (
         <PredioVertical
@@ -718,29 +677,9 @@ function JanelaNo({
           nome={ehPredio ? (filhosReais(no)[0] ?? no).elemento.nome : no.elemento.nome} predioId={idPredioDoElemento(no.elemento) ?? undefined} rotas={todasRotas} caixas={caixas} usuario={usuario} onAbrirRota={onAbrirRota} onRotasMudaram={onRotasMudaram} modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")} onAbrirCdoi={abrirCdoi} />
       ) : aba === "emendas" ? (
         <DiagramaEmendas chave={chaveElemento(no.elemento)} nome={no.elemento.nome} rotas={rotas} />
-      ) : aba === "diagrama" ? (
-        <EditorCaixa
-          key={chaveElemento(no.elemento)}
-          chave={chaveElemento(no.elemento)}
-          nome={no.elemento.nome}
-          tipo={no.elemento.tipo}
-          caixa={no.caixa}
-          splitterRota={no.elemento.splitter}
-          modeloRota={no.elemento.splitter_modelo}
-          caboEntrada={no.elemento.cabo_entrada}
-          fibraEntrada={no.elemento.fibra_entrada}
-          ramos={filhosReais(no).map((f) => f.elemento.nome)}
-          saidas={filhosReais(no).map((f) => ({ nome: f.elemento.nome, cabo: f.elemento.cabo_entrada, fibra: f.elemento.fibra_entrada }))}
-          modelos={catalogo.filter((m) => m.categoria === "splitter")}
-          usuario={usuario}
-          onSalva={onCaixaSalva}
-          onFechar={onFechar}
-          potenciaEntrada={no.elemento.potencia_entrada}
-          semMoldura
-        />
       ) : (
         <div className="p-3">
-          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba(ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "diagrama")} />
+          <DetalheNo no={no} rotas={rotas} onAbrirRota={onAbrirRota} onAbrirCaixa={() => setAba(ehDio ? "dio" : ehHub ? "primario" : ehCto ? "cto" : ehCdoi ? "cdoi" : ehCeo ? "ceo" : ehCt ? "ct" : ehPredio ? "predio" : "emendas")} />
         </div>
       )}
     </div>
