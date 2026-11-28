@@ -61,7 +61,7 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
     predio.pontos.find((o) => o.bloco === bloco && a >= Math.min(o.atende_de, o.atende_ate) && a <= Math.max(o.atende_de, o.atende_ate));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full select-none" style={{ minWidth: Math.min(W, 460) }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto block select-none" style={{ width: "100%", maxWidth: Math.max(W * 1.25, (480 * W) / H), maxHeight: 480, minWidth: Math.min(W, 420) }}>
       <defs>
         <linearGradient id="dp-ceu" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#7dd3fc" />
