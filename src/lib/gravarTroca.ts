@@ -4,7 +4,7 @@
 // =====================
 import { registroCaixa, COLECAO_CAIXAS, type CaixaRede } from "./caixasRede";
 import { camposAtualizarRota, COLECAO_ROTAS, type RotaOptica } from "./rotaOptica";
-import { paraGravar } from "./subRotas";
+import { rotaParaGravar } from "./subRotas";
 import { caixasDoPlano, planoPelasRotas } from "./trocaFibra";
 import type { CadastroLigacoes } from "./unifilar";
 
@@ -15,11 +15,7 @@ export async function gravarTroca(rotas: RotaOptica[], caixas: Omit<CaixaRede, "
   const { db } = await import("./firebase");
   const lote = writeBatch(db);
   for (const r of rotas) {
-    const dados = paraGravar({ pai: r.pai, tronco: r.tronco }, {
-      nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos,
-      calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-    });
-    lote.update(doc(db, COLECAO_ROTAS, r.id), camposAtualizarRota(dados, { serverTimestamp, deleteField }));
+    lote.update(doc(db, COLECAO_ROTAS, r.id), camposAtualizarRota(rotaParaGravar(r), { serverTimestamp, deleteField }));
   }
   const gravadas: CaixaRede[] = [];
   for (const c of caixas) {

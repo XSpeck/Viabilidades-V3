@@ -17,7 +17,7 @@ import {
   type Alerta, type CaboAnalise, type CaixaAnalise, type Gravidade,
 } from "@/lib/analiseRede";
 import { iconeSvg } from "./IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
 import LegendaMapa, { TEMAS, type TemaMapa } from "./mapa/LegendaMapa";
 import PainelMapa, { type AbaPainel, type AlertaMapa, type AlvoMapa } from "./mapa/PainelMapa";
 
@@ -37,7 +37,7 @@ interface Props {
 const COR_GRAV: Record<Gravidade, string> = { critico: "#dc2626", atencao: "#f97316", cadastro: "#0284c7" };
 const ORDEM_GRAV: Gravidade[] = ["critico", "atencao", "cadastro"];
 const piorAlerta = (l: Alerta[]) => ORDEM_GRAV.find((g) => l.some((a) => a.gravidade === g));
-const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const curto = nomeCurto;
 
 /** Preferência guardada no aparelho (tema, alertas, painel) */
 function usePref<T extends string | boolean>(chave: string, inicial: T): [T, (v: T) => void] {
@@ -255,7 +255,7 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota, onAbrirNoUni
                       <br />
                       {formatMetros(c.metrosOlt)} da OLT · {c.rotas.length} rota{c.rotas.length !== 1 ? "s" : ""}
                       {c.ocupacao?.total ? ` · ${c.ocupacao.clientes + c.ocupacao.ramais}/${c.ocupacao.total} portas` : ""}
-                      {c.potPonta !== undefined ? ` · ${c.potPonta.toFixed(1).replace(".", ",")} dBm` : ""}
+                      {c.potPonta !== undefined ? ` · ${dbmCurto(c.potPonta, true)}` : ""}
                     </Tooltip>
                   </Marker>
                 );

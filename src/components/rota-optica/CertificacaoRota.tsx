@@ -18,7 +18,7 @@ import {
   type Situacao,
 } from "@/lib/certificacao";
 import { IconeElemento } from "./IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { cortar, nomeCurto } from "@/lib/textoCompleto";
 import type { PontoVisita } from "./MapaCertificacao";
 import EnviarTecnico, { linkMaps } from "./EnviarTecnico";
 
@@ -38,7 +38,7 @@ interface Props {
   usuario?: string;
 }
 
-const curto = (s: string, n = 24) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const curto = (s: string, n = 24) => nomeCurto(s, n);
 const nomeSimples = (s: string) => s.split(" - ")[0].split(" / ")[0].trim();
 const db = (v?: number) => (v === undefined || !Number.isFinite(v) ? "—" : v.toFixed(2).replace(".", ","));
 const num = (t: string) => {

@@ -4,7 +4,7 @@ import { confirmar } from "@/lib/dialogo";
 import { useEffect, useState, type ReactNode } from "react";
 import { Building2, Cable as CableIcon, GitBranch, Loader2, Package, Trash2 } from "lucide-react";
 import { atualizarRota, excluirRota, type RotaOptica } from "@/lib/rotaOptica";
-import { candidatasSubRota, paraGravar, type CandidataSubRota } from "@/lib/subRotas";
+import { candidatasSubRota, type CandidataSubRota, rotaParaGravar } from "@/lib/subRotas";
 import { chaveElemento } from "@/lib/arvorePon";
 import { excluirCaixa, type CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo, excluirCabo, type CaboRede } from "@/lib/cabosRede";
@@ -77,10 +77,7 @@ export default function LimpezaRede({ rotas, caixas, cabos, usuario, onCaixas, o
     const r = c.rota;
     await atualizarRota(
       r.id,
-      paraGravar(
-        { pai: { rota_id: c.dona.id, chave: chaveElemento(r.elementos[c.k]) }, tronco: c.k + 1 },
-        { nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por }
-      )
+      rotaParaGravar(r, {}, { pai: { rota_id: c.dona.id, chave: chaveElemento(r.elementos[c.k]) }, tronco: c.k + 1 })
     );
   }
   const converter = (c: CandidataSubRota) =>

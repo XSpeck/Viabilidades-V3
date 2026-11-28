@@ -1,7 +1,8 @@
 "use client";
+import { inicioProprio } from "@/lib/compartilhados";
 import { avisar, confirmar } from "@/lib/dialogo";
 
-import { paraGravar } from "@/lib/subRotas";
+import { paraGravar, rotaParaGravar } from "@/lib/subRotas";
 
 import { useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/prediosRede";
 import { IconeElementoSvg } from "./IconesRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
-import { cortar } from "@/lib/textoCompleto";
+import { nomeCurto } from "@/lib/textoCompleto";
 
 /**
  * Prédio vertical: blocos lado a lado com térreo, andares e subsolos; cada CDOI no seu andar,
@@ -87,10 +88,7 @@ interface Props {
 /** Subida da fibra dentro do prédio até a CDOI: ~3 m por andar */
 const METROS_POR_ANDAR = 3;
 
-const curto = (s: string, n = 26) => {
-  const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return cortar(t, n, s);
-};
+const curto = nomeCurto;
 
 interface CaboEntrada {
   cabo: string;
@@ -364,7 +362,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
         if (gerenciadas.has(rt.id)) continue;
         let mudou = false;
         const elementos = rt.elementos.map((e, idx) => {
-          if (idx < (rt.tronco ?? 0)) return e;
+          if (idx < inicioProprio(rt)) return e;
           // entrada do prédio: acompanha o nome do prédio
           if (idPredioDoElemento(e) === s.id) {
             if (e.nome === s.nome) return e;
@@ -381,10 +379,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
         });
         if (!mudou) continue;
         pendentes.push(
-          atualizarRota(rt.id, paraGravar(rt, {
-            nome: rt.nome, origem: rt.origem, elementos, trechos: rt.trechos,
-            calculo_potencia: rt.calculo_potencia, obs: rt.obs, criado_por: rt.criado_por,
-          })),
+          atualizarRota(rt.id, rotaParaGravar(rt, { elementos })),
         );
       }
       await Promise.all(pendentes);
@@ -401,7 +396,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
   function entradasDo(p: PredioRede) {
     return rotas.flatMap((r) => {
       const k = r.elementos.findIndex((e) => idPredioDoElemento(e) === p.id);
-      if (k <= 0 || k < (r.tronco ?? 0)) return [];
+      if (k <= 0 || k < inicioProprio(r)) return [];
       const e = r.elementos[k];
       if (!e.cabo_entrada) return [];
       return [{ rota: r, k, cabo: e.cabo_entrada, de: r.elementos[k - 1].nome, elemento: e }];
@@ -410,7 +405,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
 
   async function excluir() {
     if (!salvo) return;
-    const usam = rotas.filter((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && (idPredioDoElemento(e) === salvo.id || salvo.pontos.some((o) => o.chave && o.chave === chaveElemento(e)))));
+    const usam = rotas.filter((r) => r.elementos.some((e, i) => i >= inicioProprio(r) && (idPredioDoElemento(e) === salvo.id || salvo.pontos.some((o) => o.chave && o.chave === chaveElemento(e)))));
     if (usam.length) {
       void avisar(`O prédio "${salvo.nome}" ainda é usado por ${usam.length} rota${usam.length > 1 ? "s" : ""}:\n\n${usam.map((r) => `• ${r.nome}`).join("\n")}\n\nExclua antes as rotas das CDOIs e depois a do cabo até o prédio.`);
       return;
@@ -501,7 +496,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
     rotas.forEach((rt) => {
       if (doPredio.has(rt.id)) return;
       rt.elementos.forEach((e, idx) => {
-        if (idx < (rt.tronco ?? 0)) return;
+        if (idx < inicioProprio(rt)) return;
         if (e.cabo_entrada && e.fibra_entrada && chaveCabo(e.cabo_entrada) === k && !m.has(e.fibra_entrada)) m.set(e.fibra_entrada, e.nome);
       });
     });

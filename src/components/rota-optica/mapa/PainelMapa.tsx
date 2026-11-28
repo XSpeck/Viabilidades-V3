@@ -10,7 +10,7 @@ import { formatMetros, TIPO_ELEMENTO_LABEL, corFibra, type RotaOptica } from "@/
 import { chaveCabo, semCodigo } from "@/lib/cabosRede";
 import { chaveElemento } from "@/lib/arvorePon";
 import { IconeElemento, IconeCabo } from "../IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
 
 export type AbaPainel = "indicadores" | "alertas" | "detalhe";
 /** Onde um alerta aponta (para centralizar o mapa e abrir o detalhe) */
@@ -19,8 +19,8 @@ export interface AlertaMapa extends Alerta { alvo: AlvoMapa }
 
 const COR_GRAV: Record<Gravidade, string> = { critico: "bg-red-600", atencao: "bg-orange-500", cadastro: "bg-sky-600" };
 const ROT_GRAV: Record<Gravidade, string> = { critico: "Crítico", atencao: "Atenção", cadastro: "Cadastro" };
-const dbm = (v?: number) => (v === undefined ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")} dBm`);
-const curto = (s: string, n = 30) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const dbm = (v?: number) => dbmCurto(v, true);
+const curto = (s: string, n = 30) => nomeCurto(s, n);
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
 interface Props {

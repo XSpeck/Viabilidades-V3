@@ -27,7 +27,7 @@ import {
 } from "@/lib/rotaOptica";
 import type { PaiRota } from "@/lib/rotaOptica";
 import { atualizarRota, criarRota } from "@/lib/rotaOptica";
-import { donoDoElemento, entradaPotencia, paraGravar, portasDaCaixa, subRotasDe } from "@/lib/subRotas";
+import { donoDoElemento, entradaPotencia, paraGravar, portasDaCaixa, subRotasDe, rotaParaGravar } from "@/lib/subRotas";
 import EtiquetaCabo from "./EtiquetaCabo";
 import PaletaFerramentas from "./editor/PaletaFerramentas";
 import CartaoPredio from "./editor/CartaoPredio";
@@ -891,10 +891,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     for (const r of rede) {
       const novo = aplicarNaRota(r, globais);
       if (!novo) continue;
-      await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
-        nome: r.nome, origem: r.origem, elementos: novo.elementos, trechos: novo.trechos,
-        calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-      }));
+      await atualizarRota(r.id, rotaParaGravar(r, { elementos: novo.elementos, trechos: novo.trechos }));
     }
     setGlobais([]);
   }
@@ -1415,10 +1412,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           criado_por: usuario,
         }));
         for (const x of passarParaNova) {
-          await atualizarRota(x.id, paraGravar({ pai: { ...x.pai!, rota_id: idNova }, tronco: x.tronco }, {
-            nome: x.nome, origem: x.origem, elementos: x.elementos, trechos: x.trechos,
-            calculo_potencia: x.calculo_potencia, obs: x.obs, criado_por: x.criado_por,
-          }));
+          await atualizarRota(x.id, rotaParaGravar(x, {}, { pai: { ...x.pai!, rota_id: idNova }, tronco: x.tronco }));
         }
       }
       await gravarGlobais();

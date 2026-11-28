@@ -7,7 +7,7 @@ import { gravarRotasEPontas } from "@/lib/gravarTroca";
 import type { CaixaRede } from "@/lib/caixasRede";
 import { salvarCabo, semCodigo, type CaboRede, type UsoFibra } from "@/lib/cabosRede";
 import { conflitosTroca, trechosDaFibra, trocarFibraNaRota } from "@/lib/trocaFibra";
-import { cortar } from "@/lib/textoCompleto";
+import { nomeCurto } from "@/lib/textoCompleto";
 
 interface Props {
   /** Todas as rotas montadas */
@@ -28,7 +28,7 @@ interface Props {
   onFeito: (resumo: string, cabo?: CaboRede, caixas?: CaixaRede[]) => void;
 }
 
-const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const curto = nomeCurto;
 
 /**
  * Trocar a fibra em várias rotas de uma vez: escolhe a fibra nova, os trechos do cabo e as rotas

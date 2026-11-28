@@ -124,6 +124,14 @@ export function donoDoElemento(r: RotaOptica, k: number, todas: RotaOptica[]): R
  * O que vai para o banco de uma rota montada: a sub-rota perde o tronco
  * (fica a caixa de ramificação como 1º elemento) e o traçado volta aos índices dela.
  */
+/** O que vai para o banco de uma rota montada, com o que mudou nela (elementos, trechos, pai…) */
+export function rotaParaGravar(r: RotaOptica, mudou: Partial<RotaOpticaInput> = {}, pai: Pick<RotaOptica, "pai" | "tronco"> = r): RotaOpticaInput {
+  return paraGravar(pai, {
+    nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos,
+    calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por, ...mudou,
+  });
+}
+
 export function paraGravar(r: Pick<RotaOptica, "pai" | "tronco">, dados: RotaOpticaInput): RotaOpticaInput {
   const { tronco } = r;
   if (!r.pai) return { ...dados, pai: undefined };

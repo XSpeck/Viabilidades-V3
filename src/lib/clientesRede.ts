@@ -1,3 +1,4 @@
+import { inicioProprio } from "./compartilhados";
 // =====================
 // Clientes da rede: cadastro (nome, documento, endereço, contato) e a ligação com uma perna
 // de splitter de CTO ou CDOI. A ligação mora na porta da caixa (cliente_id); daqui se lê e se muda.
@@ -99,7 +100,7 @@ export function caixasDeAtendimento(rotas: RotaOptica[], caixas: CaixaRede[]) {
   const vistas = new Map<string, { chave: string; nome: string; tipo: "cto" | "cdoi"; splitters: SplitterCaixa[]; caixa?: CaixaRede }>();
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
-      if (i < (r.tronco ?? 0) || e.passagem) return;
+      if (i < inicioProprio(r) || e.passagem) return;
       const t = tipoVisual(e);
       if (t !== "cto" && t !== "cdoi") return;
       const k = chaveElemento(e);

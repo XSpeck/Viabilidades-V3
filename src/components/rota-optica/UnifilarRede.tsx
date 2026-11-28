@@ -13,7 +13,7 @@ import {
   type CadastroLigacoes, type CaboUni, type ModeloUnifilar, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
 import { CALCULO_PADRAO } from "@/lib/rotaOptica";
 import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
 import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
@@ -47,7 +47,7 @@ interface Props {
 }
 
 const ROW = 15, HEAD = 30, HEAD_CABO = 20, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
-const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const curto = nomeCurto;
 const COR_TIPO: Partial<Record<TipoElementoRota, string>> = { hub: "#ca8a04", cto: "#059669", cdoi: "#ea580c", ceo: "#2563eb", ct: "#525252", dio: "#475569", predio: "#0284c7" };
 const textoSobre = (hex: string) => (["#f4f4f0", "#f2c200", "#ee86b0", "#20bdc9", "#8a949b", "#f08a1c", "#b48ae6"].includes(hex) ? "#0b0d10" : "#fff");
 
@@ -167,7 +167,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     if (infoDe.get(chave)?.tipo !== "hub") return base;
     return new Map([...base].map(([k, v]) => [k, v + CALCULO_PADRAO.conector_db - CALCULO_PADRAO.emenda_db]));
   };
-  const dbm = (v?: number) => (v === undefined ? "" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`);
+  const dbm = (v?: number) => dbmCurto(v);
 
   /** Ir até uma caixa (clique no nome no painel da rota): rola até ela e pisca a borda */
   const irPara = useRef<string | null>(Array.isArray(inicial) ? inicial[0] ?? null : inicial ?? null);

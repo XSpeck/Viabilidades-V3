@@ -9,7 +9,7 @@ import type { CaixaRede } from "@/lib/caixasRede";
 import { chaveCabo } from "@/lib/cabosRede";
 import { acumuladoDaRota, localizarRompimento, trechosDaRota, type Sentido } from "@/lib/rompimento";
 import { IconeElemento, IconeElementoSvg } from "./IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { nomeCurto } from "@/lib/textoCompleto";
 import CertificacaoRota from "./CertificacaoRota";
 import EnviarTecnico from "./EnviarTecnico";
 
@@ -47,10 +47,7 @@ interface Props {
   usuario?: string;
 }
 
-const curto = (s: string, n = 24) => {
-  const t = s.split(" - ")[0].split(" / ")[0].trim();
-  return cortar(t, n, s);
-};
+const curto = (s: string, n = 24) => nomeCurto(s, n);
 const m0 = (v: number) => `${Math.round(v).toLocaleString("pt-BR")} m`;
 
 function subarvore(n: NoArvore): NoArvore[] {

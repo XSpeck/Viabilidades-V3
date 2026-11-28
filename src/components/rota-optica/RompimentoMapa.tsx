@@ -13,11 +13,11 @@ import { resumoPortas, type CaixaRede } from "@/lib/caixasRede";
 import { semCodigo } from "@/lib/cabosRede";
 import { afetadasPeloCorte, trechoNoClique, trechosDaRede, trechosDaRota, type TrechoRede } from "@/lib/rompimento";
 import { iconeSvg, IconeElemento } from "./IconesRede";
-import { cortar } from "@/lib/textoCompleto";
+import { nomeCurto } from "@/lib/textoCompleto";
 import EnviarTecnico from "./EnviarTecnico";
 
 type Ponto = { lat: number; lon: number };
-const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+const curto = nomeCurto;
 const ll = (ps: Ponto[]) => ps.map((p) => [p.lat, p.lon] as [number, number]);
 
 const iconeQuebra = L.divIcon({

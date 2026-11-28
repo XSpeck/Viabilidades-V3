@@ -1,3 +1,4 @@
+import { dbmCurto } from "./textoCompleto";
 // =====================
 // Análise da rede para o Mapa da rede: cada caixa e cada trecho de cabo com ocupação, potência,
 // portas PON e alertas; e os indicadores de um conjunto (o filtrado ou o visível no mapa).
@@ -235,5 +236,5 @@ export function indicadores(caixas: CaixaAnalise[], cabos: CaboAnalise[], extras
 }
 
 function fmt(v?: number) {
-  return v === undefined ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`;
+  return v === undefined ? "—" : dbmCurto(v);
 }

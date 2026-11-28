@@ -27,3 +27,14 @@ export function expandir(texto: string): string | null {
   }
   return achou ? saida : null;
 }
+
+/** Nome curto de caixa/cabo/rota: só a primeira parte ("CTO 12 - Rua X / lado A" → "CTO 12"), cortada em n letras */
+export function nomeCurto(s: string, n = 26): string {
+  return cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
+}
+
+/** Potência curta: "+3,8", "−18,0" (com " dBm" se pedido); "—" sem medida */
+export function dbmCurto(v?: number, unidade = false): string {
+  if (v === undefined || !Number.isFinite(v)) return unidade ? "—" : "";
+  return `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}${unidade ? " dBm" : ""}`;
+}
