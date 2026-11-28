@@ -539,6 +539,14 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     const l = modelos.get(chave)?.ligacoes.find((x) => x.tipo === "dio" && x.b.k === "adaptador" && x.b.n === n && x.a.k === "fibra" && x.a.lado === "chega");
     return l && l.a.k === "fibra" ? l.a : undefined;
   }
+  /** O cordão que sai de uma porta PON da OLT (a fibra dele) */
+  function cordaoDaPon(chave: string, porta: string) {
+    const l = modelos.get(chave)?.ligacoes.find((x) => x.tipo === "cordao" && x.a.k === "pon" && x.a.porta === porta && x.b.k === "fibra");
+    return l && l.b.k === "fibra" ? l.b : undefined;
+  }
+  /** Porta PON (na OLT) escolhida + adaptador de um DIO aberto: o cordão dela passa para esse adaptador */
+  const ponParaDio = (s0: { chave: string; p: PontoUni } | null, chave: string, p: PontoUni) =>
+    !!s0 && s0.p.k === "pon" && p.k === "adaptador" && infoDe.get(chave)?.tipo === "dio" && !!cordaoDaPon(s0.chave, s0.p.porta);
   async function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "clientes") {
@@ -577,6 +585,13 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       return;
     }
     if (!sel) { setSel({ chave, p }); setSelLig(null); return; }
+    // ponta da OLT (porta PON) + adaptador no DIO: troca a porta do DIO daquele cordão
+    if (ponParaDio(sel, chave, p) && sel.p.k === "pon" && p.k === "adaptador") {
+      const cd = cordaoDaPon(sel.chave, sel.p.porta)!;
+      moverPortaDio(chave, cd.cabo, p.n);
+      setSel(null);
+      return;
+    }
     if (sel.chave !== chave) {
       setErro(`As ligações são feitas dentro de uma mesma caixa. Agora o ponto escolhido é desta (${curto(infoDe.get(chave)?.nome ?? "", 30)}): clique no destino com anel verde.`);
       setSel({ chave, p });
@@ -704,7 +719,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     const ativo = sel && sel.chave === chave && idPonto(sel.p) === idPonto(p);
     const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega")
       || (sel.p.k === "adaptador" && p.k === "adaptador" && !!cordaoNoAdaptador(chave, sel.p.n)));
-    const cand = modo === "editar" && sel?.chave === chave && !ativo && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)));
+    const cand = modo === "editar" && !ativo && (ponParaDio(sel, chave, p) || (sel?.chave === chave && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)))));
     const apagado = modo === "editar" && !!sel && !ativo && !cand;
     return (
       <g key={`pt${id}${lado}`} className="cursor-pointer" opacity={apagado ? 0.3 : 1} onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
@@ -1265,7 +1280,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           ? "Clique numa porta (perna) de splitter, ou numa fibra que chega na CT, para marcar o cliente ou deixar livre. Salve no topo."
           : modo === "navegar"
           ? "Clique numa fibra: a caixa do outro lado do cabo abre ao lado e o caminho acende em laranja. O nome azul embaixo do cabo também abre a vizinha."
-          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar, e no nome de um splitter para tirá-lo. No DIO: clique no adaptador em uso e depois no novo para mudar a porta da rota. Salve no topo."}
+          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar, e no nome de um splitter para tirá-lo. Porta do DIO: clique na porta PON da OLT (ou no adaptador em uso) e depois no adaptador novo. Salve no topo."}
       </p>
     </div>
   );
