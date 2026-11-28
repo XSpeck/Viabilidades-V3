@@ -548,10 +548,9 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 semMoldura
                 soLeitura
                 onEditarNoMapa={onEditarRota ? () => {
-                  // a rota que usa este cabo por conta própria (não herdado do tronco)
-                  const usos = [...(usoFibras.get(k)?.fibras.values() ?? [])].flat();
-                  const u = usos.find((x) => !x.herdado) ?? usos[0];
-                  if (u) onEditarRota(u.rotaId);
+                  // a rota dona do cabo: tem o cabo num elemento dela (não no tronco herdado da rota-mãe)
+                  const dona = rotas.find((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === k));
+                  if (dona) onEditarRota(dona.id);
                 } : undefined}
               />
             </Janela>
