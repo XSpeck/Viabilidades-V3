@@ -129,9 +129,11 @@ export default function CaixaCt({ no, rotas, modelos, onAbrirUnifilar }: Props) 
         <p className="text-[11px] text-slate-500">
           {cto ? <>Extensão da <b>{curto(cto.elemento.nome, 26)}</b>: portas dela seguem pelo cabo até aqui.</> : "Não há CTO antes desta CT na rota."}
         </p>
-        <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="Cliente de cada fibra e a porta da CTO se mudam na aba Unifilar">
+        {onAbrirUnifilar && (
+        <button type="button" onClick={onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="Cliente de cada fibra e a porta da CTO se mudam na aba Unifilar">
           Abrir no Unifilar
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-4 gap-1.5">

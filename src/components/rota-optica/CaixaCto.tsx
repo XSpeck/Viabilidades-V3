@@ -170,9 +170,11 @@ export default function CaixaCto({ no, rotas, modelos, tipoCaixa = "CTO", onAbri
               ? "Splitter da CDOI e o apartamento / cliente em cada perna."
               : "Splitters de atendimento da CTO e os clientes em cada porta."}
         </p>
-          <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
+          {onAbrirUnifilar && (
+          <button type="button" onClick={onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
             Abrir no Unifilar
           </button>
+          )}
       </div>
 
       {no.elemento.passagem && (

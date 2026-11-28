@@ -211,19 +211,7 @@ export default function PrimarioHub({ no, rotas = [], catalogo, onAbrirNo, onEdi
 
   return (
     <div className="p-3 space-y-3">
-      {onEditarPortas && (
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] text-slate-500">Splitter primário da HUB e para onde vai cada porta.</p>
-          <button
-            type="button"
-            onClick={onEditarPortas}
-            className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900"
-            title="O que tem dentro da caixa se muda na aba Unifilar"
-          >
-            Abrir no Unifilar
-          </button>
-        </div>
-      )}
+      <p className="text-[11px] text-slate-500">Splitter primário da HUB e para onde vai cada porta.</p>
       {/* Números */}
       <div className="grid grid-cols-4 gap-1.5">
         {[

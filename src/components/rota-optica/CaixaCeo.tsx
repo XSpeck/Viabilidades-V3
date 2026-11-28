@@ -110,9 +110,11 @@ export default function CaixaCeo({ no, rotas, onAbrirUnifilar }: Props) {
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
         <p className="text-[11px] text-slate-500">Mapa de emendas: cor com cor e as exceções.</p>
-          <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
+          {onAbrirUnifilar && (
+          <button type="button" onClick={onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="O que tem dentro da caixa se muda na aba Unifilar">
             Abrir no Unifilar
           </button>
+          )}
       </div>
 
       {/* Números */}

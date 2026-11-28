@@ -635,6 +635,15 @@ function JanelaNo({
   const abrirUnifilar = onAbrirNoUnifilar ? () => onAbrirNoUnifilar(chaveElemento(no.elemento)) : undefined;
   return (
     <div>
+      {/* Todo elemento: ligação com o Unifilar (o que tem dentro dele se muda lá) */}
+      {abrirUnifilar && (
+        <div className="flex items-center gap-2 border-b border-slate-800 bg-[#16181c] px-3 py-1.5">
+          <p className="min-w-0 flex-1 truncate text-[11px] text-slate-300">Ligações, splitters e clientes desta caixa: no Unifilar.</p>
+          <button type="button" onClick={abrirUnifilar} className="shrink-0 rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600">
+            Abrir no Unifilar
+          </button>
+        </div>
+      )}
       {/* CDOI: só a aba dela (a barra de abas some) */}
       <div className={`flex border-b border-gray-200 bg-slate-50 text-xs font-medium ${ehCdoi ? "hidden" : ""}`} role="tablist">
         {(() => {
@@ -668,9 +677,9 @@ function JanelaNo({
       ) : aba === "dio" ? (
         <CaixaDio no={no} rotas={todasRotas} catalogo={catalogo} />
       ) : aba === "ct" ? (
-        <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} onAbrirUnifilar={abrirUnifilar} />
+        <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} />
       ) : aba === "ceo" ? (
-        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} onAbrirUnifilar={abrirUnifilar} />
+        <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} />
       ) : aba === "cto" || aba === "cdoi" ? (
         <CaixaCto
           key={`${aba}-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`}
@@ -678,7 +687,6 @@ function JanelaNo({
           rotas={todasRotas}
           modelos={catalogo.filter((m) => m.categoria === "splitter")}
           tipoCaixa={aba === "cdoi" ? "CDOI" : "CTO"}
-          onAbrirUnifilar={abrirUnifilar}
         />
       ) : aba === "predio" ? (
         <PredioVertical
