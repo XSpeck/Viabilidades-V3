@@ -112,3 +112,13 @@ describe("OLT e DIO no unifilar", () => {
     expect(n[2].fibra_entrada).toBe(20);
   });
 });
+
+describe("regra da fusão", () => {
+  it("só entre uma fibra que chega e uma que sai", () => {
+    const chegaA = { k: "fibra" as const, lado: "chega" as const, cabo: A, fibra: 1 };
+    const chegaB = { k: "fibra" as const, lado: "chega" as const, cabo: B, fibra: 1 };
+    const saiB = { k: "fibra" as const, lado: "sai" as const, cabo: B, fibra: 2 };
+    expect(tipoEntre(chegaA, saiB)).toBe("fusao");
+    expect(tipoEntre(chegaA, chegaB)).toMatch(/cabo que sai/);
+  });
+});

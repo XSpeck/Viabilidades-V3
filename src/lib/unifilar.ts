@@ -190,12 +190,12 @@ function ordenar(a: PontoUni, b: PontoUni): [PontoUni, PontoUni] {
 /** Que tipo de ligação dois pontos formam (ou o motivo de não poder) */
 export function tipoEntre(a: PontoUni, b: PontoUni): TipoLigacao | string {
   const [x, y] = ordenar(a, b);
-  if (x.k === "fibra" && y.k === "fibra") return x.lado === y.lado && chaveCabo(x.cabo) === chaveCabo(y.cabo) ? "Escolha uma fibra de outro cabo." : "fusao";
-  if (x.k === "fibra" && y.k === "entrada") return x.lado === "chega" ? "entrada" : "A entrada do splitter recebe uma fibra que chega.";
+  if (x.k === "fibra" && y.k === "fibra") return x.lado === y.lado ? (x.lado === "chega" ? "Ligue a fibra que chega numa fibra de um cabo que sai (lado ▶)." : "Ligue a fibra que sai numa fibra de um cabo que chega (lado ◀).") : "fusao";
+  if (x.k === "fibra" && y.k === "entrada") return x.lado === "chega" ? "entrada" : "A entrada do splitter recebe uma fibra de um cabo que chega (◀).";
   if (x.k === "entrada" && y.k === "porta") return x.spl === y.spl ? "O splitter não pode alimentar a si mesmo." : "nivel2";
-  if (x.k === "porta" && y.k === "fibra") return y.lado === "sai" ? "perna" : "A porta do splitter vai para uma fibra que sai.";
-  if (x.k === "fibra" && y.k === "porta") return x.lado === "sai" ? "perna" : "A porta do splitter vai para uma fibra que sai.";
-  return "Essa ligação não existe numa caixa.";
+  if (x.k === "porta" && y.k === "fibra") return y.lado === "sai" ? "perna" : "A porta do splitter vai para uma fibra de um cabo que sai (▶).";
+  if (x.k === "fibra" && y.k === "porta") return x.lado === "sai" ? "perna" : "A porta do splitter vai para uma fibra de um cabo que sai (▶).";
+  return "Essa ligação não existe numa caixa: veja os pontos com anel verde.";
 }
 
 /** Tira do cadastro tudo que usa o ponto (para religar ou desligar) */

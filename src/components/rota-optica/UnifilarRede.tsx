@@ -527,7 +527,11 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       return;
     }
     if (!sel) { setSel({ chave, p }); setSelLig(null); return; }
-    if (sel.chave !== chave) { setSel({ chave, p }); return; }
+    if (sel.chave !== chave) {
+      setErro(`As ligações são feitas dentro de uma mesma caixa. Agora o ponto escolhido é desta (${curto(infoDe.get(chave)?.nome ?? "", 30)}): clique no destino com anel verde.`);
+      setSel({ chave, p });
+      return;
+    }
     if (idPonto(sel.p) === idPonto(p)) { setSel(null); return; }
     // DIO: cordão que chega + adaptador = a rota passa a usar aquele adaptador (grava na rota)
     const cordao = sel.p.k === "fibra" && sel.p.lado === "chega" ? sel.p : p.k === "fibra" && p.lado === "chega" ? p : null;
@@ -638,8 +642,9 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     const ativo = sel && sel.chave === chave && idPonto(sel.p) === idPonto(p);
     const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega"));
     const cand = modo === "editar" && sel?.chave === chave && !ativo && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)));
+    const apagado = modo === "editar" && !!sel && !ativo && !cand;
     return (
-      <g key={`pt${id}${lado}`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
+      <g key={`pt${id}${lado}`} className="cursor-pointer" opacity={apagado ? 0.3 : 1} onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
         <circle cx={x} cy={y} r={9} fill="transparent" />
         {cand && <circle cx={x} cy={y} r={7.5} fill="none" stroke="#4ade80" strokeWidth={1.4} />}
         {ativo && <circle cx={x} cy={y} r={8} fill="#facc15" opacity={0.45} />}
@@ -888,7 +893,20 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                       const cf = corFibra(f, b.c.nome);
                       const tr = aceso(ka) && aceso(kb);
                       return (
-                        <g key={f}>
+                        <g key={f} className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (moveu.current) return;
+                            // a ponta mais perto do clique: a fibra que sai da caixa da esquerda ou a que chega na da direita
+                            const r = (e.currentTarget as SVGGElement).getBoundingClientRect();
+                            const perto = e.clientX < r.left + r.width / 2
+                              ? { chave: b.chave, p: { k: "fibra" as const, lado: "sai" as const, cabo: b.c.nome, fibra: f } }
+                              : { chave: dest.chave, p: { k: "fibra" as const, lado: "chega" as const, cabo: dest.c.nome, fibra: f } };
+                            if (modo === "clientes") { setErro(`${cf.rotulo} do cabo ${curto(semCodigo(b.c.nome), 30)}. Clientes se marcam nas portas dos splitters.`); return; }
+                            void clicarPonto(perto.chave, perto.p);
+                          }}>
+                          <title>{`${cf.rotulo} ${cf.nome.toLowerCase()} · ${semCodigo(b.c.nome)}${modo === "editar" ? " · clique para escolher esta fibra na ponta mais perto" : " · clique para traçar"}`}</title>
+                          <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                           {tr && <path d={d} fill="none" stroke={LAR} strokeWidth={5} opacity={0.85} strokeLinecap="round" />}
                           <path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.4} />
                           <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.9} />
@@ -911,9 +929,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                     <rect x={x} y={y} width={BW} height={h} rx={6} fill="#2a2e35" stroke="#3b4048" {...arrastavel(chave, idBloco)} />
                     <rect x={x} y={y} width={BW} height={HEAD - 4} rx={6} fill="#0f1115" {...arrastavel(chave, idBloco)}><title>Arraste para mover o cabo</title></rect>
                     <text x={x + 6} y={y + 11} fontSize={8.5} fontWeight={800} fill="#e2e8f0" pointerEvents="none">{curto(semCodigo(c.nome), 28)}</text>
-                    <text x={x + 6} y={y + 21} fontSize={7.5} fill={viz && !aberta ? "#60a5fa" : "#94a3b8"} className={viz && !aberta ? "cursor-pointer" : undefined}
+                    <text x={x + 6} y={y + 21} fontSize={7.5} className={viz && !aberta ? "cursor-pointer" : undefined}
                       onClick={(e) => { e.stopPropagation(); abrirVizinha(chave, c); }}>
-                      {codigoDoCabo(c.nome) ?? "sem código"} · {c.capacidade}f{viz ? ` · ${ehE ? "◀" : "▶"} ${curto(viz.nome, 16)}` : ""}
+                      <title>{viz && !aberta ? `Clique para abrir ${viz.nome}` : ehE ? "Cabo que chega nesta caixa" : "Cabo que sai desta caixa"}</title>
+                      <tspan fontWeight={800} fill={ehE ? "#6ee7b7" : "#93c5fd"}>{ehE ? "◀ chega" : "sai ▶"}{viz ? (ehE ? " de " : " para ") : ""}</tspan>
+                      {viz && <tspan fill={!aberta ? "#60a5fa" : "#cbd5e1"} textDecoration={!aberta ? "underline" : undefined}>{curto(viz.nome, 14)}</tspan>}
+                      <tspan fill="#64748b"> · {codigoDoCabo(c.nome) ?? "sem código"} · {c.capacidade}f</tspan>
                     </text>
                     {fibras.map((f, k) => {
                       const cf = corFibra(f, c.nome);
