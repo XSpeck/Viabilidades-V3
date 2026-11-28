@@ -264,3 +264,55 @@ export function rotasDaFibra(rotas: RotaOptica[], cabo: string, fibra: number): 
     // as rotas principais primeiro, depois as mais longas
     .sort((a, b) => Number(!!a.rota.pai) - Number(!!b.rota.pai) || b.passos.length - a.passos.length);
 }
+
+// ---------- Montar pelas rotas ----------
+
+/**
+ * Completa os splitters da caixa com o que as rotas dizem: um splitter para cada fibra que chega e usa
+ * splitter (a porta PON), com a entrada ligada, e as pernas indo para as fibras que saem (cabos de prédio,
+ * CTOs depois da HUB…). O que já está no cadastro fica como está; só preenche o que falta.
+ */
+export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: CadastroLigacoes): { ed: CadastroLigacoes; splitters: number; pernas: number } {
+  const spls = c.splitters.map((s) => ({ ...s, entrada: { ...s.entrada }, portas: portasPara(s.relacao, s.portas).map((p) => ({ ...p })) }));
+  let novosSpl = 0, novasPernas = 0;
+  const achar = (f: PontaFibra) => spls.find((s) => s.entrada.fibra && mesmaFibra(s.entrada.fibra, f));
+  // 1) splitters: um por fibra que chega e usa splitter aqui
+  for (const r of rotas) {
+    r.elementos.forEach((e, i) => {
+      if (i === 0 || chaveElemento(e) !== chave || e.passagem || !e.splitter || !e.cabo_entrada || !e.fibra_entrada) return;
+      const f = { cabo: e.cabo_entrada, fibra: e.fibra_entrada };
+      if (achar(f)) return;
+      // um splitter antigo sem entrada e da mesma relação: ganha a entrada (em vez de criar outro)
+      const solto = spls.find((s) => !s.entrada.fibra && !s.entrada.splitter && s.relacao === e.splitter);
+      if (solto) { solto.entrada = { fibra: f }; return; }
+      spls.push({ id: `r${spls.length + 1}${f.fibra}`, relacao: e.splitter, modelo_id: e.splitter_modelo, entrada: { fibra: f }, portas: portasPara(e.splitter, []) });
+      novosSpl++;
+    });
+  }
+  // 2) pernas: o que sai depois desta caixa em cada rota vai numa porta do splitter daquela fibra
+  const jaSai = (f: PontaFibra) => spls.some((s) => s.portas.some((p) => p.saida && mesmaFibra(p.saida, f)));
+  for (const r of rotas) {
+    r.elementos.forEach((e, i) => {
+      if (i === 0 || chaveElemento(e) !== chave || e.passagem || !e.cabo_entrada || !e.fibra_entrada) return;
+      const s = achar({ cabo: e.cabo_entrada, fibra: e.fibra_entrada });
+      if (!s) return;
+      const prox = r.elementos[i + 1];
+      if (!prox?.cabo_entrada) return;
+      // cabo até um prédio entra inteiro: as fibras são as das CDOIs logo depois
+      const saidas: PontaFibra[] = prox.fibra_entrada
+        ? [{ cabo: prox.cabo_entrada, fibra: prox.fibra_entrada }]
+        : r.elementos.slice(i + 2).filter((x) => x.cabo_entrada && x.fibra_entrada && chaveCabo(x.cabo_entrada) === chaveCabo(prox.cabo_entrada!)).map((x) => ({ cabo: x.cabo_entrada!, fibra: x.fibra_entrada! }));
+      for (const f of saidas) {
+        if (jaSai(f)) continue;
+        const livre = s.portas.find((p) => p.status === "livre" && !p.saida && !spls.some((x) => x.entrada.splitter?.id === s.id && x.entrada.splitter.porta === p.numero));
+        if (!livre) continue;
+        livre.status = "ramal";
+        livre.saida = f;
+        livre.descricao = `F${f.fibra} · ${f.cabo}`;
+        novasPernas++;
+      }
+    });
+  }
+  const mudou = novosSpl > 0 || novasPernas > 0 || spls.some((s, k) => JSON.stringify(s.entrada) !== JSON.stringify(c.splitters[k]?.entrada));
+  return { ed: mudou ? { ...c, splitters: spls } : c, splitters: novosSpl, pernas: novasPernas };
+}

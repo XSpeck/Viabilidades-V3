@@ -8,7 +8,7 @@ import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
 import { portasPara, salvarCaixa, type CaixaRede, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import {
-  caminhoNaCaixa, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre,
+  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre,
   type CadastroLigacoes, type CaboUni, type ModeloUnifilar, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
@@ -82,17 +82,29 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   }, [cheia]);
 
   const comSpl = (chave: string) => ["hub", "cto", "cdoi"].includes(infoDe.get(chave)?.tipo ?? "");
-  const edDe = (chave: string) => eds[chave] ?? inicialDe(cadDe.get(chave));
+  /** O cadastro da caixa completado pelas rotas (splitter de cada porta + pernas), sem gravar */
+  const automatico = useMemo(() => {
+    const m = new Map<string, { ed: CadastroLigacoes; mudou: boolean }>();
+    for (const k of abertas) {
+      const base = inicialDe(cadDe.get(k));
+      if (!["hub", "cto", "cdoi"].includes(infoDe.get(k)?.tipo ?? "")) { m.set(k, { ed: base, mudou: false }); continue; }
+      const r = completarPelasRotas(k, rotas, base);
+      m.set(k, { ed: r.ed, mudou: r.ed !== base });
+    }
+    return m;
+  }, [abertas, rotas, cadDe, infoDe]);
+  const edDe = (chave: string) => eds[chave] ?? automatico.get(chave)?.ed ?? inicialDe(cadDe.get(chave));
   const modelos = useMemo(() => {
     const m = new Map<string, ModeloUnifilar>();
     for (const k of abertas) {
-      const e = eds[k] ?? inicialDe(cadDe.get(k));
+      const e = eds[k] ?? automatico.get(k)?.ed ?? inicialDe(cadDe.get(k));
       m.set(k, montarUnifilar(k, rotas, { ...cadDe.get(k), ...e, splitters: comSpl(k) ? e.splitters : [] }));
     }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abertas, eds, rotas, cadDe]);
-  const sujas = Object.keys(eds);
+  }, [abertas, eds, rotas, cadDe, automatico]);
+  /** caixas para gravar: as editadas e as montadas pelas rotas que ainda não estão no cadastro */
+  const sujas = [...new Set([...Object.keys(eds), ...abertas.filter((k) => automatico.get(k)?.mudou)])];
 
   function mudar(chave: string, n: CadastroLigacoes) {
     setHist((h) => [...h.slice(-49), eds]);
@@ -230,7 +242,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     setErro(null);
     try {
       for (const chave of sujas) {
-        const ed = eds[chave];
+        const ed = edDe(chave);
         const cad = cadDe.get(chave);
         const temSpl = comSpl(chave);
         const semEntrada = temSpl ? ed.splitters.find((s) => !s.entrada.fibra && !s.entrada.splitter) : undefined;
@@ -374,7 +386,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
                     <rect x={cx.x} y={TOPO} width={cx.w} height={30} rx={10} fill={COR_TIPO[t] ?? "#475569"} opacity={0.9} />
                     <g transform={`translate(${cx.x + 8} ${TOPO + 4})`} dangerouslySetInnerHTML={{ __html: iconeSvg(t, 22) }} />
                     <text x={cx.x + 36} y={TOPO + 13} fontSize={10} fontWeight={800} fill="#fff">{curto(info?.nome ?? cx.chave, 40)}</text>
-                    <text x={cx.x + 36} y={TOPO + 24} fontSize={8} fill="#f1f5f9" opacity={0.85}>{TIPO_ELEMENTO_LABEL[t]}{cx.chave.startsWith("PT:") ? ` · ${cx.chave.slice(3)}` : ""}{eds[cx.chave] ? " · alterada" : ""}</text>
+                    <text x={cx.x + 36} y={TOPO + 24} fontSize={8} fill="#f1f5f9" opacity={0.85}>{TIPO_ELEMENTO_LABEL[t]}{cx.chave.startsWith("PT:") ? ` · ${cx.chave.slice(3)}` : ""}{eds[cx.chave] ? " · alterada" : automatico.get(cx.chave)?.mudou ? " · splitters montados pelas rotas (falta salvar)" : ""}</text>
                     <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setAbertas((a) => a.filter((x) => x !== cx.chave)); }}>
                       <title>Fechar esta caixa</title>
                       <circle cx={cx.x + cx.w - 14} cy={TOPO + 15} r={8} fill="#00000033" />

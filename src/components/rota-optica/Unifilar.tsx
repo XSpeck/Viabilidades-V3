@@ -8,7 +8,7 @@ import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
 import { portasPara, salvarCaixa, type CaixaRede, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import {
-  caminhoNaCaixa, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre,
+  caminhoNaCaixa, completarPelasRotas, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre,
   type CadastroLigacoes, type CaboUni, type LigacaoUni, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento } from "./IconesRede";
@@ -46,7 +46,7 @@ const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].tr
 const LARANJA = "#f97316";
 
 export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelos = [], usuario, onSalva, onCancelar, onVerFibra, clientes = [], clientesOcupados, semRamal }: Props) {
-  const inicial: CadastroLigacoes = useMemo(() => ({
+  const base: CadastroLigacoes = useMemo(() => ({
     emendas: cad?.emendas ?? [],
     regras_emenda: cad?.regras_emenda ?? [],
     splitters: cad?.splitters?.length
@@ -55,7 +55,9 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
         ? [{ id: "s1", relacao: cad.splitter, modelo_id: cad.splitter_modelo, entrada: {}, portas: portasPara(cad.splitter, cad.portas ?? []) }]
         : [],
   }), [cad]);
-  const [ed, setEd] = useState<CadastroLigacoes>(inicial);
+  // HUB/CTO/CDOI: completa com o que as rotas dizem (um splitter por porta PON e as pernas)
+  const auto = useMemo(() => (comSplitters ? completarPelasRotas(chave, rotas, base) : { ed: base, splitters: 0, pernas: 0 }), [comSplitters, chave, rotas, base]);
+  const [ed, setEd] = useState<CadastroLigacoes>(auto.ed);
   const [hist, setHist] = useState<CadastroLigacoes[]>([]);
   const [modo, setModo] = useState<"editar" | "clientes" | "tracar">("editar");
   /** Modo Clientes: a perna escolhida */
@@ -281,6 +283,12 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
             ? "Agora clique no destino (os pontos com anel verde aceitam a ligação). Clique de novo no mesmo ponto para cancelar."
             : "Clique num ponto (fibra, entrada ou porta do splitter) e depois no destino. Clique numa linha para desligar."}
       </p>
+
+      {auto.ed !== base && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-900">
+          Montado pelas rotas: {auto.splitters ? `${auto.splitters} splitter${auto.splitters !== 1 ? "s" : ""} novo${auto.splitters !== 1 ? "s" : ""}, ` : ""}{auto.pernas} perna{auto.pernas !== 1 ? "s" : ""} ligada{auto.pernas !== 1 ? "s" : ""}. Confira e clique em <b>Salvar conexões</b>.
+        </p>
+      )}
 
       {/* Desenho */}
       <div

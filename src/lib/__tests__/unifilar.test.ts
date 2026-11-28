@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { caminhoNaCaixa, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, type CadastroLigacoes } from "../unifilar";
+import { caminhoNaCaixa, completarPelasRotas, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, type CadastroLigacoes } from "../unifilar";
 import type { ElementoRota, RotaOptica } from "../rotaOptica";
 
 const A = "24 FO ASO · HUB → CEO 3 [CB-000006]";
@@ -63,5 +63,26 @@ describe("unifilar", () => {
     const r = rotasDaFibra([rota("a", 6, 1), rota("b", 7, 2)], A, 6);
     expect(r.map((x) => x.rota.id)).toEqual(["a"]);
     expect(r[0].passos.map((p) => p.nome)).toEqual(["OLT", "HUB", "CEO 3", "CEO 2"]);
+  });
+});
+
+describe("montar splitters pelas rotas", () => {
+  const C4 = "04 FO ASO · CEO 1 → HUB X [CB-000008]";
+  const P1 = "06 FO ASO · HUB X → Ed. Um [CB-000011]";
+  const hubRota = (id: string, porta: string, fibra: number, cauda: ElementoRota[]): RotaOptica => ({
+    id, nome: id, origem: "manual", trechos: [],
+    elementos: [el("OLT", "olt", "", { porta }), el("HUB X", "hub", "15", { cabo_entrada: C4, fibra_entrada: fibra, splitter: "1:8" }), ...cauda],
+  });
+  it("um splitter por porta PON, com entrada e pernas para o prédio", () => {
+    const a = hubRota("062", "PL 06 - Porta 02", 3, [el("Ed. Um", "predio", "PREDIO-1", { cabo_entrada: P1 }), el("CDOI 1", "cdoi", "20", { cabo_entrada: P1, fibra_entrada: 1 }), el("CDOI 2", "cdoi", "21", { cabo_entrada: P1, fibra_entrada: 2 })]);
+    const b = hubRota("215", "PL 02 - Porta 15", 4, []);
+    const r = completarPelasRotas("PT:15", [a, b], { emendas: [], regras_emenda: [], splitters: [{ id: "s1", relacao: "1:8", entrada: {}, portas: [] }] });
+    expect(r.ed.splitters).toHaveLength(2);
+    expect(r.ed.splitters[0].entrada.fibra).toEqual({ cabo: C4, fibra: 3 });
+    expect(r.ed.splitters[1].entrada.fibra).toEqual({ cabo: C4, fibra: 4 });
+    expect(r.pernas).toBe(2);
+    expect(r.ed.splitters[0].portas.filter((p) => p.saida).map((p) => p.saida!.fibra)).toEqual([1, 2]);
+    // rodar de novo não muda nada
+    expect(completarPelasRotas("PT:15", [a, b], r.ed).ed).toBe(r.ed);
   });
 });
