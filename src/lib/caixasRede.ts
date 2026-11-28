@@ -79,9 +79,14 @@ export interface CaixaRede {
   splitter_modelo?: string;
   portas: PortaCaixa[];
   obs?: string;
+  /** Unifilar: quanto cada item foi arrastado do lugar automático (cabo, splitter, DIO, OLT) */
+  layout_unifilar?: LayoutUnifilar;
   atualizado_por?: string;
   atualizado_em?: string;
 }
+
+/** Deslocamento de cada item do desenho da caixa no Unifilar, em relação ao lugar automático */
+export type LayoutUnifilar = Record<string, { dx: number; dy: number }>;
 
 export const SPLITTERS = ["1:2", "1:4", "1:8", "1:16", "1:32", "1:64"] as const;
 
@@ -222,6 +227,7 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       emendas: Array.isArray(data.emendas) && data.emendas.length ? data.emendas : undefined,
       atendimento: Array.isArray(data.atendimento) && data.atendimento.length ? data.atendimento : undefined,
       obs: data.obs || undefined,
+      layout_unifilar: data.layout_unifilar && typeof data.layout_unifilar === "object" && Object.keys(data.layout_unifilar).length ? data.layout_unifilar : undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
     } as CaixaRede;
@@ -269,11 +275,24 @@ export async function salvarCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
   };
-  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
-  return { id, ...registro, splitters: splitters.length ? splitters : undefined,
+  // merge: campos que esta tela não mexe (arrumação do Unifilar) continuam
+  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() }, { merge: true });
+  return { id, ...registro, layout_unifilar: dados.layout_unifilar, splitters: splitters.length ? splitters : undefined,
     regras_emenda: registro.regras_emenda.length ? registro.regras_emenda : undefined,
     emendas: registro.emendas.length ? registro.emendas : undefined,
     atendimento: registro.atendimento.length ? registro.atendimento : undefined, splitter: registro.splitter || undefined, splitter_modelo: registro.splitter_modelo || undefined, obs: registro.obs || undefined, atualizado_em: new Date().toISOString() };
+}
+
+/**
+ * Grava só a arrumação do desenho da caixa no Unifilar (não mexe em splitters, emendas, clientes).
+ * Layout vazio = volta ao automático.
+ */
+export async function salvarLayoutUnifilar(chave: string, nome: string, layout: LayoutUnifilar): Promise<void> {
+  const { doc, setDoc, deleteField } = await import("firebase/firestore");
+  const { db } = await import("./firebase");
+  const limpo: LayoutUnifilar = {};
+  for (const [k, v] of Object.entries(layout)) if (Math.round(v.dx) || Math.round(v.dy)) limpo[k] = { dx: Math.round(v.dx), dy: Math.round(v.dy) };
+  await setDoc(doc(db, COLECAO, idCaixa(chave)), { chave, nome, layout_unifilar: Object.keys(limpo).length ? limpo : deleteField() }, { merge: true });
 }
 
 export async function excluirCaixa(id: string): Promise<void> {
