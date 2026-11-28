@@ -127,3 +127,12 @@ describe("rompimento", () => {
     expect(s.caixas.has("PT:6")).toBe(false);
   });
 });
+
+describe("rompimento: o que fica antes do corte continua aceso", () => {
+  it("os trechos até a CEO seguem com sinal", () => {
+    const { elementos, cabos } = rede();
+    const s = calcularSinal(elementos, cabos, { cortes: new Set(["CB-000003|0"]) });
+    expect(s.trechos.has("CB-000002|5|0")).toBe(true);
+    expect(s.trechos.has("CB-000003|2|0")).toBe(false);
+  });
+});

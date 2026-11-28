@@ -266,6 +266,8 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
         }
         if (!saidas.length && !finais.length) emitir(trilha);
 
+        /** Quantas saídas levaram a luz adiante (rompimento, conflito ou laço param ela aqui) */
+        let seguiu = 0;
         for (const s of saidas) {
           const c = caboDe.get(s.q.cabo)!;
           const i = c.caminho!.indexOf(x.chave);
@@ -290,8 +292,10 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
           const chega: PontoRede = { k: "fibra", cabo: chaveCabo(c.nome), fibra: s.q.fibra, lado: s.q.lado === "seg" ? "ant" : "seg" };
           entradas.add(`${y.chave}#${idPontoRede(chega)}`);
           const prox: Passo = { caixa: y, cabo: c, fibra: s.q.fibra, trecho: t, splitters: [], passagem: false, pontosEntrada: [idPontoRede(chega)], pontosSaida: [] };
+          seguiu++;
           andar(y, chega, [...trilha.slice(0, -1), aqui, prox]);
         }
+        if (saidas.length && !seguiu && !finais.length) emitir(trilha);
       };
 
       /** Monta o caminho (rota) até a última caixa da trilha e espalha a potência pelos pontos */
