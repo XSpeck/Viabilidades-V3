@@ -659,7 +659,10 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
 
   return (
     <div className={`rolagem-escura overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
-      <style>{`@keyframes fh-fluxo { to { stroke-dashoffset: -30; } } .fh-fluxo { stroke-dasharray: 3 12; animation: fh-fluxo 1.2s linear infinite; } @media (prefers-reduced-motion: reduce) { .fh-fluxo { animation: none; } }`}</style>
+      <style>{`@keyframes fh-fluxo { to { stroke-dashoffset: -30; } } .fh-fluxo { stroke-dasharray: 3 12; animation: fh-fluxo 1.2s linear infinite; }
+@keyframes fh-led { 0%, 100% { opacity: 1; } 50% { opacity: .35; } } .fh-led { animation: fh-led 1.1s ease-in-out infinite; }
+@keyframes fh-anel { 0% { opacity: .9; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.8); } } .fh-anel { transform-box: fill-box; transform-origin: center; animation: fh-anel 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .fh-fluxo, .fh-led, .fh-anel { animation: none; } }`}</style>
       {/* Barra */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-[#0f1115] px-3 py-2 text-xs">
         <div className="relative">
@@ -724,6 +727,17 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
             </div>
           ) : (
             <svg viewBox={`${minX} ${minY} ${W} ${H}`} width={W * zoom} height={H * zoom} className="block" role="img" aria-label="Unifilar da rede">
+              <defs>
+                <linearGradient id="uf-chassi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1e293b" /><stop offset="1" stopColor="#0b1220" /></linearGradient>
+                <linearGradient id="uf-rack" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#334155" /><stop offset=".08" stopColor="#1f2937" /><stop offset="1" stopColor="#111827" /></linearGradient>
+                <linearGradient id="uf-sfp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#94a3b8" /><stop offset="1" stopColor="#475569" /></linearGradient>
+                {(["hub", "cto", "verde"] as const).map((k) => (
+                  <linearGradient key={k} id={`uf-spl-${k}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={TEMA_SPL[k].fundo} /><stop offset="1" stopColor="#0b0d10" /></linearGradient>
+                ))}
+                {(["hub", "cto", "verde"] as const).map((k) => (
+                  <linearGradient key={`l${k}`} id={`uf-leque-${k}`} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor={TEMA_SPL[k].borda} stopOpacity=".55" /><stop offset="1" stopColor={TEMA_SPL[k].borda} stopOpacity=".08" /></linearGradient>
+                ))}
+              </defs>
               <defs>
                 <pattern id="gradeUR" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#22252b" strokeWidth=".7" /></pattern>
               </defs>
@@ -795,19 +809,28 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                     {/* OLT: placa com as portas PON usadas */}
                     {t === "olt" && cx.olt && (
                       <g>
-                        <rect x={cx.olt.x} y={cx.olt.y} width={BW} height={cx.olt.h} rx={6} fill="#0f172a" stroke="#334155" {...arrastavel(cx.chave, "olt")} />
-                        <text x={cx.olt.x + 8} y={cx.olt.y + 14} fontSize={9} fontWeight={800} fill="#e2e8f0" pointerEvents="none">Portas PON</text>
+                        <rect x={cx.olt.x} y={cx.olt.y} width={BW} height={cx.olt.h} rx={6} fill="url(#uf-chassi)" stroke="#475569" strokeWidth={1.2} {...arrastavel(cx.chave, "olt")} />
+                        <rect x={cx.olt.x} y={cx.olt.y} width={BW} height={20} rx={6} fill="#0b1220" pointerEvents="none" />
+                        {Array.from({ length: 6 }, (_, k) => <rect key={k} x={cx.olt!.x + BW - 52 + k * 7} y={cx.olt!.y + 6} width={4} height={8} rx={1} fill="#334155" pointerEvents="none" />)}
+                        <circle cx={cx.olt.x + 10} cy={cx.olt.y + 10} r={3} fill="#22c55e" className="fh-led" pointerEvents="none"><title>PWR</title></circle>
+                        <circle cx={cx.olt.x + 19} cy={cx.olt.y + 10} r={3} fill="#38bdf8" className="fh-led" style={{ animationDelay: ".4s" }} pointerEvents="none"><title>RUN</title></circle>
+                        <text x={cx.olt.x + 27} y={cx.olt.y + 13.5} fontSize={8.5} fontWeight={800} fill="#e2e8f0" pointerEvents="none">Portas PON</text>
                         {cx.pons.map((pp, k) => {
                           const xO = cx.olt!.x;
                           const yy = cx.olt!.y + HEAD + k * (ROW + 4) + ROW / 2;
                           const lp = pp.match(/PL\s*0*(\d+)\D+0*(\d+)/i);
                           const rotulo = lp ? `0/${+lp[1]}/${+lp[2]}` : pp;
+                          const viva = rotas.some((r) => r.id.startsWith(`${cx.chave}|${pp}>`));
+                          const txOlt = rotas.find((r) => r.id.startsWith(`${cx.chave}|${pp}>`))?.elementos[0]?.potencia_saida;
                           return (
                             <g key={pp}>
-                              <rect x={xO + 8} y={yy - 7} width={BW - 26} height={14} rx={3} fill="#1e293b" stroke="#475569" pointerEvents="none" />
-                              <rect x={xO + 12} y={yy - 4} width={8} height={8} rx={1.5} fill="#16a34a" pointerEvents="none" />
-                              <text x={xO + 26} y={yy + 3} fontSize={8} fontWeight={700} fill="#e2e8f0" pointerEvents="none">PON {rotulo}</text>
-                              <text x={xO + BW - 22} y={yy + 3} fontSize={7} fill="#94a3b8" textAnchor="end" pointerEvents="none">{pp.replace(/^PL\s*/i, "PL ")}</text>
+                              <rect x={xO + 8} y={yy - 7} width={BW - 26} height={14} rx={3} fill="#0b1220" stroke={viva ? "#16a34a" : "#475569"} pointerEvents="none" />
+                              {/* gaiola SFP */}
+                              <rect x={xO + BW - 38} y={yy - 5} width={18} height={10} rx={1.5} fill="url(#uf-sfp)" stroke="#1e293b" pointerEvents="none" />
+                              <rect x={xO + BW - 35} y={yy - 2.5} width={12} height={5} rx={1} fill="#0f172a" pointerEvents="none" />
+                              <circle cx={xO + 15} cy={yy} r={3.2} fill={viva ? "#22c55e" : "#475569"} className={viva ? "fh-led" : undefined} style={{ animationDelay: `${(k % 4) * 0.25}s` }} pointerEvents="none" />
+                              <text x={xO + 23} y={yy + 3} fontSize={8} fontWeight={700} fill="#e2e8f0" pointerEvents="none">PON {rotulo}</text>
+                              {viva && txOlt !== undefined && <text x={xO + BW - 41} y={yy + 2.5} fontSize={6.5} fontWeight={700} fill="#86efac" textAnchor="end" pointerEvents="none">{dbm(txOlt)}</text>}
                               {ponto(cx.chave, { k: "pon", porta: pp }, xO + BW, yy, "#facc15", true)}
                             </g>
                           );
@@ -817,7 +840,8 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                     {/* DIO: grade de adaptadores (porta N = fibra N do cabo que sai) */}
                     {t === "dio" && cx.dio && (
                       <g>
-                        <rect x={cx.dio.x} y={cx.dio.y} width={cx.dio.w} height={cx.dio.h} rx={6} fill="#111827" stroke="#334155" {...arrastavel(cx.chave, "dio")} />
+                        <rect x={cx.dio.x} y={cx.dio.y} width={cx.dio.w} height={cx.dio.h} rx={5} fill="url(#uf-rack)" stroke="#475569" strokeWidth={1.2} {...arrastavel(cx.chave, "dio")} />
+                        {[[4, 4], [cx.dio.w - 4, 4], [4, cx.dio.h - 4], [cx.dio.w - 4, cx.dio.h - 4]].map(([dx, dy], k) => <circle key={k} cx={cx.dio!.x + dx} cy={cx.dio!.y + dy} r={1.8} fill="#94a3b8" stroke="#1e293b" pointerEvents="none" />)}
                         <text x={cx.dio.x + 8} y={cx.dio.y + 13} fontSize={8.5} fontWeight={800} fill="#cbd5e1" pointerEvents="none">Adaptadores do DIO · {cx.capDio}</text>
                         {Array.from({ length: cx.capDio }, (_, k) => {
                           const n = k + 1;
@@ -831,8 +855,18 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                                 const v = de ? potChega.get(cx.chave)?.get(`${chaveCabo(de.cabo)}|${de.fibra}`) : undefined;
                                 return `Adaptador ${n}${usado ? " · em uso" : " · livre"}${vem?.outraChave ? ` · cordão de ${infoDe.get(vem.outraChave)?.nome ?? "OLT"}` : ""}${v !== undefined ? ` · ${dbm(v)} dBm` : ""}`;
                               })()}</title>
-                              <rect x={pp[0] - 7} y={pp[1] - 7} width={14} height={14} rx={2.5} fill={usado ? "#1e3a8a" : "#1f2937"} stroke={usado ? "#60a5fa" : "#374151"} pointerEvents="none" />
-                              <text x={pp[0]} y={pp[1] + 2.5} fontSize={6} fill={usado ? "#dbeafe" : "#6b7280"} textAnchor="middle" fontWeight={700} pointerEvents="none">{n}</text>
+                              {(() => {
+                                const de = cordaoNoAdaptador(cx.chave, n);
+                                const luz = !!de && potChega.get(cx.chave)?.has(`${chaveCabo(de.cabo)}|${de.fibra}`);
+                                return (
+                                  <g pointerEvents="none">
+                                    {luz && <rect x={pp[0] - 7} y={pp[1] - 7} width={14} height={14} rx={3} fill="none" stroke="#22d3ee" strokeWidth={1.6} className="fh-anel" />}
+                                    <rect x={pp[0] - 7} y={pp[1] - 7} width={14} height={14} rx={2.5} fill={luz ? "#0e7490" : usado ? "#1e3a8a" : "#1f2937"} stroke={luz ? "#67e8f9" : usado ? "#60a5fa" : "#374151"} />
+                                    <circle cx={pp[0]} cy={pp[1] - 0.5} r={3.4} fill={luz ? "#a5f3fc" : usado ? "#3b82f6" : "#111827"} stroke="#0b0d10" strokeWidth={0.6} />
+                                    <text x={pp[0]} y={pp[1] + 1.8} fontSize={5} fill={luz ? "#083344" : usado ? "#dbeafe" : "#6b7280"} textAnchor="middle" fontWeight={800}>{n}</text>
+                                  </g>
+                                );
+                              })()}
                               {(usado || modo === "editar") && ponto(cx.chave, { k: "adaptador", n }, pp[0], pp[1] + 9, "#60a5fa", usado)}
                             </g>
                           );
@@ -841,7 +875,10 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                     )}
                     {/* splitters (estilo GeoGrid: entrada à esquerda, leque, portas numeradas à direita) */}
                     {(() => { const pp = potPortas(cx.chave, edDe(cx.chave).splitters); return cx.spl.map(({ s, x, y, h, w, portas, id: idSpl }) => {
-                      const tm = t === "hub" ? TEMA_SPL.hub : t === "cto" ? TEMA_SPL.cto : TEMA_SPL.verde;
+                      const kTema = t === "hub" ? "hub" : t === "cto" ? "cto" : "verde";
+                      const tm = TEMA_SPL[kTema];
+                      // tem luz entrando: alguma porta tem potência
+                      const comLuz = portas.some((p) => pp.has(`${s.id}|${p.numero}`));
                       const modelo = catalogo.find((q) => q.id === s.modelo_id);
                       const ent = s.entrada.fibra;
                       const pon = ent ? rotas.find((r) => r.elementos.some((e) => chaveElemento(e) === cx.chave && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(ent.cabo) && e.fibra_entrada === ent.fibra)) : undefined;
@@ -849,7 +886,8 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                       const idx = (edDe(cx.chave).splitters.indexOf(s) + 1) || 1;
                       return (
                         <g key={s.id}>
-                          <rect x={x} y={y} width={w} height={h} rx={6} fill={tm.fundo} stroke={tm.borda} strokeWidth={1.2} {...arrastavel(cx.chave, idSpl)} />
+                          {comLuz && <rect x={x - 3} y={y - 3} width={w + 6} height={h + 6} rx={9} fill="none" stroke={tm.borda} strokeWidth={3} opacity={0.25} pointerEvents="none" />}
+                          <rect x={x} y={y} width={w} height={h} rx={6} fill={`url(#uf-spl-${kTema})`} stroke={tm.borda} strokeWidth={1.2} {...arrastavel(cx.chave, idSpl)} />
                           <rect x={x} y={y} width={w} height={20} rx={6} fill={splSel?.chave === cx.chave && splSel.id === s.id ? "#a16207" : tm.cabeca}
                             {...arrastavel(cx.chave, idSpl)}
                             onClick={(e) => { if (modo !== "editar" || moveu.current) return; e.stopPropagation(); setSplSel({ chave: cx.chave, id: s.id }); setSelLig(null); setSel(null); }}>
@@ -858,7 +896,20 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                           <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill={tm.texto} pointerEvents="none">S{idx} · {s.relacao}</text>
                           <text x={x + w - 6} y={y + 13} fontSize={7.5} fill={tm.suave} textAnchor="end" pointerEvents="none">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : ent ? `F${String(ent.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
                           {!pon && ent && <rect x={x} y={y} width={w} height={h} rx={6} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="4 3"><title>Esta fibra não tem rota: confira ou tire o splitter</title></rect>}
-                          <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill={tm.borda} opacity={0.18} pointerEvents="none" />
+                          <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill={`url(#uf-leque-${kTema})`} opacity={comLuz ? 1 : 0.5} pointerEvents="none" />
+                          {/* feixes de luz: da entrada até cada porta */}
+                          {portas.map((p, k) => {
+                            const yy = y + 26 + k * ROW + ROW / 2;
+                            const viva = pp.has(`${s.id}|${p.numero}`);
+                            const d = `M${x + 10} ${yIn} L${x + w - 28} ${yy}`;
+                            return (
+                              <g key={`f${p.numero}`} pointerEvents="none">
+                                <path d={d} stroke={tm.borda} strokeWidth={0.8} opacity={viva ? 0.7 : 0.25} />
+                                {viva && <path d={d} stroke="#ffffff" strokeWidth={1} opacity={0.8} className="fh-fluxo" style={{ animationDelay: `${(k % 4) * 0.15}s` }} />}
+                              </g>
+                            );
+                          })}
+                          {comLuz && <rect x={x - 2} y={yIn - 6} width={12} height={12} rx={2} fill="none" stroke={tm.borda} strokeWidth={1.6} className="fh-anel" pointerEvents="none" />}
                           <rect x={x - 2} y={yIn - 6} width={12} height={12} rx={2} fill={tm.borda} stroke="#0b0d10" pointerEvents="none" />
                           <text x={x + 20} y={yIn + 3} fontSize={6.5} fill={tm.suave} pointerEvents="none">{perdaSplitter(s.relacao, modelo?.perda_db).toFixed(1).replace(".", ",")} dB</text>
                           {ponto(cx.chave, { k: "entrada", spl: s.id }, x - 6, yIn, tm.ponto, ocup.has(idPonto({ k: "entrada", spl: s.id })))}
@@ -868,6 +919,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                             return (
                               <g key={p.numero}>
                                 <title>{`Porta ${p.numero} · ${p.status === "cliente" ? `cliente ${p.descricao ?? ""}` : p.status === "ramal" ? `ramal ${p.descricao ?? ""}` : "livre"}`}</title>
+                                {pp.has(`${s.id}|${p.numero}`) && <rect x={x + w - 28} y={yy - 8} width={24} height={16} rx={3} fill="none" stroke={COR_NIVEL[nivelPotencia(pp.get(`${s.id}|${p.numero}`))]} strokeWidth={1.2} opacity={0.9} pointerEvents="none" />}
                                 <rect x={x + w - 26} y={yy - 6} width={20} height={12} rx={2} fill={cor} stroke="#0b0d10" />
                                 <text x={x + w - 16} y={yy + 3} fontSize={7} fontWeight={800} fill="#fff" textAnchor="middle">{p.numero}</text>
                                 {p.status === "cliente" && <text x={x + w - 32} y={yy + 3} fontSize={7} textAnchor="end">👤</text>}

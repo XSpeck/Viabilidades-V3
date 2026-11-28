@@ -329,6 +329,11 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                   {c.trechos?.[t]?.metros ? ` · ${formatMetros(c.trechos[t].metros!)}` : ""}
                 </Tooltip>
               </Polyline>
+              {/* várias fibras acesas no trecho: listras com a cor de cada uma (as mesmas do Unifilar) */}
+              {!ativo && fs.length > 1 && fs.slice(0, 6).map((f, k, l) => k === 0 ? null : (
+                <Polyline key={`f${f}`} positions={linha} interactive={false}
+                  pathOptions={{ color: corFibra(f, c.nome).hex, weight: 4.5 + grosso, lineCap: "butt", dashArray: `14 ${14 * (l.length - 1)}`, dashOffset: `${-14 * k}` }} />
+              ))}
               {aceso && <Polyline positions={linha} interactive={false} className="fh-fluxo" pathOptions={{ color: "#ffffff", weight: 2.5, opacity: 0.95, lineCap: "round" }} />}
             </Fragment>
           );
