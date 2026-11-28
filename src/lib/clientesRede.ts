@@ -4,7 +4,7 @@ import { inicioProprio } from "./compartilhados";
 // de splitter de CTO ou CDOI. A ligação mora na porta da caixa (cliente_id); daqui se lê e se muda.
 // =====================
 import { chaveElemento } from "./arvorePon";
-import { portasFinais, salvarCaixa, splittersDaCaixa, type CaixaRede, type SplitterCaixa } from "./caixasRede";
+import { portasFinais, splittersDaCaixa, type CaixaRede, type SplitterCaixa } from "./caixasRede";
 import { tipoVisual, type RotaOptica } from "./rotaOptica";
 
 export interface ClienteRede {
@@ -171,24 +171,12 @@ export async function ligarCliente(
     p.descricao = cliente.nome;
     p.cliente_id = cliente.id;
   }
-  let lista = caixas;
-  for (const [chave, c] of mudadas) {
-    const salva = await salvarCaixa({
-      chave,
-      nome: c.caixa?.nome || c.nome,
-      splitters: c.splitters,
-      regras_emenda: c.caixa?.regras_emenda,
-      emendas: c.caixa?.emendas,
-      atendimento: c.caixa?.atendimento,
-      splitter: c.splitters[0]?.relacao,
-      splitter_modelo: c.splitters[0]?.modelo_id,
-      portas: c.splitters[0]?.portas ?? [],
-      obs: c.caixa?.obs,
-      atualizado_por: usuario,
-    });
-    lista = [...lista.filter((x) => x.chave !== chave), salva];
-  }
-  return lista;
+  // as caixas mudadas vão juntas, pelo mesmo caminho das outras telas (só os splitters mudam)
+  const { gravarTroca } = await import("./gravarTroca");
+  const gravadas = await gravarTroca([], [...mudadas].map(([chave, c]) => ({
+    ...(c.caixa ?? { portas: [] }), chave, nome: c.caixa?.nome || c.nome, splitters: c.splitters, atualizado_por: usuario,
+  })));
+  return [...caixas.filter((x) => !gravadas.some((g) => g.chave === x.chave)), ...gravadas];
 }
 
 // =====================

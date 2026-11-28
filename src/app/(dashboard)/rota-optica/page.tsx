@@ -464,7 +464,7 @@ export default function RotaOpticaPage() {
           corBarra="bg-emerald-800"
           onFechar={() => setJanelaClientes(null)}
         >
-          <ClientesRede rotas={rotas} caixas={caixas} clientes={clientes} usuario={user?.nome ?? ""} onClientes={setClientes} onCaixas={setCaixas} />
+          <ClientesRede rotas={rotas} caixas={caixas} clientes={clientes} usuario={user?.nome ?? ""} onClientes={setClientes} onCaixas={setCaixas} onAbrirNoUnifilar={(k) => { setJanelaClientes(null); abrirNoUnifilar(k); }} />
         </Janela>
       )}
 

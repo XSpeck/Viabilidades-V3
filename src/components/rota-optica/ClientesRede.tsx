@@ -32,6 +32,8 @@ interface Props {
   usuario: string;
   onClientes: (c: ClienteRede[]) => void;
   onCaixas: (c: CaixaRede[]) => void;
+  /** Abre a caixa no Unifilar (onde o cliente se liga na perna) */
+  onAbrirNoUnifilar?: (chave: string) => void;
 }
 
 type Rascunho = Omit<ClienteRede, "id" | "atualizado_em"> & { id?: string };
@@ -42,7 +44,7 @@ const vazio = (codigo: string): Rascunho => ({
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export default function ClientesRede({ rotas, caixas, clientes, usuario, onClientes, onCaixas }: Props) {
+export default function ClientesRede({ rotas, caixas, clientes, usuario, onClientes, onCaixas, onAbrirNoUnifilar }: Props) {
   const [busca, setBusca] = useState("");
   const [form, setForm] = useState<Rascunho | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -198,7 +200,8 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
               {l ? (
                 <>
                   <IconeElemento tipo={l.tipo} tamanho={18} />
-                  <span>Ligado na <b>{l.caixa}</b> · perna <b>{l.rotulo}</b></span>
+                  <span className="min-w-0 flex-1">Ligado na <b>{l.caixa}</b> · perna <b>{l.rotulo}</b></span>
+                  {onAbrirNoUnifilar && <button type="button" onClick={() => onAbrirNoUnifilar(l.chave)} className="shrink-0 rounded-md bg-slate-800 px-2 py-1 text-[10px] font-semibold text-white hover:bg-slate-900">Mudar no Unifilar</button>}
                 </>
               ) : (
                 <span>Sem ligação. Para ligar, abra a CTO/CDOI no Unifilar, modo <b>Clientes nas portas</b>, clique na perna e busque pelo código ou nome.</span>
