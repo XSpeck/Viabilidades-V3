@@ -1,5 +1,6 @@
 "use client";
 
+import { donoDoElemento } from "@/lib/subRotas";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Cable as CableIcon, Info, Maximize2, Minimize2, Route as RouteIcon, Signal, Users, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { corFibra, formatMetros, TIPO_ELEMENTO_LABEL, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
@@ -549,8 +550,10 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 soLeitura
                 onEditarNoMapa={onEditarRota ? () => {
                   // a rota dona do cabo: tem o cabo num elemento dela (não no tronco herdado da rota-mãe)
-                  const dona = rotas.find((r) => r.elementos.some((e, i) => i >= (r.tronco ?? 0) && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === k));
-                  if (dona) onEditarRota(dona.id);
+                  for (const r of rotas) {
+                    const i = r.elementos.findIndex((e) => !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === k);
+                    if (i >= 0) { onEditarRota(donoDoElemento(r, i, rotas).id); return; }
+                  }
                 } : undefined}
               />
             </Janela>
