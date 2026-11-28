@@ -1,5 +1,5 @@
 "use client";
-import { inicioProprio } from "@/lib/compartilhados";
+import { inicioProprio, aplicarNaRota, type MudancaGlobal } from "@/lib/compartilhados";
 import { avisar, confirmar } from "@/lib/dialogo";
 
 import { paraGravar, rotaParaGravar } from "@/lib/subRotas";
@@ -24,6 +24,7 @@ import { gravarRotasEPontas } from "@/lib/gravarTroca";
 import { chaveCabo } from "@/lib/cabosRede";
 import {
   andaresDoBloco,
+  CODIGO_PREDIO,
   excluirPredio,
   idPredioDoElemento,
   listarPredios,
@@ -356,31 +357,19 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
       gravadas.forEach((c) => onCaixaSalva?.(c));
       const s = await salvarPredio({ ...rascunho, pontos }, usuario);
       setPredios((ps) => [...(ps ?? []).filter((p) => p.id !== s.id), s]);
-      // CDOIs que vêm de rotas feitas fora do prédio: nome e splitter do prédio valem também na rota
+      // nome do prédio e das CDOIs de rotas feitas fora do prédio: muda em todas as rotas, pelo mesmo
+      // caminho do "Editar em todas" do editor (a caixa e os nomes de cabo que levam o nome dela)
+      const renomes: MudancaGlobal[] = [];
+      if (salvo && salvo.nome !== s.nome) renomes.push({ tipo: "caixa", chave: chaveElemento({ nome: s.nome, tipo: "predio", codigo: `${CODIGO_PREDIO}${s.id}` }), nomeVelho: salvo.nome, nome: s.nome });
+      for (const o of s.pontos) {
+        const v = salvo?.pontos.find((x) => x.id === o.id);
+        if (o.chave && !o.rota_id && v && o.nome.trim() && v.nome.trim() !== o.nome.trim()) renomes.push({ tipo: "caixa", chave: o.chave, nomeVelho: v.nome, nome: o.nome.trim() });
+      }
       const pendentes: Promise<void>[] = [];
-      for (const rt of rotas) {
+      for (const rt of renomes.length ? rotas : []) {
         if (gerenciadas.has(rt.id)) continue;
-        let mudou = false;
-        const elementos = rt.elementos.map((e, idx) => {
-          if (idx < inicioProprio(rt)) return e;
-          // entrada do prédio: acompanha o nome do prédio
-          if (idPredioDoElemento(e) === s.id) {
-            if (e.nome === s.nome) return e;
-            mudou = true;
-            return { ...e, nome: s.nome };
-          }
-          const o = s.pontos.find((x) => x.chave && x.chave === chaveElemento(e));
-          if (!o || !e.codigo || o.rota_id) return e;
-          const nomeNovo = o.nome.trim() && o.nome.trim() !== e.nome ? o.nome.trim() : e.nome;
-          const splNovo = o.splitter && o.splitter !== e.splitter ? o.splitter : e.splitter;
-          if (nomeNovo === e.nome && splNovo === e.splitter) return e;
-          mudou = true;
-          return { ...e, nome: nomeNovo, splitter: splNovo, splitter_modelo: splNovo !== e.splitter ? modelosSplitter.find((m) => m.relacao === splNovo)?.id : e.splitter_modelo };
-        });
-        if (!mudou) continue;
-        pendentes.push(
-          atualizarRota(rt.id, rotaParaGravar(rt, { elementos })),
-        );
+        const novo = aplicarNaRota(rt, renomes);
+        if (novo) pendentes.push(atualizarRota(rt.id, rotaParaGravar(rt, novo)));
       }
       await Promise.all(pendentes);
       onRotasMudaram?.();
