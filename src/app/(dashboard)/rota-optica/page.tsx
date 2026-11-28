@@ -16,11 +16,12 @@ import {
   resumoRota,
   type RotaOptica,
   type RotaOpticaInput,
+  type ElementoRota,
 } from "@/lib/rotaOptica";
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
 import RotaEditor from "@/components/rota-optica/RotaEditor";
 import UnifilarRede from "@/components/rota-optica/UnifilarRede";
-import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
+import { listarCaixas, splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
@@ -109,10 +110,15 @@ export default function RotaOpticaPage() {
   /** Janela "Como funciona" */
   const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
+  /** Perda (dB) do modelo de splitter do cadastro de equipamentos */
+  const perdaDoModelo = (id?: string) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined);
+  /** O splitter de cada caixa é o do cadastro dela (Unifilar): a rota e o prédio só mostram */
+  const splitterDaCaixa = (e: ElementoRota) => splitterDoCadastro(caixas.find((c) => c.chave === chaveElemento(e)), e.cabo_entrada, e.fibra_entrada);
   // Sub-rotas montadas com o tronco da rota-mãe: todas as telas usam o caminho completo
   const rotas = useMemo(
-    () => montarRotas(rotasCruas, (id) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined)),
-    [rotasCruas, catalogo]
+    () => montarRotas(rotasCruas, perdaDoModelo, splitterDaCaixa),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rotasCruas, catalogo, caixas]
   );
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -210,7 +216,7 @@ export default function RotaOpticaPage() {
     const id = modo.tipo === "editar" ? modo.rota?.id : undefined;
     const lista = await listarRotas();
     setRotas(lista);
-    const montadas = montarRotas(lista, (x) => (x ? catalogo.find((c) => c.id === x)?.perda_db : undefined));
+    const montadas = montarRotas(lista, perdaDoModelo, splitterDaCaixa);
     if (id) setModo({ tipo: "editar", rota: montadas.find((r) => r.id === id) ?? null });
     setVersaoEditor((v) => v + 1);
   }

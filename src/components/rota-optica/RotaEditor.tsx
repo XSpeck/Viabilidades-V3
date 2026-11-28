@@ -1244,6 +1244,12 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     };
   });
 
+  /** O splitter que o cadastro da caixa (Unifilar) diz para este elemento; null = a rota escolhe */
+  function splitterDaLinha(l: Linha) {
+    if (l.passagem || !["hub", "cto", "cdoi"].includes(l.tipo)) return null;
+    return splitterDoCadastro(caixas.find((c) => c.chave === chaveLinha(l)), l.cabo_entrada || undefined, +l.fibra_entrada || undefined);
+  }
+
   // ---------- Potência ----------
   const tx = linhas[0] ? n(linhas[0].potencia_saida) ?? n(linhas[0].potencia_entrada) : undefined;
   const pots =
@@ -1255,8 +1261,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                 nome: l.nome,
                 tipo: l.tipo,
                 distancia_m: n(l.distancia_m),
-                splitter: l.splitter || undefined,
-                splitter_modelo: l.splitter_modelo || undefined,
+                // o splitter do cadastro da caixa (Unifilar) manda; sem cadastro, o escolhido aqui
+                splitter: splitterDaLinha(l)?.relacao ?? (l.splitter || undefined),
+                splitter_modelo: splitterDaLinha(l) ? splitterDaLinha(l)!.modelo_id : l.splitter_modelo || undefined,
                 passagem: l.passagem,
                 meia_porta: l.tipo === "hub" && !!l.meiaPorta,
                 via_meia_porta: !!paiEf?.meia_porta && i === troncoEf - 1,
@@ -1720,21 +1727,13 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       );
     }
     // O cadastro da caixa (Unifilar) manda no splitter: aqui só mostra
-    const cad = caixas.find((c) => c.chave === chaveLinha(l));
-    const doCad = ["hub", "cto", "cdoi"].includes(l.tipo) ? splitterDoCadastro(cad, l.cabo_entrada || undefined, +l.fibra_entrada || undefined) : null;
+    const doCad = splitterDaLinha(l);
     if (doCad) {
-      const difere = l.splitter !== doCad.relacao;
       return (
         <>
         {escolhaHub}
         <div className="col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-900">
           <p><b>Splitter {doCad.relacao}</b> · definido no Unifilar (o que tem dentro da caixa se muda lá).</p>
-          {difere && (
-            <p className="mt-0.5 text-amber-800">
-              Esta rota está com {l.splitter || "nenhum"}.{" "}
-              <button type="button" className="font-semibold underline" onClick={() => alterar(i, { splitter: doCad.relacao, splitter_modelo: doCad.modelo_id ?? "" })}>Usar o {doCad.relacao}</button>
-            </p>
-          )}
           {onAbrirNoUnifilar && (
             <button type="button" className="mt-1 font-semibold text-emerald-800 underline" onClick={() => onAbrirNoUnifilar(chaveLinha(l))}>Abrir no Unifilar</button>
           )}

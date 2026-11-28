@@ -34,8 +34,26 @@ export function entradaPotencia(e: ElementoRota, perdaModelo?: (id?: string) => 
   return { ...base, splitter: spl, perda_splitter: p };
 }
 
+/** Splitter que o cadastro da caixa (Unifilar) diz para um elemento; null = a rota decide */
+export type SplitterDoCadastro = (e: ElementoRota) => { relacao: string; modelo_id?: string } | null;
+
+/** O splitter do cadastro da caixa vale no lugar do guardado na rota (uma fonte só) */
+function comSplitterDoCadastro(r: RotaOptica, splitterDe?: SplitterDoCadastro): RotaOptica {
+  if (!splitterDe) return r;
+  let mudou = false;
+  const elementos = r.elementos.map((e, i) => {
+    if (i === 0 || e.passagem || !["hub", "cto", "cdoi"].includes(e.tipo)) return e;
+    const c = splitterDe(e);
+    if (!c || (c.relacao === e.splitter && (c.modelo_id ?? "") === (e.splitter_modelo ?? ""))) return e;
+    mudou = true;
+    return { ...e, splitter: c.relacao, splitter_modelo: c.modelo_id };
+  });
+  return mudou ? { ...r, elementos } : r;
+}
+
 /** Recalcula a potência de uma rota montada (quando o cálculo é automático) */
-function comPotencias(r: RotaOptica, perdaModelo?: (id?: string) => number | undefined): RotaOptica {
+function comPotencias(r0: RotaOptica, perdaModelo?: (id?: string) => number | undefined, splitterDe?: SplitterDoCadastro): RotaOptica {
+  const r = comSplitterDoCadastro(r0, splitterDe);
   const calc = r.calculo_potencia ?? CALCULO_PADRAO;
   const tx = r.elementos[0]?.potencia_saida ?? r.elementos[0]?.potencia_entrada;
   if (!calc.auto || tx === undefined) return r;
@@ -53,7 +71,7 @@ function indiceAncora(elementos: ElementoRota[], chave: string): number {
  * Monta todas as rotas: principais ficam como estão; sub-rotas ganham o tronco da mãe.
  * `tronco` = quantos elementos vieram da mãe (incluindo a caixa onde ramifica).
  */
-export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => number | undefined): RotaOptica[] {
+export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => number | undefined, splitterDe?: SplitterDoCadastro): RotaOptica[] {
   const porId = new Map(cruas.map((r) => [r.id, r]));
   const prontas = new Map<string, RotaOptica>();
   const montar = (r: RotaOptica, visitando: Set<string>): RotaOptica => {
@@ -61,7 +79,7 @@ export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => 
     if (ja) return ja;
     if (!r.pai) {
       // potência sempre recalculada pelos elementos (um splitter mudado depois não deixa a ponta desatualizada)
-      const pronta = comPotencias(r, perdaModelo);
+      const pronta = comPotencias(r, perdaModelo, splitterDe);
       prontas.set(r.id, pronta);
       return pronta;
     }
@@ -100,7 +118,8 @@ export function montarRotas(cruas: RotaOptica[], perdaModelo?: (id?: string) => 
     ];
     const montada = comPotencias(
       { ...r, elementos, trechos, calculo_potencia: r.calculo_potencia ?? mae.calculo_potencia, tronco: k + 1 },
-      perdaModelo
+      perdaModelo,
+      splitterDe,
     );
     prontas.set(r.id, montada);
     return montada;

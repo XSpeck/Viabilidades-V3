@@ -17,7 +17,6 @@ import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
 import { CALCULO_PADRAO } from "@/lib/rotaOptica";
 import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
 import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
-import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
 import { caixasDoPlano, planoPelaCaixa, planoPelasRotas, type PlanoTroca } from "@/lib/trocaFibra";
 import { gravarTroca } from "@/lib/gravarTroca";
 import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
@@ -628,13 +627,9 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       const cadastroDe = (k: string) => (cadDe.has(k) || eds[k] ? edDe(k) : undefined);
       const cadastros = caixasDoPlano(plano.pontas, cadastroDe, new Map(sujas.map((k) => [k, edDe(k)])), valem);
       const gravadas = await gravarTroca(rotasGravar, [...cadastros].map(([k, ed]) => caixaParaGravar(k, ed)));
+      // o splitter vale direto do cadastro (a potência das rotas é refeita com ele): nada a copiar
       gravadas.forEach(onCaixaSalva);
-      // CDOI: o splitter do Unifilar passa para o prédio e para a rota (conta de potência)
-      const rotasDepois = rotasBase.map((x) => rotasGravar.find((r) => r.id === x.id) ?? x);
-      let mudouRota = rotasGravar.length > 0;
-      for (const c of gravadas) {
-        if (infoDe.get(c.chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(c, rotasDepois, catalogo, usuario))) mudouRota = true;
-      }
+      const mudouRota = rotasGravar.length > 0;
       setDioPend({});
       setEds({});
       setAtds({});

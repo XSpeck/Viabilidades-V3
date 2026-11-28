@@ -1043,7 +1043,7 @@ export default function PredioVertical({ chave, nome, rotas, caixas, usuario, on
                       const doDiagrama = portasDe(o)?.total;
                       const daRota = rotas.flatMap((r) => r.elementos).find((x) => chaveElemento(x) === o.chave && totalPernas(x.splitter))?.splitter;
                       if (doDiagrama || daRota) {
-                        return <p className="mt-1 text-[10px] text-slate-500">Splitter {doDiagrama ? `1:${doDiagrama} (diagrama da caixa)` : `${daRota} (da rota)`}</p>;
+                        return <p className="mt-1 text-[10px] text-slate-500">Splitter {doDiagrama ? `1:${doDiagrama} (do Unifilar)` : `${daRota} (da rota)`}</p>;
                       }
                       return (
                         <div className="mt-1 flex items-center gap-1.5">
