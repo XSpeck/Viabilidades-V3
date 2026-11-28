@@ -573,13 +573,11 @@ export default function RotaOpticaPage() {
               inicial={uniInicial?.chave}
               onEditarPredio={editarPredio}
               clientes={clientes}
-              rotas={rotas}
+              cabos={cabos}
               caixas={caixas}
               catalogo={catalogo}
               usuario={user?.nome ?? ""}
               onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-              onAbrirRota={abrirRota}
-              onRotasMudaram={recarregar}
             />
           ) : (
             <EditorRede

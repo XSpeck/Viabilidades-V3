@@ -74,6 +74,8 @@ export interface SinalRede {
   trechos: Map<string, SinalPonto>;
   /** Caixas com sinal → as PONs que chegam nela */
   caixas: Map<string, Set<string>>;
+  /** `${caixa}#${idPontoRede}` das fibras por onde a luz ENTRA na caixa (o resto, por onde sai) */
+  entradas: Set<string>;
   conflitos: ConflitoSinal[];
 }
 
@@ -158,6 +160,7 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
   const pontos = new Map<string, SinalPonto>();
   const trechos = new Map<string, SinalPonto>();
   const caixasCom = new Map<string, Set<string>>();
+  const entradas = new Set<string>();
   const conflitos: ConflitoSinal[] = [];
   const rotas: RotaOptica[] = [];
   const rotasVistas = new Set<string>();
@@ -282,6 +285,7 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
           dono.set(nk, pon);
           const aqui: Passo = { ...passo, splitters: s.spls, passagem, pontosSaida: s.pts };
           const chega: PontoRede = { k: "fibra", cabo: chaveCabo(c.nome), fibra: s.q.fibra, lado: s.q.lado === "seg" ? "ant" : "seg" };
+          entradas.add(`${y.chave}#${idPontoRede(chega)}`);
           const prox: Passo = { caixa: y, cabo: c, fibra: s.q.fibra, trecho: t, splitters: [], passagem: false, pontosEntrada: [idPontoRede(chega)], pontosSaida: [] };
           andar(y, chega, [...trilha.slice(0, -1), aqui, prox]);
         }
@@ -340,7 +344,7 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
       andar(olt, inicio, [{ caixa: olt, splitters: [], passagem: false, pontosEntrada: [idPontoRede(inicio)], pontosSaida: [] }]);
     }
   }
-  return { rotas, pontos, trechos, caixas: caixasCom, conflitos };
+  return { rotas, pontos, trechos, caixas: caixasCom, entradas, conflitos };
 }
 
 /** Traçado completo de um trecho do cabo: a caixa de antes, as curvas e a caixa de depois */
