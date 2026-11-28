@@ -1868,7 +1868,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // CDOI de prédio: aqui só o prédio e o cabo que chega (o resto fica na janela do prédio)
     const soPredio = l.tipo === "predio";
     /** Caixa também usada em outra rota: nome e tipo só mudam "em todas" (ou separando) */
-    const caixaTravada = outrasComCaixa(i).length > 0;
+    // CDOI do prédio: nome, andar e fibra vêm da janela do prédio (aqui só mostra)
+    const doPredio = !!predioDono && l.tipo === "cdoi";
+    const caixaTravada = doPredio || outrasComCaixa(i).length > 0;
     const caboTravado = outrasComCabo(i).length > 0;
     return (
       <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
@@ -1883,7 +1885,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               className={`${campo} ${!l.nome.trim() ? "border-red-400" : ""} ${caixaTravada ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`}
               value={l.nome}
               readOnly={caixaTravada}
-              title={caixaTravada ? "Caixa compartilhada: use Editar em todas" : undefined}
+              title={doPredio ? "CDOI do prédio: o nome se muda na janela do prédio" : caixaTravada ? "Caixa compartilhada: use Editar em todas" : undefined}
               onFocus={() => { nomeAntes.current = l.nome; }}
               onChange={(e) => alterar(i, { nome: e.target.value })}
               onBlur={() => renomearCabos(nomeAntes.current, l.nome)}
@@ -2470,8 +2472,8 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               )}
               {predioDono && (
                 <p className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-                  Esta é a rota de uma CDOI do prédio <b>{predioDono.nome}</b>. Fibra, splitter, andar e nome são definidos na janela do prédio (Unifilar → prédio → Editar no prédio):
-                  mudanças feitas aqui voltam ao que está no prédio quando ele for salvo.
+                  Esta é a rota de uma CDOI do prédio <b>{predioDono.nome}</b>: nome, andar e fibra se mudam na janela do prédio
+                  (Unifilar → prédio → Editar no prédio), e o splitter no Unifilar da CDOI.
                 </p>
               )}
               {paiEf && (
