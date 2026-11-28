@@ -20,6 +20,7 @@ import { confirmar } from "@/lib/dialogo";
 import { caboComCaixaMovida, caixaSemCabo, cortarTrechoNaCaixa, metrosDoTrecho, proximoCodigoElemento } from "@/lib/redeLivre";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type TipoElementoRota } from "@/lib/rotaOptica";
 import { tracadoDoTrecho, type SinalRede } from "@/lib/sinalRede";
+import { CSS_MODO_ANIMACAO, SeletorAnimacao, useModoAnimacao } from "./ModoAnimacao";
 import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
 import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
 
@@ -103,6 +104,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   const [tipoCabo, setTipoCabo] = useState("");
   /** Mostrar o nome de cada elemento embaixo do ícone */
   const [nomes, setNomes] = useState(false);
+  const [modoAnim] = useModoAnimacao();
 
   const elementos = useMemo(() => caixas.filter((c) => c.tipo && c.lat !== undefined && c.lon !== undefined && !c.predio_id), [caixas]);
   const elDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
@@ -302,7 +304,8 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   );
 
   return (
-    <div className="relative isolate h-[min(76vh,720px)] overflow-hidden rounded-xl border border-gray-200">
+    <div data-anim={modoAnim} className="relative isolate h-[min(76vh,720px)] overflow-hidden rounded-xl border border-gray-200">
+      <style>{CSS_MODO_ANIMACAO}</style>
       <MapContainer center={pts[0] ?? [-28.68, -49.37]} zoom={15} scrollWheelZoom={false} doubleClickZoom={false} zoomControl={false}
         className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${ferr !== "navegar" ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}>
         <CamadaBase camada={camada} />
@@ -372,7 +375,10 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
           </button>
         </div>
         <div className="pointer-events-auto ml-auto flex flex-col items-end gap-2">
-          <SeletorCamada valor={camada} onMudar={setCamada} />
+          <div className="flex items-center gap-2">
+            <SeletorAnimacao />
+            <SeletorCamada valor={camada} onMudar={setCamada} />
+          </div>
           <div className="flex flex-wrap justify-end gap-1.5 text-[11px] font-semibold">
             <span className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-slate-700 shadow ring-1 ring-slate-900/5 backdrop-blur"><Zap className="h-3 w-3 text-amber-500" /> {totalPons} PON{totalPons !== 1 ? "s" : ""}</span>
             <span className="rounded-full bg-white/90 px-2.5 py-1 text-slate-700 shadow ring-1 ring-slate-900/5 backdrop-blur">{elementos.length} elementos</span>

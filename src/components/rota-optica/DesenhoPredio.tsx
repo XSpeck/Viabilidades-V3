@@ -7,6 +7,7 @@
 // dos andares atendidos acendem.
 // =====================
 import { andaresDoBloco, rotuloAndarCurto, type BlocoPredio, type PontoPredio, type PredioRede } from "@/lib/prediosRede";
+import type { ModoAnimacao } from "./ModoAnimacao";
 
 export interface InfoCdoi {
   nome: string;
@@ -25,11 +26,14 @@ interface Props {
   onAndar?: (bloco: string, andar: number) => void;
   /** Texto do dBm ("−18,4") */
   dbm: (v?: number) => string;
+  /** tudo: luz correndo; portas: só o pulso das CDOIs; nenhuma: parado */
+  anim?: ModoAnimacao;
 }
 
 const FH = 24, JAN = 22, POCO = 30, LADO = 30, GAP = 46, ESQ = 92, TOPO = 74;
 
-export default function DesenhoPredio({ predio, info, selecionada, onSelecionar, onAndar, dbm }: Props) {
+export default function DesenhoPredio({ predio, info, selecionada, onSelecionar, onAndar, dbm, anim = "tudo" }: Props) {
+  const corre = anim === "tudo", mexe = anim !== "nenhuma";
   const blocos = predio.blocos;
   const aptosDe = (b: BlocoPredio) => Math.max(1, Math.min(b.aptos, 8));
   const largura = (b: BlocoPredio) => LADO + aptosDe(b) * JAN + POCO;
@@ -98,10 +102,10 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
       {[[60, 30], [W * 0.45, 22], [W * 0.7, 44]].map(([cx, cy], k) => (
         <g key={k} opacity=".8" fill="#fff">
           <ellipse cx={cx} cy={cy} rx={20} ry={7}>
-            <animate attributeName="cx" values={`${cx};${cx + 14};${cx}`} dur={`${18 + k * 6}s`} repeatCount="indefinite" />
+            {mexe && <animate attributeName="cx" values={`${cx};${cx + 14};${cx}`} dur={`${18 + k * 6}s`} repeatCount="indefinite" />}
           </ellipse>
           <ellipse cx={cx + 12} cy={cy - 4} rx={12} ry={6}>
-            <animate attributeName="cx" values={`${cx + 12};${cx + 26};${cx + 12}`} dur={`${18 + k * 6}s`} repeatCount="indefinite" />
+            {mexe && <animate attributeName="cx" values={`${cx + 12};${cx + 26};${cx + 12}`} dur={`${18 + k * 6}s`} repeatCount="indefinite" />}
           </ellipse>
         </g>
       ))}
@@ -163,7 +167,7 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
                         <g key={k}>
                           {luz && <rect x={wx - 2} y={wy - 2} width={ww + 4} height={wh + 4} rx={2} fill="#fbbf24" opacity={0.5} filter="url(#dp-brilho)" />}
                           <rect x={wx} y={wy} width={ww} height={wh} rx={1.2} fill={luz ? "url(#dp-luz)" : "url(#dp-vidro)"} stroke="#334155" strokeWidth={0.6}>
-                            {luz && <animate attributeName="opacity" values="1;.78;1" dur={`${2.4 + ((k + a) % 4) * 0.5}s`} repeatCount="indefinite" />}
+                            {luz && mexe && <animate attributeName="opacity" values="1;.78;1" dur={`${2.4 + ((k + a) % 4) * 0.5}s`} repeatCount="indefinite" />}
                           </rect>
                           <line x1={wx + ww / 2} y1={wy} x2={wx + ww / 2} y2={wy + wh} stroke="#334155" strokeWidth={0.5} opacity={0.6} />
                           <rect x={wx - 1} y={wy + wh} width={ww + 2} height={1.6} fill="#94a3b8" />
@@ -197,7 +201,7 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
           <g>
             <path d={d} fill="none" stroke="#0f172a" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" />
             <path d={d} fill="none" stroke={alguma ? alguma.cor : "#94a3b8"} strokeWidth={2.4} strokeLinejoin="round" strokeDasharray={alguma ? undefined : "4 3"} />
-            {alguma && [0, 1, 2].map((k) => (
+            {alguma && corre && [0, 1, 2].map((k) => (
               <circle key={k} r={2.4} fill="#fff">
                 <animateMotion dur="2.6s" begin={`${k * 0.85}s`} repeatCount="indefinite" path={d} />
               </circle>
@@ -222,7 +226,7 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
             {/* cabo interno do DG até a CDOI */}
             <path d={subida} fill="none" stroke="#0f172a" strokeWidth={3.6} strokeLinejoin="round" />
             <path d={subida} fill="none" stroke={io.cor} strokeWidth={1.6} strokeLinejoin="round" strokeDasharray={io.aceso ? undefined : "3 2"} />
-            {io.aceso && (
+            {io.aceso && corre && (
               <circle r={2} fill="#fff">
                 <animateMotion dur="2.2s" repeatCount="indefinite" path={subida} />
               </circle>
@@ -235,7 +239,7 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
                 <g key={a}>
                   <line x1={p.x} y1={meio(a)} x2={lw - 2} y2={meio(a)} stroke={io.cor} strokeWidth={1} strokeDasharray="2 1.6" opacity={0.85} />
                   <rect x={p.x - 2.6} y={meio(a) - 2.6} width={5.2} height={5.2} rx={1.2} fill="#fff" stroke={io.cor} strokeWidth={1.2} />
-                  {io.aceso && (
+                  {io.aceso && corre && (
                     <circle r={1.7} fill={io.cor} stroke="#fff" strokeWidth={0.6}>
                       <animateMotion dur={`${1.6 + Math.abs(a - o.andar) * 0.18}s`} begin={`${(k % 5) * 0.3}s`} repeatCount="indefinite" path={ramal} />
                     </circle>
@@ -258,8 +262,8 @@ export default function DesenhoPredio({ predio, info, selecionada, onSelecionar,
             <title>{`${io.nome}${io.aceso ? ` · ${dbm(io.pot)} dBm` : " · sem sinal"}`}</title>
             {(io.aceso || sel) && (
               <circle cx={p.x} cy={p.y} r={11} fill="none" stroke={sel ? "#0ea5e9" : io.cor} strokeWidth={2}>
-                <animate attributeName="r" values="9;15;9" dur="2s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values=".9;0;.9" dur="2s" repeatCount="indefinite" />
+                {mexe && <animate attributeName="r" values="9;15;9" dur="2s" repeatCount="indefinite" />}
+                {mexe && <animate attributeName="opacity" values=".9;0;.9" dur="2s" repeatCount="indefinite" />}
               </circle>
             )}
             <rect x={p.x - 8} y={p.y - 8} width={16} height={16} rx={3.5} fill={io.existe ? "#ea580c" : "#dc2626"} stroke="#fff" strokeWidth={1.5} />

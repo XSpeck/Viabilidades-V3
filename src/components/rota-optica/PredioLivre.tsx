@@ -13,6 +13,7 @@ import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { confirmar } from "@/lib/dialogo";
 import { andaresDoBloco, listarPredios, novoId, rotuloAndar, rotuloAndarCurto, salvarPredio, type BlocoPredio, type PontoPredio, type PredioRede } from "@/lib/prediosRede";
 import DesenhoPredio, { type InfoCdoi } from "./DesenhoPredio";
+import { SeletorAnimacao, useModoAnimacao } from "./ModoAnimacao";
 import { dbmCurto } from "@/lib/textoCompleto";
 import { proximoCodigoElemento } from "@/lib/redeLivre";
 import { RELACOES_SPLITTER } from "@/lib/catalogoRede";
@@ -39,6 +40,7 @@ const vazio = (p: CaixaRede): PredioRede => ({
 
 export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, usuario, onCaixa, onCaixaFora, onCabo, onCaboFora, onAbrirNoUnifilar }: Props) {
   const [dados, setDados] = useState<PredioRede | null>(null);
+  const [modoAnim] = useModoAnimacao();
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [nova, setNova] = useState({ bloco: "", andar: 0, nome: "", relacao: "1:8", tipoCabo: "" });
@@ -184,8 +186,10 @@ export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, us
           onSelecionar={(id) => setSelCdoi((x) => (x === id ? null : id))}
           onAndar={selCdoi ? ajustarAtende : undefined}
           dbm={dbmCurto}
+          anim={modoAnim}
         />
       </div>
+      <div className="flex justify-end"><SeletorAnimacao /></div>
       {selCdoi && <p className="rounded-lg bg-sky-50 px-2 py-1 text-sky-800">Clique num andar do mesmo bloco para a {dados.pontos.find((o) => o.id === selCdoi)?.nome} atender até ali (acima ou abaixo dela). Depois, Gravar.</p>}
 
       {/* CDOIs: onde ficam, até onde atendem, sinal e cobertura */}

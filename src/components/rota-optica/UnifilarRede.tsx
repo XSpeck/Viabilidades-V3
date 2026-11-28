@@ -23,6 +23,7 @@ import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
 import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
 import type { PortaCaixa, StatusPorta } from "@/lib/caixasRede";
 import BuscaCliente from "./BuscaCliente";
+import { CSS_MODO_ANIMACAO, SeletorAnimacao, useModoAnimacao } from "./ModoAnimacao";
 
 /**
  * Unifilar da rede (estilo GeoGrid): uma janela escura onde as caixas vão abrindo em sequência.
@@ -98,6 +99,14 @@ function potenciasQueChegam(sinal: SinalRede): Map<string, Map<string, number>> 
   return m;
 }
 
+/** Meio de uma curva "M a C c1, c2, b" (onde fica o protetor da emenda e a etiqueta de metros) */
+function meioCurva(d: string): [number, number] | null {
+  const n = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
+  if (!n || n.length < 8) return null;
+  const [ax, ay, c1x, c1y, c2x, c2y, bx, by] = n;
+  return [(ax + 3 * c1x + 3 * c2x + bx) / 8, (ay + 3 * c1y + 3 * c2y + by) / 8];
+}
+
 /** As caixas com o que está sendo editado aplicado */
 function aplicarEdicoes(caixas: CaixaRede[], e: Record<string, CadastroRede>): CaixaRede[] {
   return caixas.map((c) => (e[c.chave] ? { ...c, ...e[c.chave] } : c));
@@ -105,6 +114,7 @@ function aplicarEdicoes(caixas: CaixaRede[], e: Record<string, CadastroRede>): C
 
 export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixaSalva, clientes = [], inicial, onEditarPredio }: Props) {
   const [salvo] = useState(lerEstado);
+  const [modoAnim] = useModoAnimacao();
   const cadDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
   /** Todos os elementos da rede (a OLT também), para começar */
   const todasCaixas = useMemo(
@@ -271,7 +281,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
   const ocultos = new Set<string>();
   /** Fibra escondida do cordão → o ponto visível no lugar dela (porta PON na OLT, adaptador no DIO) */
   const ancoras = new Map<string, PontoUni>();
-  const caixasDes: { chave: string; x: number; y: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara>; id: string }[]; pons: string[]; capDio: number; olt?: Painel; dio?: Painel; arrumada: boolean }[] = [];
+  const caixasDes: { chave: string; x: number; y: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara>; id: string }[]; pons: string[]; capDio: number; olt?: Painel; dio?: Painel; arrumada: boolean; bandeja?: Painel }[] = [];
   const COLS = 12, CEL = 16;
   let xCur = 20;
   let minX = 0, minY = 0, maxX = 900, maxY = 300;
@@ -400,7 +410,11 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
     const x1 = Math.max(X0 + wAuto, ...itens.map((q) => q.x + q.w + 12));
     const y1 = Math.max(T + 120, ...itens.map((q) => q.y + q.h + 12));
     const lay = layoutDe(chave);
-    caixasDes.push({ chave, x: x0, y: y0, w: x1 - x0, h: y1 - y0, spl, pons, capDio, olt, dio, arrumada: Object.keys(lay).length > 0 || !!boxOff[chave] });
+    // caixa de emenda: a bandeja no meio, entre os cabos que chegam e os que saem
+    const bandeja = !temSpl && (tipoCx === "ceo" || tipoCx === "ct" || tipoCx === "predio")
+      ? { x: xE + BW + 10, y: T + 40, w: Math.max(40, xD - xE - BW - 20), h: Math.max(60, y1 - T - 52) }
+      : undefined;
+    caixasDes.push({ chave, x: x0, y: y0, w: x1 - x0, h: y1 - y0, spl, pons, capDio, olt, dio, arrumada: Object.keys(lay).length > 0 || !!boxOff[chave], bandeja });
     minX = Math.min(minX, x0 - 20); minY = Math.min(minY, y0 - 20);
     maxX = Math.max(maxX, x1 + 20); maxY = Math.max(maxY, y1 + 20);
     // a próxima caixa começa depois desta (se um item foi arrastado para a direita, ela abre espaço)
@@ -658,7 +672,8 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
   const caminho = rotasTraco[rotaIdx];
 
   return (
-    <div className={`rolagem-escura overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
+    <div data-anim={modoAnim} className={`rolagem-escura overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
+      <style>{CSS_MODO_ANIMACAO}</style>
       <style>{`@keyframes fh-fluxo { to { stroke-dashoffset: -30; } } .fh-fluxo { stroke-dasharray: 3 12; animation: fh-fluxo 1.2s linear infinite; }
 @keyframes fh-led { 0%, 100% { opacity: 1; } 50% { opacity: .35; } } .fh-led { animation: fh-led 1.1s ease-in-out infinite; }
 @keyframes fh-anel { 0% { opacity: .9; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.8); } } .fh-anel { transform-box: fill-box; transform-origin: center; animation: fh-anel 1.8s ease-out infinite; }
@@ -700,6 +715,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
           </>
         )}
         <span className="ml-auto flex items-center gap-0.5">
+          <SeletorAnimacao escuro />
           <button type="button" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))} className="rounded p-1.5 hover:bg-slate-800" aria-label="Diminuir zoom"><ZoomOut className="h-4 w-4" /></button>
           <button type="button" onClick={() => setZoom(1)} className="w-10 rounded py-1 text-center tabular-nums hover:bg-slate-800">{Math.round(zoom * 100)}%</button>
           <button type="button" onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.15).toFixed(2)))} className="rounded p-1.5 hover:bg-slate-800" aria-label="Aumentar zoom"><ZoomIn className="h-4 w-4" /></button>
@@ -757,7 +773,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                     </rect>
                     <g transform={`translate(${cx.x + 8} ${cx.y + 4})`} pointerEvents="none" dangerouslySetInnerHTML={{ __html: iconeSvg(t, 22) }} />
                     <text x={cx.x + 36} y={cx.y + 13} fontSize={10} fontWeight={800} fill="#fff" pointerEvents="none">{curto(info?.nome ?? cx.chave, 40)}</text>
-                    <text x={cx.x + 36} y={cx.y + 24} fontSize={8} fill="#f1f5f9" opacity={0.85} pointerEvents="none">{TIPO_ELEMENTO_LABEL[t]}{cx.chave.startsWith("PT:") ? ` · ${cx.chave.slice(3)}` : ""}{eds[cx.chave] ? " · alterada" : ""}</text>
+                    <text x={cx.x + 36} y={cx.y + 24} fontSize={8} fill="#f1f5f9" opacity={0.85} pointerEvents="none">{TIPO_ELEMENTO_LABEL[t]}{cx.chave.startsWith("PT:") ? ` · ${cx.chave.slice(3)}` : ""}{(() => { const n = m.ligacoes.filter((l) => l.tipo === "fusao").length; return n ? ` · ${n} fus${n > 1 ? "ões" : "ão"}` : ""; })()}{eds[cx.chave] ? " · alterada" : ""}</text>
                     {t === "predio" && onEditarPredio && (
                       <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onEditarPredio(cx.chave); }}>
                         <title>Qual fibra alimenta cada CDOI, blocos e andares</title>
@@ -781,6 +797,16 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                       <path d={`M${cx.x + cx.w - 18} ${cx.y + 11} l8 8 M${cx.x + cx.w - 10} ${cx.y + 11} l-8 8`} stroke="#fff" strokeWidth={1.6} />
                     </g>
 
+                    {cx.bandeja && (
+                      <g pointerEvents="none">
+                        <rect x={cx.bandeja.x} y={cx.bandeja.y} width={cx.bandeja.w} height={cx.bandeja.h} rx={10} fill="#12161d" stroke="#2b3442" strokeWidth={1.2} />
+                        {Array.from({ length: Math.max(1, Math.floor((cx.bandeja.h - 26) / 18)) }, (_, k) => (
+                          <line key={k} x1={cx.bandeja!.x + 10} x2={cx.bandeja!.x + cx.bandeja!.w - 10} y1={cx.bandeja!.y + 26 + k * 18} y2={cx.bandeja!.y + 26 + k * 18} stroke="#1f2733" strokeWidth={1} />
+                        ))}
+                        <rect x={cx.bandeja.x + cx.bandeja.w / 2 - 44} y={cx.bandeja.y + 5} width={88} height={13} rx={6.5} fill="#1f2937" />
+                        <text x={cx.bandeja.x + cx.bandeja.w / 2} y={cx.bandeja.y + 14.5} fontSize={7} fontWeight={800} fill="#94a3b8" textAnchor="middle" letterSpacing={0.6}>BANDEJA DE EMENDAS</text>
+                      </g>
+                    )}
                     {/* ligações dentro da caixa */}
                     {m.ligacoes.map((l) => {
                       if (ocultos.has(`${cx.chave}#${idPonto(l.a)}`) || ocultos.has(`${cx.chave}#${idPonto(l.b)}`)) return null;
@@ -802,6 +828,22 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                             : sug ? <path d={d} fill="none" stroke="#fbbf24" strokeWidth={1.6} strokeDasharray="2 3" />
                               : <>{acesa && <path d={d} fill="none" stroke={corL} strokeWidth={7} opacity={0.18} strokeLinecap="round" />}<path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.6} /><path d={d} fill="none" stroke={corL} strokeWidth={l.tipo === "cordao" ? 2.6 : 1.9} opacity={l.origem === "regra" ? 0.6 : 1} /></>}
                           {acesa && <path d={d} fill="none" stroke="#ffffff" strokeWidth={1.1} opacity={0.85} strokeLinecap="round" className="fh-fluxo" pointerEvents="none" />}
+                          {l.tipo === "fusao" && !sug && (() => {
+                            const mc = meioCurva(d);
+                            if (!mc) return null;
+                            const ca = l.a.k === "fibra" ? corFibra(l.a.fibra, l.a.cabo).hex : cor;
+                            const cb = l.b.k === "fibra" ? corFibra(l.b.fibra, l.b.cabo).hex : cor;
+                            return (
+                              <g pointerEvents="none">
+                                <title>{`Fusão${acesa ? " com luz" : ""}`}</title>
+                                {acesa && <rect x={mc[0] - 9} y={mc[1] - 4.5} width={18} height={9} rx={4.5} fill="none" stroke={cor} strokeWidth={1.4} className="fh-anel" />}
+                                <rect x={mc[0] - 8} y={mc[1] - 3.5} width={16} height={7} rx={3.5} fill="#e2e8f0" stroke="#0b0d10" strokeWidth={0.8} />
+                                <rect x={mc[0] - 8} y={mc[1] - 3.5} width={4} height={7} rx={2} fill={ca} />
+                                <rect x={mc[0] + 4} y={mc[1] - 3.5} width={4} height={7} rx={2} fill={cb} />
+                                <rect x={mc[0] - 2.5} y={mc[1] - 1.2} width={5} height={2.4} rx={1} fill={acesa ? "#facc15" : "#94a3b8"} />
+                              </g>
+                            );
+                          })()}
                         </g>
                       );
                     })}
@@ -947,8 +989,22 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                 const comSinal = (f: number) => ligA.has(idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f }));
                 const semSinal = (f: number) => !comSinal(f) && ligB.has(idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f }));
                 const emUso = (f: number) => comSinal(f) || semSinal(f);
+                // metros do trecho do cabo entre as duas caixas (o do desenho no mapa)
+                const caboR = cabos.find((x) => chaveCabo(x.nome) === b.c.chave);
+                const ia = caboR?.caminho?.indexOf(b.chave) ?? -1, ib = caboR?.caminho?.indexOf(dest.chave) ?? -1;
+                const trR = ia >= 0 && ib >= 0 && Math.abs(ia - ib) === 1 ? caboR?.trechos?.[Math.min(ia, ib)] : undefined;
+                const usadas = b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f));
+                const fMeio = usadas[0];
+                const dMeio = fMeio !== undefined ? curva(`${b.chave}#${idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: fMeio })}`, `${dest.chave}#${idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: fMeio })}`) : null;
+                const pMeio = dMeio ? meioCurva(dMeio) : null;
                 return (
                   <g key={`cab${b.chave}${b.c.id}`}>
+                    {pMeio && trR?.metros !== undefined && (
+                      <g pointerEvents="none">
+                        <rect x={pMeio[0] - 30} y={pMeio[1] - 22} width={60} height={15} rx={7.5} fill="#0f172a" stroke="#334155" />
+                        <text x={pMeio[0]} y={pMeio[1] - 11.5} fontSize={8} fontWeight={800} fill="#e2e8f0" textAnchor="middle">{trR.mesmo_poste ? "mesmo poste" : `${Math.round(trR.metros).toLocaleString("pt-BR")} m`}</text>
+                      </g>
+                    )}
                     {b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f)).map((f) => {
                       const ka = `${b.chave}#${idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f })}`;
                       const kb = `${dest.chave}#${idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f })}`;
