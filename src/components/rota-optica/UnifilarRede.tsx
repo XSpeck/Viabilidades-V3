@@ -45,7 +45,7 @@ interface Props {
   inicial?: string | string[];
 }
 
-const ROW = 15, HEAD = 30, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
+const ROW = 15, HEAD = 30, HEAD_CABO = 20, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
 const curto = (s: string, n = 26) => cortar(s.split(" - ")[0].split(" / ")[0].trim(), n, s);
 const COR_TIPO: Partial<Record<TipoElementoRota, string>> = { hub: "#ca8a04", cto: "#059669", cdoi: "#ea580c", ceo: "#2563eb", ct: "#525252", dio: "#475569", predio: "#0284c7" };
 const textoSobre = (hex: string) => (["#f4f4f0", "#f2c200", "#ee86b0", "#20bdc9", "#8a949b", "#f08a1c", "#b48ae6"].includes(hex) ? "#0b0d10" : "#fff");
@@ -315,7 +315,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       let y = T + 44;
       for (const c of lista) {
         const fibras = vis(c);
-        const h = HEAD + fibras.length * ROW + (fibras.length < c.capacidade ? ROW : 0) + 6;
+        const h = HEAD_CABO + fibras.length * ROW + (fibras.length < c.capacidade ? ROW : 0) + 6;
         const id = `c:${c.lado}:${c.chave}`;
         const o = off(chave, id);
         const bx = x + o.dx, by = y + o.dy;
@@ -323,7 +323,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         itens.push({ x: bx, y: by, w: BW, h });
         fibras.forEach((f, k) => {
           const kk = `${chave}#${idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f })}`;
-          const yy = by + HEAD + k * ROW + ROW / 2;
+          const yy = by + HEAD_CABO + k * ROW + ROW / 2;
           pos.set(kk, [c.lado === "chega" ? bx + BW : bx, yy]);
           lados.set(kk, { l: [bx, yy], r: [bx + BW, yy] });
         });
@@ -927,9 +927,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                 return (
                   <g key={`${chave}${c.id}`}>
                     <rect x={x} y={y} width={BW} height={h} rx={6} fill="#2a2e35" stroke="#3b4048" {...arrastavel(chave, idBloco)} />
-                    <rect x={x} y={y} width={BW} height={HEAD - 4} rx={6} fill="#0f1115" {...arrastavel(chave, idBloco)}><title>Arraste para mover o cabo</title></rect>
-                    <text x={x + 6} y={y + 11} fontSize={8.5} fontWeight={800} fill="#e2e8f0" pointerEvents="none">{curto(semCodigo(c.nome), 28)}</text>
-                    <text x={x + 6} y={y + 21} fontSize={7.5} className={viz && !aberta ? "cursor-pointer" : undefined}
+                    <rect x={x} y={y} width={BW} height={HEAD_CABO - 4} rx={6} fill="#0f1115" {...arrastavel(chave, idBloco)}><title>{`${semCodigo(c.nome)} · arraste para mover`}</title></rect>
+                    <text x={x + 6} y={y + 11} fontSize={7.5} className={viz && !aberta ? "cursor-pointer" : undefined}
                       onClick={(e) => { e.stopPropagation(); abrirVizinha(chave, c); }}>
                       <title>{viz && !aberta ? `Clique para abrir ${viz.nome}` : ehE ? "Cabo que chega nesta caixa" : "Cabo que sai desta caixa"}</title>
                       <tspan fontWeight={800} fill={ehE ? "#6ee7b7" : "#93c5fd"}>{ehE ? "◀ chega" : "sai ▶"}{viz ? (ehE ? " de " : " para ") : ""}</tspan>
@@ -938,7 +937,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                     </text>
                     {fibras.map((f, k) => {
                       const cf = corFibra(f, c.nome);
-                      const yy = y + HEAD + k * ROW + ROW / 2;
+                      const yy = y + HEAD_CABO + k * ROW + ROW / 2;
                       const pt: PontoUni = { k: "fibra", lado: c.lado, cabo: c.nome, fibra: f };
                       const sinal = c.sinal.has(f);
                       return (
@@ -969,7 +968,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                       );
                     })}
                     {fibras.length < c.capacidade && (
-                      <text x={x + BW / 2} y={y + HEAD + fibras.length * ROW + 10} fontSize={8} fill="#60a5fa" textAnchor="middle" className="cursor-pointer"
+                      <text x={x + BW / 2} y={y + HEAD_CABO + fibras.length * ROW + 10} fontSize={8} fill="#60a5fa" textAnchor="middle" className="cursor-pointer"
                         onClick={(e) => { e.stopPropagation(); setCabosAbertos((s) => new Set([...s, `${chave}|${c.id}`])); }}>
                         + {c.capacidade - fibras.length} fibras escondidas
                       </text>
