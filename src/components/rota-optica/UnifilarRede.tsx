@@ -532,24 +532,6 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
               </defs>
               <rect x={minX} y={minY} width={W} height={H} fill="url(#gradeUR)" />
 
-              {/* Cabos entre caixas abertas */}
-              {blocos.filter((b) => b.c.lado === "sai" && b.c.outraChave && abertas.includes(b.c.outraChave)).map((b) => {
-                const dest = blocos.find((x) => x.chave === b.c.outraChave && x.c.lado === "chega" && x.c.chave === b.c.chave);
-                if (!dest) return null;
-                const y1 = b.y + 14, y2 = dest.y + 14;
-                const x1 = b.x + BW, x2 = dest.x;
-                const d = `M${x1} ${y1} C ${x1 + 50} ${y1}, ${x2 - 50} ${y2}, ${x2} ${y2}`;
-                return (
-                  <g key={`cab${b.chave}${b.c.id}`}>
-                    <path d={d} fill="none" stroke="#0b0d10" strokeWidth={9} strokeLinecap="round" />
-                    <path d={d} fill="none" stroke="#3b82f6" strokeWidth={4} strokeLinecap="round" />
-                    <rect x={x1} y={y1 - 6} width={14} height={12} rx={3} fill="#64748b" stroke="#0b0d10" />
-                    <rect x={x2 - 14} y={y2 - 6} width={14} height={12} rx={3} fill="#64748b" stroke="#0b0d10" />
-                    <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 8} fontSize={8} fill="#93c5fd" textAnchor="middle">{curto(semCodigo(b.c.nome), 30)}</text>
-                  </g>
-                );
-              })}
-
               {/* Caixas */}
               {caixasDes.map((cx) => {
                 const info = infoDe.get(cx.chave);
@@ -679,6 +661,33 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                               </g>
                             );
                           })}
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              })}
+
+              {/* Cabos entre caixas abertas: uma linha por fibra, na cor dela */}
+              {blocos.filter((b) => b.c.lado === "sai" && b.c.outraChave && abertas.includes(b.c.outraChave)).map((b) => {
+                const dest = blocos.find((x) => x.chave === b.c.outraChave && x.c.lado === "chega" && x.c.chave === b.c.chave);
+                if (!dest) return null;
+                return (
+                  <g key={`cab${b.chave}${b.c.id}`}>
+                    {b.fibras.filter((f) => dest.fibras.includes(f)).map((f) => {
+                      const ka = `${b.chave}#${idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f })}`;
+                      const kb = `${dest.chave}#${idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f })}`;
+                      const a = pos.get(ka), z = pos.get(kb);
+                      if (!a || !z) return null;
+                      const d = `M${a[0]} ${a[1]} C ${a[0] + 60} ${a[1]}, ${z[0] - 60} ${z[1]}, ${z[0]} ${z[1]}`;
+                      const cf = corFibra(f, b.c.nome);
+                      const usada = b.c.sinal.has(f) || dest.c.sinal.has(f);
+                      const tr = aceso(ka) && aceso(kb);
+                      return (
+                        <g key={f}>
+                          {tr && <path d={d} fill="none" stroke={LAR} strokeWidth={5} opacity={0.85} strokeLinecap="round" />}
+                          <path d={d} fill="none" stroke="#0b0d10" strokeWidth={usada ? 3.4 : 2.4} />
+                          <path d={d} fill="none" stroke={cf.hex} strokeWidth={usada ? 1.9 : 1.1} opacity={usada ? 1 : 0.45} />
                         </g>
                       );
                     })}
