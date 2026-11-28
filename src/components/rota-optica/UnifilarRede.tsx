@@ -277,12 +277,15 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   // ---------- layout das caixas abertas, lado a lado ----------
   // Cada item tem um lugar automático (sem sobrepor: cada bloco empurra o de baixo) e o deslocamento
   // que o usuário arrastou, gravado na caixa (layout_unifilar). A caixa envolve o que tem dentro.
-  type Bloco = { chave: string; c: CaboUni; x: number; y: number; fibras: number[]; h: number; id: string };
+  /** oculto: cordão OLT → DIO (não vira bloco; a fibra fica em cima da porta PON / do adaptador) */
+  type Bloco = { chave: string; c: CaboUni; x: number; y: number; fibras: number[]; h: number; id: string; oculto?: boolean };
   type Painel = { x: number; y: number; w: number; h: number };
   const pos = new Map<string, [number, number]>();
   /** Fibras de cabo: ponto dos dois lados do bloco; a ligação usa o lado mais perto da outra ponta */
   const lados = new Map<string, { l: [number, number]; r: [number, number] }>();
   const blocos: Bloco[] = [];
+  /** Pontos de fibra de cordão escondidos (as ligações deles dentro da caixa não se desenham) */
+  const ocultos = new Set<string>();
   const caixasDes: { chave: string; x: number; y: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara>; id: string }[]; pons: string[]; capDio: number; olt?: Painel; dio?: Painel; arrumada: boolean }[] = [];
   const COLS = 12, CEL = 16;
   let xCur = 20;
@@ -311,9 +314,33 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       const v = todas.filter((f) => tubos.has(corFibra(f, c.nome).tubo ?? 1));
       return v.length ? v : todas.slice(0, Math.min(12, todas.length));
     };
+    /** Cordão OLT → DIO: a fibra dele é a própria porta PON (na OLT) ou o adaptador (no DIO) */
+    const pontaDoCordao = (c: CaboUni, f: number): [number, number] | undefined => {
+      const fid = idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f });
+      if (tipoCx === "olt" && c.lado === "sai") {
+        const l = m.ligacoes.find((x) => x.tipo === "cordao" && idPonto(x.b) === fid);
+        return l ? pos.get(`${chave}#${idPonto(l.a)}`) : undefined;
+      }
+      if (tipoCx === "dio" && c.lado === "chega") {
+        const l = m.ligacoes.find((x) => x.tipo === "dio" && idPonto(x.a) === fid && x.b.k === "adaptador");
+        const q = l ? pos.get(`${chave}#${idPonto(l.b)}`) : undefined;
+        return q ? [q[0], q[1] + 9] : undefined;
+      }
+      return undefined;
+    };
     const empilhar = (lista: CaboUni[], x: number) => {
       let y = T + 44;
       for (const c of lista) {
+        const doCordao = Array.from({ length: c.capacidade }, (_, i) => i + 1).filter((f) => pontaDoCordao(c, f));
+        if (doCordao.length) {
+          doCordao.forEach((f) => {
+            const kk = `${chave}#${idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f })}`;
+            pos.set(kk, pontaDoCordao(c, f)!);
+            ocultos.add(kk);
+          });
+          blocos.push({ chave, c, x, y, fibras: doCordao, h: 0, id: `c:${c.lado}:${c.chave}`, oculto: true });
+          continue;
+        }
         const fibras = vis(c);
         const h = HEAD_CABO + fibras.length * ROW + (fibras.length < c.capacidade ? ROW : 0) + 6;
         const id = `c:${c.lado}:${c.chave}`;
@@ -498,6 +525,11 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     const c = modelos.get(chave)?.cabos.find((x) => x.lado === "sai" && x.chave === chaveCabo(p.cabo));
     return c?.outraChave && infoDe.get(c.outraChave)?.tipo === "predio" ? c.outraChave : undefined;
   }
+  /** O cordão que chega num adaptador do DIO (a fibra dele) */
+  function cordaoNoAdaptador(chave: string, n: number) {
+    const l = modelos.get(chave)?.ligacoes.find((x) => x.tipo === "dio" && x.b.k === "adaptador" && x.b.n === n && x.a.k === "fibra" && x.a.lado === "chega");
+    return l && l.a.k === "fibra" ? l.a : undefined;
+  }
   async function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "clientes") {
@@ -517,6 +549,9 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           setFibraTraco({ cabo: fb.cabo, fibra: fb.fibra });
           setRotaIdx(0);
         }
+        const de = p.k === "adaptador" ? cordaoNoAdaptador(chave, p.n) : undefined;
+        const cc = de && modelos.get(chave)?.cabos.find((x) => x.lado === "chega" && x.chave === chaveCabo(de.cabo));
+        if (cc) abrirVizinha(chave, cc);
       }
       if (p.k === "fibra") {
         const c = modelos.get(chave)?.cabos.find((x) => x.lado === p.lado && x.chave === chaveCabo(p.cabo));
@@ -540,6 +575,13 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     }
     if (idPonto(sel.p) === idPonto(p)) { setSel(null); return; }
     // DIO: cordão que chega + adaptador = a rota passa a usar aquele adaptador (grava na rota)
+    if (sel.p.k === "adaptador" && p.k === "adaptador") {
+      const de = cordaoNoAdaptador(chave, sel.p.n);
+      if (!de) { setErro(`Nenhum cordão chega no adaptador ${sel.p.n}. Comece pelo adaptador em uso.`); setSel({ chave, p }); return; }
+      moverPortaDio(chave, de.cabo, p.n);
+      setSel(null);
+      return;
+    }
     const cordao = sel.p.k === "fibra" && sel.p.lado === "chega" ? sel.p : p.k === "fibra" && p.lado === "chega" ? p : null;
     const adapt = sel.p.k === "adaptador" ? sel.p : p.k === "adaptador" ? p : null;
     if (cordao && adapt) { moverPortaDio(chave, cordao.cabo, adapt.n); setSel(null); return; }
@@ -651,7 +693,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const ponto = (chave: string, p: PontoUni, x: number, y: number, cor: string, ocup: boolean, lado = "") => {
     const id = `${chave}#${idPonto(p)}`;
     const ativo = sel && sel.chave === chave && idPonto(sel.p) === idPonto(p);
-    const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega"));
+    const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega")
+      || (sel.p.k === "adaptador" && p.k === "adaptador" && !!cordaoNoAdaptador(chave, sel.p.n)));
     const cand = modo === "editar" && sel?.chave === chave && !ativo && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)));
     const apagado = modo === "editar" && !!sel && !ativo && !cand;
     return (
@@ -778,6 +821,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
 
                     {/* ligações dentro da caixa */}
                     {m.ligacoes.map((l) => {
+                      if (ocultos.has(`${cx.chave}#${idPonto(l.a)}`) || ocultos.has(`${cx.chave}#${idPonto(l.b)}`)) return null;
                       const d = curva(`${cx.chave}#${idPonto(l.a)}`, `${cx.chave}#${idPonto(l.b)}`);
                       if (!d) return null;
                       const tr = aceso(`${cx.chave}#L:${l.id}`);
@@ -830,7 +874,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                           const usado = ocup.has(idPonto({ k: "adaptador", n }));
                           return (
                             <g key={n}>
-                              <title>{`Adaptador ${n}${usado ? " · em uso" : " · livre"}`}</title>
+                              <title>{(() => {
+                                const de = cordaoNoAdaptador(cx.chave, n);
+                                const vem = de && modelos.get(cx.chave)?.cabos.find((x) => x.lado === "chega" && x.chave === chaveCabo(de.cabo));
+                                const v = de ? potChega.get(cx.chave)?.get(`${chaveCabo(de.cabo)}|${de.fibra}`) : undefined;
+                                return `Adaptador ${n}${usado ? " · em uso" : " · livre"}${vem?.outraChave ? ` · cordão de ${infoDe.get(vem.outraChave)?.nome ?? "OLT"}` : ""}${v !== undefined ? ` · ${dbm(v)} dBm` : ""}`;
+                              })()}</title>
                               <rect x={pp[0] - 7} y={pp[1] - 7} width={14} height={14} rx={2.5} fill={usado ? "#1e3a8a" : "#1f2937"} stroke={usado ? "#60a5fa" : "#374151"} pointerEvents="none" />
                               <text x={pp[0]} y={pp[1] + 2.5} fontSize={6} fill={usado ? "#dbeafe" : "#6b7280"} textAnchor="middle" fontWeight={700} pointerEvents="none">{n}</text>
                               {(usado || modo === "editar") && ponto(cx.chave, { k: "adaptador", n }, pp[0], pp[1] + 9, "#60a5fa", usado)}
@@ -924,8 +973,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                             <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.4} strokeDasharray="3 4" opacity={0.45} />
                           ) : (
                             <>
-                              <path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.4} />
-                              <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.9} />
+                              <path d={d} fill="none" stroke="#0b0d10" strokeWidth={b.oculto ? 4.2 : 3.4} />
+                              <path d={d} fill="none" stroke={cf.hex} strokeWidth={b.oculto ? 2.6 : 1.9} />
                             </>
                           )}
                         </g>
@@ -936,7 +985,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
               })}
 
               {/* blocos dos cabos (por cima) */}
-              {blocos.map(({ chave, c, x, y, fibras, h, id: idBloco }) => {
+              {blocos.filter((b) => !b.oculto).map(({ chave, c, x, y, fibras, h, id: idBloco }) => {
                 const ehE = c.lado === "chega";
                 const m = modelos.get(chave)!;
                 const ocup = new Set(m.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]));
@@ -1206,7 +1255,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           ? "Clique numa porta (perna) de splitter, ou numa fibra que chega na CT, para marcar o cliente ou deixar livre. Salve no topo."
           : modo === "navegar"
           ? "Clique numa fibra: a caixa do outro lado do cabo abre ao lado e o caminho acende em laranja. O nome azul embaixo do cabo também abre a vizinha."
-          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar, e no nome de um splitter para tirá-lo. No DIO: cordão + adaptador muda a porta da rota. Salve no topo."}
+          : sel ? "Agora clique no destino na mesma caixa (anel verde)." : "Clique num ponto e depois no destino. Clique numa linha para desligar ou aceitar, e no nome de um splitter para tirá-lo. No DIO: clique no adaptador em uso e depois no novo para mudar a porta da rota. Salve no topo."}
       </p>
     </div>
   );
