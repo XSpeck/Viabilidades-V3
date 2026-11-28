@@ -19,6 +19,7 @@ import {
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
 import RotaEditor from "@/components/rota-optica/RotaEditor";
 import ArvorePonView from "@/components/rota-optica/ArvorePon";
+import UnifilarRede from "@/components/rota-optica/UnifilarRede";
 import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
@@ -34,7 +35,7 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
+import { Boxes, Cable, FileUp, GitBranch, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
 
 const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ssr: false,
@@ -78,7 +79,7 @@ export default function RotaOpticaPage() {
   /** Janela do simulador de rompimento (OTDR) */
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   /** Tela principal: árvore das portas PON ou mapa da rede */
-  const [vista, setVista] = useState<"arvore" | "mapa">("arvore");
+  const [vista, setVista] = useState<"arvore" | "mapa" | "unifilar">("arvore");
   const inputKml = useRef<HTMLInputElement>(null);
   // Sub-rotas montadas com o tronco da rota-mãe: todas as telas usam o caminho completo
   const rotas = useMemo(
@@ -399,7 +400,7 @@ export default function RotaOpticaPage() {
         ) : (
           <div className="space-y-3">
           <div className="inline-flex rounded-xl bg-slate-100 p-1" role="tablist">
-            {([["arvore", "Árvore", GitBranch], ["mapa", "Mapa da rede", MapIcon]] as const).map(([k, rot, Ic]) => (
+            {([["arvore", "Árvore", GitBranch], ["mapa", "Mapa da rede", MapIcon], ["unifilar", "Unifilar", Cable]] as const).map(([k, rot, Ic]) => (
               <button
                 key={k}
                 type="button"
@@ -412,7 +413,16 @@ export default function RotaOpticaPage() {
               </button>
             ))}
           </div>
-          {vista === "mapa" ? (
+          {vista === "unifilar" ? (
+            <UnifilarRede
+              rotas={rotas}
+              caixas={caixas}
+              catalogo={catalogo}
+              usuario={user?.nome ?? ""}
+              onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
+              onAbrirRota={abrirRota}
+            />
+          ) : vista === "mapa" ? (
             <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} />
           ) : (
           <ArvorePonView

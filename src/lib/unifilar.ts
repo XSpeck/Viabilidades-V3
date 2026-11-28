@@ -37,6 +37,8 @@ export interface CaboUni {
   sinal: Map<number, string[]>;
   /** caixa do outro lado do cabo (de onde vem / para onde vai) */
   outraPonta?: string;
+  /** chave da caixa do outro lado (para abrir ela no unifilar da rede) */
+  outraChave?: string;
 }
 
 export interface ModeloUnifilar {
@@ -52,10 +54,10 @@ const mesmaFibra = (a: PontaFibra, b: PontaFibra) => chaveCabo(a.cabo) === chave
 /** Monta o unifilar da caixa `chave` com o cadastro `cad` e as rotas */
 export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<CaixaRede> | undefined): ModeloUnifilar {
   const cabos = new Map<string, CaboUni>();
-  const garantir = (nome: string, lado: Lado, outra?: string) => {
+  const garantir = (nome: string, lado: Lado, outra?: ElementoRota) => {
     const id = idCabo(nome, lado);
-    const c = cabos.get(id) ?? { id, nome, chave: chaveCabo(nome), lado, capacidade: 0, sinal: new Map<number, string[]>(), outraPonta: outra };
-    if (!c.outraPonta && outra) c.outraPonta = outra;
+    const c = cabos.get(id) ?? { id, nome, chave: chaveCabo(nome), lado, capacidade: 0, sinal: new Map<number, string[]>(), outraPonta: outra?.nome, outraChave: outra ? chaveElemento(outra) : undefined };
+    if (!c.outraPonta && outra) { c.outraPonta = outra.nome; c.outraChave = chaveElemento(outra); }
     cabos.set(id, c);
     return c;
   };
@@ -69,10 +71,10 @@ export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<
       if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada) return;
       const ant = r.elementos[i - 1];
       const prox = r.elementos[i + 1];
-      const cin = garantir(e.cabo_entrada, "chega", ant?.nome);
+      const cin = garantir(e.cabo_entrada, "chega", ant);
       if (e.fibra_entrada) marcar(cin, e.fibra_entrada, r.nome);
       if (prox?.cabo_entrada) {
-        const cout = garantir(prox.cabo_entrada, "sai", prox.nome);
+        const cout = garantir(prox.cabo_entrada, "sai", prox);
         if (prox.fibra_entrada) marcar(cout, prox.fibra_entrada, r.nome);
       }
       if (e.fibra_entrada) {

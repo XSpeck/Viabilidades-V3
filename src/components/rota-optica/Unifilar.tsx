@@ -123,18 +123,21 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
   const hE = empilhar(esquerda, xE), hD = empilhar(direita, xD);
   // splitters no meio
   const spls = comSplitters ? ed.splitters : [];
-  const SW = 96;
+  const SW = 112;
   const xS = PAD + BW + (W_MEIO - SW) / 2;
   let yS = PAD + 22;
   const caixasSpl: { s: SplitterCaixa; y: number; h: number; portas: ReturnType<typeof portasPara> }[] = [];
-  for (const s of spls) {
+  // cada splitter fica na altura da fibra que o alimenta (menos linhas cruzando), sem encavalar
+  const yEntradaDe = (s: SplitterCaixa) => (s.entrada.fibra ? pos.get(idPonto({ k: "fibra", lado: "chega", ...s.entrada.fibra }))?.[1] ?? 1e6 : 1e6);
+  for (const s of [...spls].sort((a, b) => yEntradaDe(a) - yEntradaDe(b))) {
     const portas = portasPara(s.relacao, s.portas);
-    const h = 34 + portas.length * ROW;
-    const y0 = yS;
+    const h = 26 + portas.length * ROW + 8;
+    const yIn = yEntradaDe(s);
+    const y0 = Math.max(yS, yIn < 1e6 ? yIn - (26 + (portas.length * ROW) / 2) : yS);
     caixasSpl.push({ s, y: y0, h, portas });
-    pos.set(idPonto({ k: "entrada", spl: s.id }), [xS, y0 + h / 2]);
-    portas.forEach((p, k) => pos.set(idPonto({ k: "porta", spl: s.id, porta: p.numero }), [xS + SW, y0 + 30 + k * ROW + ROW / 2]));
-    yS += h + 20;
+    pos.set(idPonto({ k: "entrada", spl: s.id }), [xS - 6, y0 + 26 + (portas.length * ROW) / 2]);
+    portas.forEach((p, k) => pos.set(idPonto({ k: "porta", spl: s.id, porta: p.numero }), [xS + SW + 6, y0 + 26 + k * ROW + ROW / 2]));
+    yS = y0 + h + 18;
   }
   const H = Math.max(hE, hD, yS) + PAD;
 
@@ -368,19 +371,28 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
           {caixasSpl.map(({ s, y, h, portas }) => {
             const m = modelos.find((x) => x.id === s.modelo_id);
             const pon = s.entrada.fibra ? ponDaFibra(s.entrada.fibra.cabo, s.entrada.fibra.fibra) : undefined;
+            const yIn = y + 26 + (portas.length * ROW) / 2;
             return (
               <g key={s.id}>
-                <rect x={xS} y={y} width={SW} height={h} rx={7} fill="#123524" stroke="#16a34a" />
-                <text x={xS + 6} y={y + 12} fontSize={9} fontWeight={800} fill="#bbf7d0">{nomeSpl(s)} · {s.relacao}</text>
-                <text x={xS + 6} y={y + 23} fontSize={7.5} fill="#86efac">{pon ? `PON ${pon}` : s.entrada.splitter ? "2º nível" : "sem entrada"} · {perdaSplitter(s.relacao, m?.perda_db).toFixed(1).replace(".", ",")} dB</text>
-                <path d={`M${xS + 12} ${y + h / 2 - 8} L${xS + SW - 18} ${y + 30} L${xS + SW - 18} ${y + h - 6} Z`} fill="#16a34a" opacity={0.25} />
-                {ponto({ k: "entrada", spl: s.id }, xS, y + h / 2, "#4ade80")}
+                {/* estilo GeoGrid: cabeçalho, entrada à esquerda, leque e as portas numeradas à direita */}
+                <rect x={xS} y={y} width={SW} height={h} rx={6} fill="#0f2a1c" stroke="#22c55e" strokeWidth={1.2} />
+                <rect x={xS} y={y} width={SW} height={20} rx={6} fill="#14532d" />
+                <text x={xS + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7">{nomeSpl(s)} · {s.relacao}</text>
+                <text x={xS + SW - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? pon : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                <path d={`M${xS + 10} ${yIn - 5} L${xS + SW - 30} ${y + 26} L${xS + SW - 30} ${y + h - 8} L${xS + 10} ${yIn + 5} Z`} fill="#22c55e" opacity={0.18} />
+                <rect x={xS - 2} y={yIn - 6} width={12} height={12} rx={2} fill="#16a34a" stroke="#0b0d10" />
+                <text x={xS + 20} y={yIn + 3} fontSize={6.5} fill="#86efac">{perdaSplitter(s.relacao, m?.perda_db).toFixed(1).replace(".", ",")} dB</text>
+                {ponto({ k: "entrada", spl: s.id }, xS - 6, yIn, "#4ade80")}
                 {portas.map((p, k) => {
-                  const yy = y + 30 + k * ROW + ROW / 2;
+                  const yy = y + 26 + k * ROW + ROW / 2;
+                  const cor = p.status === "cliente" ? "#0284c7" : p.status === "ramal" ? "#d97706" : "#1f3d33";
                   return (
                     <g key={p.numero}>
-                      <text x={xS + SW - 10} y={yy + 3} fontSize={7.5} fill={p.status === "cliente" ? "#38bdf8" : "#d1fae5"} textAnchor="end" fontWeight={700}>{p.numero}{p.status === "cliente" ? " 👤" : ""}</text>
-                      {ponto({ k: "porta", spl: s.id, porta: p.numero }, xS + SW, yy, "#4ade80")}
+                      <title>{`Porta ${p.numero} · ${p.status === "cliente" ? `cliente ${p.descricao ?? ""}` : p.status === "ramal" ? `ramal ${p.descricao ?? ""}` : "livre"}`}</title>
+                      <rect x={xS + SW - 26} y={yy - 6} width={20} height={12} rx={2} fill={cor} stroke="#0b0d10" />
+                      <text x={xS + SW - 16} y={yy + 3} fontSize={7} fontWeight={800} fill="#fff" textAnchor="middle">{p.numero}</text>
+                      {p.status === "cliente" && <text x={xS + SW - 32} y={yy + 3} fontSize={7} textAnchor="end">👤</text>}
+                      {ponto({ k: "porta", spl: s.id, porta: p.numero }, xS + SW + 6, yy, "#4ade80")}
                     </g>
                   );
                 })}
