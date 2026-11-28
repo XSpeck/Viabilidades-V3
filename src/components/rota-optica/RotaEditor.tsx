@@ -169,7 +169,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
   /** "Editar em todas as rotas": gravado nas outras rotas junto com esta (ao salvar) */
   const [globais, setGlobais] = useState<MudancaGlobal[]>([]);
   /** Janela "Editar em todas" aberta: de uma caixa ou do cabo que chega numa caixa */
-  const [editarTodas, setEditarTodas] = useState<{ tipo: "caixa" | "cabo"; i: number; nome: string; tipoEl: TipoElementoRota; tipoCabo: string } | null>(null);
+  const [editarTodas, setEditarTodas] = useState<{ tipo: "caixa" | "cabo"; i: number; nome: string; tipoEl: TipoElementoRota } | null>(null);
   /** Caixa compartilhada arrastada no mapa: espera confirmar "mover em todas" */
   const [moverTodas, setMoverTodas] = useState<{ i: number; lat: number; lon: number } | null>(null);
   /** Caixa de várias portas (HUB 0/2/15_0/6/2): de qual porta sai a sub-rota */
@@ -901,7 +901,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (tipo === "cabo" && !codigoDoCabo(l.cabo_entrada)) {
       return setAviso("Este cabo ainda não tem código: salve a rota uma vez e depois edite em todas.");
     }
-    setEditarTodas({ tipo, i, nome: tipo === "caixa" ? l.nome : semCodigo(l.cabo_entrada), tipoEl: l.tipo, tipoCabo: tiposCabo[chaveCabo(l.cabo_entrada)] ?? "" });
+    setEditarTodas({ tipo, i, nome: tipo === "caixa" ? l.nome : semCodigo(l.cabo_entrada), tipoEl: l.tipo });
   }
 
   function aplicarEditarTodas() {
@@ -921,7 +921,6 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
       const v = comCodigo(novoNome, cod);
       mudar((ls) => ls.map((x) => (codigoDoCabo(x.cabo_entrada) === cod ? { ...x, cabo_entrada: v } : x)));
       // o tipo é do cabo (cadastro de cabos, pelo código): vale para todas as rotas ao salvar
-      if (editarTodas.tipoCabo) setTiposCabo((t) => ({ ...t, [cod]: editarTodas.tipoCabo }));
       setGlobais((g) => [...g, { tipo: "cabo", codigo: cod, nome: novoNome }]);
     }
     setEditarTodas(null);
@@ -1017,7 +1016,9 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     // trocar aqui mudaria os dois: então este trecho vira um cabo novo, com nome próprio.
     const compartilhado = !!kAtual && linhas.some((x, j) => j !== i && j > 0 && x.cabo_entrada.trim() && chaveCabo(x.cabo_entrada) === kAtual);
     const trocouTipo = tiposCabo[kAtual] !== t.id;
-    const separar = compartilhado && trocouTipo;
+    // cabo que já existe (tem código) não muda de tipo por aqui: outro tipo = cabo novo neste trecho
+    // (o tipo e a capacidade de um cabo existente se mudam no painel Cabo)
+    const separar = (compartilhado || !!codigoDoCabo(atual)) && trocouTipo;
     // nome criado pelo editor ("72 FO ASO · DIO → CEO 1"): ao trocar o tipo, o nome acompanha
     const nomeAutomatico = tiposDeCabo.some((c) => atual.startsWith(`${c.nome} · `));
     const nomeCabo =
@@ -2008,7 +2009,10 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
             })()}
             {tiposDeCabo.length > 0 && (
               <div className="mb-2">
-                <p className="text-[10px] text-slate-500 mb-1">{cabosSaindoDe(i).length ? "Ou um cabo novo do cadastro:" : "Cabo do cadastro:"}</p>
+                <p className="text-[10px] text-slate-500 mb-1">
+                  {cabosSaindoDe(i).length ? "Ou um cabo novo do cadastro:" : codigoDoCabo(l.cabo_entrada) ? "Trocar por um cabo novo:" : "Cabo do cadastro:"}
+                  {codigoDoCabo(l.cabo_entrada) && <span className="ml-1 text-slate-400">(o tipo deste cabo se muda no botão Cabo)</span>}
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {tiposDeCabo.map((t) => {
                     const ativo = !!kCabo && tiposCabo[kCabo] === t.id;
@@ -2646,13 +2650,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                   </div>
                 )}
                 {tipo === "cabo" && (
-                  <div>
-                    <label className={rot}>Tipo do cabo</label>
-                    <select className={campo} value={editarTodas.tipoCabo} onChange={(e) => setEditarTodas({ ...editarTodas, tipoCabo: e.target.value })}>
-                      <option value="">— escolha —</option>
-                      {tiposDeCabo.map((t) => <option key={t.id} value={t.id}>{t.nome} · {resumoItem(t)}</option>)}
-                    </select>
-                  </div>
+                  <p className="text-[11px] text-slate-500">Tipo e capacidade do cabo: botão <b>Cabo</b>, ao lado do nome dele.</p>
                 )}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Muda também em {afetadas.length} rota{afetadas.length !== 1 ? "s" : ""}</p>
