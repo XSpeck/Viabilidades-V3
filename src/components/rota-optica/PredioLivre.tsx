@@ -8,13 +8,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Network, Plus, Trash2 } from "lucide-react";
 import { chaveCabo, comCodigo, excluirCabo, proximoCodigoCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
-import { excluirCaixa, idCaixa, portasPara, salvarCaixa, type CaixaRede } from "@/lib/caixasRede";
+import { excluirCaixa, idCaixa, portasFinais, portasPara, salvarCaixa, type CaixaRede } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { confirmar } from "@/lib/dialogo";
-import { andaresDoBloco, listarPredios, novoId, rotuloAndar, rotuloAndarCurto, salvarPredio, type BlocoPredio, type PredioRede } from "@/lib/prediosRede";
+import { andaresDoBloco, listarPredios, novoId, rotuloAndar, rotuloAndarCurto, salvarPredio, type BlocoPredio, type PontoPredio, type PredioRede } from "@/lib/prediosRede";
+import DesenhoPredio, { type InfoCdoi } from "./DesenhoPredio";
+import { dbmCurto } from "@/lib/textoCompleto";
 import { proximoCodigoElemento } from "@/lib/redeLivre";
 import { RELACOES_SPLITTER } from "@/lib/catalogoRede";
-import { formatDbm } from "@/lib/rotaOptica";
 import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
 import type { SinalRede } from "@/lib/sinalRede";
 
@@ -41,6 +42,8 @@ export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, us
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [nova, setNova] = useState({ bloco: "", andar: 0, nome: "", relacao: "1:8", tipoCabo: "" });
+  /** CDOI escolhida no desenho (clicar num andar ajusta até onde ela atende) */
+  const [selCdoi, setSelCdoi] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -121,6 +124,24 @@ export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, us
     }
   }
 
+  /** Cor, sinal e potência de cada CDOI para o desenho */
+  const infoDe = (o: PontoPredio): InfoCdoi => {
+    const existe = cdois.some((c) => c.chave === o.chave);
+    const sd = sinalDa(o.chave);
+    return { nome: o.nome, existe, aceso: !!sd.pon, pot: sd.pot, cor: !existe ? "#dc2626" : sd.pon ? COR_NIVEL[nivelPotencia(sd.pot)] : "#94a3b8" };
+  };
+  /** Clicou num andar com a CDOI escolhida: ela passa a atender até ali */
+  function ajustarAtende(bloco: string, andar: number) {
+    if (!dados || !selCdoi) return;
+    setDados({
+      ...dados,
+      pontos: dados.pontos.map((o) => {
+        if (o.id !== selCdoi || o.bloco !== bloco) return o;
+        return andar >= o.andar ? { ...o, atende_ate: andar, atende_de: Math.min(o.atende_de, o.andar) } : { ...o, atende_de: andar, atende_ate: Math.max(o.atende_ate, o.andar) };
+      }),
+    });
+  }
+
   /** Sinal da CDOI: quem acende e a potência que chega nela */
   const sinalDa = (chave: string) => {
     const cb = cabos.find((x) => x.caminho?.[1] === chave && x.caminho[0] === predio.chave);
@@ -154,56 +175,57 @@ export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, us
         <button type="button" onClick={() => setDados({ ...dados, blocos: [...dados.blocos, { id: novoId(), nome: `Bloco ${String.fromCharCode(65 + dados.blocos.length)}`, andares: 10, subsolos: 0, aptos: 4 }] })} className="flex items-center gap-1 text-indigo-700"><Plus className="h-3.5 w-3.5" /> bloco</button>
       </div>
 
-      {/* desenho: um prédio por bloco, andar por andar; janelas acesas onde a CDOI do andar tem sinal */}
-      <style>{`@keyframes fh-pulso { 0% { transform: scale(.85); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } } .fh-pulso { animation: fh-pulso 2s ease-out infinite; } @media (prefers-reduced-motion: reduce) { .fh-pulso { animation: none; } }`}</style>
-      <div className="flex items-end gap-5 overflow-x-auto rounded-2xl bg-gradient-to-b from-sky-100 via-sky-50 to-white p-4 pb-0 ring-1 ring-slate-200">
-        {dados.blocos.map((b) => {
-          // andares atendidos por uma CDOI com sinal (as janelas acendem)
-          const acesos = new Set<number>();
-          dados.pontos.filter((o) => o.bloco === b.id && sinalDa(o.chave).pon).forEach((o) => {
-            for (let a = Math.min(o.atende_de, o.atende_ate); a <= Math.max(o.atende_de, o.atende_ate); a++) acesos.add(a);
-          });
-          return (
-            <div key={b.id} className="flex min-w-[190px] flex-col items-center">
-              <p className="mb-1.5 rounded-full bg-slate-800 px-3 py-0.5 text-[11px] font-bold text-white shadow">{b.nome}</p>
-              {/* telhado */}
-              <div className="h-0 w-0 border-x-[96px] border-b-[18px] border-x-transparent border-b-slate-600" />
-              <div className="flex w-[192px] flex-col-reverse rounded-b-sm border-x-4 border-slate-600 bg-gradient-to-b from-slate-200 to-slate-300 shadow-xl">
-                {andaresDoBloco(b).map((a) => {
-                  const aqui = dados.pontos.filter((o) => o.bloco === b.id && o.andar === a);
-                  const luz = acesos.has(a);
-                  return (
-                    <div key={a} className={`relative flex min-h-[26px] items-center gap-1 border-t border-slate-400/50 px-1.5 ${a < 0 ? "bg-slate-400/60" : a === 0 ? "bg-slate-100" : ""}`}>
-                      <span className="w-6 shrink-0 text-[9px] font-bold text-slate-500">{rotuloAndarCurto(a)}</span>
-                      <div className="flex flex-1 gap-1">
-                        {a >= 0 && Array.from({ length: Math.min(b.aptos, 6) }, (_, k) => (
-                          <span key={k} className={`h-3 flex-1 rounded-[2px] border transition-colors duration-500 ${luz ? "border-amber-400 bg-amber-200 shadow-[0_0_6px_rgba(251,191,36,.8)]" : "border-slate-400 bg-sky-900/30"}`} />
-                        ))}
-                      </div>
-                      {aqui.map((o) => {
-                        const sd = sinalDa(o.chave);
-                        const existe = cdois.some((c) => c.chave === o.chave);
-                        const cor = !existe ? "#dc2626" : sd.pon ? COR_NIVEL[nivelPotencia(sd.pot)] : "#64748b";
-                        return (
-                          <span key={o.id} className="group absolute -right-2 z-10 flex translate-x-full items-center gap-1 whitespace-nowrap rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg" style={{ background: cor }} title={sd.pon ? `${sd.pon} · ${formatDbm(sd.pot)}` : "sem sinal"}>
-                            {sd.pon && <span className="fh-pulso pointer-events-none absolute inset-0 rounded-lg" style={{ boxShadow: `0 0 0 2px ${cor}` }} />}
-                            {o.nome}{sd.pot !== undefined ? ` · ${formatDbm(sd.pot)}` : ""}
-                            {onAbrirNoUnifilar && existe && <button type="button" onClick={() => onAbrirNoUnifilar(o.chave)} title="Abrir no Unifilar" className="rounded p-0.5 hover:bg-white/20"><Network className="h-3 w-3" /></button>}
-                            <button type="button" onClick={() => void tirarCdoi(o.chave)} title="Tirar do prédio" className="rounded p-0.5 hover:bg-white/20"><Trash2 className="h-3 w-3" /></button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* chão */}
-              <div className="h-2 w-[230px] rounded-t bg-gradient-to-b from-emerald-600 to-emerald-800" />
-            </div>
-          );
-        })}
-        <div className="w-40 shrink-0" />
+      {/* desenho do prédio: cabo da rua, DG, prumadas e os andares que cada CDOI atende */}
+      <div className="overflow-x-auto rounded-2xl shadow-inner ring-1 ring-slate-200">
+        <DesenhoPredio
+          predio={dados}
+          info={infoDe}
+          selecionada={selCdoi}
+          onSelecionar={(id) => setSelCdoi((x) => (x === id ? null : id))}
+          onAndar={selCdoi ? ajustarAtende : undefined}
+          dbm={dbmCurto}
+        />
       </div>
+      {selCdoi && <p className="rounded-lg bg-sky-50 px-2 py-1 text-sky-800">Clique num andar do mesmo bloco para a {dados.pontos.find((o) => o.id === selCdoi)?.nome} atender até ali (acima ou abaixo dela). Depois, Gravar.</p>}
+
+      {/* CDOIs: onde ficam, até onde atendem, sinal e cobertura */}
+      {dados.pontos.length > 0 && (
+        <div className="space-y-1.5">
+          {dados.pontos.map((o) => {
+            const io = infoDe(o);
+            const b = dados.blocos.find((x) => x.id === o.bloco);
+            const cx = cdois.find((c) => c.chave === o.chave);
+            const portas = cx?.splitters?.length ? portasFinais(cx.splitters).length : 0;
+            const de = Math.min(o.atende_de, o.atende_ate), ate = Math.max(o.atende_de, o.atende_ate);
+            const aptos = (b ? Math.max(0, Math.min(ate, b.andares) - Math.max(de, 1) + 1) : 0) * (b?.aptos ?? 0);
+            const pct = aptos ? Math.round((portas / aptos) * 100) : null;
+            const sel = selCdoi === o.id;
+            return (
+              <div key={o.id} onClick={() => setSelCdoi(sel ? null : o.id)}
+                className={`flex cursor-pointer flex-wrap items-center gap-2 rounded-xl border p-2 transition-all ${sel ? "border-sky-400 bg-sky-50 shadow" : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"}`}>
+                <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ background: io.cor }} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-slate-800">{o.nome}</p>
+                  <p className="text-[11px] text-slate-500">{b?.nome} · {rotuloAndar(o.andar)}</p>
+                </div>
+                <label className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>atende
+                  <select value={de} onChange={(e) => setDados({ ...dados, pontos: dados.pontos.map((x) => (x.id === o.id ? { ...x, atende_de: +e.target.value, atende_ate: Math.max(+e.target.value, ate) } : x)) })} className="rounded border px-1 py-0.5">
+                    {b && andaresDoBloco(b).map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+                  </select>
+                  ao
+                  <select value={ate} onChange={(e) => setDados({ ...dados, pontos: dados.pontos.map((x) => (x.id === o.id ? { ...x, atende_ate: +e.target.value, atende_de: Math.min(+e.target.value, de) } : x)) })} className="rounded border px-1 py-0.5">
+                    {b && andaresDoBloco(b).map((a) => <option key={a} value={a}>{rotuloAndarCurto(a)}</option>)}
+                  </select>
+                </label>
+                {pct !== null && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${pct >= 50 ? "bg-emerald-600" : pct >= 30 ? "bg-amber-500" : "bg-red-600"}`} title={`${portas} portas para ${aptos} apartamentos (meta 50%)`}>{pct}% aptos</span>}
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: io.cor }}>{!io.existe ? "sem caixa" : io.aceso ? `${dbmCurto(io.pot)} dBm` : "sem sinal"}</span>
+                {onAbrirNoUnifilar && io.existe && <button type="button" onClick={(e) => { e.stopPropagation(); onAbrirNoUnifilar(o.chave); }} title="Abrir no Unifilar" className="rounded-lg p-1 text-slate-600 hover:bg-slate-100"><Network className="h-4 w-4" /></button>}
+                <button type="button" onClick={(e) => { e.stopPropagation(); void tirarCdoi(o.chave); }} title="Tirar do prédio" className="rounded-lg p-1 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* CDOI nova */}
       <div className="space-y-1.5 rounded-xl border border-slate-200 p-2">
