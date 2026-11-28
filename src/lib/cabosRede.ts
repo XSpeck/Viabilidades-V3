@@ -20,11 +20,28 @@ export interface FibraCabo {
   descricao?: string;
 }
 
+/** Um trecho do cabo entre duas caixas seguidas do caminho dele */
+export interface TrechoCaboRede {
+  /** Traçado no mapa (da caixa de antes até a de depois) */
+  pontos: { lat: number; lon: number }[];
+  /** Metros do trecho (vazio = pelo traçado) */
+  metros?: number;
+  /** Link no mesmo poste: sem traçado e sem reserva técnica */
+  mesmo_poste?: boolean;
+}
+
 export interface CaboRede {
   id: string;
   chave: string;
   nome: string;
   capacidade?: number;
+  /**
+   * Rede livre: as caixas por onde o cabo passa, em ordem (chaves). A primeira e a última são as pontas; as do
+   * meio, caixas onde ele passa (a fibra segue direto, a não ser que a caixa ligue algo nela: sangria).
+   */
+  caminho?: string[];
+  /** Um trecho entre cada duas caixas seguidas do caminho (caminho.length − 1) */
+  trechos?: TrechoCaboRede[];
   /** Tipo de cabo do cadastro de equipamentos (define capacidade e fibras por tubo) */
   tipo_id?: string;
   /** Só as fibras anotadas à mão (as demais seguem as rotas ou ficam livres) */
@@ -149,6 +166,8 @@ export async function listarCabos(): Promise<CaboRede[]> {
       capacidade: typeof data.capacidade === "number" && data.capacidade > 0 ? data.capacidade : undefined,
       tipo_id: data.tipo_id || undefined,
       fibras: Array.isArray(data.fibras) ? data.fibras : [],
+      caminho: Array.isArray(data.caminho) && data.caminho.length >= 2 ? data.caminho : undefined,
+      trechos: Array.isArray(data.trechos) && data.trechos.length ? data.trechos : undefined,
       obs: data.obs || undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
@@ -172,8 +191,11 @@ export async function salvarCabo(dados: Omit<CaboRede, "id" | "atualizado_em">):
     fibras,
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
+    // rede livre: só vai quando a tela mexe nisso (merge mantém o que já estava)
+    ...(dados.caminho ? { caminho: dados.caminho } : {}),
+    ...(dados.trechos ? { trechos: dados.trechos.map(gravarTrecho) } : {}),
   };
-  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() });
+  await setDoc(doc(db, COLECAO, id), { ...registro, atualizado_em: serverTimestamp() }, { merge: true });
   return {
     id,
     ...registro,
@@ -181,6 +203,15 @@ export async function salvarCabo(dados: Omit<CaboRede, "id" | "atualizado_em">):
     tipo_id: registro.tipo_id || undefined,
     obs: registro.obs || undefined,
     atualizado_em: new Date().toISOString(),
+  };
+}
+
+/** Trecho como vai para o banco (sem campos vazios) */
+function gravarTrecho(t: TrechoCaboRede): TrechoCaboRede {
+  return {
+    pontos: t.pontos.map((p) => ({ lat: p.lat, lon: p.lon })),
+    ...(t.metros !== undefined && Number.isFinite(t.metros) ? { metros: t.metros } : {}),
+    ...(t.mesmo_poste ? { mesmo_poste: true } : {}),
   };
 }
 

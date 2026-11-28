@@ -1,4 +1,5 @@
 import { chaveCabo } from "./cabosRede";
+import type { TipoElementoRota } from "./rotaOptica";
 // =====================
 // Diagrama interno das caixas (HUB, CTO, caixa de emenda), preenchido à mão na árvore PON.
 // Uma caixa é identificada pela mesma chave usada para juntar rotas (código PT ou nome),
@@ -24,10 +25,31 @@ export interface PortaCaixa {
   saida?: PontaFibra;
 }
 
+/**
+ * Lado do cabo numa caixa do meio do caminho dele (o cabo passa pela caixa): o trecho de antes ("ant", para o
+ * começo do cabo) ou o de depois ("seg", para o fim). Na ponta do cabo o lado é um só e não precisa ser dito.
+ */
+export type LadoCabo = "ant" | "seg";
+
 /** Uma fibra de um cabo */
 export interface PontaFibra {
   cabo: string;
   fibra: number;
+  /** Só numa caixa do meio do caminho do cabo: de que lado da caixa é esta fibra */
+  lado_cabo?: LadoCabo;
+}
+
+/** OLT: o cordão que sai de uma porta PON ("0/3/2") */
+export interface CordaoPon {
+  porta: string;
+  para: PontaFibra;
+}
+
+/** DIO: o adaptador N recebe uma fibra (o cordão) e entrega outra (a fibra N do cabo que sai) */
+export interface AdaptadorDio {
+  n: number;
+  de?: PontaFibra;
+  para?: PontaFibra;
 }
 
 /** Emenda (fusão) de uma fibra que chega com uma fibra que sai */
@@ -45,7 +67,7 @@ export interface RegraEmenda {
 /** De onde vem a fibra que entra num splitter da caixa */
 export interface EntradaSplitter {
   /** Uma fibra que chega na caixa (de uma rota) */
-  fibra?: { cabo: string; fibra: number };
+  fibra?: PontaFibra;
   /** Uma porta de outro splitter da mesma caixa (2º nível) */
   splitter?: { id: string; porta: number };
 }
@@ -65,6 +87,21 @@ export interface CaixaRede {
   id: string;
   chave: string;
   nome: string;
+  // ---- rede livre: o elemento em si (onde está e o que é) ----
+  tipo?: TipoElementoRota;
+  /** Código do ponto (a chave é PT:<código>) */
+  codigo?: string;
+  lat?: number;
+  lon?: number;
+  /** OLT ou DIO do cadastro de equipamentos */
+  equipamento_id?: string;
+  /** CDOI: o prédio onde ela fica */
+  predio_id?: string;
+  /** OLT: cordão de cada porta PON */
+  cordoes?: CordaoPon[];
+  /** DIO: o que liga em cada adaptador */
+  adaptadores?: AdaptadorDio[];
+  // ---- ligações dentro da caixa (Unifilar) ----
   /** Vários splitters (CTO com níveis). Quando existe, vale no lugar de splitter/portas. */
   splitters?: SplitterCaixa[];
   /** CEO: cabos emendados cor com cor */
@@ -227,6 +264,14 @@ export async function listarCaixas(): Promise<CaixaRede[]> {
       emendas: Array.isArray(data.emendas) && data.emendas.length ? data.emendas : undefined,
       atendimento: Array.isArray(data.atendimento) && data.atendimento.length ? data.atendimento : undefined,
       obs: data.obs || undefined,
+      tipo: data.tipo || undefined,
+      codigo: data.codigo || undefined,
+      lat: typeof data.lat === "number" ? data.lat : undefined,
+      lon: typeof data.lon === "number" ? data.lon : undefined,
+      equipamento_id: data.equipamento_id || undefined,
+      predio_id: data.predio_id || undefined,
+      cordoes: Array.isArray(data.cordoes) && data.cordoes.length ? data.cordoes : undefined,
+      adaptadores: Array.isArray(data.adaptadores) && data.adaptadores.length ? data.adaptadores : undefined,
       layout_unifilar: data.layout_unifilar && typeof data.layout_unifilar === "object" && Object.keys(data.layout_unifilar).length ? data.layout_unifilar : undefined,
       atualizado_por: data.atualizado_por,
       atualizado_em: isoDe(data.atualizado_em),
@@ -241,7 +286,25 @@ function gravarPorta(p: PortaCaixa): PortaCaixa {
     status: p.status,
     ...(p.descricao?.trim() ? { descricao: p.descricao.trim() } : {}),
     ...(p.status === "cliente" && p.cliente_id ? { cliente_id: p.cliente_id } : {}),
-    ...(p.status === "ramal" && p.saida ? { saida: { cabo: p.saida.cabo, fibra: p.saida.fibra } } : {}),
+    ...(p.status === "ramal" && p.saida ? { saida: gravarPonta(p.saida) } : {}),
+  };
+}
+
+/** Fibra como vai para o banco (o lado só numa caixa do meio do cabo) */
+export function gravarPonta(p: PontaFibra): PontaFibra {
+  return { cabo: p.cabo, fibra: p.fibra, ...(p.lado_cabo ? { lado_cabo: p.lado_cabo } : {}) };
+}
+
+/** O elemento em si (onde está, o que é, cordões e adaptadores): só os campos que vieram (merge mantém o resto) */
+function registroElemento(d: Omit<CaixaRede, "id" | "atualizado_em">) {
+  return {
+    ...(d.tipo ? { tipo: d.tipo } : {}),
+    ...(d.codigo ? { codigo: d.codigo } : {}),
+    ...(d.lat !== undefined && d.lon !== undefined ? { lat: d.lat, lon: d.lon } : {}),
+    ...(d.equipamento_id !== undefined ? { equipamento_id: d.equipamento_id } : {}),
+    ...(d.predio_id !== undefined ? { predio_id: d.predio_id } : {}),
+    ...(d.cordoes ? { cordoes: d.cordoes.map((c) => ({ porta: c.porta, para: gravarPonta(c.para) })) } : {}),
+    ...(d.adaptadores ? { adaptadores: d.adaptadores.map((a) => ({ n: a.n, ...(a.de ? { de: gravarPonta(a.de) } : {}), ...(a.para ? { para: gravarPonta(a.para) } : {}) })) } : {}),
   };
 }
 
@@ -268,7 +331,7 @@ export function registroCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">) {
     id: x.id,
     relacao: x.relacao,
     modelo_id: x.modelo_id ?? "",
-    entrada: x.entrada.fibra ? { fibra: x.entrada.fibra } : x.entrada.splitter ? { splitter: x.entrada.splitter } : {},
+    entrada: x.entrada.fibra ? { fibra: gravarPonta(x.entrada.fibra) } : x.entrada.splitter ? { splitter: x.entrada.splitter } : {},
     portas: portasPara(x.relacao, x.portas).map((p) => (gravarPorta(p))),
   }));
   const registro = {
@@ -276,7 +339,7 @@ export function registroCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">) {
     nome: dados.nome,
     splitters,
     regras_emenda: (dados.regras_emenda ?? []).map((x) => ({ de: x.de, para: x.para })),
-    emendas: (dados.emendas ?? []).map((x) => ({ de: { cabo: x.de.cabo, fibra: x.de.fibra }, para: { cabo: x.para.cabo, fibra: x.para.fibra } })),
+    emendas: (dados.emendas ?? []).map((x) => ({ de: gravarPonta(x.de), para: gravarPonta(x.para) })),
     atendimento: (dados.atendimento ?? [])
       .filter((p) => p.status !== "livre" || p.descricao?.trim())
       .map((p) => (gravarPorta(p))),
@@ -285,6 +348,7 @@ export function registroCaixa(dados: Omit<CaixaRede, "id" | "atualizado_em">) {
     portas,
     obs: dados.obs?.trim() ?? "",
     atualizado_por: dados.atualizado_por ?? "",
+    ...registroElemento(dados),
   };
   const caixa: CaixaRede = { id, ...registro, layout_unifilar: dados.layout_unifilar, splitters: splitters.length ? splitters : undefined,
     regras_emenda: registro.regras_emenda.length ? registro.regras_emenda : undefined,

@@ -31,6 +31,7 @@ import { montarRotas, subRotasDe } from "@/lib/subRotas";
 import { listarClientes, type ClienteRede } from "@/lib/clientesRede";
 import ClientesRede from "@/components/rota-optica/ClientesRede";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
+import { apagarRedeDesenhada, contarRedeDesenhada } from "@/lib/redeLivre";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
@@ -278,6 +279,25 @@ export default function RotaOpticaPage() {
     }
   }
 
+  /** Apaga o que está desenhado (elementos, cabos, prédios) para redesenhar na rede livre; as rotas antigas ficam */
+  async function comecarRedeNova() {
+    try {
+      const n = await contarRedeDesenhada();
+      const ok1 = await confirmar(
+        `Isto apaga tudo o que está desenhado: ${n.caixas_rede} caixa(s), ${n.cabos_rede} cabo(s) e ${n.predios_rede} prédio(s), com splitters, emendas e clientes nas portas. As rotas antigas ficam guardadas, mas o sistema não as usa mais. Não tem volta.`,
+        { titulo: "Começar rede nova", ok: "Continuar", perigo: true },
+      );
+      if (!ok1) return;
+      const ok2 = await confirmar("Última confirmação: apagar a rede desenhada agora?", { titulo: "Começar rede nova", ok: "Apagar tudo", perigo: true });
+      if (!ok2) return;
+      const total = await apagarRedeDesenhada();
+      await avisar(`Pronto: ${total} registro(s) apagado(s). A página vai recarregar.`, { titulo: "Rede nova" });
+      window.location.reload();
+    } catch (e) {
+      await avisar(e instanceof Error ? e.message : "Não foi possível apagar.", { titulo: "Começar rede nova" });
+    }
+  }
+
   return (
     <JanelasProvider>
     <div className="space-y-5">
@@ -334,6 +354,13 @@ export default function RotaOpticaPage() {
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
                   <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void comecarRedeNova(); }}
+                  className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Começar rede nova
                 </button>
               </div>
             </details>
