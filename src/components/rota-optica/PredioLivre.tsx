@@ -15,6 +15,7 @@ import { andaresDoBloco, listarPredios, novoId, rotuloAndar, rotuloAndarCurto, s
 import { proximoCodigoElemento } from "@/lib/redeLivre";
 import { RELACOES_SPLITTER } from "@/lib/catalogoRede";
 import { formatDbm } from "@/lib/rotaOptica";
+import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
 import type { SinalRede } from "@/lib/sinalRede";
 
 interface Props {
@@ -153,34 +154,55 @@ export default function PredioLivre({ predio, caixas, cabos, catalogo, sinal, us
         <button type="button" onClick={() => setDados({ ...dados, blocos: [...dados.blocos, { id: novoId(), nome: `Bloco ${String.fromCharCode(65 + dados.blocos.length)}`, andares: 10, subsolos: 0, aptos: 4 }] })} className="flex items-center gap-1 text-indigo-700"><Plus className="h-3.5 w-3.5" /> bloco</button>
       </div>
 
-      {/* desenho: um bloco por coluna, andar por andar, com as CDOIs */}
-      <div className="flex gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
-        {dados.blocos.map((b) => (
-          <div key={b.id} className="min-w-[180px]">
-            <p className="mb-1 text-center font-semibold">{b.nome}</p>
-            <div className="flex flex-col-reverse gap-0.5">
-              {andaresDoBloco(b).map((a) => {
-                const aqui = dados.pontos.filter((o) => o.bloco === b.id && o.andar === a);
-                return (
-                  <div key={a} className={`flex min-h-[22px] items-center gap-1 rounded border px-1.5 ${a === 0 ? "border-slate-400 bg-white" : "border-slate-200 bg-white/70"}`}>
-                    <span className="w-8 shrink-0 text-[10px] text-slate-500">{rotuloAndarCurto(a)}</span>
-                    {aqui.map((o) => {
-                      const s = sinalDa(o.chave);
-                      const existe = cdois.some((c) => c.chave === o.chave);
-                      return (
-                        <span key={o.id} className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold ${!existe ? "bg-red-100 text-red-700" : s.pon ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`} title={s.pon ? `${s.pon} · ${formatDbm(s.pot)}` : "sem sinal"}>
-                          {o.nome}{s.pot !== undefined ? ` · ${formatDbm(s.pot)}` : ""}
-                          {onAbrirNoUnifilar && existe && <button type="button" onClick={() => onAbrirNoUnifilar(o.chave)} title="Abrir no Unifilar"><Network className="h-3 w-3" /></button>}
-                          <button type="button" onClick={() => void tirarCdoi(o.chave)} title="Tirar do prédio"><Trash2 className="h-3 w-3" /></button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+      {/* desenho: um prédio por bloco, andar por andar; janelas acesas onde a CDOI do andar tem sinal */}
+      <style>{`@keyframes fh-pulso { 0% { transform: scale(.85); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } } .fh-pulso { animation: fh-pulso 2s ease-out infinite; } @media (prefers-reduced-motion: reduce) { .fh-pulso { animation: none; } }`}</style>
+      <div className="flex items-end gap-5 overflow-x-auto rounded-2xl bg-gradient-to-b from-sky-100 via-sky-50 to-white p-4 pb-0 ring-1 ring-slate-200">
+        {dados.blocos.map((b) => {
+          // andares atendidos por uma CDOI com sinal (as janelas acendem)
+          const acesos = new Set<number>();
+          dados.pontos.filter((o) => o.bloco === b.id && sinalDa(o.chave).pon).forEach((o) => {
+            for (let a = Math.min(o.atende_de, o.atende_ate); a <= Math.max(o.atende_de, o.atende_ate); a++) acesos.add(a);
+          });
+          return (
+            <div key={b.id} className="flex min-w-[190px] flex-col items-center">
+              <p className="mb-1.5 rounded-full bg-slate-800 px-3 py-0.5 text-[11px] font-bold text-white shadow">{b.nome}</p>
+              {/* telhado */}
+              <div className="h-0 w-0 border-x-[96px] border-b-[18px] border-x-transparent border-b-slate-600" />
+              <div className="flex w-[192px] flex-col-reverse rounded-b-sm border-x-4 border-slate-600 bg-gradient-to-b from-slate-200 to-slate-300 shadow-xl">
+                {andaresDoBloco(b).map((a) => {
+                  const aqui = dados.pontos.filter((o) => o.bloco === b.id && o.andar === a);
+                  const luz = acesos.has(a);
+                  return (
+                    <div key={a} className={`relative flex min-h-[26px] items-center gap-1 border-t border-slate-400/50 px-1.5 ${a < 0 ? "bg-slate-400/60" : a === 0 ? "bg-slate-100" : ""}`}>
+                      <span className="w-6 shrink-0 text-[9px] font-bold text-slate-500">{rotuloAndarCurto(a)}</span>
+                      <div className="flex flex-1 gap-1">
+                        {a >= 0 && Array.from({ length: Math.min(b.aptos, 6) }, (_, k) => (
+                          <span key={k} className={`h-3 flex-1 rounded-[2px] border transition-colors duration-500 ${luz ? "border-amber-400 bg-amber-200 shadow-[0_0_6px_rgba(251,191,36,.8)]" : "border-slate-400 bg-sky-900/30"}`} />
+                        ))}
+                      </div>
+                      {aqui.map((o) => {
+                        const sd = sinalDa(o.chave);
+                        const existe = cdois.some((c) => c.chave === o.chave);
+                        const cor = !existe ? "#dc2626" : sd.pon ? COR_NIVEL[nivelPotencia(sd.pot)] : "#64748b";
+                        return (
+                          <span key={o.id} className="group absolute -right-2 z-10 flex translate-x-full items-center gap-1 whitespace-nowrap rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg" style={{ background: cor }} title={sd.pon ? `${sd.pon} · ${formatDbm(sd.pot)}` : "sem sinal"}>
+                            {sd.pon && <span className="fh-pulso pointer-events-none absolute inset-0 rounded-lg" style={{ boxShadow: `0 0 0 2px ${cor}` }} />}
+                            {o.nome}{sd.pot !== undefined ? ` · ${formatDbm(sd.pot)}` : ""}
+                            {onAbrirNoUnifilar && existe && <button type="button" onClick={() => onAbrirNoUnifilar(o.chave)} title="Abrir no Unifilar" className="rounded p-0.5 hover:bg-white/20"><Network className="h-3 w-3" /></button>}
+                            <button type="button" onClick={() => void tirarCdoi(o.chave)} title="Tirar do prédio" className="rounded p-0.5 hover:bg-white/20"><Trash2 className="h-3 w-3" /></button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* chão */}
+              <div className="h-2 w-[230px] rounded-t bg-gradient-to-b from-emerald-600 to-emerald-800" />
             </div>
-          </div>
-        ))}
+          );
+        })}
+        <div className="w-40 shrink-0" />
       </div>
 
       {/* CDOI nova */}

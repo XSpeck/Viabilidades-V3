@@ -659,6 +659,7 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
 
   return (
     <div className={`rolagem-escura overflow-hidden border border-slate-800 bg-[#16181c] text-slate-200 ${cheia ? "fixed inset-0 z-50 flex flex-col" : "rounded-2xl"}`}>
+      <style>{`@keyframes fh-fluxo { to { stroke-dashoffset: -30; } } .fh-fluxo { stroke-dasharray: 3 12; animation: fh-fluxo 1.2s linear infinite; } @media (prefers-reduced-motion: reduce) { .fh-fluxo { animation: none; } }`}</style>
       {/* Barra */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-[#0f1115] px-3 py-2 text-xs">
         <div className="relative">
@@ -777,13 +778,16 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                       const cor = f ? corFibra(f.fibra, f.cabo).hex : "#4ade80";
                       const sug = l.origem === "rota" && l.tipo === "fusao";
                       const corL = l.tipo === "cordao" ? "#facc15" : cor;
+                      // tem luz passando: a fibra dela tem sinal
+                      const acesa = !!f && !!m.cabos.find((c) => c.lado === f.lado && c.chave === chaveCabo(f.cabo))?.sinal.has(f.fibra);
                       return (
                         <g key={l.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (moveu.current) return; if (modo === "navegar") clicarPonto(cx.chave, l.a); else setSelLig(sl ? null : { chave: cx.chave, id: l.id }); }}>
                           <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                           {(tr || sl) && <path d={d} fill="none" stroke={tr ? LAR : "#facc15"} strokeWidth={6} opacity={0.85} strokeLinecap="round" />}
                           {l.tipo === "passa" ? <path d={d} fill="none" stroke="#94a3b8" strokeWidth={1.6} strokeDasharray="5 4" />
                             : sug ? <path d={d} fill="none" stroke="#fbbf24" strokeWidth={1.6} strokeDasharray="2 3" />
-                              : <><path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.6} /><path d={d} fill="none" stroke={corL} strokeWidth={l.tipo === "cordao" ? 2.6 : 1.9} opacity={l.origem === "regra" ? 0.6 : 1} /></>}
+                              : <>{acesa && <path d={d} fill="none" stroke={corL} strokeWidth={7} opacity={0.18} strokeLinecap="round" />}<path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.6} /><path d={d} fill="none" stroke={corL} strokeWidth={l.tipo === "cordao" ? 2.6 : 1.9} opacity={l.origem === "regra" ? 0.6 : 1} /></>}
+                          {acesa && <path d={d} fill="none" stroke="#ffffff" strokeWidth={1.1} opacity={0.85} strokeLinecap="round" className="fh-fluxo" pointerEvents="none" />}
                         </g>
                       );
                     })}
@@ -922,7 +926,9 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
                           ) : (
                             <>
                               <path d={d} fill="none" stroke="#0b0d10" strokeWidth={b.oculto ? 4.2 : 3.4} />
+                              <path d={d} fill="none" stroke={cf.hex} strokeWidth={8} opacity={0.15} strokeLinecap="round" />
                               <path d={d} fill="none" stroke={cf.hex} strokeWidth={b.oculto ? 2.6 : 1.9} />
+                              <path d={d} fill="none" stroke="#ffffff" strokeWidth={1.1} opacity={0.85} strokeLinecap="round" className="fh-fluxo" pointerEvents="none" />
                             </>
                           )}
                         </g>
