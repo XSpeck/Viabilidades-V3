@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Save } from "lucide-react";
 import { CALCULO_PADRAO, capacidadeDoCabo, capacidadeRegistrada, corFibra, tipoVisual, type RotaOptica } from "@/lib/rotaOptica";
 import { chaveElemento, type NoArvore } from "@/lib/arvorePon";
 import {
   portasFinais,
-  salvarCaixa,
   splittersDaCaixa,
-  type CaixaRede,
-  type PortaCaixa,
   type SplitterCaixa,
   type StatusPorta,
 } from "@/lib/caixasRede";
@@ -28,8 +23,8 @@ interface Props {
   no: NoArvore;
   rotas: RotaOptica[];
   modelos: ItemCatalogo[];
-  usuario: string;
-  onSalva: (c: CaixaRede) => void;
+  /** Abre a CT na aba Unifilar (cliente de cada fibra; a porta da CTO se liga na CTO) */
+  onAbrirUnifilar?: () => void;
 }
 
 const ROW = 22;
@@ -50,7 +45,7 @@ function nivel(v?: number) {
   return "#dc2626";
 }
 
-export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props) {
+export default function CaixaCt({ no, rotas, modelos, onAbrirUnifilar }: Props) {
   const ct = no.elemento;
   const chave = chaveElemento(ct);
   const cabo = ct.cabo_entrada ?? "";
@@ -60,9 +55,6 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
   while (cto && tipoVisual(cto.elemento) !== "cto" && cto.elemento.tipo !== "olt") cto = cto.pai;
   if (cto && tipoVisual(cto.elemento) !== "cto") cto = null;
 
-  const [editando, setEditando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
 
   // ---------- Fibras do cabo que chega na CT ----------
   const usadas = new Map<number, { pot?: number; rota: string }>();
@@ -91,11 +83,12 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
   const finaisCto = portasFinais(splsCto);
   const nomeSpl = (id: string) => `S${splsCto.findIndex((x) => x.id === id) + 1}`;
   const rotuloPortaCto = (id: string, p: number) => (splsCto.length > 1 ? `${nomeSpl(id)}·${p}` : `P${p}`);
-  const textoRamal = (f: number) => `${ct.nome} · ${caboCurto(cabo)} F${f}`;
   /** Porta da CTO que alimenta a fibra f (porta Ramal marcada para esta CT nesta fibra) */
   const origemSalva = (f: number) =>
     finaisCto.find(({ porta }) => {
-      if (porta.status !== "ramal" || !porta.descricao) return false;
+      if (porta.status !== "ramal") return false;
+      if (porta.saida) return !!cabo && chaveCabo(porta.saida.cabo) === chaveCabo(cabo) && porta.saida.fibra === f;
+      if (!porta.descricao) return false;
       const d = norm(porta.descricao);
       return d.includes(norm(curto(ct.nome, 60))) && new RegExp(`\\bf${f}$`).test(d);
     });
@@ -107,8 +100,7 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
       const a = no.caixa?.atendimento?.find((x) => x.numero === f);
       return { fibra: f, origem: o ? `${o.spl.id}|${o.porta.numero}` : "", status: (a?.status ?? "livre") as StatusPorta, descricao: a?.descricao ?? "" };
     });
-  const [linhas, setLinhas] = useState(inicial);
-  const set = (f: number, m: Partial<(typeof linhas)[number]>) => setLinhas((l) => l.map((x) => (x.fibra === f ? { ...x, ...m } : x)));
+  const linhas = inicial();
 
   // ---------- Potência na CT ----------
   const dist = ct.distancia_m ?? 0;
@@ -126,67 +118,10 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
   const pots = linhas.filter((l) => l.origem).map((l) => potFibra(l.fibra)).filter((v): v is number => v !== undefined);
   const pior = pots.length ? Math.min(...pots) : undefined;
 
-  async function salvar() {
-    setSalvando(true);
-    setErro(null);
-    try {
-      // 1) CT: clientes de cada fibra
-      const atendimento: PortaCaixa[] = linhas.map((l) => ({ numero: l.fibra, status: l.status, descricao: l.descricao || undefined }));
-      const c = no.caixa;
-      const salvaCt = await salvarCaixa({
-        chave, nome: ct.nome, splitter: c?.splitter, splitter_modelo: c?.splitter_modelo, portas: c?.portas ?? [],
-        splitters: c?.splitters, regras_emenda: c?.regras_emenda, emendas: c?.emendas, obs: c?.obs, atendimento, atualizado_por: usuario,
-      });
-      onSalva(salvaCt);
-      // 2) CTO: a porta escolhida vira Ramal para esta CT; a que deixou de ser usada volta a livre
-      if (cto && splsCto.length) {
-        const escolhidas = new Map(linhas.filter((l) => l.origem).map((l) => [l.origem, l.fibra]));
-        let mudou = false;
-        const novos = splsCto.map((s) => {
-          const total = parseInt(s.relacao.split(":")[1] ?? "0", 10) || 0;
-          const portas: PortaCaixa[] = Array.from({ length: total }, (_, i) => s.portas.find((p) => p.numero === i + 1) ?? { numero: i + 1, status: "livre" as StatusPorta });
-          return {
-            ...s,
-            portas: portas.map((p) => {
-              const k = `${s.id}|${p.numero}`;
-              const f = escolhidas.get(k);
-              if (f) {
-                const d = textoRamal(f);
-                if (p.status !== "ramal" || p.descricao !== d) { mudou = true; return { numero: p.numero, status: "ramal" as StatusPorta, descricao: d }; }
-                return p;
-              }
-              // estava ligada nesta CT e não está mais
-              if (p.status === "ramal" && p.descricao && norm(p.descricao).includes(norm(curto(ct.nome, 60))) && /\bf\d+$/.test(norm(p.descricao))) {
-                mudou = true;
-                return { numero: p.numero, status: "livre" as StatusPorta };
-              }
-              return p;
-            }),
-          };
-        });
-        if (mudou) {
-          const cc = cto.caixa;
-          const salvaCto = await salvarCaixa({
-            chave: chaveElemento(cto.elemento), nome: cto.elemento.nome,
-            splitters: novos, splitter: novos[0]?.relacao, splitter_modelo: novos[0]?.modelo_id, portas: novos[0]?.portas ?? [],
-            regras_emenda: cc?.regras_emenda, emendas: cc?.emendas, atendimento: cc?.atendimento, obs: cc?.obs, atualizado_por: usuario,
-          });
-          onSalva(salvaCto);
-        }
-      }
-      setEditando(false);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
   // ---------- Desenho ----------
   const H = TOPO + fibras.length * ROW + 10;
   const xCto = 8, wCto = 92, xCt = 262, wCt = 34;
   const Y = (i: number) => TOPO + i * ROW + ROW / 2;
-  const campo = "rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px]";
 
   return (
     <div className="p-3 space-y-3">
@@ -194,11 +129,9 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
         <p className="text-[11px] text-slate-500">
           {cto ? <>Extensão da <b>{curto(cto.elemento.nome, 26)}</b>: portas dela seguem pelo cabo até aqui.</> : "Não há CTO antes desta CT na rota."}
         </p>
-        {!editando && (
-          <button type="button" onClick={() => { setLinhas(inicial()); setEditando(true); }} className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-neutral-400">
-            ✎ Editar
-          </button>
-        )}
+        <button type="button" onClick={onAbrirUnifilar} disabled={!onAbrirUnifilar} className="ml-auto shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-40" title="Cliente de cada fibra e a porta da CTO se mudam na aba Unifilar">
+          Abrir no Unifilar
+        </button>
       </div>
 
       <div className="grid grid-cols-4 gap-1.5">
@@ -267,49 +200,10 @@ export default function CaixaCt({ no, rotas, modelos, usuario, onSalva }: Props)
         </svg>
       </div>
 
-      {editando && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] text-slate-500">Para cada fibra do cabo: qual porta da CTO ela leva e quem ela atende aqui na CT.</p>
-          {linhas.map((l) => {
-            const ocupadas = new Set(linhas.filter((x) => x.fibra !== l.fibra && x.origem).map((x) => x.origem));
-            return (
-              <div key={l.fibra} className="flex items-center gap-1">
-                <span className="w-8 shrink-0 rounded border border-slate-300 bg-white py-0.5 text-center text-[10px] font-bold" style={{ boxShadow: `inset 3px 0 0 ${corFibra(l.fibra, cabo).hex}` }}>F{l.fibra}</span>
-                <select className={`${campo} w-28`} value={l.origem} onChange={(e) => set(l.fibra, { origem: e.target.value })} disabled={!cto}>
-                  <option value="">porta da CTO…</option>
-                  {finaisCto.map(({ spl, porta }) => {
-                    const k = `${spl.id}|${porta.numero}`;
-                    // ocupada: outra fibra desta CT já usa, ou a porta tem cliente / é ramal para outro lugar
-                    const desta = porta.status === "ramal" && norm(porta.descricao ?? "").includes(norm(curto(ct.nome, 60)));
-                    const ocupada = ocupadas.has(k) || porta.status === "cliente" || (porta.status === "ramal" && !desta);
-                    return (
-                      <option key={k} value={k} disabled={ocupada}>
-                        {rotuloPortaCto(spl.id, porta.numero)} {dbm(potCto.get(k))}{ocupada ? " (ocupada)" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                <div className="flex shrink-0 rounded border border-slate-200 bg-slate-50 p-0.5">
-                  {(["livre", "cliente"] as const).map((st) => (
-                    <button key={st} type="button" onClick={() => set(l.fibra, { status: st })} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${l.status === st ? (st === "cliente" ? "bg-sky-600 text-white" : "bg-white text-slate-600") : "text-slate-500"}`}>
-                      {st === "livre" ? "Livre" : "Cliente"}
-                    </button>
-                  ))}
-                </div>
-                <input className={`${campo} min-w-0 flex-1`} disabled={l.status === "livre"} value={l.descricao} onChange={(e) => set(l.fibra, { descricao: e.target.value })} placeholder={l.status === "cliente" ? "Cliente / login" : "livre"} />
-              </div>
-            );
-          })}
-          {!splsCto.length && cto && <p className="text-[11px] text-amber-700">A CTO ainda não tem splitter: cadastre na aba CTO dela para ligar as portas aqui.</p>}
-          {erro && <p className="text-xs text-red-600">{erro}</p>}
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => { setEditando(false); setErro(null); }} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">Cancelar</button>
-            <button type="button" disabled={salvando} onClick={salvar} className="flex items-center gap-1 rounded-lg bg-neutral-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-60">
-              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar CT
-            </button>
-          </div>
-        </div>
-      )}
+      <p className="text-[11px] text-slate-500">
+        No Unifilar: a porta da CTO que desce para cada fibra se liga na <b>CTO</b> (Editar conexões, porta → fibra do cabo),
+        e o cliente de cada fibra se marca na <b>CT</b> (Clientes nas portas).
+      </p>
     </div>
   );
 }

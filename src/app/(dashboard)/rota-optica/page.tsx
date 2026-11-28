@@ -90,6 +90,8 @@ export default function RotaOpticaPage() {
   const [vista, setVista] = useState<"arvore" | "mapa" | "unifilar">("arvore");
   /** Caixa que a aba Unifilar abre (vindo de outra tela); n muda a cada pedido */
   const [uniInicial, setUniInicial] = useState<{ chave: string; n: number } | null>(null);
+  /** Muda para o editor reabrir do zero (depois de uma troca de fibra gravada) */
+  const [versaoEditor, setVersaoEditor] = useState(0);
   /** Janela "Como funciona" */
   const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
@@ -187,6 +189,24 @@ export default function RotaOpticaPage() {
         ? [...rs.filter((x) => x.id !== id), rs.find((x) => x.id === id)!]
         : [...rs, { id, x: Math.max(8, (window.innerWidth - 980) / 2) + (rs.length % 4) * 24, y: 48 + (rs.length % 4) * 24 }]
     );
+  }
+
+  /** Troca de fibra feita de dentro do editor: grava rotas, então o editor reabre com a rota gravada */
+  async function editorRegravado() {
+    const id = modo.tipo === "editar" ? modo.rota?.id : undefined;
+    const lista = await listarRotas();
+    setRotas(lista);
+    const montadas = montarRotas(lista, (x) => (x ? catalogo.find((c) => c.id === x)?.perda_db : undefined));
+    if (id) setModo({ tipo: "editar", rota: montadas.find((r) => r.id === id) ?? null });
+    setVersaoEditor((v) => v + 1);
+  }
+
+  /** Abre uma rota no editor (mapa) */
+  function editarRota(id: string) {
+    const r = rotas.find((x) => x.id === id);
+    if (!r) return;
+    setRotasAbertas((rs) => rs.filter((x) => x.id !== id));
+    setModo({ tipo: "editar", rota: r });
   }
 
   /** Leva a caixa para a aba Unifilar (onde se muda o que tem dentro dela) */
@@ -325,6 +345,7 @@ export default function RotaOpticaPage() {
 
       {modo.tipo === "editar" && (
         <RotaEditor
+          key={`${modo.rota?.id ?? "nova"}-${versaoEditor}`}
           inicial={modo.rota}
           usuario={user?.nome ?? ""}
           catalogo={catalogo}
@@ -338,6 +359,7 @@ export default function RotaOpticaPage() {
           onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
           onSalvarParcial={modo.rota ? async (d) => { await atualizarRota(modo.rota!.id, d); await recarregar(); } : undefined}
           caixas={caixas}
+          onRotasRegravadas={editorRegravado}
           onAbrirNoUnifilar={(k) => { if (confirm("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.")) abrirNoUnifilar(k); }}
         />
       )}
@@ -486,6 +508,7 @@ export default function RotaOpticaPage() {
             onAbrirRota={abrirRota}
             onRotasMudaram={recarregar}
             onAbrirNoUnifilar={abrirNoUnifilar}
+            onEditarRota={editarRota}
           />
           )}
           </div>

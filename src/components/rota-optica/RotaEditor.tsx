@@ -32,7 +32,8 @@ import PaletaFerramentas from "./editor/PaletaFerramentas";
 import CartaoPredio from "./editor/CartaoPredio";
 import BarraTopo from "./editor/BarraTopo";
 import { comparavel, elementoDaLinha, garantirCodigosCabos } from "./editor/salvar";
-import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, type CaboRede } from "@/lib/cabosRede";
+import { chaveCabo, codigoDoCabo, comCodigo, normalizar, proximoCodigoCabo, salvarCabo, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
+import QuadroCabo from "./QuadroCabo";
 import { aplicarNaRota, caboComCodigoNovo, rotasComCabo, rotasComCaixa, type MudancaGlobal } from "@/lib/compartilhados";
 import { lerPortaOlt, numeracaoOlt, resumoItem, textoPortaOlt, type ItemCatalogo } from "@/lib/catalogoRede";
 import type { Ferramenta, PontoEditor, PontoRede } from "./RotaEditorMapa";
@@ -98,9 +99,13 @@ interface Props {
   caixas?: CaixaRede[];
   /** Abre a caixa na aba Unifilar (fecha o editor) */
   onAbrirNoUnifilar?: (chave: string) => void;
+  /** Troca de fibra gravou rotas: recarregar e reabrir o editor */
+  onRotasRegravadas?: () => void;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar, onRotasRegravadas }: Props) {
+  /** Painel do cabo (tipo, capacidade, observação, fibras e troca de fibra) aberto para o elemento i */
+  const [painelCabo, setPainelCabo] = useState<number | null>(null);
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
   const trechosFixos: TrechoCabo[] = [];
   const [nome, setNome] = useState(inicial?.nome ?? "");
@@ -2053,6 +2058,11 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
                       ) : !/^Cordão /i.test(l.cabo_entrada) && (
                         <span className="shrink-0 rounded border border-dashed border-slate-300 px-1 text-[10px] text-slate-400" title="O código do cabo é gerado ao salvar a rota">código ao salvar</span>
                       )}
+                      {codigoDoCabo(l.cabo_entrada) && (
+                        <button type="button" onClick={() => setPainelCabo(i)} className="shrink-0 rounded border border-indigo-200 bg-indigo-50 px-1.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tipo, capacidade, observação, fibras e troca de fibra deste cabo">
+                          Cabo
+                        </button>
+                      )}
                       {caboTravado ? (
                         <span className="shrink-0 px-1 text-slate-400" title="Cabo compartilhado: use Editar em todas">🔒</span>
                       ) : (
@@ -2539,6 +2549,45 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
           </div>
         </aside>
       </div>
+
+      {/* Painel do cabo */}
+      {painelCabo !== null && linhas[painelCabo] && (() => {
+        const l = linhas[painelCabo];
+        const k = chaveCabo(l.cabo_entrada);
+        const usos = usoDasFibras(todas ?? rede).get(k);
+        return (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setPainelCabo(null)}>
+            <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 bg-indigo-900 px-4 py-3 text-white">
+                <IconeCabo tamanho={22} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{semCodigo(l.cabo_entrada)}</p>
+                  <p className="text-[11px] text-indigo-200">Cabo {codigoDoCabo(l.cabo_entrada)} · vale em todas as rotas que usam este cabo</p>
+                </div>
+                <button type="button" onClick={() => setPainelCabo(null)} className="rounded p-1 hover:bg-white/10" aria-label="Fechar">✕</button>
+              </div>
+              <div className="min-h-0 overflow-y-auto">
+                <QuadroCabo
+                  chave={k}
+                  nome={l.cabo_entrada}
+                  cabo={cabos.find((c) => c.chave === k)}
+                  uso={usos?.fibras ?? new Map()}
+                  fibraDestaque={+l.fibra_entrada || undefined}
+                  tipos={tiposDeCabo}
+                  usuario={usuario}
+                  onSalva={(c) => { onCaboSalvo(c); setTiposCabo((t) => ({ ...t, [k]: c.tipo_id ?? "" })); }}
+                  onFechar={() => setPainelCabo(null)}
+                  onAbrirRota={() => setAviso("Para ver outra rota, salve ou cancele esta primeiro.")}
+                  semMoldura
+                  rotas={todas ?? rede}
+                  antesDeTrocar={() => confirm("A troca de fibra grava as rotas escolhidas na hora. O que você mudou aqui e ainda não salvou se perde (o editor reabre com a rota gravada). Continuar?")}
+                  onRotasMudaram={() => { setPainelCabo(null); onRotasRegravadas?.(); }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Editar em todas as rotas */}
       {editarTodas && (() => {

@@ -38,6 +38,8 @@ interface Props {
   onRotasMudaram?: () => void;
   /** Abre a caixa na aba Unifilar (a árvore só mostra) */
   onAbrirNoUnifilar?: (chave: string) => void;
+  /** Abre uma rota no editor (mapa) */
+  onEditarRota?: (id: string) => void;
 }
 
 /** Janela aberta sobre a árvore (posição inicial na tela). */
@@ -94,7 +96,7 @@ function layout(a: ArvorePon) {
   return { y, livres, linhas: Math.max(linha, 1), maxD };
 }
 
-export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram, clientes = [], onAbrirNoUnifilar }: Props) {
+export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario, onCaixaSalva, onCaboSalvo, onAbrirRota, onRotasMudaram, clientes = [], onAbrirNoUnifilar, onEditarRota }: Props) {
   /** Prédios: agrupam as CDOIs na árvore e entram como destino das fibras de um cabo */
   const [predios, setPredios] = useState<PredioRede[]>([]);
   useEffect(() => {
@@ -544,8 +546,13 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
                 onFechar={() => fecharJanela(j.id)}
                 onAbrirRota={onAbrirRota}
                 semMoldura
-                rotas={rotas}
-                onRotasMudaram={onRotasMudaram}
+                soLeitura
+                onEditarNoMapa={onEditarRota ? () => {
+                  // a rota que usa este cabo por conta própria (não herdado do tronco)
+                  const usos = [...(usoFibras.get(k)?.fibras.values() ?? [])].flat();
+                  const u = usos.find((x) => !x.herdado) ?? usos[0];
+                  if (u) onEditarRota(u.rotaId);
+                } : undefined}
               />
             </Janela>
           );
@@ -589,7 +596,7 @@ export default function ArvorePonView({ rotas, caixas, cabos, catalogo, usuario,
 
 /** Conteúdo da janela de um elemento: abas Diagrama (splitter/portas) e Caminho (desde a OLT). */
 function JanelaNo({
-  no, rotas, todasRotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onAbrirNo, onRotasMudaram, onAbrirNoUnifilar,
+  no, rotas, todasRotas, caixas, catalogo, usuario, onAbrirRota, onAbrirNo, onRotasMudaram, onAbrirNoUnifilar,
 }: {
   onAbrirNoUnifilar?: (chave: string) => void;
   onVerFibra?: (cabo: string, fibra: number) => void;
@@ -659,7 +666,7 @@ function JanelaNo({
       ) : aba === "dio" ? (
         <CaixaDio no={no} rotas={todasRotas} catalogo={catalogo} />
       ) : aba === "ct" ? (
-        <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} usuario={usuario} onSalva={onCaixaSalva} />
+        <CaixaCt key={`ct-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} modelos={catalogo.filter((m) => m.categoria === "splitter")} onAbrirUnifilar={abrirUnifilar} />
       ) : aba === "ceo" ? (
         <CaixaCeo key={`ceo-${chaveElemento(no.elemento)}-${no.caixa?.atualizado_em ?? ""}`} no={no} rotas={todasRotas} onAbrirUnifilar={abrirUnifilar} />
       ) : aba === "cto" || aba === "cdoi" ? (

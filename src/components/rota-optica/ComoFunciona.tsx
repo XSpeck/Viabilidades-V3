@@ -12,7 +12,7 @@ const PASSOS = [
     titulo: "Mapa da rota",
     onde: "botão “Nova rota” ou “Editar” na janela da rota",
     serve: "Onde as coisas estão e por onde a fibra passa.",
-    edita: ["caixas e a posição de cada uma", "cabos e o traçado nos postes", "a fibra que cada rota usa", "OLT, porta PON e DIO da estação", "prédios (blocos, andares e CDOIs)"],
+    edita: ["caixas e a posição de cada uma", "cabos e o traçado nos postes", "botão Cabo: tipo, capacidade, observação e troca de fibra em várias rotas", "a fibra que cada rota usa", "OLT, porta PON e DIO da estação", "prédios (blocos, andares e CDOIs)"],
     Icone: Pencil,
     cor: "border-indigo-200 bg-indigo-50 text-indigo-900",
   },
@@ -30,7 +30,7 @@ const PASSOS = [
     titulo: "Unifilar",
     onde: "aba Unifilar",
     serve: "O que tem dentro de cada caixa, ligação por ligação.",
-    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal", "cliente em cada porta", "adaptador do DIO de cada rota"],
+    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal (porta da CTO → CT)", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO de cada rota"],
     Icone: Cable,
     cor: "border-slate-700 bg-[#16181c] text-slate-100",
   },
@@ -41,7 +41,7 @@ const OLHAR = [
   { titulo: "Simular rompimento", serve: "Onde rompeu e quem fica sem sinal.", Icone: Zap },
 ];
 
-const CADASTROS = "Cadastros de equipamentos, clientes, importar KML e limpeza ficam em “Mais ▾”. O tipo e a observação de um cabo, e a troca de fibra em várias rotas, ficam na janela do cabo. A ligação CTO → CT fica na aba CT.";
+const CADASTROS = "Cadastros de equipamentos, clientes, importar KML e limpeza ficam em “Mais ▾”.";
 
 export default function ComoFunciona() {
   return (

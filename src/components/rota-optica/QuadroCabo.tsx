@@ -40,12 +40,17 @@ interface Props {
   rotas?: RotaOptica[];
   /** As rotas foram gravadas (recarregar) */
   onRotasMudaram?: () => void;
+  /** Árvore: só mostra; o cabo se edita no mapa da rota */
+  soLeitura?: boolean;
+  onEditarNoMapa?: () => void;
+  /** Antes de começar uma troca de fibra (o editor avisa que o não salvo se perde) */
+  antesDeTrocar?: () => boolean;
 }
 
 
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
-export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram }: Props) {
+export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram, soLeitura, onEditarNoMapa, antesDeTrocar }: Props) {
   /** Fibra escolhida (clique): destacada aqui e na árvore */
   const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
   /** Fibras com as sub-rotas abertas (por padrão ficam recolhidas embaixo da rota tronco) */
@@ -273,10 +278,10 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                             </span>
                             <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${CHIP[st]}`}>{STATUS_FIBRA_LABEL[st]}</span>
                           </div>
-                          {ativa && st === "uso" && rotas && trocando !== n && (
+                          {ativa && st === "uso" && rotas && trocando !== n && !soLeitura && (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setTrocando(n); setFeito(null); }}
+                              onClick={(e) => { e.stopPropagation(); if (antesDeTrocar && !antesDeTrocar()) return; setTrocando(n); setFeito(null); }}
                               className="mt-1 ml-[46px] rounded-md border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100"
                               title="Passar esta fibra para outra em várias rotas de uma vez"
                             >
@@ -388,13 +393,25 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
             <p className="text-[11px] text-gray-400 truncate">
               {cabo?.obs ? cabo.obs : cabo?.atualizado_por ? `Por ${cabo.atualizado_por}` : "Uso automático pelas rotas salvas"}
             </p>
-            <button
-              type="button"
-              onClick={() => setEditando(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-gray-300 hover:bg-gray-50 shrink-0"
-            >
-              <Pencil className="w-3.5 h-3.5" /> Editar
-            </button>
+            {soLeitura ? (
+              <button
+                type="button"
+                onClick={onEditarNoMapa}
+                disabled={!onEditarNoMapa}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shrink-0 disabled:opacity-40"
+                title="Tipo, capacidade, observação e troca de fibra: no mapa da rota (botão Cabo)"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Editar no mapa
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditando(true)}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-gray-300 hover:bg-gray-50 shrink-0"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Editar
+              </button>
+            )}
           </div>
         )}
       </div>
