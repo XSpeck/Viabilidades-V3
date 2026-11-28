@@ -37,7 +37,7 @@ interface Props {
   /** Clientes do cadastro (modo Clientes nas portas) */
   clientes?: ClienteRede[];
   /** Caixa que já abre (vindo da Árvore, do Mapa da rede ou do editor da rota) */
-  inicial?: string;
+  inicial?: string | string[];
 }
 
 const ROW = 15, HEAD = 30, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
@@ -87,7 +87,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   }, [rotas]);
   const infoDe = useMemo(() => new Map(todasCaixas.map((c) => [c.chave, c])), [todasCaixas]);
 
-  const [abertas, setAbertas] = useState<string[]>(() => (inicial ? [inicial] : []));
+  const [abertas, setAbertas] = useState<string[]>(() => (Array.isArray(inicial) ? inicial : inicial ? [inicial] : []));
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useState<"navegar" | "editar" | "clientes">("navegar");
   /** Modo Clientes: a perna escolhida; Editar: o splitter escolhido (para remover) */

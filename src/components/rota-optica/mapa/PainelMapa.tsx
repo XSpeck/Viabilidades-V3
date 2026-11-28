@@ -7,7 +7,8 @@ import {
   type Alerta, type CaboAnalise, type CaixaAnalise, type Gravidade, type Indicadores, type NivelPotencia,
 } from "@/lib/analiseRede";
 import { formatMetros, TIPO_ELEMENTO_LABEL, corFibra, type RotaOptica } from "@/lib/rotaOptica";
-import { semCodigo } from "@/lib/cabosRede";
+import { chaveCabo, semCodigo } from "@/lib/cabosRede";
+import { chaveElemento } from "@/lib/arvorePon";
 import { IconeElemento, IconeCabo } from "../IconesRede";
 import { cortar } from "@/lib/textoCompleto";
 
@@ -34,7 +35,7 @@ interface Props {
   onIrPara: (alvo: AlvoMapa) => void;
   onAbrirRota: (id: string) => void;
   /** Abre a caixa na aba Unifilar (o que tem dentro dela) */
-  onAbrirNoUnifilar?: (chave: string) => void;
+  onAbrirNoUnifilar?: (chave: string | string[]) => void;
 }
 
 /** Painel do lado do mapa: indicadores da seleção, alertas e detalhe do que foi clicado */
@@ -193,7 +194,7 @@ function ListaRotas({ rotas, onAbrirRota }: { rotas: RotaOptica[]; onAbrirRota: 
   );
 }
 
-function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: Props["detalhe"]; pons: Props["pons"]; onAbrirRota: (id: string) => void; onAbrirNoUnifilar?: (chave: string) => void }) {
+function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: Props["detalhe"]; pons: Props["pons"]; onAbrirRota: (id: string) => void; onAbrirNoUnifilar?: (chave: string | string[]) => void }) {
   if (!detalhe?.caixa && !detalhe?.cabo) return <p className="py-6 text-center text-slate-400">Clique numa caixa ou num cabo do mapa.</p>;
   const corPon = (k: string) => pons.find((p) => p.chave === k);
   const chipsPon = (ks: string[]) => (
@@ -219,17 +220,17 @@ function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: 
             <p className="text-[11px] text-slate-500">{TIPO_ELEMENTO_LABEL[c.tipo]}{c.cdois ? ` · ${c.cdois} CDOIs` : ""} · {formatMetros(c.metrosOlt)} da OLT</p>
           </div>
         </div>
+        {onAbrirNoUnifilar && (
+          <button type="button" onClick={() => onAbrirNoUnifilar(c.chave)} className="w-full rounded-lg bg-orange-500 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-orange-600">
+            Abrir no Unifilar
+          </button>
+        )}
         {chipsPon(c.pons)}
         <div className="grid grid-cols-2 gap-1.5">
           <Cartao rotulo="Ocupação" valor={oc?.total ? `${usadas}/${oc.total}` : "—"} sub={oc?.total ? `${pct(usadas, oc.total)}% · ${oc.livres} livres` : "sem cadastro de portas"} cor={oc?.total ? COR_OCUPACAO[faixaOcupacao(usadas, oc.total)] : undefined} />
           <Cartao rotulo="Pior ponta" valor={dbm(c.potPonta)} sub={ROTULO_NIVEL[nivelPotencia(c.potPonta)]} cor={COR_NIVEL[nivelPotencia(c.potPonta)]} />
         </div>
         {alertasDe(c.alertas)}
-        {onAbrirNoUnifilar && (
-          <button type="button" onClick={() => onAbrirNoUnifilar(c.chave)} className="w-full rounded-lg bg-slate-800 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-900">
-            Abrir no Unifilar (o que tem dentro da caixa)
-          </button>
-        )}
         <ListaRotas rotas={c.rotas} onAbrirRota={onAbrirRota} />
       </div>
     );
@@ -245,6 +246,19 @@ function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: 
           <p className="text-[11px] text-slate-500">{b.capacidade} fibras · {formatMetros(b.metros)} neste trecho</p>
         </div>
       </div>
+      {onAbrirNoUnifilar && (() => {
+        // as duas caixas que o cabo liga (pelas rotas)
+        const pontas: string[] = [];
+        for (const r of b.rotas) {
+          const i = r.elementos.findIndex((e, k) => k > 0 && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === b.chave);
+          if (i > 0) { pontas.push(chaveElemento(r.elementos[i - 1]), chaveElemento(r.elementos[i])); break; }
+        }
+        return pontas.length ? (
+          <button type="button" onClick={() => onAbrirNoUnifilar(pontas)} className="w-full rounded-lg bg-orange-500 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-orange-600">
+            Abrir no Unifilar (as duas pontas do cabo)
+          </button>
+        ) : null;
+      })()}
       {chipsPon(b.pons)}
       <div>
         <div className="mb-1 flex items-center text-[11px]"><span>Fibras em uso</span><b className="ml-auto" style={{ color: COR_OCUPACAO[fOc] }}>{b.fibras.length} de {b.capacidade}</b></div>
@@ -258,7 +272,7 @@ function Detalhe_({ detalhe, pons, onAbrirRota, onAbrirNoUnifilar }: { detalhe: 
       </div>
       {alertasDe(b.alertas)}
       <ListaRotas rotas={b.rotas} onAbrirRota={onAbrirRota} />
-      <p className="text-[10px] text-slate-400">Para trocar uma fibra, abra o cabo na Árvore (quadro do cabo → Trocar fibra).</p>
+      <p className="text-[10px] text-slate-400">Tipo, capacidade e troca de fibra: no mapa da rota (Editar → botão Cabo).</p>
     </div>
   );
 }

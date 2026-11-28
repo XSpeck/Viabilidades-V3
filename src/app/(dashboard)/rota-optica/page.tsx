@@ -89,7 +89,7 @@ export default function RotaOpticaPage() {
   /** Tela principal: árvore das portas PON ou mapa da rede */
   const [vista, setVista] = useState<"arvore" | "mapa" | "unifilar">("arvore");
   /** Caixa que a aba Unifilar abre (vindo de outra tela); n muda a cada pedido */
-  const [uniInicial, setUniInicial] = useState<{ chave: string; n: number } | null>(null);
+  const [uniInicial, setUniInicial] = useState<{ chave: string | string[]; n: number } | null>(null);
   /** Muda para o editor reabrir do zero (depois de uma troca de fibra gravada) */
   const [versaoEditor, setVersaoEditor] = useState(0);
   /** Janela "Como funciona" */
@@ -210,7 +210,7 @@ export default function RotaOpticaPage() {
   }
 
   /** Leva a caixa para a aba Unifilar (onde se muda o que tem dentro dela) */
-  function abrirNoUnifilar(chave: string) {
+  function abrirNoUnifilar(chave: string | string[]) {
     setModo({ tipo: "ver" });
     setUniInicial((u) => ({ chave, n: (u?.n ?? 0) + 1 }));
     setVista("unifilar");

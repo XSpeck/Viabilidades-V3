@@ -30,7 +30,8 @@ interface Props {
   rotas: RotaOptica[];
   caixas?: CaixaRede[];
   onAbrirRota: (id: string) => void;
-  onAbrirNoUnifilar?: (chave: string) => void;
+  /** Abre uma caixa (ou as duas pontas de um cabo) na aba Unifilar */
+  onAbrirNoUnifilar?: (chave: string | string[]) => void;
 }
 
 const COR_GRAV: Record<Gravidade, string> = { critico: "#dc2626", atencao: "#f97316", cadastro: "#0284c7" };
