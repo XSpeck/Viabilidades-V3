@@ -613,7 +613,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                 </div>
               );
             })()}
-            {elSel.tipo === "olt" && <PonsDaOlt olt={elSel} caixas={caixas} cabos={cabos} usuario={usuario} onCaixa={onCaixa} onCabo={onCabo} onErro={setErro} />}
+            {elSel.tipo === "olt" && <PonsDaOlt key={elSel.chave} olt={elSel} caixas={caixas} cabos={cabos} catalogo={catalogo} usuario={usuario} onCaixa={onCaixa} onCabo={onCabo} onCaboFora={onCaboFora} onErro={setErro} />}
             <div className="flex flex-wrap gap-1.5">
               {elSel.tipo === "predio" && onAbrirPredio && <button type="button" onClick={() => onAbrirPredio(elSel.chave)} className="flex items-center gap-1 rounded-lg bg-sky-700 px-2 py-1.5 font-semibold text-white">Abrir prédio</button>}
               {onAbrirNoUnifilar && <button type="button" onClick={() => onAbrirNoUnifilar(elSel.chave)} className="flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-1.5 font-semibold text-white"><Network className="h-3.5 w-3.5" /> Abrir no Unifilar</button>}
@@ -654,15 +654,38 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   );
 }
 
-/** OLT: as portas PON e o cordão de cada uma até um adaptador do DIO */
-function PonsDaOlt({ olt, caixas, cabos, usuario, onCaixa, onCabo, onErro }: {
-  olt: CaixaRede; caixas: CaixaRede[]; cabos: CaboRede[]; usuario: string;
-  onCaixa: (c: CaixaRede) => void; onCabo: (c: CaboRede) => void; onErro: (e: string | null) => void;
+/** OLT: as portas PON e o cordão de cada uma até um adaptador de um DIO da estação (pode ser mais de um DIO) */
+function PonsDaOlt({ olt, caixas, cabos, catalogo, usuario, onCaixa, onCabo, onCaboFora, onErro }: {
+  olt: CaixaRede; caixas: CaixaRede[]; cabos: CaboRede[]; catalogo: ItemCatalogo[]; usuario: string;
+  onCaixa: (c: CaixaRede) => void; onCabo: (c: CaboRede) => void; onCaboFora: (chave: string) => void; onErro: (e: string | null) => void;
 }) {
   const dios = caixas.filter((c) => c.tipo === "dio");
-  const [porta, setPorta] = useState("0/1/1");
-  const [dio, setDio] = useState(dios[0]?.chave ?? "");
-  const [n, setN] = useState("1");
+  /** DIO e adaptador de cada PON (pelo cordão) */
+  const ligacaoDa = (cabo: string) => {
+    for (const d of dios) {
+      const a = d.adaptadores?.find((x) => x.de && chaveCabo(x.de.cabo) === chaveCabo(cabo));
+      if (a) return { dio: d, n: a.n };
+    }
+    return null;
+  };
+  const pons = olt.cordoes ?? [];
+  // sugestões: a porta seguinte à última, o DIO da última PON e o primeiro adaptador livre dele
+  const ultima = pons.at(-1);
+  const proxPorta = (() => {
+    const m = ultima?.porta.match(/^(\d+)\/(\d+)\/(\d+)$/);
+    return m ? `${m[1]}/${m[2]}/${+m[3] + 1}` : "0/1/1";
+  })();
+  const dioPadrao = (ultima && ligacaoDa(ultima.para.cabo)?.dio.chave) || dios[0]?.chave || "";
+  const livre = (chave: string) => {
+    const d = caixas.find((c) => c.chave === chave);
+    const usados = new Set((d?.adaptadores ?? []).filter((a) => a.de).map((a) => a.n));
+    let n = 1;
+    while (usados.has(n)) n++;
+    return n;
+  };
+  const [porta, setPorta] = useState(proxPorta);
+  const [dio, setDio] = useState(dioPadrao);
+  const [n, setN] = useState(String(livre(dioPadrao)));
   const [gravando, setGravando] = useState(false);
 
   async function adicionar() {
@@ -671,7 +694,7 @@ function PonsDaOlt({ olt, caixas, cabos, usuario, onCaixa, onCabo, onErro }: {
     const num = parseInt(n, 10);
     if (!/^\d+\/\d+\/\d+$/.test(porta.trim())) { onErro("Porta PON no formato 0/1/1."); return; }
     if (!d || !num) { onErro("Escolha o DIO e o adaptador."); return; }
-    if (olt.cordoes?.some((c) => c.porta === porta.trim())) { onErro(`A PON ${porta} já tem cordão.`); return; }
+    if (pons.some((c) => c.porta === porta.trim())) { onErro(`A PON ${porta} já tem cordão.`); return; }
     if (d.adaptadores?.some((a) => a.n === num && a.de)) { onErro(`O adaptador ${num} do ${d.nome} já está em uso.`); return; }
     setGravando(true);
     try {
@@ -679,12 +702,16 @@ function PonsDaOlt({ olt, caixas, cabos, usuario, onCaixa, onCabo, onErro }: {
       const nome = comCodigo(`Cordão ${porta.trim()} ${nomeCurto(olt.nome, 20)} → ${nomeCurto(d.nome, 20)}`, codigo);
       const cordao = await salvarCabo({ chave: codigo, nome, capacidade: 1, fibras: [], caminho: [olt.chave, d.chave], trechos: [{ pontos: [], metros: 3, mesmo_poste: true }], atualizado_por: usuario });
       onCabo(cordao);
-      onCaixa(await salvarCaixa({ ...olt, cordoes: [...(olt.cordoes ?? []), { porta: porta.trim(), para: { cabo: nome, fibra: 1 } }], atualizado_por: usuario }));
+      onCaixa(await salvarCaixa({ ...olt, cordoes: [...pons, { porta: porta.trim(), para: { cabo: nome, fibra: 1 } }], atualizado_por: usuario }));
       // o adaptador N entrega a fibra N do cabo que sai do DIO (quando só há um)
       const saem = cabos.filter((c) => c.caminho?.includes(d.chave) && (c.capacidade ?? 0) > 1);
       const para = saem.length === 1 ? { cabo: saem[0].nome, fibra: num } : undefined;
       const outros = (d.adaptadores ?? []).filter((a) => a.n !== num);
       onCaixa(await salvarCaixa({ ...d, adaptadores: [...outros, { n: num, de: { cabo: nome, fibra: 1 }, ...(para ? { para } : {}) }], atualizado_por: usuario }));
+      // a próxima já sai sugerida
+      const m = porta.trim().match(/^(\d+)\/(\d+)\/(\d+)$/);
+      if (m) setPorta(`${m[1]}/${m[2]}/${+m[3] + 1}`);
+      setN(String(num + 1));
     } catch (e) {
       onErro(e instanceof Error ? e.message : "Não foi possível ligar a PON.");
     } finally {
@@ -692,20 +719,74 @@ function PonsDaOlt({ olt, caixas, cabos, usuario, onCaixa, onCabo, onErro }: {
     }
   }
 
+  /** Desliga a PON: some o cordão, sai da OLT e libera o adaptador do DIO */
+  async function desligarPon(p: string, cabo: string) {
+    if (!(await confirmar(`Desligar a PON ${p}? O cordão dela some e o adaptador do DIO fica livre.`, { ok: "Desligar", perigo: true }))) return;
+    setGravando(true);
+    try {
+      const lig = ligacaoDa(cabo);
+      if (lig) onCaixa(await salvarCaixa({ ...lig.dio, adaptadores: (lig.dio.adaptadores ?? []).filter((a) => a.n !== lig.n), atualizado_por: usuario }));
+      onCaixa(await salvarCaixa({ ...olt, cordoes: pons.filter((c) => c.porta !== p), atualizado_por: usuario }));
+      const cb = cabos.find((x) => chaveCabo(x.nome) === chaveCabo(cabo));
+      if (cb) { await excluirCabo(cb.id); onCaboFora(cb.chave); }
+    } catch (e) {
+      onErro(e instanceof Error ? e.message : "Não foi possível desligar a PON.");
+    } finally {
+      setGravando(false);
+    }
+  }
+
+  /** DIO novo na mesma estação, ao lado da OLT */
+  async function novoDio() {
+    setGravando(true);
+    try {
+      const codigo = proximoCodigoElemento(caixas.map((c) => c.codigo));
+      const k = dios.length;
+      const equip = catalogo.find((i) => i.categoria === "dio");
+      const d = await salvarCaixa({
+        chave: `PT:${codigo}`, nome: `DIO ${String(k + 1).padStart(2, "0")}`, tipo: "dio", codigo,
+        lat: (olt.lat ?? 0) - 0.00004 * (k + 1), lon: (olt.lon ?? 0) + 0.00004 * (k + 1),
+        ...(equip ? { equipamento_id: equip.id } : {}), portas: [], atualizado_por: usuario,
+      });
+      onCaixa(d);
+      setDio(d.chave);
+      setN("1");
+    } catch (e) {
+      onErro(e instanceof Error ? e.message : "Não foi possível criar o DIO.");
+    } finally {
+      setGravando(false);
+    }
+  }
+
   return (
-    <div className="space-y-1 rounded-lg border border-slate-200 p-2">
-      <p className="font-semibold">Portas PON</p>
-      {(olt.cordoes ?? []).map((c) => <p key={c.porta} className="text-slate-600">PON {c.porta} → {nomeCurto(c.para.cabo.replace(/^Cordão \S+ /, ""), 40)}</p>)}
+    <div className="space-y-1.5 rounded-xl border border-slate-200 p-2">
+      <p className="font-semibold">Portas PON da {olt.nome}</p>
+      {pons.length > 0 && (
+        <ul className="space-y-1">
+          {pons.map((c) => {
+            const lig = ligacaoDa(c.para.cabo);
+            return (
+              <li key={c.porta} className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                <b>PON {c.porta}</b>
+                <span className="min-w-0 flex-1 truncate text-slate-600">→ {lig ? `${lig.dio.nome} · adaptador ${lig.n}` : "sem DIO"}</span>
+                <button type="button" disabled={gravando} onClick={() => void desligarPon(c.porta, c.para.cabo)} title="Desligar esta PON" className="rounded p-0.5 text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <div className="flex flex-wrap items-center gap-1">
-        <input value={porta} onChange={(e) => setPorta(e.target.value)} className="w-16 rounded border px-1.5 py-1" title="Porta PON (placa/porta)" />
+        <input value={porta} onChange={(e) => setPorta(e.target.value)} className="w-16 rounded border px-1.5 py-1" title="Porta PON (chassi/placa/porta)" />
         <span>→</span>
-        <select value={dio} onChange={(e) => setDio(e.target.value)} className="min-w-0 flex-1 rounded border px-1.5 py-1">
+        <select value={dio} onChange={(e) => { setDio(e.target.value); setN(String(livre(e.target.value))); }} className="min-w-0 flex-1 rounded border px-1.5 py-1" title="DIO da estação">
           <option value="">DIO…</option>
           {dios.map((d) => <option key={d.chave} value={d.chave}>{d.nome}</option>)}
         </select>
         <input value={n} onChange={(e) => setN(e.target.value)} className="w-12 rounded border px-1.5 py-1" title="Adaptador do DIO" inputMode="numeric" />
         <button type="button" disabled={gravando} onClick={() => void adicionar()} className="rounded-lg bg-indigo-600 px-2 py-1 font-semibold text-white disabled:opacity-60">Ligar PON</button>
       </div>
+      <button type="button" disabled={gravando} onClick={() => void novoDio()} className="text-[11px] font-semibold text-indigo-700 hover:underline">+ Novo DIO na estação</button>
     </div>
   );
 }
