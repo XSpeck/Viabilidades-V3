@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { propagarNasRotas, type CadastroLigacoes } from "../unifilar";
+import { completarPelasRotas, propagarNasRotas, trocarFibraNoCadastro, type CadastroLigacoes } from "../unifilar";
 import type { ElementoRota, RotaOptica } from "../rotaOptica";
 
 const A = "24 FO ASO · HUB → CEO 3 [CB-000006]";
@@ -65,5 +65,56 @@ describe("emenda nova muda a rota dali pra frente", () => {
     const spl = (f: number) => [{ id: "s1", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: 6 } }, portas: [{ numero: 1, status: "ramal" as const, saida: { cabo: B, fibra: f } }] }];
     const { mudancas } = propagarNasRotas("PT:12", [hub], cad({ splitters: spl(1) }), cad({ splitters: spl(7) }));
     expect(mudancas[0].elementos[2].fibra_entrada).toBe(7);
+  });
+});
+
+describe("a fibra que entra e a outra ponta do cabo", () => {
+  // OLT → CEO 9 → (cabo A) → HUB 12 → (cabo B) → CDOI 13
+  const hub = (fA: number): RotaOptica => ({
+    id: "h", nome: "0/6/2", origem: "manual", trechos: [],
+    elementos: [
+      el("OLT", "olt", "", { porta: "PL 06 - Porta 02" }),
+      el("CEO 9", "ceo", "9", { cabo_entrada: "x", fibra_entrada: 1 }),
+      el("HUB", "hub", "12", { cabo_entrada: A, fibra_entrada: fA, splitter: "1:8" }),
+      el("CDOI", "cdoi", "13", { cabo_entrada: B, fibra_entrada: 1 }),
+    ],
+  });
+  const spl = (fEnt: number) => [{ id: "s1", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: fEnt } }, portas: [{ numero: 1, status: "ramal" as const, saida: { cabo: B, fibra: 1 } }] }];
+
+  it("entrada do splitter da F03 para a F01: a rota chega pela F01 e a CEO de trás passa a alimentar a F01", () => {
+    const { mudancas, pontas, bloqueadas } = propagarNasRotas("PT:12", [hub(3)], cad({ splitters: spl(3) }), cad({ splitters: spl(1) }));
+    expect(bloqueadas).toHaveLength(0);
+    expect(mudancas).toHaveLength(1);
+    expect(mudancas[0]).toMatchObject({ sentido: "chega", ponta: "CEO 9" });
+    expect(mudancas[0].elementos[2].fibra_entrada).toBe(1);
+    expect(pontas).toEqual([expect.objectContaining({ chave: "PT:9", lado: "sai", de: 3, para: 1 })]);
+  });
+
+  it("a outra ponta do cabo que sai recebe a fibra nova", () => {
+    const antes = cad({ emendas: [{ de: { cabo: A, fibra: 6 }, para: { cabo: B, fibra: 1 } }] });
+    const depois = cad({ emendas: [{ de: { cabo: A, fibra: 6 }, para: { cabo: B, fibra: 5 } }] });
+    const { pontas } = propagarNasRotas("PT:12", [rota("r", 6, 1)], antes, depois);
+    // o cabo B passa direto pela CEO 2 e termina na CEO 1
+    expect(pontas).toEqual([expect.objectContaining({ chave: "PT:14", lado: "chega", de: 1, para: 5 })]);
+  });
+
+  it("trocar a fibra no cadastro da outra ponta: fusão e splitter", () => {
+    const c = cad({
+      emendas: [{ de: { cabo: "Z", fibra: 2 }, para: { cabo: A, fibra: 3 } }],
+      splitters: [{ id: "s", relacao: "1:8", entrada: { fibra: { cabo: B, fibra: 1 } }, portas: [] }],
+    });
+    expect(trocarFibraNoCadastro(c, A, "sai", 3, 1).emendas[0].para.fibra).toBe(1);
+    expect(trocarFibraNoCadastro(c, B, "chega", 1, 5).splitters[0].entrada.fibra?.fibra).toBe(5);
+  });
+});
+
+describe("não monta splitter repetido", () => {
+  it("rota na F03, mas a perna dela já sai de um splitter na F01: não cria outro", () => {
+    const r: RotaOptica = {
+      id: "h", nome: "h", origem: "manual", trechos: [],
+      elementos: [el("OLT", "olt", "", { porta: "PL 06 - Porta 02" }), el("HUB", "hub", "12", { cabo_entrada: A, fibra_entrada: 3, splitter: "1:8" }), el("CDOI", "cdoi", "13", { cabo_entrada: B, fibra_entrada: 1 })],
+    };
+    const c = cad({ splitters: [{ id: "r33", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: 1 } }, portas: [{ numero: 1, status: "ramal" as const, saida: { cabo: B, fibra: 1 } }] }] });
+    expect(completarPelasRotas("PT:12", [r], c).splitters).toBe(0);
   });
 });

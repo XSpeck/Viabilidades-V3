@@ -38,6 +38,9 @@ import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
 import { Boxes, Cable, FileUp, GitBranch, HelpCircle, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
 import ComoFunciona from "@/components/rota-optica/ComoFunciona";
+import PredioVertical from "@/components/rota-optica/PredioVertical";
+import { chaveElemento } from "@/lib/arvorePon";
+import { idPredioDoElemento } from "@/lib/prediosRede";
 
 /** Para que serve cada aba (uma frase) */
 const FRASE_VISTA = {
@@ -103,6 +106,8 @@ export default function RotaOpticaPage() {
   const [uniInicial, setUniInicial] = useState<{ chave: string | string[]; n: number } | null>(null);
   /** Muda para o editor reabrir do zero (depois de uma troca de fibra gravada) */
   const [versaoEditor, setVersaoEditor] = useState(0);
+  /** Janela do prédio aberta pelo Unifilar (fibra de cada CDOI) */
+  const [predioAberto, setPredioAberto] = useState<{ chave: string; nome: string; predioId?: string; x: number; y: number } | null>(null);
   /** Janela "Como funciona" */
   const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
   const inputKml = useRef<HTMLInputElement>(null);
@@ -218,6 +223,13 @@ export default function RotaOpticaPage() {
     if (!r) return;
     setRotasAbertas((rs) => rs.filter((x) => x.id !== id));
     setModo({ tipo: "editar", rota: r });
+  }
+
+  /** Abre a janela do prédio (onde se escolhe a fibra de cada CDOI) */
+  function editarPredio(chave: string) {
+    const el = rotas.flatMap((r) => r.elementos).find((e) => chaveElemento(e) === chave);
+    if (!el) return;
+    setPredioAberto({ chave, nome: el.nome, predioId: idPredioDoElemento(el) ?? undefined, x: Math.max(8, (window.innerWidth - 640) / 2), y: 60 });
   }
 
   /** Leva a caixa para a aba Unifilar (onde se muda o que tem dentro dela) */
@@ -375,6 +387,32 @@ export default function RotaOpticaPage() {
         />
       )}
 
+      {predioAberto && (
+        <Janela
+          inicial={predioAberto}
+          largura={Math.min(640, typeof window !== "undefined" ? window.innerWidth - 16 : 640)}
+          titulo={predioAberto.nome}
+          subtitulo="Prédio · fibra de cada CDOI, blocos e andares"
+          icone={<IconeElemento tipo="predio" tamanho={22} />}
+          corBarra="bg-slate-700"
+          onFechar={() => setPredioAberto(null)}
+        >
+          <PredioVertical
+            key={predioAberto.chave}
+            chave={predioAberto.chave}
+            nome={predioAberto.nome}
+            predioId={predioAberto.predioId}
+            rotas={rotas}
+            caixas={caixas}
+            usuario={user?.nome ?? ""}
+            onAbrirRota={abrirRota}
+            onRotasMudaram={recarregar}
+            modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")}
+            onAbrirCdoi={(k) => abrirNoUnifilar(k)}
+          />
+        </Janela>
+      )}
+
       {ajuda && (
         <Janela
           inicial={ajuda}
@@ -495,6 +533,7 @@ export default function RotaOpticaPage() {
             <UnifilarRede
               key={uniInicial?.n ?? 0}
               inicial={uniInicial?.chave}
+              onEditarPredio={editarPredio}
               clientes={clientes}
               rotas={rotas}
               caixas={caixas}

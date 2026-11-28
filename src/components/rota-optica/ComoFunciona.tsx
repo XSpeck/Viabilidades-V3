@@ -30,7 +30,7 @@ const PASSOS = [
     titulo: "Unifilar",
     onde: "aba Unifilar",
     serve: "O que tem dentro de cada caixa, ligação por ligação.",
-    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal (porta da CTO → CT)", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO de cada rota"],
+    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal (porta da CTO → CT)", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO de cada rota", "trocar a fibra: vale no trecho inteiro do cabo (rotas e a caixa da outra ponta)", "prédio: botão Editar no prédio (fibra de cada CDOI)"],
     Icone: Cable,
     cor: "border-slate-700 bg-[#16181c] text-slate-100",
   },
