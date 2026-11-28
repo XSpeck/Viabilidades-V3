@@ -304,9 +304,10 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
           let distancia: number | undefined;
           if (k > 0 && ps.cabo && ps.trecho !== undefined) {
             const tr = ps.cabo.trechos?.[ps.trecho];
-            const metros = tr?.metros ?? (tr ? comprimentoTracado(tr.pontos) : 0);
+            const linha = tracadoDoTrecho(ps.cabo, ps.trecho, elDe);
+            const metros = tr?.metros ?? comprimentoTracado(linha);
             distancia = Math.round(metros + (tr?.mesmo_poste ? 0 : reservaTrecho(trilha[k - 1].caixa.tipo, tipo, calc)));
-            if (tr?.pontos.length) tracos.push({ nome: ps.cabo.nome, pontos: tr.pontos, ate: k });
+            if (linha.length >= 2) tracos.push({ nome: ps.cabo.nome, pontos: linha, ate: k });
           }
           const prox = trilha[k + 1];
           elementos.push({
@@ -340,6 +341,13 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
     }
   }
   return { rotas, pontos, trechos, caixas: caixasCom, conflitos };
+}
+
+/** Traçado completo de um trecho do cabo: a caixa de antes, as curvas e a caixa de depois */
+export function tracadoDoTrecho(c: CaboRede, t: number, elDe: Map<string, CaixaRede>): { lat: number; lon: number }[] {
+  const a = elDe.get(c.caminho?.[t] ?? ""), b = elDe.get(c.caminho?.[t + 1] ?? "");
+  const pos = (e?: CaixaRede) => (e && e.lat !== undefined && e.lon !== undefined ? [{ lat: e.lat, lon: e.lon }] : []);
+  return [...pos(a), ...(c.trechos?.[t]?.pontos ?? []), ...pos(b)];
 }
 
 /** Nome do elemento para busca (sem acento, maiúsculo) */

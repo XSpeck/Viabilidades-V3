@@ -32,6 +32,7 @@ import { listarClientes, type ClienteRede } from "@/lib/clientesRede";
 import ClientesRede from "@/components/rota-optica/ClientesRede";
 import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import { apagarRedeDesenhada, contarRedeDesenhada } from "@/lib/redeLivre";
+import { calcularSinal } from "@/lib/sinalRede";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
 import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos";
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
@@ -58,7 +59,7 @@ const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
   ),
 });
 
-const MapaRede = dynamic(() => import("@/components/rota-optica/MapaRede"), {
+const EditorRede = dynamic(() => import("@/components/rota-optica/EditorRede"), {
   ssr: false,
   loading: () => (
     <div className="h-[520px] bg-gray-100 rounded-xl flex items-center justify-center">
@@ -120,6 +121,15 @@ export default function RotaOpticaPage() {
     () => montarRotas(rotasCruas, perdaDoModelo, splitterDaCaixa),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rotasCruas, catalogo, caixas]
+  );
+
+  /** Rede livre: o sinal sai das portas PON e segue as ligações das caixas (nada disso é gravado) */
+  const sinal = useMemo(
+    () => calcularSinal(caixas, cabos, {
+      txDe: (o) => catalogo.find((c) => c.id === o.equipamento_id)?.potencia_tx,
+      perdaModelo: (id) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined),
+    }),
+    [caixas, cabos, catalogo],
   );
 
   const permitido = canAccess(user ?? null, "rota-optica");
@@ -572,7 +582,18 @@ export default function RotaOpticaPage() {
               onRotasMudaram={recarregar}
             />
           ) : (
-            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
+            <EditorRede
+              caixas={caixas}
+              cabos={cabos}
+              catalogo={catalogo}
+              sinal={sinal}
+              usuario={user?.nome ?? ""}
+              onCaixa={(c) => setCaixas((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+              onCaixaFora={(k) => setCaixas((l) => l.filter((x) => x.chave !== k))}
+              onCabo={(c) => setCabos((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+              onCaboFora={(k) => setCabos((l) => l.filter((x) => x.chave !== k))}
+              onAbrirNoUnifilar={abrirNoUnifilar}
+            />
           )}
           </div>
         )
