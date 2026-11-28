@@ -101,6 +101,23 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const [boxOff, setBoxOff] = useState<Record<string, { dx: number; dy: number }>>({});
   const [vivo, setVivo] = useState<{ chave: string; id: string; dx: number; dy: number } | null>(null);
   const arrasto = useRef<{ chave: string; id: string; sx: number; sy: number; base: { dx: number; dy: number }; moveu: boolean } | null>(null);
+  /** Ir até uma caixa (clique no nome no painel da rota): rola até ela e pisca a borda */
+  const irPara = useRef<string | null>(null);
+  const [destaque, setDestaque] = useState<string | null>(null);
+  useEffect(() => {
+    const k = irPara.current;
+    if (!k || !area.current) return;
+    const el = area.current.querySelector(`[data-caixa="${CSS.escape(k)}"]`);
+    if (!el) return;
+    irPara.current = null;
+    el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  });
+  function irParaCaixa(chave: string) {
+    setAbertas((a) => (a.includes(chave) ? a : [...a, chave]));
+    irPara.current = chave;
+    setDestaque(chave);
+    setTimeout(() => setDestaque((d) => (d === chave ? null : d)), 1800);
+  }
   const layoutDe = (chave: string): LayoutUnifilar => cadDe.get(chave)?.layout_unifilar ?? {};
   /** Deslocamento de um item ("box" = a caixa inteira) em relação ao lugar automático */
   const off = (chave: string, id: string) =>
@@ -515,7 +532,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           ref={area}
           className="min-w-0 flex-1 cursor-grab select-none overflow-auto active:cursor-grabbing"
           onPointerDown={(e) => { if (e.pointerType !== "mouse" || e.button !== 0 || !area.current) return; arr.current = { x: e.clientX, y: e.clientY, sl: area.current.scrollLeft, st: area.current.scrollTop }; moveu.current = false; }}
-          onPointerMove={(e) => { const a = arr.current; if (!a || !area.current) return; const dx = e.clientX - a.x, dy = e.clientY - a.y; if (!moveu.current && Math.abs(dx) + Math.abs(dy) > 5) moveu.current = true; if (moveu.current) { area.current.scrollLeft = a.sl - dx; area.current.scrollTop = a.st - dy; } }}
+          onPointerMove={(e) => { const a = arr.current; if (!a || !area.current) return; const dx = e.clientX - a.x, dy = e.clientY - a.y; if (!moveu.current && Math.abs(dx) + Math.abs(dy) > 5) moveu.current = true; if (moveu.current) { e.currentTarget.scrollLeft = a.sl - dx; e.currentTarget.scrollTop = a.st - dy; } }}
           onPointerUp={() => { arr.current = null; setTimeout(() => { moveu.current = false; }, 0); }}
           onClick={() => { if (!moveu.current) { setSel(null); setSelLig(null); } }}
         >
@@ -539,8 +556,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                 const m = modelos.get(cx.chave)!;
                 const ocup = new Set(m.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]));
                 return (
-                  <g key={cx.chave}>
-                    <rect x={cx.x} y={cx.y} width={cx.w} height={cx.h} rx={10} fill="#1d2025" stroke={COR_TIPO[t] ?? "#475569"} strokeWidth={1.4} />
+                  <g key={cx.chave} data-caixa={cx.chave}>
+                    <rect x={cx.x} y={cx.y} width={cx.w} height={cx.h} rx={10} fill="#1d2025" stroke={destaque === cx.chave ? "#facc15" : COR_TIPO[t] ?? "#475569"} strokeWidth={destaque === cx.chave ? 4 : 1.4} />
                     <rect x={cx.x} y={cx.y} width={cx.w} height={30} rx={10} fill={COR_TIPO[t] ?? "#475569"} opacity={0.9} {...arrastavel(cx.chave, "box")}>
                       <title>Arraste para mover a caixa</title>
                     </rect>
@@ -887,7 +904,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                             {cf && <span className="inline-block h-2 w-2 rounded-full" style={{ background: cf.hex }} />}{curto(semCodigo(p.cabo), 26)}{cf ? ` · ${cf.rotulo}` : ""}
                           </p>
                         )}
-                        <button type="button" disabled={!infoDe.has(p.chave)} onClick={() => setAbertas((a) => (a.includes(p.chave) ? a : [...a, p.chave]))}
+                        <button type="button" disabled={!infoDe.has(p.chave)} onClick={() => irParaCaixa(p.chave)} title="Ir até esta caixa"
                           className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left ${aberta ? "bg-orange-500/20 text-orange-200" : "text-slate-200 hover:bg-slate-800"} disabled:cursor-default disabled:hover:bg-transparent`}>
                           <IconeElemento tipo={p.tipo} tamanho={15} /> <span className="truncate">{curto(p.nome, 30)}{p.porta ? ` · ${p.porta}` : ""}</span>
                         </button>
