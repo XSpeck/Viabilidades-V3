@@ -14,9 +14,14 @@ export type Lado = "chega" | "sai";
 export type PontoUni =
   | { k: "fibra"; lado: Lado; cabo: string; fibra: number }
   | { k: "entrada"; spl: string }
-  | { k: "porta"; spl: string; porta: number };
+  | { k: "porta"; spl: string; porta: number }
+  /** porta PON da OLT ("PL 06 - Porta 02") */
+  | { k: "pon"; porta: string }
+  /** adaptador (porta) do DIO */
+  | { k: "adaptador"; n: number };
 
-export type TipoLigacao = "fusao" | "entrada" | "perna" | "nivel2" | "passa";
+/** cordao = porta PON → cordão que sai da OLT; dio = cordão → adaptador → fibra do cabo que sai (pelas rotas) */
+export type TipoLigacao = "fusao" | "entrada" | "perna" | "nivel2" | "passa" | "cordao" | "dio";
 export interface LigacaoUni {
   id: string;
   tipo: TipoLigacao;
@@ -47,7 +52,14 @@ export interface ModeloUnifilar {
 }
 
 export const idPonto = (p: PontoUni) =>
-  p.k === "fibra" ? `f:${p.lado}:${chaveCabo(p.cabo)}:${p.fibra}` : p.k === "entrada" ? `e:${p.spl}` : `p:${p.spl}:${p.porta}`;
+  p.k === "fibra" ? `f:${p.lado}:${chaveCabo(p.cabo)}:${p.fibra}`
+    : p.k === "entrada" ? `e:${p.spl}`
+      : p.k === "porta" ? `p:${p.spl}:${p.porta}`
+        : p.k === "pon" ? `o:${p.porta}`
+          : `a:${p.n}`;
+
+/** Número da porta do DIO ("Porta 13" → 13) */
+export const numeroPortaDio = (porta?: string) => { const m = porta?.match(/Porta\s*0*(\d+)/i); return m ? +m[1] : undefined; };
 const idCabo = (cabo: string, lado: Lado) => `${lado}:${chaveCabo(cabo)}`;
 const mesmaFibra = (a: PontaFibra, b: PontaFibra) => chaveCabo(a.cabo) === chaveCabo(b.cabo) && a.fibra === b.fibra;
 
@@ -64,10 +76,21 @@ export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<
   const marcar = (c: CaboUni, f: number, rota: string) => { c.sinal.set(f, [...new Set([...(c.sinal.get(f) ?? []), rota])]); };
 
   // o que as rotas dizem: a fibra que chega e para onde ela segue
-  type Passo = { de: PontaFibra; para?: PontaFibra; splitter: boolean };
+  type Passo = { de: PontaFibra; para?: PontaFibra; splitter: boolean; adaptador?: number };
   const passos: Passo[] = [];
+  /** OLT: porta PON → cordão que sai */
+  const cordoes: { porta: string; para: PontaFibra }[] = [];
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
+      if (i === 0 && chaveElemento(e) === chave) {
+        const prox = r.elementos[1];
+        if (e.porta && prox?.cabo_entrada) {
+          const cout = garantir(prox.cabo_entrada, "sai", prox);
+          marcar(cout, prox.fibra_entrada ?? 1, r.nome);
+          cordoes.push({ porta: e.porta, para: { cabo: prox.cabo_entrada, fibra: prox.fibra_entrada ?? 1 } });
+        }
+        return;
+      }
       if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada) return;
       const ant = r.elementos[i - 1];
       const prox = r.elementos[i + 1];
@@ -82,6 +105,7 @@ export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<
           de: { cabo: e.cabo_entrada, fibra: e.fibra_entrada },
           para: prox?.cabo_entrada && prox.fibra_entrada ? { cabo: prox.cabo_entrada, fibra: prox.fibra_entrada } : undefined,
           splitter: !e.passagem && !!(e.splitter || cad?.splitters?.length || cad?.splitter),
+          adaptador: e.tipo === "dio" ? numeroPortaDio(e.porta) ?? prox?.fibra_entrada : undefined,
         });
       }
     });
@@ -127,9 +151,18 @@ export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<
     for (const p of s.portas) if (p.saida) add("perna", { k: "porta", spl: s.id, porta: p.numero }, fib(p.saida, "sai"), "cadastro");
   }
 
+  // OLT: cada porta PON com o seu cordão
+  for (const c of cordoes) add("cordao", { k: "pon", porta: c.porta }, fib(c.para, "sai"), "rota");
+
   // rotas: passa direto (mesmo cabo e fibra) e as fusões que o cadastro ainda não tem (sugestões)
   const ocupado = new Set(ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]));
   for (const p of passos) {
+    // DIO: o cordão entra num adaptador e o adaptador é a fibra do cabo que sai (porta N = fibra N)
+    if (p.adaptador) {
+      add("dio", fib(p.de, "chega"), { k: "adaptador", n: p.adaptador }, "rota");
+      if (p.para) add("dio", { k: "adaptador", n: p.adaptador }, fib(p.para, "sai"), "rota");
+      continue;
+    }
     if (!p.para) continue;
     if (mesmaFibra(p.de, p.para)) { add("passa", fib(p.de, "chega"), fib(p.para, "sai"), "rota"); continue; }
     if (p.splitter) continue;
@@ -315,4 +348,19 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
   }
   const mudou = novosSpl > 0 || novasPernas > 0 || spls.some((s, k) => JSON.stringify(s.entrada) !== JSON.stringify(c.splitters[k]?.entrada));
   return { ed: mudou ? { ...c, splitters: spls } : c, splitters: novosSpl, pernas: novasPernas };
+}
+
+/**
+ * Troca o adaptador (porta) do DIO numa rota: a porta do DIO e a fibra do cabo que sai dele (porta N = fibra N).
+ * Devolve os elementos novos ou null se a rota não passa pelo DIO.
+ */
+export function trocarPortaDio(r: RotaOptica, chaveDio: string, n: number): ElementoRota[] | null {
+  const i = r.elementos.findIndex((e) => chaveElemento(e) === chaveDio && e.tipo === "dio");
+  if (i < 0) return null;
+  const pad = String(n).padStart(2, "0");
+  return r.elementos.map((e, j) => {
+    if (j === i) return { ...e, porta: `Porta ${pad}`, fibra_saida: n };
+    if (j === i + 1) return { ...e, fibra_entrada: n };
+    return e;
+  });
 }

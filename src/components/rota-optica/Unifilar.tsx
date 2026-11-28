@@ -386,7 +386,8 @@ export default function Unifilar({ chave, nome, rotas, cad, comSplitters, modelo
                 <rect x={xS} y={y} width={SW} height={h} rx={6} fill="#0f2a1c" stroke="#22c55e" strokeWidth={1.2} />
                 <rect x={xS} y={y} width={SW} height={20} rx={6} fill="#14532d" />
                 <text x={xS + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7">{nomeSpl(s)} · {s.relacao}</text>
-                <text x={xS + SW - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? pon : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                <text x={xS + SW - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? pon : s.entrada.fibra ? `F${String(s.entrada.fibra.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                {!pon && s.entrada.fibra && <rect x={xS} y={y} width={SW} height={h} rx={6} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="4 3"><title>Esta fibra não tem rota: confira ou tire o splitter</title></rect>}
                 <path d={`M${xS + 10} ${yIn - 5} L${xS + SW - 30} ${y + 26} L${xS + SW - 30} ${y + h - 8} L${xS + 10} ${yIn + 5} Z`} fill="#22c55e" opacity={0.18} />
                 <rect x={xS - 2} y={yIn - 6} width={12} height={12} rx={2} fill="#16a34a" stroke="#0b0d10" />
                 <text x={xS + 20} y={yIn + 3} fontSize={6.5} fill="#86efac">{perdaSplitter(s.relacao, m?.perda_db).toFixed(1).replace(".", ",")} dB</text>

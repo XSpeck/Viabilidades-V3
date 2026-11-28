@@ -8,11 +8,13 @@ import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
 import { portasPara, salvarCaixa, type CaixaRede, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import {
-  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre,
+  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, trocarPortaDio,
   type CadastroLigacoes, type CaboUni, type ModeloUnifilar, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
+import { atualizarRota } from "@/lib/rotaOptica";
+import { paraGravar } from "@/lib/subRotas";
 
 /**
  * Unifilar da rede (estilo GeoGrid): uma janela escura onde as caixas vão abrindo em sequência.
@@ -26,6 +28,8 @@ interface Props {
   usuario: string;
   onCaixaSalva: (c: CaixaRede) => void;
   onAbrirRota: (id: string) => void;
+  /** Rotas gravadas (troca de porta do DIO): recarregar */
+  onRotasMudaram?: () => void;
 }
 
 const ROW = 15, HEAD = 30, BW = 158, TOPO = 40, GAP_CAIXA = 120, LAR = "#f97316";
@@ -47,12 +51,12 @@ function inicialDe(cad?: CaixaRede): CadastroLigacoes {
   };
 }
 
-export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota }: Props) {
+export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onRotasMudaram }: Props) {
   const cadDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
-  /** Todas as caixas da rede (menos a OLT), para começar */
+  /** Todas as caixas da rede (a OLT também), para começar */
   const todasCaixas = useMemo(() => {
-    const m = new Map<string, { chave: string; nome: string; tipo: TipoElementoRota }>();
-    rotas.forEach((r) => r.elementos.forEach((e, i) => { if (i === 0 || e.tipo === "olt") return; const k = chaveElemento(e); if (!m.has(k)) m.set(k, { chave: k, nome: e.nome, tipo: tipoVisual(e) }); }));
+    const m = new Map<string, { chave: string; nome: string; tipo: TipoElementoRota; equip?: string }>();
+    rotas.forEach((r) => r.elementos.forEach((e) => { const k = chaveElemento(e); if (!m.has(k)) m.set(k, { chave: k, nome: e.nome, tipo: tipoVisual(e), equip: e.equipamento_id }); }));
     return [...m.values()];
   }, [rotas]);
   const infoDe = useMemo(() => new Map(todasCaixas.map((c) => [c.chave, c])), [todasCaixas]);
@@ -115,14 +119,19 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   type Bloco = { chave: string; c: CaboUni; x: number; y: number; fibras: number[]; h: number };
   const pos = new Map<string, [number, number]>();
   const blocos: Bloco[] = [];
-  const caixasDes: { chave: string; x: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara> }[] }[] = [];
+  const caixasDes: { chave: string; x: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara> }[]; pons: string[]; capDio: number; xE: number }[] = [];
   let xCur = 20;
   let hMax = 300;
   for (const chave of abertas) {
     const m = modelos.get(chave)!;
     const ed = edDe(chave);
     const temSpl = comSpl(chave) && ed.splitters.length > 0;
-    const MID = temSpl ? 240 : 130;
+    const tipoCx = infoDe.get(chave)?.tipo;
+    // DIO: grade de adaptadores no meio (capacidade do DIO no cadastro de equipamentos)
+    const adaptUsados = m.ligacoes.flatMap((l) => [l.a, l.b]).filter((q): q is { k: "adaptador"; n: number } => q.k === "adaptador").map((q) => q.n);
+    const capDio = tipoCx === "dio" ? Math.max(catalogo.find((q) => q.id === infoDe.get(chave)?.equip)?.portas ?? 0, ...adaptUsados, 12) : 0;
+    const COLS = 12, CEL = 16;
+    const MID = temSpl ? 240 : tipoCx === "dio" ? COLS * CEL + 60 : 130;
     const xE = xCur + 12, xD = xCur + 12 + BW + MID;
     const ocup = new Set(m.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]));
     const vis = (c: CaboUni) => {
@@ -146,7 +155,23 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
       }
       return y;
     };
-    const hE = empilhar(m.cabos.filter((c) => c.lado === "chega"), xE);
+    // OLT: a coluna da esquerda é a própria OLT, com as portas PON usadas
+    const pons = m.ligacoes.filter((l) => l.tipo === "cordao").map((l) => (l.a as { k: "pon"; porta: string }).porta).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+    let hOlt = 0;
+    if (tipoCx === "olt") {
+      pons.forEach((pp, k) => pos.set(`${chave}#${idPonto({ k: "pon", porta: pp })}`, [xE + BW, TOPO + 44 + HEAD + k * (ROW + 4) + ROW / 2]));
+      hOlt = TOPO + 44 + HEAD + pons.length * (ROW + 4) + 10;
+    }
+    let hDio = 0;
+    if (tipoCx === "dio") {
+      const xG = xE + BW + 30;
+      for (let n = 1; n <= capDio; n++) {
+        const k = n - 1;
+        pos.set(`${chave}#${idPonto({ k: "adaptador", n })}`, [xG + (k % COLS) * CEL + CEL / 2, TOPO + 70 + Math.floor(k / COLS) * CEL + CEL / 2]);
+      }
+      hDio = TOPO + 70 + Math.ceil(capDio / COLS) * CEL + 16;
+    }
+    const hE = tipoCx === "olt" ? hOlt : empilhar(m.cabos.filter((c) => c.lado === "chega"), xE);
     const hD = empilhar(m.cabos.filter((c) => c.lado === "sai"), xD);
     // splitters: no meio, cada um perto da fibra que o alimenta
     const spl: (typeof caixasDes)[number]["spl"] = [];
@@ -171,8 +196,8 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
       hMax = Math.max(hMax, yMin);
     }
     const w = 24 + BW * 2 + MID;
-    const h = Math.max(hE, hD, ...spl.map((x) => x.y + x.h + 10)) - TOPO + 10;
-    caixasDes.push({ chave, x: xCur, w, h, spl });
+    const h = Math.max(hE, hD, hDio, ...spl.map((x) => x.y + x.h + 10)) - TOPO + 10;
+    caixasDes.push({ chave, x: xCur, w, h, spl, pons, capDio, xE });
     hMax = Math.max(hMax, TOPO + h + 20);
     xCur += w + GAP_CAIXA;
   }
@@ -215,6 +240,17 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "navegar") {
+      // porta PON ou adaptador do DIO: segue pela fibra ligada a eles
+      if (p.k === "pon" || p.k === "adaptador") {
+        const l = modelos.get(chave)?.ligacoes.find((x) => (x.tipo === "cordao" || x.tipo === "dio") && idPonto(x.a) === idPonto(p) && x.b.k === "fibra");
+        if (l && l.b.k === "fibra") {
+          const fb = l.b;
+          const c = modelos.get(chave)?.cabos.find((x) => x.lado === "sai" && x.chave === chaveCabo(fb.cabo));
+          if (c) abrirVizinha(chave, c);
+          setRotasTraco(rotasDaFibra(rotas, fb.cabo, fb.fibra));
+          setRotaIdx(0);
+        }
+      }
       if (p.k === "fibra") {
         const c = modelos.get(chave)?.cabos.find((x) => x.lado === p.lado && x.chave === chaveCabo(p.cabo));
         if (c) abrirVizinha(chave, c);
@@ -227,6 +263,10 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     if (!sel) { setSel({ chave, p }); setSelLig(null); return; }
     if (sel.chave !== chave) { setSel({ chave, p }); return; }
     if (idPonto(sel.p) === idPonto(p)) { setSel(null); return; }
+    // DIO: cordão que chega + adaptador = a rota passa a usar aquele adaptador (grava na rota)
+    const cordao = sel.p.k === "fibra" && sel.p.lado === "chega" ? sel.p : p.k === "fibra" && p.lado === "chega" ? p : null;
+    const adapt = sel.p.k === "adaptador" ? sel.p : p.k === "adaptador" ? p : null;
+    if (cordao && adapt) { void moverPortaDio(chave, cordao.cabo, adapt.n); setSel(null); return; }
     const t = tipoEntre(sel.p, p);
     if (!["fusao", "entrada", "perna", "nivel2"].includes(t)) { setErro(t); return; }
     const m = modelos.get(chave)!;
@@ -237,6 +277,30 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     mudar(chave, r);
     setSel(null);
   }
+  /** Troca o adaptador do DIO das rotas que chegam por este cordão (grava nas rotas) */
+  async function moverPortaDio(chave: string, cordao: string, n: number) {
+    const donas = rotas.filter((r) => !r.pai && r.elementos.some((e) => chaveElemento(e) === chave && e.tipo === "dio" && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(cordao)));
+    if (!donas.length) { setErro("Nenhuma rota chega por esse cordão."); return; }
+    const ocupante = rotas.find((r) => !donas.includes(r) && !r.pai && r.elementos.some((e) => chaveElemento(e) === chave && e.tipo === "dio" && /Porta\s*0*(\d+)/i.exec(e.porta ?? "")?.[1] === String(n)));
+    const msg = `Passar ${donas.map((r) => r.nome).join(", ")} para o adaptador ${n} do DIO (fibra ${n} do cabo que sai)?${ocupante ? `\n\nAtenção: o adaptador ${n} já é usado por ${ocupante.nome}.` : ""}`;
+    if (!confirm(msg)) return;
+    setSalvando(true);
+    try {
+      for (const r of donas) {
+        const elementos = trocarPortaDio(r, chave, n);
+        if (!elementos) continue;
+        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
+          nome: r.nome, origem: r.origem, elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
+        }));
+      }
+      onRotasMudaram?.();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível gravar a rota.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function salvarTudo() {
     setSalvando(true);
     setErro(null);
@@ -272,7 +336,8 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   const ponto = (chave: string, p: PontoUni, x: number, y: number, cor: string, ocup: boolean) => {
     const id = `${chave}#${idPonto(p)}`;
     const ativo = sel && sel.chave === chave && idPonto(sel.p) === idPonto(p);
-    const cand = modo === "editar" && sel?.chave === chave && !ativo && ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p));
+    const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega"));
+    const cand = modo === "editar" && sel?.chave === chave && !ativo && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)));
     return (
       <g key={`pt${id}`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
         <circle cx={x} cy={y} r={9} fill="transparent" />
@@ -403,18 +468,60 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
                       const sl = selLig?.chave === cx.chave && selLig.id === l.id;
                       const f = l.a.k === "fibra" ? l.a : l.b.k === "fibra" ? l.b : null;
                       const cor = f ? corFibra(f.fibra, f.cabo).hex : "#4ade80";
-                      const sug = l.origem === "rota" && l.tipo !== "passa";
+                      const sug = l.origem === "rota" && l.tipo === "fusao";
+                      const corL = l.tipo === "cordao" ? "#facc15" : cor;
                       return (
                         <g key={l.id} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (moveu.current) return; if (modo === "navegar") clicarPonto(cx.chave, l.a); else setSelLig(sl ? null : { chave: cx.chave, id: l.id }); }}>
                           <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                           {(tr || sl) && <path d={d} fill="none" stroke={tr ? LAR : "#facc15"} strokeWidth={6} opacity={0.85} strokeLinecap="round" />}
                           {l.tipo === "passa" ? <path d={d} fill="none" stroke="#94a3b8" strokeWidth={1.6} strokeDasharray="5 4" />
                             : sug ? <path d={d} fill="none" stroke="#fbbf24" strokeWidth={1.6} strokeDasharray="2 3" />
-                              : <><path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.6} /><path d={d} fill="none" stroke={cor} strokeWidth={1.9} opacity={l.origem === "regra" ? 0.6 : 1} /></>}
+                              : <><path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.6} /><path d={d} fill="none" stroke={corL} strokeWidth={l.tipo === "cordao" ? 2.6 : 1.9} opacity={l.origem === "regra" ? 0.6 : 1} /></>}
                         </g>
                       );
                     })}
 
+                    {/* OLT: placa com as portas PON usadas */}
+                    {t === "olt" && (
+                      <g>
+                        <rect x={cx.xE} y={TOPO + 44} width={BW} height={HEAD + cx.pons.length * (ROW + 4) + 4} rx={6} fill="#0f172a" stroke="#334155" />
+                        <text x={cx.xE + 8} y={TOPO + 58} fontSize={9} fontWeight={800} fill="#e2e8f0">Portas PON</text>
+                        {cx.pons.map((pp, k) => {
+                          const yy = TOPO + 44 + HEAD + k * (ROW + 4) + ROW / 2;
+                          const lp = pp.match(/PL\s*0*(\d+)\D+0*(\d+)/i);
+                          const rotulo = lp ? `0/${+lp[1]}/${+lp[2]}` : pp;
+                          return (
+                            <g key={pp}>
+                              <rect x={cx.xE + 8} y={yy - 7} width={BW - 26} height={14} rx={3} fill="#1e293b" stroke="#475569" />
+                              <rect x={cx.xE + 12} y={yy - 4} width={8} height={8} rx={1.5} fill="#16a34a" />
+                              <text x={cx.xE + 26} y={yy + 3} fontSize={8} fontWeight={700} fill="#e2e8f0">PON {rotulo}</text>
+                              <text x={cx.xE + BW - 22} y={yy + 3} fontSize={7} fill="#94a3b8" textAnchor="end">{pp.replace(/^PL\s*/i, "PL ")}</text>
+                              {ponto(cx.chave, { k: "pon", porta: pp }, cx.xE + BW, yy, "#facc15", true)}
+                            </g>
+                          );
+                        })}
+                      </g>
+                    )}
+                    {/* DIO: grade de adaptadores (porta N = fibra N do cabo que sai) */}
+                    {t === "dio" && (
+                      <g>
+                        <rect x={cx.xE + BW + 20} y={TOPO + 50} width={12 * 16 + 20} height={Math.ceil(cx.capDio / 12) * 16 + 30} rx={6} fill="#111827" stroke="#334155" />
+                        <text x={cx.xE + BW + 28} y={TOPO + 63} fontSize={8.5} fontWeight={800} fill="#cbd5e1">Adaptadores do DIO · {cx.capDio}</text>
+                        {Array.from({ length: cx.capDio }, (_, k) => {
+                          const n = k + 1;
+                          const pp = pos.get(`${cx.chave}#${idPonto({ k: "adaptador", n })}`)!;
+                          const usado = ocup.has(idPonto({ k: "adaptador", n }));
+                          return (
+                            <g key={n}>
+                              <title>{`Adaptador ${n}${usado ? " · em uso" : " · livre"}`}</title>
+                              <rect x={pp[0] - 7} y={pp[1] - 7} width={14} height={14} rx={2.5} fill={usado ? "#1e3a8a" : "#1f2937"} stroke={usado ? "#60a5fa" : "#374151"} />
+                              <text x={pp[0]} y={pp[1] + 2.5} fontSize={6} fill={usado ? "#dbeafe" : "#6b7280"} textAnchor="middle" fontWeight={700}>{n}</text>
+                              {(usado || modo === "editar") && ponto(cx.chave, { k: "adaptador", n }, pp[0], pp[1] + 9, "#60a5fa", usado)}
+                            </g>
+                          );
+                        })}
+                      </g>
+                    )}
                     {/* splitters (estilo GeoGrid: entrada à esquerda, leque, portas numeradas à direita) */}
                     {cx.spl.map(({ s, x, y, h, w, portas }) => {
                       const modelo = catalogo.find((q) => q.id === s.modelo_id);
@@ -427,7 +534,8 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
                           <rect x={x} y={y} width={w} height={h} rx={6} fill="#0f2a1c" stroke="#22c55e" strokeWidth={1.2} />
                           <rect x={x} y={y} width={w} height={20} rx={6} fill="#14532d" />
                           <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7">S{idx} · {s.relacao}</text>
-                          <text x={x + w - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                          <text x={x + w - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : ent ? `F${String(ent.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                          {!pon && ent && <rect x={x} y={y} width={w} height={h} rx={6} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="4 3"><title>Esta fibra não tem rota: confira ou tire o splitter</title></rect>}
                           <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill="#22c55e" opacity={0.18} />
                           <rect x={x - 2} y={yIn - 6} width={12} height={12} rx={2} fill="#16a34a" stroke="#0b0d10" />
                           <text x={x + 20} y={yIn + 3} fontSize={6.5} fill="#86efac">{perdaSplitter(s.relacao, modelo?.perda_db).toFixed(1).replace(".", ",")} dB</text>

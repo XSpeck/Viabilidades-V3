@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { caminhoNaCaixa, completarPelasRotas, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, type CadastroLigacoes } from "../unifilar";
+import { trocarPortaDio, caminhoNaCaixa, completarPelasRotas, corComCor, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, type CadastroLigacoes } from "../unifilar";
 import type { ElementoRota, RotaOptica } from "../rotaOptica";
 
 const A = "24 FO ASO · HUB → CEO 3 [CB-000006]";
@@ -84,5 +84,31 @@ describe("montar splitters pelas rotas", () => {
     expect(r.ed.splitters[0].portas.filter((p) => p.saida).map((p) => p.saida!.fibra)).toEqual([1, 2]);
     // rodar de novo não muda nada
     expect(completarPelasRotas("PT:15", [a, b], r.ed).ed).toBe(r.ed);
+  });
+});
+
+describe("OLT e DIO no unifilar", () => {
+  const COR = "Cordão 0/2/15 OLT2 → DIO 04";
+  const C72 = "72 FO ASO · DIO 04 → HUB [CB-000005]";
+  const r: RotaOptica = {
+    id: "r", nome: "0/2/15", origem: "manual", trechos: [],
+    elementos: [el("OLT2", "olt", "", { porta: "PL 02 - Porta 15" }), el("DIO 04", "dio", "100008", { cabo_entrada: COR, fibra_entrada: 1, porta: "Porta 13" }), el("HUB", "hub", "9", { cabo_entrada: C72, fibra_entrada: 13 })],
+  };
+  it("OLT: porta PON ligada no cordão que sai", () => {
+    const m = montarUnifilar("N:OLT2", [r], undefined);
+    expect(m.ligacoes).toHaveLength(1);
+    expect(m.ligacoes[0]).toMatchObject({ tipo: "cordao", a: { k: "pon", porta: "PL 02 - Porta 15" } });
+    expect(m.cabos[0].outraChave).toBe("PT:100008");
+  });
+  it("DIO: cordão → adaptador 13 → fibra 13 do cabo que sai", () => {
+    const m = montarUnifilar("PT:100008", [r], undefined);
+    expect(m.ligacoes.map((l) => l.tipo)).toEqual(["dio", "dio"]);
+    const cam = caminhoNaCaixa(m, { k: "fibra", lado: "chega", cabo: COR, fibra: 1 });
+    expect(cam.has(idPonto({ k: "fibra", lado: "sai", cabo: C72, fibra: 13 }))).toBe(true);
+  });
+  it("trocar a porta do DIO muda a porta e a fibra seguinte", () => {
+    const n = trocarPortaDio(r, "PT:100008", 20)!;
+    expect(n[1].porta).toBe("Porta 20");
+    expect(n[2].fibra_entrada).toBe(20);
   });
 });
