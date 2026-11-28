@@ -48,6 +48,31 @@ const textoSobre = (hex: string) => (["#f4f4f0", "#f2c200", "#ee86b0", "#20bdc9"
 
 type Pt = { chave: string; p: PontoUni };
 
+/** O que está aberto e sendo feito no Unifilar fica guardado no navegador (some só com Limpar, o "x" ou Salvar/Descartar) */
+const CHAVE_ESTADO = "unifilar_estado_v1";
+interface EstadoGuardado {
+  abertas: string[];
+  boxOff: Record<string, { dx: number; dy: number }>;
+  eds: Record<string, CadastroLigacoes>;
+  atds: Record<string, PortaCaixa[]>;
+  dioPend: Record<string, { chave: string; cordao: string; n: number }>;
+  cabosAbertos: string[];
+  zoom: number;
+  modo: "navegar" | "editar" | "clientes";
+  inicioTraco: Pt | null;
+  fibraTraco: { cabo: string; fibra: number } | null;
+  rotaIdx: number;
+  rolagem: { l: number; t: number };
+}
+function lerEstado(): Partial<EstadoGuardado> {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(CHAVE_ESTADO) ?? "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Cores do splitter: HUB laranja, CTO azul, CDOI (e outras) verde */
 const TEMA_SPL = {
   hub: { fundo: "#2a1607", borda: "#ea580c", cabeca: "#9a3412", texto: "#ffedd5", suave: "#fdba74", ponto: "#fb923c", porta: "#4a2410" },
@@ -69,7 +94,8 @@ function inicialDe(cad?: CaixaRede): CadastroLigacoes {
 
 export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuario, onCaixaSalva, onAbrirRota, onRotasMudaram, clientes = [], inicial }: Props) {
   /** Trocas de adaptador do DIO ainda não gravadas: chave do DIO | cordão → adaptador */
-  const [dioPend, setDioPend] = useState<Record<string, { chave: string; cordao: string; n: number }>>({});
+  const [salvo] = useState(lerEstado);
+  const [dioPend, setDioPend] = useState<Record<string, { chave: string; cordao: string; n: number }>>(salvo.dioPend ?? {});
   /** As rotas como ficam com as trocas pendentes (o desenho já mostra o novo adaptador) */
   const rotas = useMemo(() => {
     const pend = Object.values(dioPend);
@@ -95,22 +121,27 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   }, [rotas]);
   const infoDe = useMemo(() => new Map(todasCaixas.map((c) => [c.chave, c])), [todasCaixas]);
 
-  const [abertas, setAbertas] = useState<string[]>(() => (Array.isArray(inicial) ? inicial : inicial ? [inicial] : []));
+  // o que já estava aberto continua; a caixa pedida por outra tela entra junto
+  const [abertas, setAbertas] = useState<string[]>(() => {
+    const pedidas = Array.isArray(inicial) ? inicial : inicial ? [inicial] : [];
+    const antes = (salvo.abertas ?? []).filter((k) => typeof k === "string");
+    return [...antes, ...pedidas.filter((k) => !antes.includes(k))];
+  });
   const [busca, setBusca] = useState("");
-  const [modo, setModo] = useState<"navegar" | "editar" | "clientes">("navegar");
+  const [modo, setModo] = useState<"navegar" | "editar" | "clientes">(salvo.modo ?? "navegar");
   /** Modo Clientes: a perna escolhida; Editar: o splitter escolhido (para remover) */
   const [pernaSel, setPernaSel] = useState<{ chave: string; spl: string; porta: number } | null>(null);
   const [splSel, setSplSel] = useState<{ chave: string; id: string } | null>(null);
   /** CT: o cliente de cada fibra que chega (atendimento), ainda não gravado */
-  const [atds, setAtds] = useState<Record<string, PortaCaixa[]>>({});
+  const [atds, setAtds] = useState<Record<string, PortaCaixa[]>>(salvo.atds ?? {});
   const [fibraCt, setFibraCt] = useState<{ chave: string; fibra: number } | null>(null);
   const atdDe = (chave: string) => atds[chave] ?? cadDe.get(chave)?.atendimento ?? [];
   /** Arrumação: a posição da caixa na tela (só nesta sessão) e o arrasto em andamento */
-  const [boxOff, setBoxOff] = useState<Record<string, { dx: number; dy: number }>>({});
+  const [boxOff, setBoxOff] = useState<Record<string, { dx: number; dy: number }>>(salvo.boxOff ?? {});
   const [vivo, setVivo] = useState<{ chave: string; id: string; dx: number; dy: number } | null>(null);
   const arrasto = useRef<{ chave: string; id: string; sx: number; sy: number; base: { dx: number; dy: number }; moveu: boolean } | null>(null);
   /** Ir até uma caixa (clique no nome no painel da rota): rola até ela e pisca a borda */
-  const irPara = useRef<string | null>(null);
+  const irPara = useRef<string | null>(Array.isArray(inicial) ? inicial[0] ?? null : inicial ?? null);
   const [destaque, setDestaque] = useState<string | null>(null);
   useEffect(() => {
     const k = irPara.current;
@@ -130,20 +161,52 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   /** Deslocamento de um item ("box" = a caixa inteira) em relação ao lugar automático */
   const off = (chave: string, id: string) =>
     vivo && vivo.chave === chave && vivo.id === id ? vivo : (id === "box" ? boxOff[chave] : layoutDe(chave)[id]) ?? { dx: 0, dy: 0 };
-  const [eds, setEds] = useState<Record<string, CadastroLigacoes>>({});
+  const [eds, setEds] = useState<Record<string, CadastroLigacoes>>(salvo.eds ?? {});
   const [hist, setHist] = useState<Record<string, CadastroLigacoes>[]>([]);
   const [sel, setSel] = useState<Pt | null>(null);
   const [selLig, setSelLig] = useState<{ chave: string; id: string } | null>(null);
   /** Ponto clicado no "Navegar": o caminho laranja é recalculado quando novas caixas abrem */
-  const [inicioTraco, setTraco] = useState<Pt | null>(null);
-  const [rotasTraco, setRotasTraco] = useState<ReturnType<typeof rotasDaFibra>>([]);
-  const [rotaIdx, setRotaIdx] = useState(0);
-  const [cabosAbertos, setCabosAbertos] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(1);
+  const [inicioTraco, setTraco] = useState<Pt | null>(salvo.inicioTraco ?? null);
+  /** Fibra traçada: as rotas dela saem das rotas (sempre atualizadas) */
+  const [fibraTraco, setFibraTraco] = useState<{ cabo: string; fibra: number } | null>(salvo.fibraTraco ?? null);
+  const rotasTraco = useMemo(() => (fibraTraco ? rotasDaFibra(rotas, fibraTraco.cabo, fibraTraco.fibra) : []), [rotas, fibraTraco]);
+  const [rotaIdx, setRotaIdx] = useState(salvo.rotaIdx ?? 0);
+  const [cabosAbertos, setCabosAbertos] = useState<Set<string>>(() => new Set(salvo.cabosAbertos ?? []));
+  const [zoom, setZoom] = useState(typeof salvo.zoom === "number" ? salvo.zoom : 1);
   const [cheia, setCheia] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const area = useRef<HTMLDivElement>(null);
+  // guarda o que está sendo feito (atualizar a página, trocar de aba e voltar: continua igual)
+  const rolagem = useRef(salvo.rolagem ?? { l: 0, t: 0 });
+  useEffect(() => {
+    try {
+      const estado: EstadoGuardado = {
+        abertas, boxOff, eds, atds, dioPend, cabosAbertos: [...cabosAbertos], zoom, modo, inicioTraco, fibraTraco, rotaIdx, rolagem: rolagem.current,
+      };
+      window.localStorage.setItem(CHAVE_ESTADO, JSON.stringify(estado));
+    } catch { /* navegador sem espaço ou bloqueado: segue sem guardar */ }
+  }, [abertas, boxOff, eds, atds, dioPend, cabosAbertos, zoom, modo, inicioTraco, fibraTraco, rotaIdx]);
+  // volta para onde estava rolado (se não veio pedir uma caixa)
+  useEffect(() => {
+    if (irPara.current) return;
+    const el = area.current;
+    const r = salvo.rolagem;
+    if (el && r) { el.scrollLeft = r.l; el.scrollTop = r.t; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const guardaRolagem = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function aoRolar(e: React.UIEvent<HTMLDivElement>) {
+    rolagem.current = { l: e.currentTarget.scrollLeft, t: e.currentTarget.scrollTop };
+    if (guardaRolagem.current) clearTimeout(guardaRolagem.current);
+    guardaRolagem.current = setTimeout(() => {
+      try {
+        const v = JSON.parse(window.localStorage.getItem(CHAVE_ESTADO) ?? "{}");
+        window.localStorage.setItem(CHAVE_ESTADO, JSON.stringify({ ...v, rolagem: rolagem.current }));
+      } catch { /* sem guardar */ }
+    }, 300);
+  }
+
 
   useEffect(() => {
     if (!cheia) return;
@@ -417,14 +480,14 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           const fb = l.b;
           const c = modelos.get(chave)?.cabos.find((x) => x.lado === "sai" && x.chave === chaveCabo(fb.cabo));
           if (c) abrirVizinha(chave, c);
-          setRotasTraco(rotasDaFibra(rotas, fb.cabo, fb.fibra));
+          setFibraTraco({ cabo: fb.cabo, fibra: fb.fibra });
           setRotaIdx(0);
         }
       }
       if (p.k === "fibra") {
         const c = modelos.get(chave)?.cabos.find((x) => x.lado === p.lado && x.chave === chaveCabo(p.cabo));
         if (c) abrirVizinha(chave, c);
-        setRotasTraco(rotasDaFibra(rotas, p.cabo, p.fibra));
+        setFibraTraco({ cabo: p.cabo, fibra: p.fibra });
         setRotaIdx(0);
       }
       tracar({ chave, p });
@@ -576,7 +639,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
             </button>
           ))}
         </div>
-        {abertas.length > 0 && <button type="button" onClick={() => { setAbertas([]); setTraco(null); setRotasTraco([]); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-400 hover:text-slate-200">Limpar</button>}
+        {abertas.length > 0 && <button type="button" onClick={() => { setAbertas([]); setTraco(null); setFibraTraco(null); setBoxOff({}); setCabosAbertos(new Set()); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-400 hover:text-slate-200">Limpar</button>}
         {pendentes > 0 && (
           <>
             <button type="button" disabled={!hist.length} onClick={() => { setEds(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); }} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" /> Desfazer</button>
@@ -599,6 +662,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         {/* Área */}
         <div
           ref={area}
+          onScroll={aoRolar}
           className="min-w-0 flex-1 cursor-grab select-none overflow-auto active:cursor-grabbing"
           onPointerDown={(e) => { if (e.pointerType !== "mouse" || e.button !== 0 || !area.current) return; arr.current = { x: e.clientX, y: e.clientY, sl: area.current.scrollLeft, st: area.current.scrollTop }; moveu.current = false; }}
           onPointerMove={(e) => { const a = arr.current; if (!a || !area.current) return; const dx = e.clientX - a.x, dy = e.clientY - a.y; if (!moveu.current && Math.abs(dx) + Math.abs(dy) > 5) moveu.current = true; if (moveu.current) { e.currentTarget.scrollLeft = a.sl - dx; e.currentTarget.scrollTop = a.st - dy; } }}

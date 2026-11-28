@@ -88,7 +88,17 @@ export default function RotaOpticaPage() {
   /** Janela do simulador de rompimento (OTDR) */
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   /** Tela principal: árvore das portas PON ou mapa da rede */
-  const [vista, setVista] = useState<"arvore" | "mapa" | "unifilar">("arvore");
+  // a aba escolhida continua ao atualizar a página
+  const [vista, setVistaEstado] = useState<"arvore" | "mapa" | "unifilar">(() => {
+    try {
+      const v = typeof window !== "undefined" ? window.localStorage.getItem("rota_optica_vista") : null;
+      return v === "mapa" || v === "unifilar" || v === "arvore" ? v : "arvore";
+    } catch { return "arvore"; }
+  });
+  const setVista = (v: "arvore" | "mapa" | "unifilar") => {
+    setVistaEstado(v);
+    try { window.localStorage.setItem("rota_optica_vista", v); } catch { /* sem guardar */ }
+  };
   /** Caixa que a aba Unifilar abre (vindo de outra tela); n muda a cada pedido */
   const [uniInicial, setUniInicial] = useState<{ chave: string | string[]; n: number } | null>(null);
   /** Muda para o editor reabrir do zero (depois de uma troca de fibra gravada) */
