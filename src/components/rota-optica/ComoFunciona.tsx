@@ -9,10 +9,10 @@ import { Boxes, Cable, Map as MapIcon, Pencil, Zap } from "lucide-react";
 const PASSOS = [
   {
     n: "1",
-    titulo: "Mapa da rota",
-    onde: "botão “Nova rota” ou “Editar” na janela da rota",
-    serve: "Onde as coisas estão e por onde a fibra passa.",
-    edita: ["caixas e a posição de cada uma", "cabos e o traçado nos postes", "botão Cabo: tipo, capacidade, observação e troca de fibra em várias rotas", "a fibra que cada rota usa", "OLT, porta PON e DIO da estação", "prédios (blocos, andares e CDOIs)"],
+    titulo: "Mapa da rede · Editar",
+    onde: "aba Mapa da rede, botão Editar rede",
+    serve: "Onde as coisas estão e por onde o cabo passa. A rede é livre: nada de rotas.",
+    edita: ["colocar OLT, DIO, CEO, CT, HUB, CTO e CDOI", "desenhar cabo de caixa em caixa (passando pelas do meio)", "pôr caixa em cima de um cabo", "arrastar e apagar", "na OLT: Ligar PON (cordão até o adaptador do DIO)", "tipo e capacidade do cabo"],
     Icone: Pencil,
     cor: "border-indigo-200 bg-indigo-50 text-indigo-900",
   },
@@ -20,16 +20,16 @@ const PASSOS = [
     n: "2",
     titulo: "Unifilar",
     onde: "aba Unifilar",
-    serve: "O que tem dentro de cada caixa, ligação por ligação, com a potência (dBm) em cada ponta.",
-    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal (porta da CTO → CT)", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO de cada rota", "trocar a fibra: vale no trecho inteiro do cabo (rotas e a caixa da outra ponta)", "prédio: botão Editar no prédio (fibra de cada CDOI)"],
+    serve: "O que liga em quê dentro de cada caixa. O sinal vem da porta PON e acende sozinho, com a potência em cada ponta.",
+    edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas dos splitters", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO (PON + adaptador novo)", "desligar não apaga nada: só tira o sinal", "não deixa duas PONs na mesma fibra"],
     Icone: Cable,
     cor: "border-slate-700 bg-[#16181c] text-slate-100",
   },
   {
     n: "3",
-    titulo: "Mapa da rede",
-    onde: "aba Mapa da rede",
-    serve: "A rede inteira para análise. Escolha uma PON para o resumo dela.",
+    titulo: "Mapa da rede · Análise",
+    onde: "aba Mapa da rede, botão Análise",
+    serve: "A rede inteira com o caminho da luz calculado. Escolha uma PON para o resumo dela.",
     edita: [],
     Icone: MapIcon,
     cor: "border-slate-200 bg-slate-50 text-slate-800",
@@ -40,13 +40,13 @@ const OLHAR = [
   { titulo: "Simular rompimento", serve: "Onde rompeu e quem fica sem sinal.", Icone: Zap },
 ];
 
-const CADASTROS = "Cadastros de equipamentos, clientes, importar KML e limpeza ficam em “Mais ▾”.";
+const CADASTROS = "Cadastros de equipamentos, clientes e Começar rede nova ficam em “Mais ▾”.";
 
 export default function ComoFunciona() {
   return (
     <div className="space-y-3 p-3 text-xs">
       <p className="text-slate-600">
-        Cada coisa se muda <b>num lugar só</b>. A sequência é: desenhe a rota no mapa → ligue as fibras e confira a potência no Unifilar → analise a rede no Mapa da rede.
+        Cada coisa se muda <b>num lugar só</b>. A sequência é: desenhe elementos e cabos no mapa → ligue as fibras no Unifilar (o sinal aparece sozinho) → analise a rede.
       </p>
       <ol className="grid gap-2 sm:grid-cols-3">
         {PASSOS.map(({ n, titulo, onde, serve, edita, Icone, cor }) => (

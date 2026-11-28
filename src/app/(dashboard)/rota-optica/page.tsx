@@ -6,31 +6,21 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/access";
 import {
-  atualizarRota,
-  criarRota,
-  excluirRota,
   formatDbm,
   formatMetros,
-  listarRotas,
-  parseGeoGridKml,
   resumoRota,
   type RotaOptica,
-  type RotaOpticaInput,
-  type ElementoRota,
 } from "@/lib/rotaOptica";
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
-import RotaEditor from "@/components/rota-optica/RotaEditor";
 import UnifilarRede from "@/components/rota-optica/UnifilarRede";
-import { listarCaixas, splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
+import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
 import EtiquetaCabo from "@/components/rota-optica/EtiquetaCabo";
 import { registrarCapacidadesCabos } from "@/lib/rotaOptica";
 import { listarCatalogo, type ItemCatalogo } from "@/lib/catalogoRede";
-import { listarPredios, salvarPredio } from "@/lib/prediosRede";
-import { montarRotas, subRotasDe } from "@/lib/subRotas";
+import { listarPredios } from "@/lib/prediosRede";
 import { listarClientes, type ClienteRede } from "@/lib/clientesRede";
 import ClientesRede from "@/components/rota-optica/ClientesRede";
-import LimpezaRede from "@/components/rota-optica/LimpezaRede";
 import { apagarRedeDesenhada, contarRedeDesenhada } from "@/lib/redeLivre";
 import { calcularSinal } from "@/lib/sinalRede";
 import SimuladorRompimento from "@/components/rota-optica/SimuladorRompimento";
@@ -38,42 +28,30 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, Cable, FileUp, HelpCircle, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
+import { Boxes, Cable, HelpCircle, Loader2, Map as MapIcon, Pencil, Route, Trash2, Users, X, Zap } from "lucide-react";
 import ComoFunciona from "@/components/rota-optica/ComoFunciona";
-import PredioVertical from "@/components/rota-optica/PredioVertical";
-import { chaveElemento } from "@/lib/arvorePon";
-import { idPredioDoElemento } from "@/lib/prediosRede";
 
 /** Para que serve cada aba (uma frase) */
 const FRASE_VISTA = {
-  mapa: "A rede inteira para análise. Para mudar posição ou cabo, abra a rota e clique em Editar.",
-  unifilar: "O que tem dentro de cada caixa: splitters, emendas, clientes nas portas e o DIO. É aqui que se muda.",
+  mapa: "Onde as coisas estão e por onde o cabo passa: coloque elementos e desenhe cabos. O sinal aparece sozinho.",
+  unifilar: "O que liga em quê dentro de cada caixa: splitters, emendas, DIO e clientes nas portas.",
 } as const;
 
-const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[420px] bg-gray-100 rounded-xl flex items-center justify-center">
+function CarregandoMapa({ h }: { h: string }) {
+  return (
+    <div className={`${h} bg-gray-100 rounded-xl flex items-center justify-center`}>
       <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
     </div>
-  ),
-});
+  );
+}
+const RotaMapa = dynamic(() => import("@/components/rota-optica/RotaMapa"), { ssr: false, loading: () => <CarregandoMapa h="h-[420px]" /> });
+const EditorRede = dynamic(() => import("@/components/rota-optica/EditorRede"), { ssr: false, loading: () => <CarregandoMapa h="h-[520px]" /> });
+const MapaRede = dynamic(() => import("@/components/rota-optica/MapaRede"), { ssr: false, loading: () => <CarregandoMapa h="h-[520px]" /> });
 
-const EditorRede = dynamic(() => import("@/components/rota-optica/EditorRede"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[520px] bg-gray-100 rounded-xl flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-    </div>
-  ),
-});
-
-type Modo = { tipo: "ver" } | { tipo: "editar"; rota: RotaOptica | null } | { tipo: "importar"; rota: RotaOpticaInput };
+type Modo = { tipo: "ver" };
 
 export default function RotaOpticaPage() {
   const { user } = useAuth();
-  /** Rotas como estão no banco (sub-rotas só com o trecho delas) */
-  const [rotasCruas, setRotas] = useState<RotaOptica[]>([]);
   const [caixas, setCaixas] = useState<CaixaRede[]>([]);
   const [cabos, setCabos] = useState<CaboRede[]>([]);
   const [catalogo, setCatalogo] = useState<ItemCatalogo[]>([]);
@@ -84,8 +62,6 @@ export default function RotaOpticaPage() {
   const [rotasAbertas, setRotasAbertas] = useState<{ id: string; x: number; y: number }[]>([]);
   /** Janela do cadastro de equipamentos (posição inicial) */
   const [cadastro, setCadastro] = useState<{ x: number; y: number } | null>(null);
-  /** Janela de limpeza (resíduos de rotas apagadas) */
-  const [limpeza, setLimpeza] = useState<{ x: number; y: number } | null>(null);
   /** Janela do cadastro de clientes */
   const [janelaClientes, setJanelaClientes] = useState<{ x: number; y: number } | null>(null);
   const [clientes, setClientes] = useState<ClienteRede[]>([]);
@@ -105,24 +81,10 @@ export default function RotaOpticaPage() {
   };
   /** Caixa que a aba Unifilar abre (vindo de outra tela); n muda a cada pedido */
   const [uniInicial, setUniInicial] = useState<{ chave: string | string[]; n: number } | null>(null);
-  /** Muda para o editor reabrir do zero (depois de uma troca de fibra gravada) */
-  const [versaoEditor, setVersaoEditor] = useState(0);
-  /** Janela do prédio aberta pelo Unifilar (fibra de cada CDOI) */
-  const [predioAberto, setPredioAberto] = useState<{ chave: string; nome: string; predioId?: string; x: number; y: number } | null>(null);
+  /** Aba Mapa da rede: desenhar (editar) ou ver a análise (temas, alertas) */
+  const [mapaModo, setMapaModo] = useState<"editar" | "analise">("editar");
   /** Janela "Como funciona" */
   const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
-  const inputKml = useRef<HTMLInputElement>(null);
-  /** Perda (dB) do modelo de splitter do cadastro de equipamentos */
-  const perdaDoModelo = (id?: string) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined);
-  /** O splitter de cada caixa é o do cadastro dela (Unifilar): a rota e o prédio só mostram */
-  const splitterDaCaixa = (e: ElementoRota) => splitterDoCadastro(caixas.find((c) => c.chave === chaveElemento(e)), e.cabo_entrada, e.fibra_entrada);
-  // Sub-rotas montadas com o tronco da rota-mãe: todas as telas usam o caminho completo
-  const rotas = useMemo(
-    () => montarRotas(rotasCruas, perdaDoModelo, splitterDaCaixa),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rotasCruas, catalogo, caixas]
-  );
-
   /** Rede livre: o sinal sai das portas PON e segue as ligações das caixas (nada disso é gravado) */
   const sinal = useMemo(
     () => calcularSinal(caixas, cabos, {
@@ -131,21 +93,10 @@ export default function RotaOpticaPage() {
     }),
     [caixas, cabos, catalogo],
   );
+  /** Os caminhos da luz (de cada PON até cada caixa onde ela termina): o que as telas de análise leem */
+  const rotas = sinal.rotas;
 
   const permitido = canAccess(user ?? null, "rota-optica");
-
-  async function recarregar() {
-    try {
-      const lista = await listarRotas();
-      setRotas(lista);
-      setRotasAbertas((rs) => rs.filter((x) => lista.some((r) => r.id === x.id)));
-      setErro(null);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao carregar rotas.");
-    } finally {
-      setCarregando(false);
-    }
-  }
 
   useEffect(() => {
     if (!permitido) return;
@@ -162,10 +113,7 @@ export default function RotaOpticaPage() {
       .catch((e) => console.warn("Não foi possível carregar os clientes (publique a regra clientes_rede):", e));
     listarCaixas()
       .then((cx) => { if (ativo) setCaixas(cx); })
-      .catch((e) => console.warn("Não foi possível carregar as caixas:", e));
-    listarRotas()
-      .then((lista) => { if (ativo) setRotas(lista); })
-      .catch((e) => ativo && setErro(e instanceof Error ? e.message : "Erro ao carregar rotas."))
+      .catch((e) => ativo && setErro(e instanceof Error ? e.message : "Erro ao carregar a rede."))
       .finally(() => ativo && setCarregando(false));
     return () => { ativo = false; };
   }, [permitido]);
@@ -185,34 +133,8 @@ export default function RotaOpticaPage() {
   }, [cabos, catalogo]);
   registrarCapacidadesCabos(capacidades, tubos, construcoes);
 
-  const nomesCabos = useMemo(() => {
-    const m = new Map<string, string>();
-    usoDasFibras(rotas).forEach((v, k) => m.set(k, v.nome));
-    rotas.forEach((r) => r.elementos.forEach((e) => e.cabo_saida && m.set(e.cabo_saida.toUpperCase(), e.cabo_saida)));
-    cabos.forEach((c) => m.set(c.chave, c.nome));
-    return [...new Set(m.values())].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
-  }, [rotas, cabos]);
-
-  // Mapa de rota nova abre perto da rede já cadastrada
-  const pontoRede = rotas.flatMap((r) => r.elementos).find((e) => e.lat !== undefined && e.lon !== undefined);
-  const centroPadrao: [number, number] | undefined = pontoRede ? [pontoRede.lat!, pontoRede.lon!] : undefined;
-
   if (!permitido) {
     return <div className="text-center py-20 text-red-500">🚫 Acesso restrito a administradores.</div>;
-  }
-
-  async function lerKml(file: File) {
-    setErro(null);
-    try {
-      const texto = await file.text();
-      const { elementos, trechos, nomeSugerido } = parseGeoGridKml(texto);
-      setModo({
-        tipo: "importar",
-        rota: { nome: nomeSugerido, origem: "geogrid", elementos, trechos, criado_por: user?.nome },
-      });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível ler o KML.");
-    }
   }
 
   /** Abre a rota numa janela grande, centralizada no topo (ou traz para frente) */
@@ -224,69 +146,11 @@ export default function RotaOpticaPage() {
     );
   }
 
-  /** Troca de fibra feita de dentro do editor: grava rotas, então o editor reabre com a rota gravada */
-  async function editorRegravado() {
-    const id = modo.tipo === "editar" ? modo.rota?.id : undefined;
-    const lista = await listarRotas();
-    setRotas(lista);
-    const montadas = montarRotas(lista, perdaDoModelo, splitterDaCaixa);
-    if (id) setModo({ tipo: "editar", rota: montadas.find((r) => r.id === id) ?? null });
-    setVersaoEditor((v) => v + 1);
-  }
-
-  /** Abre a janela do prédio (onde se escolhe a fibra de cada CDOI) */
-  function editarPredio(chave: string) {
-    const el = rotas.flatMap((r) => r.elementos).find((e) => chaveElemento(e) === chave);
-    if (!el) return;
-    setPredioAberto({ chave, nome: el.nome, predioId: idPredioDoElemento(el) ?? undefined, x: Math.max(8, (window.innerWidth - 640) / 2), y: 60 });
-  }
-
   /** Leva a caixa para a aba Unifilar (onde se muda o que tem dentro dela) */
   function abrirNoUnifilar(chave: string | string[]) {
     setModo({ tipo: "ver" });
     setUniInicial((u) => ({ chave, n: (u?.n ?? 0) + 1 }));
     setVista("unifilar");
-  }
-
-  async function salvarNova(dados: RotaOpticaInput) {
-    const id = await criarRota(dados);
-    setModo({ tipo: "ver" });
-    await recarregar();
-    abrirRota(id);
-  }
-
-  async function salvarEdicao(id: string, dados: RotaOpticaInput) {
-    await atualizarRota(id, dados);
-    setModo({ tipo: "ver" });
-    await recarregar();
-    abrirRota(id);
-  }
-
-  async function excluir(r: RotaOptica) {
-    const filhas = subRotasDe(r.id, rotas);
-    if (filhas.length) {
-      const lista = filhas.map((x) => `• ${x.nome}`).join("\n");
-      void avisar(`A rota "${r.nome}" tem ${filhas.length} sub-rota${filhas.length > 1 ? "s" : ""} saindo dela:\n\n${lista}\n\nExclua as sub-rotas antes.`);
-      return;
-    }
-    // rota de CDOI montada por um prédio: a CDOI continua no prédio, só que sem fibra (só no desenho)
-    const prediosAgora = await listarPredios(true).catch(() => []);
-    const doPredio = prediosAgora.find((p) => p.pontos.some((o) => o.rota_id === r.id));
-    const cdoi = doPredio?.pontos.find((o) => o.rota_id === r.id);
-    const aviso = doPredio && cdoi ? `\n\nA ${cdoi.nome} continua no prédio ${doPredio.nome}, sem fibra (só no desenho).` : "";
-    if (!(await confirmar(`Excluir a rota "${r.nome}"? Isso não pode ser desfeito.${aviso}`, { titulo: "Excluir rota", ok: "Excluir" }))) return;
-    try {
-      await excluirRota(r.id);
-      if (doPredio && cdoi) {
-        await salvarPredio(
-          { ...doPredio, pontos: doPredio.pontos.map((o) => (o.id === cdoi.id ? { ...o, rota_id: undefined, fibra: undefined, chave: "" } : o)) },
-          user?.nome ?? ""
-        );
-      }
-      await recarregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao excluir.");
-    }
   }
 
   /** Apaga o que está desenhado (elementos, cabos, prédios) para redesenhar na rede livre; as rotas antigas ficam */
@@ -321,17 +185,6 @@ export default function RotaOpticaPage() {
         </div>
         {modo.tipo === "ver" && (
           <div className="flex flex-wrap gap-2">
-            <input
-              ref={inputKml}
-              type="file"
-              accept=".kml,application/vnd.google-earth.kml+xml"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) lerKml(f);
-                e.target.value = "";
-              }}
-            />
             <details className="relative">
               <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50">
                 <Boxes className="w-4 h-4" /> Mais ▾
@@ -353,20 +206,6 @@ export default function RotaOpticaPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; inputKml.current?.click(); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  <FileUp className="w-4 h-4 text-indigo-600" /> Importar KML do GeoGrid
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setLimpeza({ x: Math.max(8, (window.innerWidth - 520) / 2), y: 72 }); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  <Trash2 className="w-4 h-4 text-slate-600" /> Limpeza (sem rota)
-                </button>
-                <button
-                  type="button"
                   onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void comecarRedeNova(); }}
                   className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50"
                 >
@@ -383,13 +222,6 @@ export default function RotaOpticaPage() {
             >
               <Zap className="w-4 h-4" /> Simular rompimento
             </button>
-            <button
-              type="button"
-              onClick={() => { setModo({ tipo: "editar", rota: null }); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
-            >
-              <Plus className="w-4 h-4" /> Nova rota (mapa / manual)
-            </button>
           </div>
         )}
       </div>
@@ -399,56 +231,6 @@ export default function RotaOpticaPage() {
           <span>{erro}</span>
           <button type="button" onClick={() => setErro(null)} aria-label="Fechar aviso"><X className="w-4 h-4" /></button>
         </div>
-      )}
-
-      {modo.tipo === "editar" && (
-        <RotaEditor
-          key={`${modo.rota?.id ?? "nova"}-${versaoEditor}`}
-          inicial={modo.rota}
-          usuario={user?.nome ?? ""}
-          catalogo={catalogo}
-          cabos={cabos}
-          nomesCabos={nomesCabos}
-          centroPadrao={centroPadrao}
-          rede={rotas.filter((r) => r.id !== modo.rota?.id)}
-          todas={rotas}
-          onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-          onCancelar={() => setModo({ tipo: "ver" })}
-          onSalvar={(d) => (modo.rota ? salvarEdicao(modo.rota.id, d) : salvarNova(d))}
-          onSalvarParcial={modo.rota ? async (d) => { await atualizarRota(modo.rota!.id, d); await recarregar(); } : undefined}
-          caixas={caixas}
-          onRotasRegravadas={editorRegravado}
-          onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-          onEditarPredio={async (k) => { if (await confirmar("Sair do editor da rota e abrir a janela do prédio? O que não foi salvo aqui se perde.", { ok: "Abrir o prédio" })) { setModo({ tipo: "ver" }); editarPredio(k); } }}
-          onAbrirNoUnifilar={async (k) => { if (await confirmar("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.", { ok: "Abrir no Unifilar" })) abrirNoUnifilar(k); }}
-        />
-      )}
-
-      {predioAberto && (
-        <Janela
-          inicial={predioAberto}
-          largura={Math.min(640, typeof window !== "undefined" ? window.innerWidth - 16 : 640)}
-          titulo={predioAberto.nome}
-          subtitulo="Prédio · fibra de cada CDOI, blocos e andares"
-          icone={<IconeElemento tipo="predio" tamanho={22} />}
-          corBarra="bg-slate-700"
-          onFechar={() => setPredioAberto(null)}
-        >
-          <PredioVertical
-            key={predioAberto.chave}
-            chave={predioAberto.chave}
-            nome={predioAberto.nome}
-            predioId={predioAberto.predioId}
-            rotas={rotas}
-            caixas={caixas}
-            usuario={user?.nome ?? ""}
-            onAbrirRota={abrirRota}
-            onRotasMudaram={recarregar}
-            modelosSplitter={catalogo.filter((m) => m.categoria === "splitter")}
-            onAbrirCdoi={(k) => abrirNoUnifilar(k)}
-            onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-          />
-        </Janela>
       )}
 
       {ajuda && (
@@ -507,37 +289,6 @@ export default function RotaOpticaPage() {
         </Janela>
       )}
 
-      {limpeza && (
-        <Janela
-          inicial={limpeza}
-          largura={520}
-          titulo="Limpeza"
-          subtitulo="Sub-rotas a converter e prédios, caixas e cabos que nenhuma rota usa"
-          icone={<Trash2 className="w-5 h-5" />}
-          corBarra="bg-slate-800"
-          onFechar={() => setLimpeza(null)}
-        >
-          <LimpezaRede
-            rotas={rotas}
-            caixas={caixas}
-            cabos={cabos}
-            usuario={user?.nome ?? ""}
-            onCaixas={setCaixas}
-            onCabos={setCabos}
-            onPredios={recarregar}
-            onRotas={recarregar}
-          />
-        </Janela>
-      )}
-
-      {modo.tipo === "importar" && (
-        <PreviaImportacao
-          rota={modo.rota}
-          onCancelar={() => setModo({ tipo: "ver" })}
-          onSalvar={salvarNova}
-        />
-      )}
-
       {modo.tipo === "ver" && (
         carregando ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -571,7 +322,6 @@ export default function RotaOpticaPage() {
             <UnifilarRede
               key={uniInicial?.n ?? 0}
               inicial={uniInicial?.chave}
-              onEditarPredio={editarPredio}
               clientes={clientes}
               cabos={cabos}
               caixas={caixas}
@@ -580,18 +330,30 @@ export default function RotaOpticaPage() {
               onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
             />
           ) : (
-            <EditorRede
-              caixas={caixas}
-              cabos={cabos}
-              catalogo={catalogo}
-              sinal={sinal}
-              usuario={user?.nome ?? ""}
-              onCaixa={(c) => setCaixas((l) => [...l.filter((x) => x.chave !== c.chave), c])}
-              onCaixaFora={(k) => setCaixas((l) => l.filter((x) => x.chave !== k))}
-              onCabo={(c) => setCabos((l) => [...l.filter((x) => x.chave !== c.chave), c])}
-              onCaboFora={(k) => setCabos((l) => l.filter((x) => x.chave !== k))}
-              onAbrirNoUnifilar={abrirNoUnifilar}
-            />
+            <div className="space-y-2">
+              <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs">
+                {([["editar", "Editar rede"], ["analise", "Análise"]] as const).map(([k, r]) => (
+                  <button key={k} type="button" onClick={() => setMapaModo(k)}
+                    className={`rounded-md px-2.5 py-1 font-semibold ${mapaModo === k ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{r}</button>
+                ))}
+              </div>
+              {mapaModo === "analise" ? (
+                <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
+              ) : (
+              <EditorRede
+                caixas={caixas}
+                cabos={cabos}
+                catalogo={catalogo}
+                sinal={sinal}
+                usuario={user?.nome ?? ""}
+                onCaixa={(c) => setCaixas((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+                onCaixaFora={(k) => setCaixas((l) => l.filter((x) => x.chave !== k))}
+                onCabo={(c) => setCabos((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+                onCaboFora={(k) => setCabos((l) => l.filter((x) => x.chave !== k))}
+                onAbrirNoUnifilar={abrirNoUnifilar}
+              />
+              )}
+            </div>
           )}
           </div>
         )
@@ -607,7 +369,7 @@ export default function RotaOpticaPage() {
             inicial={{ x: j.x, y: j.y }}
             largura={Math.min(980, typeof window !== "undefined" ? window.innerWidth - 16 : 980)}
             titulo={r.nome}
-            subtitulo={`${r.origem === "geogrid" ? "GeoGrid" : "Manual"} · ${r.elementos.length} elementos · ${formatMetros(res.distancia_m)}`}
+            subtitulo={`${r.elementos.length} elementos · ${formatMetros(res.distancia_m)}`}
             icone={<Route className="w-5 h-5" />}
             corBarra="bg-indigo-900"
             onFechar={() => setRotasAbertas((rs) => rs.filter((x) => x.id !== j.id))}
@@ -617,15 +379,7 @@ export default function RotaOpticaPage() {
                 rota={r}
                 catalogo={catalogo}
                 emJanela
-                origemTexto={
-                  r.pai
-                    ? `Sub-rota de ${rotas.find((x) => x.id === r.pai!.rota_id)?.nome ?? "rota-mãe"}, saindo de ${r.tronco ? r.elementos[r.tronco - 1]?.nome : "?"}`
-                    : rotas.some((x) => x.pai?.rota_id === r.id)
-                      ? `Rota tronco · ${rotas.filter((x) => x.pai?.rota_id === r.id).length} sub-rota(s) saindo dela`
-                      : undefined
-                }
-                onEditar={() => { setRotasAbertas((rs) => rs.filter((x) => x.id !== j.id)); setModo({ tipo: "editar", rota: r }); }}
-                onExcluir={() => excluir(r)}
+                origemTexto="Caminho da luz, calculado pelas ligações das caixas"
               />
             </div>
           </Janela>
@@ -633,68 +387,6 @@ export default function RotaOpticaPage() {
       })}
     </div>
     </JanelasProvider>
-  );
-}
-
-// =====================
-// Prévia antes de salvar o KML importado
-// =====================
-function PreviaImportacao({
-  rota,
-  onCancelar,
-  onSalvar,
-}: {
-  rota: RotaOpticaInput;
-  onCancelar: () => void;
-  onSalvar: (r: RotaOpticaInput) => Promise<void>;
-}) {
-  const [nome, setNome] = useState(rota.nome);
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-
-  async function salvar() {
-    if (!nome.trim()) return setErro("Dê um nome para a rota.");
-    setSalvando(true);
-    setErro(null);
-    try {
-      await onSalvar({ ...rota, nome: nome.trim() });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
-      setSalvando(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-indigo-200 p-4 space-y-3">
-        <p className="text-sm text-gray-700">
-          KML lido: <b>{rota.elementos.length}</b> elementos e <b>{rota.trechos.length}</b> trechos de cabo. Confira abaixo e salve.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            aria-label="Nome da rota"
-          />
-          <div className="flex gap-2">
-            <button type="button" onClick={onCancelar} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={salvar}
-              disabled={salvando}
-              className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5"
-            >
-              {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar rota
-            </button>
-          </div>
-        </div>
-        {erro && <p className="text-sm text-red-600">{erro}</p>}
-      </div>
-      <VisualizarRota rota={{ ...rota, id: "previa", nome }} />
-    </div>
   );
 }
 

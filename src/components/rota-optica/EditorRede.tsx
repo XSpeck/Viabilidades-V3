@@ -7,7 +7,7 @@
 // =====================
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { Cable, Hand, Loader2, MousePointer2, Network, Trash2, Undo2, X } from "lucide-react";
 import ZoomComCtrl from "./ZoomComCtrl";
@@ -265,10 +265,11 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
 
   return (
     <div className="relative h-[min(76vh,720px)] overflow-hidden rounded-xl border border-gray-200">
-      <MapContainer center={pts[0] ?? [-28.68, -49.37]} zoom={15} scrollWheelZoom={false} doubleClickZoom={false}
+      <MapContainer center={pts[0] ?? [-28.68, -49.37]} zoom={15} scrollWheelZoom={false} doubleClickZoom={false} zoomControl={false}
         className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${ferr !== "navegar" ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}>
         <CamadaBase camada={camada} />
         <ZoomComCtrl />
+        <ZoomControl position="bottomright" />
         <Cliques onClicar={clicarMapa} />
         <Enquadrar pts={pts} />
         {linhasCabo.map(({ c, t, linha, fs }) => {
