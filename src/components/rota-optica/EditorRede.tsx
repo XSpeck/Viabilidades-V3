@@ -9,24 +9,27 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { Activity, AlertTriangle, Cable, Hand, Loader2, MousePointer2, Network, Tags, Trash2, Undo2, X, Zap } from "lucide-react";
+import { Activity, AlertTriangle, Cable, Gauge, Hand, Loader2, MousePointer2, Network, Scissors, Tags, Trash2, Undo2, Users, X, Zap } from "lucide-react";
 import ZoomComCtrl from "./ZoomComCtrl";
 import { CamadaBase, SeletorCamada, useCamada } from "./CamadasMapa";
 import { iconeSvg } from "./IconesRede";
-import { chaveCabo, comCodigo, excluirCabo, proximoCodigoCabo, salvarCabo, type CaboRede } from "@/lib/cabosRede";
-import { excluirCaixa, idCaixa, salvarCaixa, type CaixaRede } from "@/lib/caixasRede";
+import { chaveCabo, comCodigo, excluirCabo, proximoCodigoCabo, salvarCabo, type CaboRede, type TrechoCaboRede } from "@/lib/cabosRede";
+import { excluirCaixa, idCaixa, portasFinais, salvarCaixa, type CaixaRede } from "@/lib/caixasRede";
+import type { ClienteRede } from "@/lib/clientesRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import { confirmar } from "@/lib/dialogo";
 import { caboComCaixaMovida, caixaSemCabo, cortarTrechoNaCaixa, metrosDoTrecho, proximoCodigoElemento } from "@/lib/redeLivre";
 import { corFibra, formatDbm, formatMetros, TIPO_ELEMENTO_LABEL, type TipoElementoRota } from "@/lib/rotaOptica";
-import { tracadoDoTrecho, type SinalRede } from "@/lib/sinalRede";
+import { calcularSinal, tracadoDoTrecho, type SinalRede } from "@/lib/sinalRede";
 import { CSS_MODO_ANIMACAO, SeletorAnimacao, useModoAnimacao } from "./ModoAnimacao";
 import { dbmCurto, nomeCurto } from "@/lib/textoCompleto";
-import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
+import { COR_NIVEL, COR_OCUPACAO, faixaOcupacao, nivelPotencia } from "@/lib/analiseRede";
 
 type Pt = { lat: number; lon: number };
 const TIPOS: TipoElementoRota[] = ["olt", "dio", "ceo", "ct", "hub", "cto", "cdoi", "predio"];
-type Ferramenta = "navegar" | "cabo" | TipoElementoRota;
+type Ferramenta = "navegar" | "cabo" | "romper" | TipoElementoRota;
+/** Portas de atendimento de uma caixa: usadas (cliente ou ramal), clientes e total */
+type Ocupacao = { u: number; cli: number; t: number };
 
 interface Props {
   caixas: CaixaRede[];
@@ -41,17 +44,28 @@ interface Props {
   onAbrirNoUnifilar?: (chave: string) => void;
   /** Prédio: blocos, andares e as CDOIs de cada andar */
   onAbrirPredio?: (chave: string) => void;
+  /** Clientes do cadastro (nome de quem está em cada porta) */
+  clientes?: ClienteRede[];
 }
 
 /** Ícone do elemento: com sinal, um pulso na cor da potência e o selo de dBm; sem sinal, apagado */
-function icone(tipo: TipoElementoRota, ativo: boolean, aceso: boolean, pot?: number, nome?: string) {
+function icone(tipo: TipoElementoRota, ativo: boolean, aceso: boolean, pot?: number, nome?: string,
+  extra: { falha?: boolean; ocup?: Ocupacao | null; porOcupacao?: boolean } = {}) {
   const tam = ativo ? 40 : 32;
-  const cor = aceso ? COR_NIVEL[nivelPotencia(pot)] : "#94a3b8";
+  const corOcup = extra.ocup ? COR_OCUPACAO[faixaOcupacao(extra.ocup.u, extra.ocup.t)] : "#94a3b8";
+  const cor = extra.falha ? "#dc2626" : extra.porOcupacao ? corOcup : aceso ? COR_NIVEL[nivelPotencia(pot)] : "#94a3b8";
+  if (extra.falha) aceso = true;
   const selo = aceso && pot !== undefined
     ? `<span style="position:absolute;left:50%;top:-14px;transform:translateX(-50%);white-space:nowrap;padding:1px 5px;border-radius:9999px;background:${cor};color:#fff;font:700 9px/13px system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.35)">${dbmCurto(pot)}</span>`
     : "";
+  const barra = extra.ocup
+    ? `<span style="position:absolute;left:50%;top:${tam + 1}px;transform:translateX(-50%);display:flex;align-items:center;gap:3px;white-space:nowrap;padding:1px 4px;border-radius:6px;background:rgba(255,255,255,.92);box-shadow:0 1px 2px rgba(0,0,0,.3);font:700 8.5px/11px system-ui,sans-serif;color:#0f172a"><span style="display:inline-block;width:22px;height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden"><span style="display:block;height:100%;width:${Math.round((extra.ocup.u / Math.max(1, extra.ocup.t)) * 100)}%;background:${corOcup}"></span></span>${extra.ocup.u}/${extra.ocup.t}</span>`
+    : "";
+  const alerta = !extra.falha && aceso && pot !== undefined && nivelPotencia(pot) === "abaixo"
+    ? `<span title="Abaixo de −27 dBm" style="position:absolute;left:-6px;top:-6px;width:15px;height:15px;border-radius:9999px;background:#dc2626;color:#fff;border:2px solid #fff;font:900 9px/11px system-ui,sans-serif;text-align:center">!</span>`
+    : "";
   const rotulo = nome
-    ? `<span style="position:absolute;left:50%;top:${tam + 2}px;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;border-radius:6px;background:rgba(15,23,42,.82);color:#f8fafc;font:600 10px/14px system-ui,sans-serif">${nome.replace(/</g, "&lt;")}</span>`
+    ? `<span style="position:absolute;left:50%;top:${tam + (extra.ocup ? 15 : 2)}px;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;border-radius:6px;background:rgba(15,23,42,.82);color:#f8fafc;font:600 10px/14px system-ui,sans-serif">${nome.replace(/</g, "&lt;")}</span>`
     : "";
   const pulso = aceso ? `<span class="fh-pulso" style="position:absolute;inset:-6px;border-radius:9999px;border:3px solid ${cor}"></span>` : "";
   const brilho = ativo ? "filter:drop-shadow(0 0 8px #facc15) drop-shadow(0 0 2px #facc15);" : aceso ? "filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));" : "filter:grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.25));opacity:.6;";
@@ -59,7 +73,7 @@ function icone(tipo: TipoElementoRota, ativo: boolean, aceso: boolean, pot?: num
     className: "",
     iconSize: [tam, tam],
     iconAnchor: [tam / 2, tam / 2],
-    html: `<div style="position:relative;width:${tam}px;height:${tam}px">${pulso}<div style="position:relative;width:${tam}px;height:${tam}px;${brilho}transition:transform .15s">${iconeSvg(tipo, tam)}</div>${selo}${rotulo}</div>`,
+    html: `<div style="position:relative;width:${tam}px;height:${tam}px">${pulso}<div style="position:relative;width:${tam}px;height:${tam}px;${extra.falha ? "filter:drop-shadow(0 0 6px #dc2626);" : brilho}transition:transform .15s">${iconeSvg(tipo, tam)}</div>${selo}${alerta}${barra}${rotulo}</div>`,
   });
 }
 
@@ -73,6 +87,11 @@ const ESTILO_ANIMACAO = `
 .fh-entra { animation: fh-entra .2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .fh-fluxo, .fh-pulso { animation: none; } }
 `;
+/** Curva do cabo (arrasta) e o "+" para inserir uma curva no meio de um segmento */
+const iconeCurva = L.divIcon({ className: "", iconSize: [14, 14], iconAnchor: [7, 7], html: `<div style="width:14px;height:14px;border-radius:9999px;background:#fff;border:3px solid #4f46e5;box-shadow:0 1px 3px rgba(0,0,0,.4);cursor:grab"></div>` });
+const iconeMais = L.divIcon({ className: "", iconSize: [14, 14], iconAnchor: [7, 7], html: `<div style="width:14px;height:14px;border-radius:9999px;background:rgba(79,70,229,.85);color:#fff;font:800 11px/13px system-ui,sans-serif;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.35);cursor:copy">+</div>` });
+/** Onde o cabo rompeu */
+const iconeRompeu = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15], html: `<div style="position:relative;width:30px;height:30px"><span class="fh-pulso" style="position:absolute;inset:-4px;border-radius:9999px;border:3px solid #dc2626"></span><div style="width:30px;height:30px;border-radius:9999px;background:#dc2626;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font:900 16px/16px system-ui">⚡</div></div>` });
 const iconePonto = L.divIcon({ className: "", iconSize: [10, 10], iconAnchor: [5, 5], html: `<div style="width:10px;height:10px;border-radius:9999px;background:#fff;border:2px solid #f97316"></div>` });
 
 function Cliques({ onClicar }: { onClicar: (p: Pt) => void }) {
@@ -91,7 +110,7 @@ function Enquadrar({ pts }: { pts: [number, number][] }) {
   return null;
 }
 
-export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, onCaixa, onCaixaFora, onCabo, onCaboFora, onAbrirNoUnifilar, onAbrirPredio }: Props) {
+export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, onCaixa, onCaixaFora, onCabo, onCaboFora, onAbrirNoUnifilar, onAbrirPredio, clientes = [] }: Props) {
   const [camada, setCamada] = useCamada();
   const [ferr, setFerr] = useState<Ferramenta>("navegar");
   const [sel, setSel] = useState<{ k: "el" | "cabo"; chave: string } | null>(null);
@@ -105,6 +124,10 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   /** Mostrar o nome de cada elemento embaixo do ícone */
   const [nomes, setNomes] = useState(false);
   const [modoAnim] = useModoAnimacao();
+  /** Simulador: o trecho de cabo que rompeu (e onde) */
+  const [rompido, setRompido] = useState<{ chave: string; nome: string; t: number; p: Pt } | null>(null);
+  /** Pintar os elementos pela potência ou pela ocupação das portas */
+  const [porOcupacao, setPorOcupacao] = useState(false);
 
   const elementos = useMemo(() => caixas.filter((c) => c.tipo && c.lat !== undefined && c.lon !== undefined && !c.predio_id), [caixas]);
   const elDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
@@ -112,6 +135,31 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   const desenhados = useMemo(() => cabos.filter((c) => c.caminho && c.caminho.length >= 2), [cabos]);
   const pts = useMemo<[number, number][]>(() => elementos.map((e) => [e.lat!, e.lon!]), [elementos]);
   const elSel = sel?.k === "el" ? elDe.get(sel.chave) : undefined;
+  const opSinal = useMemo(() => ({
+    txDe: (o: CaixaRede) => catalogo.find((c) => c.id === o.equipamento_id)?.potencia_tx,
+    perdaModelo: (id?: string) => (id ? catalogo.find((c) => c.id === id)?.perda_db : undefined),
+  }), [catalogo]);
+  /** O sinal com o trecho rompido cortado: o que apaga é o que estava aceso e não está mais */
+  const sinalRompido = useMemo(
+    () => (rompido ? calcularSinal(caixas, cabos, { ...opSinal, cortes: new Set([`${chaveCabo(rompido.nome)}|${rompido.t}`]) }) : null),
+    [rompido, caixas, cabos, opSinal],
+  );
+  const apagadas = useMemo(
+    () => (sinalRompido ? caixas.filter((c) => sinal.caixas.has(c.chave) && !sinalRompido.caixas.has(c.chave)) : []),
+    [sinalRompido, sinal, caixas],
+  );
+  const trechosApagados = useMemo(() => {
+    const out = new Set<string>();
+    if (sinalRompido) for (const k of sinal.trechos.keys()) if (!sinalRompido.trechos.has(k)) { const [cb, , t] = k.split("|"); out.add(`${cb}|${t}`); }
+    return out;
+  }, [sinalRompido, sinal]);
+  /** Ocupação das portas de atendimento (CTO, CDOI, HUB com splitter) */
+  const ocupDe = (c?: CaixaRede): Ocupacao | null => {
+    const f = c?.splitters?.length ? portasFinais(c.splitters) : [];
+    if (!f.length) return null;
+    return { u: f.filter((x) => x.porta.status !== "livre").length, cli: f.filter((x) => x.porta.status === "cliente").length, t: f.length };
+  };
+  const nomeCliente = (id?: string) => (id ? clientes.find((x) => x.id === id)?.nome : undefined);
   const caboSel = sel?.k === "cabo" ? cabos.find((c) => c.chave === sel.chave) : undefined;
 
   /** Fibras acesas num trecho do cabo */
@@ -123,6 +171,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
 
   function escolher(f: Ferramenta) {
     setFerr(f);
+    if (f !== "romper") setRompido(null);
     setNovo(null);
     setDesenho(f === "cabo" ? { caminho: [], trechos: [], atual: [] } : null);
     setErro(null);
@@ -140,6 +189,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
       setDesenho({ ...desenho, atual: [...desenho.atual, p] });
       return;
     }
+    if (ferr === "romper") return;
     if (ferr !== "navegar") { novoElemento(ferr, p); return; }
     setSel(null);
   }
@@ -158,6 +208,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
 
   function clicarCabo(c: CaboRede, t: number, p: Pt) {
     setErro(null);
+    if (ferr === "romper") { setRompido({ chave: c.chave, nome: c.nome, t, p }); return; }
     if (TIPOS.includes(ferr as TipoElementoRota)) { novoElemento(ferr as TipoElementoRota, p, { chave: c.chave, t }); return; }
     if (ferr === "navegar") setSel({ k: "cabo", chave: c.chave });
   }
@@ -251,6 +302,18 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
     }
   }
 
+  /** Curvas do trecho t mudaram (arrastou, inseriu ou apagou): grava e refaz os metros */
+  async function salvarTracado(c: CaboRede, t: number, pontos: Pt[]) {
+    const pos = (k: string) => { const e = elDe.get(k); return e?.lat !== undefined && e.lon !== undefined ? { lat: e.lat, lon: e.lon } : undefined; };
+    const base: TrechoCaboRede[] = c.trechos ?? c.caminho!.slice(1).map(() => ({ pontos: [] }));
+    const trechos = base.map((tr, k) => (k === t ? { ...tr, pontos, metros: tr.mesmo_poste ? tr.metros : metrosDoTrecho(pos(c.caminho![t]), pontos, pos(c.caminho![t + 1])) } : tr));
+    try {
+      onCabo(await salvarCabo({ ...c, trechos, atualizado_por: usuario }));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível gravar o traçado.");
+    }
+  }
+
   async function renomear(e: CaixaRede, nome: string) {
     if (!nome.trim() || nome.trim() === e.nome) return;
     onCaixa(await salvarCaixa({ ...e, nome: nome.trim(), atualizado_por: usuario }));
@@ -315,15 +378,16 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
         <Enquadrar pts={pts} />
         {linhasCabo.map(({ c, t, linha, fs }) => {
           const ativo = caboSel?.chave === c.chave;
-          const aceso = fs.length > 0;
-          const cor = aceso ? corFibra(fs[0], c.nome).hex : "#94a3b8";
+          const caiu = trechosApagados.has(`${chaveCabo(c.nome)}|${t}`);
+          const aceso = fs.length > 0 && !caiu;
+          const cor = caiu ? "#dc2626" : aceso ? corFibra(fs[0], c.nome).hex : "#94a3b8";
           const grosso = Math.min(3, (c.capacidade ?? 12) / 24);
           return (
             <Fragment key={`${c.chave}|${t}`}>
               {(aceso || ativo) && <Polyline positions={linha} interactive={false} pathOptions={{ color: ativo ? "#facc15" : cor, weight: 14 + grosso * 2, opacity: ativo ? 0.45 : 0.18, lineCap: "round", lineJoin: "round" }} />}
               <Polyline positions={linha} interactive={false} pathOptions={{ color: "#0f172a", weight: (aceso ? 7 : 5) + grosso, opacity: aceso ? 0.55 : 0.25, lineCap: "round", lineJoin: "round" }} />
               <Polyline positions={linha}
-                pathOptions={{ color: ativo ? "#facc15" : cor, weight: (aceso ? 4.5 : 3) + grosso, opacity: aceso ? 1 : 0.9, dashArray: aceso ? undefined : "7 7", lineCap: "round", lineJoin: "round" }}
+                pathOptions={{ color: ativo ? "#facc15" : cor, weight: (aceso || caiu ? 4.5 : 3) + grosso, opacity: aceso || caiu ? 1 : 0.9, dashArray: aceso ? undefined : caiu ? "10 6" : "7 7", lineCap: "round", lineJoin: "round" }}
                 eventHandlers={{ click: (ev) => { L.DomEvent.stopPropagation(ev); clicarCabo(c, t, { lat: ev.latlng.lat, lon: ev.latlng.lng }); } }}>
                 <Tooltip sticky>
                   <b>{nomeCurto(c.nome, 50)}</b>
@@ -333,7 +397,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                 </Tooltip>
               </Polyline>
               {/* várias fibras acesas no trecho: listras com a cor de cada uma (as mesmas do Unifilar) */}
-              {!ativo && fs.length > 1 && fs.slice(0, 6).map((f, k, l) => k === 0 ? null : (
+              {!ativo && !caiu && fs.length > 1 && fs.slice(0, 6).map((f, k, l) => k === 0 ? null : (
                 <Polyline key={`f${f}`} positions={linha} interactive={false}
                   pathOptions={{ color: corFibra(f, c.nome).hex, weight: 4.5 + grosso, lineCap: "butt", dashArray: `14 ${14 * (l.length - 1)}`, dashOffset: `${-14 * k}` }} />
               ))}
@@ -343,8 +407,37 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
         })}
         {desenhoLinha.length >= 1 && <Polyline positions={desenhoLinha} className="fh-fluxo" pathOptions={{ color: "#f97316", weight: 4 }} interactive={false} />}
         {desenho?.atual.map((p, k) => <Marker key={`d${k}`} position={[p.lat, p.lon]} icon={iconePonto} interactive={false} />)}
+        {rompido && <Marker position={[rompido.p.lat, rompido.p.lon]} icon={iconeRompeu} interactive={false} zIndexOffset={3000} />}
+        {ferr === "navegar" && caboSel?.caminho && caboSel.caminho.slice(1).map((_, t) => {
+          if (caboSel.caminho!.some((k) => elDe.get(k)?.predio_id)) return null;
+          const pts0 = caboSel.trechos?.[t]?.pontos ?? [];
+          const linha = tracadoDoTrecho(caboSel, t, elDe);
+          return (
+            <Fragment key={`ed${t}`}>
+              {pts0.map((q, i) => (
+                <Marker key={`v${t}|${i}|${q.lat}|${q.lon}`} position={[q.lat, q.lon]} icon={iconeCurva} draggable zIndexOffset={2000}
+                  eventHandlers={{
+                    dragend: (ev) => { const ll = (ev.target as L.Marker).getLatLng(); void salvarTracado(caboSel, t, pts0.map((x, k) => (k === i ? { lat: ll.lat, lon: ll.lng } : x))); },
+                    contextmenu: (ev) => { L.DomEvent.stopPropagation(ev); void salvarTracado(caboSel, t, pts0.filter((_, k) => k !== i)); },
+                  }}>
+                  <Tooltip direction="top" offset={[0, -8]}>Arraste para mover · clique direito apaga</Tooltip>
+                </Marker>
+              ))}
+              {linha.slice(1).map((b, i) => {
+                const a = linha[i];
+                return (
+                  <Marker key={`m${t}|${i}`} position={[(a.lat + b.lat) / 2, (a.lon + b.lon) / 2]} icon={iconeMais} zIndexOffset={1900}
+                    eventHandlers={{ click: (ev) => { L.DomEvent.stopPropagation(ev); const n = [...pts0]; n.splice(i, 0, { lat: (a.lat + b.lat) / 2, lon: (a.lon + b.lon) / 2 }); void salvarTracado(caboSel, t, n); } }}>
+                    <Tooltip direction="top" offset={[0, -8]}>Inserir uma curva aqui</Tooltip>
+                  </Marker>
+                );
+              })}
+            </Fragment>
+          );
+        })}
         {elementos.map((e) => (
-          <Marker key={e.chave} position={[e.lat!, e.lon!]} icon={icone(e.tipo!, sel?.chave === e.chave, pons(e.chave).length > 0, potDe.get(e.chave), nomes || sel?.chave === e.chave ? nomeCurto(e.nome, 22) : undefined)}
+          <Marker key={e.chave} position={[e.lat!, e.lon!]} icon={icone(e.tipo!, sel?.chave === e.chave, pons(e.chave).length > 0 && !apagadas.some((x) => x.chave === e.chave), potDe.get(e.chave), nomes || sel?.chave === e.chave ? nomeCurto(e.nome, 22) : undefined,
+              { falha: apagadas.some((x) => x.chave === e.chave), ocup: e.tipo === "cto" || e.tipo === "cdoi" || porOcupacao ? ocupDe(e) : null, porOcupacao })}
             draggable={ferr === "navegar" && sel?.chave === e.chave}
             eventHandlers={{
               click: (ev) => { L.DomEvent.stopPropagation(ev); clicarElemento(e); },
@@ -366,12 +459,17 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
         <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-2xl border border-white/60 bg-slate-100/80 p-1 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/5 backdrop-blur-md">
           {botao("navegar", "Navegar", <MousePointer2 className="h-3.5 w-3.5" />)}
           {botao("cabo", "Cabo", <Cable className="h-3.5 w-3.5" />)}
+          {botao("romper", "Rompimento", <Scissors className="h-3.5 w-3.5" />)}
           <span className="mx-1 h-5 w-px bg-slate-300" />
           {TIPOS.map((t) => botao(t, t === "cdoi" ? "CDOI" : t === "predio" ? "Prédio" : t.toUpperCase(), <span className="inline-block h-4 w-4" dangerouslySetInnerHTML={{ __html: iconeSvg(t, 16) }} />))}
           <span className="mx-1 h-5 w-px bg-slate-300" />
           <button type="button" onClick={() => setNomes((v) => !v)} title="Nomes no mapa"
             className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-all ${nomes ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-white hover:shadow"}`}>
             <Tags className="h-3.5 w-3.5" /> Nomes
+          </button>
+          <button type="button" onClick={() => setPorOcupacao((v) => !v)} title="Pintar pela ocupação das portas"
+            className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-all ${porOcupacao ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-white hover:shadow"}`}>
+            <Gauge className="h-3.5 w-3.5" /> Ocupação
           </button>
         </div>
         <div className="pointer-events-auto ml-auto flex flex-col items-end gap-2">
@@ -383,6 +481,10 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
             <span className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-slate-700 shadow ring-1 ring-slate-900/5 backdrop-blur"><Zap className="h-3 w-3 text-amber-500" /> {totalPons} PON{totalPons !== 1 ? "s" : ""}</span>
             <span className="rounded-full bg-white/90 px-2.5 py-1 text-slate-700 shadow ring-1 ring-slate-900/5 backdrop-blur">{elementos.length} elementos</span>
             <span className="rounded-full bg-white/90 px-2.5 py-1 text-slate-700 shadow ring-1 ring-slate-900/5 backdrop-blur">{desenhados.length} cabos · {km.toFixed(2).replace(".", ",")} km</span>
+            {(() => {
+              const fracos = elementos.filter((e) => pons(e.chave).length && nivelPotencia(potDe.get(e.chave)) === "abaixo");
+              return fracos.length > 0 && <span className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-white shadow" title={fracos.map((e) => `${e.nome}: ${formatDbm(potDe.get(e.chave))}`).join("\n")}><AlertTriangle className="h-3 w-3" /> {fracos.length} abaixo de −27 dBm</span>;
+            })()}
             {sinal.conflitos.length > 0 && <span className="flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-white shadow" title={sinal.conflitos.map((c) => c.texto).join("\n")}><AlertTriangle className="h-3 w-3" /> {sinal.conflitos.length} conflito{sinal.conflitos.length > 1 ? "s" : ""}</span>}
           </div>
         </div>
@@ -391,7 +493,34 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
       {/* painel */}
       <div key={`${ferr}|${sel?.chave ?? ""}|${novo ? "n" : ""}`} className="fh-entra absolute bottom-3 left-3 z-[500] w-[min(370px,calc(100%-24px))] space-y-2 rounded-2xl border border-white/70 bg-white/90 p-3.5 text-xs text-slate-700 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/5 backdrop-blur-md">
         {erro && <p className="rounded-lg bg-red-50 px-2 py-1 text-red-700">{erro}</p>}
-        {ferr !== "navegar" && ferr !== "cabo" && !novo && <p>Clique no mapa para colocar a {TIPO_ELEMENTO_LABEL[ferr]}, ou em cima de um cabo para ele passar por ela.</p>}
+        {ferr !== "navegar" && ferr !== "cabo" && ferr !== "romper" && !novo && <p>Clique no mapa para colocar a {TIPO_ELEMENTO_LABEL[ferr]}, ou em cima de um cabo para ele passar por ela.</p>}
+        {ferr === "romper" && (
+          <div className="space-y-2">
+            <p className="flex items-center gap-1.5 font-bold text-red-700"><Zap className="h-4 w-4" /> Simular rompimento</p>
+            {!rompido ? <p className="text-slate-600">Clique no cabo, no ponto onde rompeu. O que fica sem sinal acende em vermelho.</p> : (() => {
+              const c = cabos.find((x) => x.chave === rompido.chave);
+              const de = elDe.get(c?.caminho?.[rompido.t] ?? ""), ate = elDe.get(c?.caminho?.[rompido.t + 1] ?? "");
+              const pontas = apagadas.filter((x) => x.tipo === "cto" || x.tipo === "cdoi");
+              const cli = apagadas.reduce((a, x) => a + (ocupDe(x)?.cli ?? 0), 0);
+              return (
+                <>
+                  <p className="text-slate-600"><b>{nomeCurto(rompido.nome, 40)}</b>, entre {de?.nome ?? "?"} e {ate?.nome ?? "?"}</p>
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div className="rounded-xl bg-red-50 p-1.5"><p className="text-lg font-black text-red-700">{apagadas.length}</p><p className="text-[10px] text-red-800">elementos sem sinal</p></div>
+                    <div className="rounded-xl bg-red-50 p-1.5"><p className="text-lg font-black text-red-700">{pontas.length}</p><p className="text-[10px] text-red-800">CTO / CDOI</p></div>
+                    <div className="rounded-xl bg-red-50 p-1.5"><p className="text-lg font-black text-red-700">{cli}</p><p className="text-[10px] text-red-800">clientes</p></div>
+                  </div>
+                  {apagadas.length > 0 ? (
+                    <ul className="max-h-28 space-y-0.5 overflow-y-auto">
+                      {apagadas.map((x) => <li key={x.chave} className="flex items-center gap-1.5"><span className="inline-block h-4 w-4" dangerouslySetInnerHTML={{ __html: iconeSvg(x.tipo ?? "outro", 16) }} />{x.nome}{ocupDe(x)?.cli ? <span className="text-slate-500"> · {ocupDe(x)!.cli} cliente{ocupDe(x)!.cli > 1 ? "s" : ""}</span> : null}</li>)}
+                    </ul>
+                  ) : <p className="text-emerald-700">Nada apaga: esse trecho não leva sinal.</p>}
+                  <button type="button" onClick={() => setRompido(null)} className="rounded-lg border px-2 py-1.5">Limpar</button>
+                </>
+              );
+            })()}
+          </div>
+        )}
 
         {novo && (
           <div className="space-y-1.5">
@@ -457,6 +586,33 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                 <span className="text-sm font-bold tabular-nums">{formatDbm(potDe.get(elSel.chave))}</span>
               </div>
             ) : <p className="rounded-xl bg-slate-100 px-2.5 py-2 text-slate-500">Sem sinal: ligue uma fibra até aqui no Unifilar.</p>}
+            {(() => {
+              const o = ocupDe(elSel);
+              if (!o) return null;
+              const f = portasFinais(elSel.splitters!);
+              return (
+                <div className="space-y-1.5 rounded-xl border border-slate-200 p-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="font-semibold">Portas {o.u}/{o.t}</span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full" style={{ width: `${(o.u / o.t) * 100}%`, background: COR_OCUPACAO[faixaOcupacao(o.u, o.t)] }} /></span>
+                    <span className="text-slate-500">{o.cli} cliente{o.cli !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-8 gap-1">
+                    {f.map(({ spl, porta }) => (
+                      <span key={`${spl.id}|${porta.numero}`} title={porta.status === "cliente" ? nomeCliente(porta.cliente_id) ?? porta.descricao ?? "cliente" : porta.status === "ramal" ? `ramal ${porta.descricao ?? ""}` : "livre"}
+                        className={`flex h-6 items-center justify-center rounded-md text-[10px] font-bold ${porta.status === "cliente" ? "bg-sky-600 text-white" : porta.status === "ramal" ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"}`}>{porta.numero}</span>
+                    ))}
+                  </div>
+                  {f.some((x) => x.porta.status === "cliente") && (
+                    <ul className="space-y-0.5 text-[11px]">
+                      {f.filter((x) => x.porta.status === "cliente").map(({ spl, porta }) => <li key={`${spl.id}|${porta.numero}`}><b>{porta.numero}</b> · {nomeCliente(porta.cliente_id) ?? porta.descricao ?? "cliente"}</li>)}
+                    </ul>
+                  )}
+                  {onAbrirNoUnifilar && <button type="button" onClick={() => onAbrirNoUnifilar(elSel.chave)} className="text-[11px] font-semibold text-indigo-700 hover:underline">Ligar ou mudar cliente: Unifilar → Clientes nas portas</button>}
+                </div>
+              );
+            })()}
             {elSel.tipo === "olt" && <PonsDaOlt olt={elSel} caixas={caixas} cabos={cabos} usuario={usuario} onCaixa={onCaixa} onCabo={onCabo} onErro={setErro} />}
             <div className="flex flex-wrap gap-1.5">
               {elSel.tipo === "predio" && onAbrirPredio && <button type="button" onClick={() => onAbrirPredio(elSel.chave)} className="flex items-center gap-1 rounded-lg bg-sky-700 px-2 py-1.5 font-semibold text-white">Abrir prédio</button>}
@@ -489,6 +645,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                 );
               })}
             </ul>
+            <p className="text-[11px] text-slate-500">Traçado: arraste os pontos brancos, clique no “+” para inserir uma curva e use o clique direito num ponto para apagar. Os metros se refazem sozinhos.</p>
             <button type="button" disabled={gravando} onClick={() => void apagarCabo(caboSel)} className="flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1.5 text-red-700"><Trash2 className="h-3.5 w-3.5" /> Apagar cabo</button>
           </div>
         )}

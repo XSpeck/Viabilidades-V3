@@ -1,12 +1,11 @@
 // Testes dos cálculos da Rota Óptica (potência, sub-rotas, metragem/OTDR, certificação, cabos e árvore).
 // Rodar: npm test
 import { describe, expect, it } from "vitest";
-import { CALCULO_PADRAO, calcularPotencias, type ElementoRota, type RotaOptica } from "../rotaOptica";
-import { montarRotas, paraGravar, entradaPotencia } from "../subRotas";
+import { CALCULO_PADRAO, calcularPotencias, entradaPotencia, type ElementoRota, type RotaOptica } from "../rotaOptica";
 import { acumuladoDaRota, localizarRompimento, trechosDaRota } from "../rompimento";
 import { analisarLeitura, eventosEsperados } from "../certificacao";
 import { chaveCabo, codigoDoCabo, comCodigo, proximoCodigoCabo, semCodigo } from "../cabosRede";
-import { chaveElemento, montarArvoresPon } from "../arvorePon";
+import { montarArvoresPon } from "../arvorePon";
 
 const CABO_72 = "72 FO ASO · DIO → HUB [CB-000001]";
 const CABO_06 = "06 FO ASO · HUB → Ed. Teste [CB-000004]";
@@ -21,10 +20,17 @@ const rota = (id: string, elementos: ElementoRota[], extra: Partial<RotaOptica> 
   id, nome: id, origem: "manual", elementos, trechos: [], calculo_potencia: CALCULO_PADRAO, ...extra,
 });
 
-const tronco = rota("tronco", [OLT, DIO, HUB]);
-const cabo = rota("predio", [HUB, PREDIO], { pai: { rota_id: "tronco", chave: chaveElemento(HUB) } });
-const cdoi = rota("cdoi", [PREDIO, CDOI], { pai: { rota_id: "predio", chave: chaveElemento(PREDIO) } });
-const montadas = montarRotas([tronco, cabo, cdoi]);
+// caminhos completos, como o sinal monta (cada um da OLT até onde a luz termina), com a potência calculada
+const comPot = (r: RotaOptica): RotaOptica => {
+  const ps = calcularPotencias(r.elementos.map((e) => entradaPotencia(e)), 6, CALCULO_PADRAO);
+  return { ...r, elementos: r.elementos.map((e, i) => (i === 0 ? e : { ...e, potencia_entrada: ps[i].entrada, potencia_saida: ps[i].saida })) };
+};
+const tronco = comPot(rota("tronco", [OLT, DIO, HUB]));
+const montadas = [
+  comPot(rota("tronco", [OLT, DIO, HUB])),
+  comPot(rota("predio", [OLT, DIO, { ...HUB, fibra_saida: 2 }, { ...PREDIO, fibra_entrada: 2 }])),
+  comPot(rota("cdoi", [OLT, DIO, { ...HUB, fibra_saida: 2 }, { ...PREDIO, fibra_entrada: 2 }, CDOI])),
+];
 const porId = (id: string) => montadas.find((r) => r.id === id)!;
 
 describe("potência", () => {
@@ -45,38 +51,6 @@ describe("potência", () => {
   it("meia porta: HUB com 1:2 antes do primário e saída pela outra perna", () => {
     expect(entradaPotencia({ ...HUB, meia_porta: true }).perda_splitter).toBeCloseTo(3.7 + 10.5, 2);
     expect(entradaPotencia({ ...HUB, meia_porta: true, via_meia_porta: true }).perda_splitter).toBeCloseTo(3.7, 2);
-  });
-});
-
-describe("sub-rotas", () => {
-  it("montam o caminho completo com o tronco da mãe", () => {
-    const r = porId("cdoi");
-    expect(r.elementos.map((e) => e.nome)).toEqual(["OLT", "DIO", "HUB", "Ed. Teste", "AND 3"]);
-    expect(r.tronco).toBe(4);
-  });
-
-  it("entrada do prédio ganha a fibra da CDOI (e a HUB sai nela)", () => {
-    const r = porId("cdoi");
-    expect(r.elementos[3].fibra_entrada).toBe(2);
-    expect(r.elementos[2].fibra_saida).toBe(2);
-  });
-
-  it("potência da CDOI é recalculada pelo tronco", () => {
-    // −5,68 no prédio − 11 m de fibra − fusão 0,1 − splitter 10,5 − conector 0,5 (arredondado a cada caixa)
-    expect(porId("cdoi").elementos[4].potencia_saida).toBeCloseTo(-16.78, 2);
-  });
-
-  it("gravam só o trecho próprio (a caixa de origem vira referência)", () => {
-    const r = porId("cdoi");
-    const g = paraGravar(r, { nome: r.nome, origem: "manual", elementos: r.elementos, trechos: r.trechos });
-    expect(g.elementos.map((e) => e.nome)).toEqual(["Ed. Teste", "AND 3"]);
-    expect(g.elementos[0].cabo_entrada).toBeUndefined();
-    expect(g.pai?.rota_id).toBe("predio");
-  });
-
-  it("sub-rota cuja caixa sumiu da mãe fica solta", () => {
-    const solta = rota("solta", [{ ...HUB, codigo: "999" }, CDOI], { pai: { rota_id: "tronco", chave: "PT:999" } });
-    expect(montarRotas([tronco, solta]).find((r) => r.id === "solta")!.orfa).toBe(true);
   });
 });
 

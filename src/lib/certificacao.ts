@@ -3,9 +3,8 @@
 // esperada e o limite de cada um, para comparar com o que foi medido em campo.
 // Padrões: fusão ≤ 0,10 dB · conector ≤ 0,50 dB · splitter até +0,5 dB do nominal · distância ±2%.
 // =====================
-import { CALCULO_PADRAO, type ElementoRota, type RotaOptica } from "./rotaOptica";
+import { CALCULO_PADRAO, type ElementoRota, type RotaOptica, entradaPotencia } from "./rotaOptica";
 import { acumuladoDaRota, trechosDaRota } from "./rompimento";
-import { entradaPotencia } from "./subRotas";
 import type { ResultadoRompimento, Sentido } from "./rompimento";
 
 export type Lambda = 1310 | 1550;

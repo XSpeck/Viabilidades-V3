@@ -723,6 +723,20 @@ export default function UnifilarRede({ cabos, caixas, catalogo, usuario, onCaixa
         </span>
       </div>
       {erro && <p className="border-b border-red-900 bg-red-950 px-3 py-1.5 text-[11px] text-red-300">{erro}</p>}
+      {(() => {
+        // portas que ficam abaixo de −27 dBm (já com o que está sendo editado, antes de salvar)
+        const fracas: string[] = [];
+        for (const k of abertas) {
+          const pp = potPortas(k, edDe(k).splitters);
+          for (const [id, v] of pp) if (v < -27) fracas.push(`${curto(infoDe.get(k)?.nome ?? k, 22)} porta ${id.split("|")[1]}: ${dbm(v)} dBm`);
+        }
+        if (!fracas.length) return null;
+        return (
+          <p className="border-b border-amber-900 bg-amber-950/70 px-3 py-1.5 text-[11px] text-amber-200" title={fracas.join(" · ")}>
+            ⚠ {fracas.length} porta{fracas.length > 1 ? "s" : ""} abaixo de −27 dBm{sujas.length ? " com o que está sendo editado" : ""}: {fracas.slice(0, 3).join(" · ")}{fracas.length > 3 ? " …" : ""}
+          </p>
+        );
+      })()}
 
       <div className={`flex ${cheia ? "min-h-0 flex-1" : "h-[74vh]"}`}>
         {/* Área */}

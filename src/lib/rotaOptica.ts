@@ -43,6 +43,8 @@ export interface ElementoRota {
   porta?: string;
   /** Splitter do elemento, ex.: "1:8" */
   splitter?: string;
+  /** Caminho calculado pelo sinal: perda somada dos splitters atravessados aqui (dB) */
+  perda_splitter_db?: number;
   /** Modelo de splitter do cadastro de equipamentos */
   splitter_modelo?: string;
   /** O trecho que chega aqui é um link no mesmo poste (ex.: HUB → CTO ao lado): sem traçado e sem reserva técnica */
@@ -219,6 +221,23 @@ export function calcularPotencias(elementos: EntradaPotencia[], tx: number, p: C
     out.push({ entrada: r2(entrada), saida: r2(saida), detalhe: partes.join(" + ") });
   });
   return out;
+}
+
+/** Perda do 1:2 da meia porta */
+export const PERDA_MEIA_PORTA = perdaSplitter("1:2");
+
+/** Entrada do cálculo de potência de um elemento (inclui o 1:2 da meia porta) */
+export function entradaPotencia(e: ElementoRota, perdaModelo?: (id?: string) => number | undefined): EntradaPotencia {
+  const base = { tipo: e.tipo, distancia_m: e.distancia_m };
+  // sai pela outra perna do 1:2: só a perda do 1:2, sem o primário desta HUB
+  if (e.via_meia_porta) return { ...base, splitter: "1:2 (meia porta)", perda_splitter: PERDA_MEIA_PORTA };
+  const spl = e.passagem ? undefined : e.splitter || undefined;
+  // caminho calculado pelo sinal: a perda dos splitters (até em 2 níveis) já vem somada
+  const p = spl ? e.perda_splitter_db ?? perdaSplitter(spl, perdaModelo?.(e.splitter_modelo)) : undefined;
+  if (e.tipo === "hub" && e.meia_porta) {
+    return { ...base, splitter: spl ? `1:2 + ${spl}` : "1:2 (meia porta)", perda_splitter: PERDA_MEIA_PORTA + (p ?? 0) };
+  }
+  return { ...base, splitter: spl, perda_splitter: p };
 }
 
 // =====================

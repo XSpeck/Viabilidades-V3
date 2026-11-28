@@ -117,3 +117,13 @@ describe("sinal da rede livre", () => {
     expect(s.conflitos.some((c) => c.tipo === "laco" || c.tipo === "duas_pons" || c.tipo === "contramao")).toBe(true);
   });
 });
+
+describe("rompimento", () => {
+  it("cortar o trecho CEO → HUB apaga a HUB e tudo depois dela", () => {
+    const { elementos, cabos } = rede();
+    const s = calcularSinal(elementos, cabos, { cortes: new Set(["CB-000003|0"]) });
+    expect(s.caixas.has("PT:3")).toBe(true);
+    expect(s.caixas.has("PT:4")).toBe(false);
+    expect(s.caixas.has("PT:6")).toBe(false);
+  });
+});

@@ -373,6 +373,7 @@ export default function RotaOpticaPage() {
                 <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
               ) : (
               <EditorRede
+                clientes={clientes}
                 caixas={caixas}
                 cabos={cabos}
                 catalogo={catalogo}

@@ -27,6 +27,8 @@ export interface OpcoesSinal {
   txDe?: (olt: CaixaRede) => number | undefined;
   /** Perda do modelo de splitter cadastrado */
   perdaModelo?: (id?: string) => number | undefined;
+  /** Trechos rompidos ("<chave do cabo>|<trecho>"): a luz não passa por eles (simulador de rompimento) */
+  cortes?: Set<string>;
 }
 
 /** Um ponto dentro de uma caixa */
@@ -271,6 +273,7 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
           const t = s.q.lado === "seg" ? i : i - 1;
           const y = elDe.get(c.caminho![j]);
           if (!y) continue;
+          if (op.cortes?.has(`${chaveCabo(c.nome)}|${t}`)) continue;
           const nk = `${chaveCabo(c.nome)}|${s.q.fibra}|${t}`;
           const outro = dono.get(nk);
           if (outro && outro !== pon) {
@@ -320,7 +323,7 @@ export function calcularSinal(elementos: CaixaRede[], cabos: CaboRede[], op: Opc
             ...(k === 0 ? { porta: cordao.porta, equipamento_id: x.equipamento_id } : {}),
             ...(ps.cabo && k > 0 ? { cabo_entrada: ps.cabo.nome, fibra_entrada: ps.fibra } : {}),
             ...(prox?.cabo ? { cabo_saida: prox.cabo.nome, fibra_saida: prox.fibra } : {}),
-            ...(rel ? { splitter: rel } : {}),
+            ...(rel ? { splitter: rel, perda_splitter_db: Math.round(perda * 100) / 100 } : {}),
             ...(ps.passagem ? { passagem: true } : {}),
             ...(distancia !== undefined ? { distancia_m: distancia } : {}),
           });

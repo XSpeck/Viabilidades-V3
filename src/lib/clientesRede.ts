@@ -172,10 +172,17 @@ export async function ligarCliente(
     p.cliente_id = cliente.id;
   }
   // as caixas mudadas vão juntas, pelo mesmo caminho das outras telas (só os splitters mudam)
-  const { gravarTroca } = await import("./gravarTroca");
-  const gravadas = await gravarTroca([], [...mudadas].map(([chave, c]) => ({
-    ...(c.caixa ?? { portas: [] }), chave, nome: c.caixa?.nome || c.nome, splitters: c.splitters, atualizado_por: usuario,
-  })));
+  const { doc, writeBatch, serverTimestamp } = await import("firebase/firestore");
+  const { db } = await import("./firebase");
+  const { registroCaixa, COLECAO_CAIXAS } = await import("./caixasRede");
+  const lote = writeBatch(db);
+  const gravadas: CaixaRede[] = [];
+  for (const [chave, c] of mudadas) {
+    const { id, registro, caixa } = registroCaixa({ ...(c.caixa ?? { portas: [] }), chave, nome: c.caixa?.nome || c.nome, splitters: c.splitters, atualizado_por: usuario });
+    lote.set(doc(db, COLECAO_CAIXAS, id), { ...registro, atualizado_em: serverTimestamp() }, { merge: true });
+    gravadas.push(caixa);
+  }
+  await lote.commit();
   return [...caixas.filter((x) => !gravadas.some((g) => g.chave === x.chave)), ...gravadas];
 }
 
