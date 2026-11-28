@@ -45,7 +45,8 @@ export function trocarFibrasNoCadastro(c: CadastroLigacoes, cabo: string, lado: 
   }
   return {
     ...c,
-    emendas,
+    // fusão que ficou com a mesma fibra do mesmo cabo nas duas pontas não é fusão: a fibra passa direto
+    emendas: emendas.filter((m) => !mesmaFibra(m.de, m.para)),
     splitters: c.splitters.map((s) => ({
       ...s,
       entrada: lado === "chega" && nova(s.entrada.fibra) ? { fibra: nova(s.entrada.fibra)! } : s.entrada,

@@ -134,8 +134,8 @@ export function montarUnifilar(chave: string, rotas: RotaOptica[], cad: Partial<
   };
   const fib = (p: PontaFibra, lado: Lado): PontoUni => ({ k: "fibra", lado, cabo: p.cabo, fibra: p.fibra });
 
-  // cadastro: avulsas valem por cima das regras
-  const avulsas = cad?.emendas ?? [];
+  // cadastro: avulsas valem por cima das regras (fusão de uma fibra com ela mesma, no mesmo cabo, é passagem)
+  const avulsas = (cad?.emendas ?? []).filter((m) => !mesmaFibra(m.de, m.para));
   for (const g of cad?.regras_emenda ?? []) {
     const n = Math.min(cabos.get(idCabo(g.de, "chega"))?.capacidade ?? 12, cabos.get(idCabo(g.para, "sai"))?.capacidade ?? 12);
     for (let f = 1; f <= n; f++) {
@@ -229,6 +229,8 @@ export function ligar(c: CadastroLigacoes, a0: PontoUni, b0: PontoUni): Cadastro
   const [a, b] = ordenar(a0, b0);
   let n = soltarPonto(soltarPonto(c, a), b);
   if (t === "fusao" && a.k === "fibra" && b.k === "fibra") {
+    // a mesma fibra do mesmo cabo dos dois lados: passa direto (não grava fusão)
+    if (mesmaFibra(a, b)) return n;
     n = { ...n, emendas: [...n.emendas, { de: { cabo: a.cabo, fibra: a.fibra }, para: { cabo: b.cabo, fibra: b.fibra } }] };
   } else if (t === "entrada" && a.k === "fibra" && b.k === "entrada") {
     n = { ...n, splitters: n.splitters.map((s) => (s.id === b.spl ? { ...s, entrada: { fibra: { cabo: a.cabo, fibra: a.fibra } } } : s)) };
