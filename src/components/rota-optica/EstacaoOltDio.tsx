@@ -226,15 +226,15 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
           <text x={b.x} y={b.y + 15} fontSize={7.5} textAnchor="middle" fill="#fff" fontWeight={700}>{portaDio}</text>
         )}
 
-        {/* Cordão OLT → DIO (amarelo, monomodo) */}
+        {/* Cordão OLT → DIO (azul-turquesa, como em todas as telas) */}
         {a && b && (
           <g>
             <path d={`M${a.x} ${a.y} C ${a.x + 40} ${y0 + hRack + 18}, ${b.x - 40} ${y0 + hRack + 18}, ${b.x} ${b.y}`} fill="none" stroke="#0f172a" strokeWidth={5} strokeLinecap="round" />
-            <path d={`M${a.x} ${a.y} C ${a.x + 40} ${y0 + hRack + 18}, ${b.x - 40} ${y0 + hRack + 18}, ${b.x} ${b.y}`} fill="none" stroke="#facc15" strokeWidth={2.8} strokeLinecap="round" />
-            <circle cx={a.x} cy={a.y} r={3} fill="#facc15" stroke="#0f172a" />
-            <circle cx={b.x} cy={b.y} r={3} fill="#facc15" stroke="#0f172a" />
-            <rect x={(xO + wO + xD) / 2 - 34} y={y0 + hRack + 6} width={68} height={14} rx={7} fill="#fef9c3" stroke="#ca8a04" />
-            <text x={(xO + wO + xD) / 2} y={y0 + hRack + 16} fontSize={8} textAnchor="middle" fill="#713f12" fontWeight={700}>
+            <path d={`M${a.x} ${a.y} C ${a.x + 40} ${y0 + hRack + 18}, ${b.x - 40} ${y0 + hRack + 18}, ${b.x} ${b.y}`} fill="none" stroke="#14b8c4" strokeWidth={2.8} strokeLinecap="round" />
+            <circle cx={a.x} cy={a.y} r={3} fill="#14b8c4" stroke="#0f172a" />
+            <circle cx={b.x} cy={b.y} r={3} fill="#14b8c4" stroke="#0f172a" />
+            <rect x={(xO + wO + xD) / 2 - 34} y={y0 + hRack + 6} width={68} height={14} rx={7} fill="#cffafe" stroke="#0e7490" />
+            <text x={(xO + wO + xD) / 2} y={y0 + hRack + 16} fontSize={8} textAnchor="middle" fill="#164e63" fontWeight={700}>
               cordão {dados.cordaoMetros ? `${dados.cordaoMetros} m` : "? m"}
             </text>
           </g>
@@ -329,7 +329,7 @@ export default function EstacaoOltDio({ dados, olts, dios, tiposCabo, onMudar, o
         ) : (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             <span className="text-slate-500">Ligação OLT → DIO:</span>
-            <span className="rounded-full border border-amber-500 bg-amber-400 px-2 py-0.5 font-semibold text-amber-950">{cordao.nome}</span>
+            <span className="rounded-full border border-cyan-600 bg-cyan-400 px-2 py-0.5 font-semibold text-cyan-950">{cordao.nome}</span>
             {dados.cordaoTipo !== cordao.id && (
               <button type="button" onClick={() => onMudar({ cordaoTipo: cordao.id })} className="text-[10px] font-semibold text-red-600 underline">
                 usar o cordão

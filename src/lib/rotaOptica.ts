@@ -270,11 +270,27 @@ const capacidadesCabos = new Map<string, number>();
 /** Fibras por tubo vindas do tipo de cabo cadastrado (quando foge do padrão). */
 const tubosCabos = new Map<string, number>();
 
-export function registrarCapacidadesCabos(capacidades: Map<string, number>, fibrasTubo?: Map<string, number>): void {
+/** Construção do tipo de cabo cadastrado ("Flat", "Cordão óptico"…), que muda a cor do cabo inteiro. */
+const construcoesCabos = new Map<string, string>();
+
+export function registrarCapacidadesCabos(capacidades: Map<string, number>, fibrasTubo?: Map<string, number>, construcoes?: Map<string, string>): void {
   capacidadesCabos.clear();
   capacidades.forEach((v, k) => capacidadesCabos.set(chaveNomeCabo(k), v));
   tubosCabos.clear();
   fibrasTubo?.forEach((v, k) => tubosCabos.set(chaveNomeCabo(k), v));
+  construcoesCabos.clear();
+  construcoes?.forEach((v, k) => construcoesCabos.set(chaveNomeCabo(k), v));
+}
+
+/** Cabo de cor própria: flat é cinza; cordão e pigtail são azul-turquesa (pelo tipo cadastrado ou pelo nome) */
+const COR_FLAT = { nome: "Cinza", hex: "#8a949b" };
+const COR_CORDAO = { nome: "Azul-turquesa", hex: "#14b8c4" };
+export function corPropriaDoCabo(cabo?: string): { nome: string; hex: string } | undefined {
+  if (!cabo) return undefined;
+  const txt = `${construcoesCabos.get(chaveNomeCabo(cabo)) ?? ""} ${cabo}`;
+  if (/cord[aã]o|pigtail/i.test(txt)) return COR_CORDAO;
+  if (/\bflat\b/i.test(txt)) return COR_FLAT;
+  return undefined;
 }
 
 /** Capacidade cadastrada para o cabo (pelo nome), se houver */
@@ -320,7 +336,9 @@ export function corFibra(fibra?: number, cabo?: string): InfoFibra {
   if (!fibra || fibra < 1) return { nome: "sem cor", hex: "#7c8a90", rotulo: "" };
   const cap = capacidadeDoCabo(cabo, fibra);
   const t = cabo ? tubosCabos.get(chaveNomeCabo(cabo)) : undefined;
-  return corFibraPorCapacidade(fibra, cap, t && cap >= fibra ? t : undefined);
+  const info = corFibraPorCapacidade(fibra, cap, t && cap >= fibra ? t : undefined);
+  const propria = corPropriaDoCabo(cabo);
+  return propria ? { ...info, ...propria } : info;
 }
 
 /** KML usa aabbggrr; devolve #rrggbb. */

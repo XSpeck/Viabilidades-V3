@@ -162,15 +162,17 @@ export default function RotaOpticaPage() {
   // Capacidade de cada cabo (cadastrada ou estimada) define tubos e cores das fibras em todas as telas
   const capacidades = useMemo(() => capacidadesDosCabos(cabos, usoDasFibras(rotas)), [cabos, rotas]);
   // Tipo de cabo cadastrado pode ter tubos fora do padrão (ex.: 96 fibras em tubos de 8)
-  const tubos = useMemo(() => {
-    const m = new Map<string, number>();
+  const [tubos, construcoes] = useMemo(() => {
+    const m = new Map<string, number>(), k = new Map<string, string>();
     cabos.forEach((c) => {
       const t = catalogo.find((i) => i.id === c.tipo_id);
       if (t?.fibras_por_tubo) m.set(c.chave, t.fibras_por_tubo);
+      // flat e cordão têm cor própria no cabo inteiro
+      if (t?.construcao) k.set(c.chave, t.construcao);
     });
-    return m;
+    return [m, k] as const;
   }, [cabos, catalogo]);
-  registrarCapacidadesCabos(capacidades, tubos);
+  registrarCapacidadesCabos(capacidades, tubos, construcoes);
 
   const nomesCabos = useMemo(() => {
     const m = new Map<string, string>();
