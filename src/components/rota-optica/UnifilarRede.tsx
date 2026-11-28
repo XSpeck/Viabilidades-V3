@@ -48,6 +48,13 @@ const textoSobre = (hex: string) => (["#f4f4f0", "#f2c200", "#ee86b0", "#20bdc9"
 
 type Pt = { chave: string; p: PontoUni };
 
+/** Cores do splitter: HUB laranja, CTO azul, CDOI (e outras) verde */
+const TEMA_SPL = {
+  hub: { fundo: "#2a1607", borda: "#ea580c", cabeca: "#9a3412", texto: "#ffedd5", suave: "#fdba74", ponto: "#fb923c", porta: "#4a2410" },
+  cto: { fundo: "#0b1b33", borda: "#3b82f6", cabeca: "#1e3a8a", texto: "#dbeafe", suave: "#93c5fd", ponto: "#60a5fa", porta: "#172b4d" },
+  verde: { fundo: "#0f2a1c", borda: "#22c55e", cabeca: "#14532d", texto: "#dcfce7", suave: "#86efac", ponto: "#4ade80", porta: "#1f3d33" },
+} as const;
+
 function inicialDe(cad?: CaixaRede): CadastroLigacoes {
   return {
     emendas: cad?.emendas ?? [],
@@ -182,6 +189,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   type Bloco = { chave: string; c: CaboUni; x: number; y: number; fibras: number[]; h: number; id: string };
   type Painel = { x: number; y: number; w: number; h: number };
   const pos = new Map<string, [number, number]>();
+  /** Fibras de cabo: ponto dos dois lados do bloco; a ligação usa o lado mais perto da outra ponta */
+  const lados = new Map<string, { l: [number, number]; r: [number, number] }>();
   const blocos: Bloco[] = [];
   const caixasDes: { chave: string; x: number; y: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara>; id: string }[]; pons: string[]; capDio: number; olt?: Painel; dio?: Painel; arrumada: boolean }[] = [];
   const COLS = 12, CEL = 16;
@@ -221,7 +230,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         const bx = x + o.dx, by = y + o.dy;
         blocos.push({ chave, c, x: bx, y: by, fibras, h, id });
         itens.push({ x: bx, y: by, w: BW, h });
-        fibras.forEach((f, k) => pos.set(`${chave}#${idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f })}`, [c.lado === "chega" ? bx + BW : bx, by + HEAD + k * ROW + ROW / 2]));
+        fibras.forEach((f, k) => {
+          const kk = `${chave}#${idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f })}`;
+          const yy = by + HEAD + k * ROW + ROW / 2;
+          pos.set(kk, [c.lado === "chega" ? bx + BW : bx, yy]);
+          lados.set(kk, { l: [bx, yy], r: [bx + BW, yy] });
+        });
         y += h + 16;
       }
     };
@@ -283,6 +297,31 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     xCur = Math.max(xCur + wAuto, x1 - bo.dx) + GAP_CAIXA;
   }
   const W = maxX - minX, H = maxY - minY;
+
+  /** Centro de um ponto (a fibra fica no meio do bloco do cabo) */
+  const centro = (k: string): [number, number] | undefined => {
+    const l = lados.get(k);
+    return l ? [(l.l[0] + l.r[0]) / 2, l.l[1]] : pos.get(k);
+  };
+  /** Onde a ligação encosta: na fibra, o lado do bloco mais perto da outra ponta; e para que lado ela sai */
+  const encaixe = (k: string, alvoX: number): { p: [number, number]; dir: number } | undefined => {
+    const l = lados.get(k);
+    if (l) return Math.abs(l.l[0] - alvoX) <= Math.abs(l.r[0] - alvoX) ? { p: l.l, dir: -1 } : { p: l.r, dir: 1 };
+    const p0 = pos.get(k);
+    if (!p0) return undefined;
+    const id = k.slice(k.indexOf("#") + 1);
+    const dir = id.startsWith("e:") ? -1 : id.startsWith("p:") || id.startsWith("o:") ? 1 : alvoX < p0[0] ? -1 : 1;
+    return { p: p0, dir };
+  };
+  /** Curva entre duas pontas, saindo de cada uma para o lado dela */
+  const curva = (ka: string, kb: string): string | null => {
+    const ca = centro(ka), cb = centro(kb);
+    if (!ca || !cb) return null;
+    const a = encaixe(ka, cb[0]), b = encaixe(kb, ca[0]);
+    if (!a || !b) return null;
+    const t = Math.max(30, Math.abs(b.p[0] - a.p[0]) / 2);
+    return `M${a.p[0]} ${a.p[1]} C ${a.p[0] + a.dir * t} ${a.p[1]}, ${b.p[0] + b.dir * t} ${b.p[1]}, ${b.p[0]} ${b.p[1]}`;
+  };
 
   // ---------- arrastar caixa e itens ----------
   /** Grava a arrumação da caixa (só o desenho; não mexe em ligações) */
@@ -491,13 +530,13 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const moveu = useRef(false);
 
   const aceso = (id: string) => !!traco?.has(id);
-  const ponto = (chave: string, p: PontoUni, x: number, y: number, cor: string, ocup: boolean) => {
+  const ponto = (chave: string, p: PontoUni, x: number, y: number, cor: string, ocup: boolean, lado = "") => {
     const id = `${chave}#${idPonto(p)}`;
     const ativo = sel && sel.chave === chave && idPonto(sel.p) === idPonto(p);
     const dioPar = !!sel && ((sel.p.k === "fibra" && sel.p.lado === "chega" && p.k === "adaptador") || (sel.p.k === "adaptador" && p.k === "fibra" && p.lado === "chega"));
     const cand = modo === "editar" && sel?.chave === chave && !ativo && (dioPar || ["fusao", "entrada", "perna", "nivel2"].includes(tipoEntre(sel.p, p)));
     return (
-      <g key={`pt${id}`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
+      <g key={`pt${id}${lado}`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); if (!moveu.current) clicarPonto(chave, p); }}>
         <circle cx={x} cy={y} r={9} fill="transparent" />
         {cand && <circle cx={x} cy={y} r={7.5} fill="none" stroke="#4ade80" strokeWidth={1.4} />}
         {ativo && <circle cx={x} cy={y} r={8} fill="#facc15" opacity={0.45} />}
@@ -609,10 +648,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
 
                     {/* ligações dentro da caixa */}
                     {m.ligacoes.map((l) => {
-                      const a = pos.get(`${cx.chave}#${idPonto(l.a)}`), b = pos.get(`${cx.chave}#${idPonto(l.b)}`);
-                      if (!a || !b) return null;
-                      const mx = (a[0] + b[0]) / 2;
-                      const d = `M${a[0]} ${a[1]} C ${mx} ${a[1]}, ${mx} ${b[1]}, ${b[0]} ${b[1]}`;
+                      const d = curva(`${cx.chave}#${idPonto(l.a)}`, `${cx.chave}#${idPonto(l.b)}`);
+                      if (!d) return null;
                       const tr = aceso(`${cx.chave}#L:${l.id}`);
                       const sl = selLig?.chave === cx.chave && selLig.id === l.id;
                       const f = l.a.k === "fibra" ? l.a : l.b.k === "fibra" ? l.b : null;
@@ -674,6 +711,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                     )}
                     {/* splitters (estilo GeoGrid: entrada à esquerda, leque, portas numeradas à direita) */}
                     {cx.spl.map(({ s, x, y, h, w, portas, id: idSpl }) => {
+                      const tm = t === "hub" ? TEMA_SPL.hub : t === "cto" ? TEMA_SPL.cto : TEMA_SPL.verde;
                       const modelo = catalogo.find((q) => q.id === s.modelo_id);
                       const ent = s.entrada.fibra;
                       const pon = ent ? rotas.find((r) => r.elementos.some((e) => chaveElemento(e) === cx.chave && !!e.cabo_entrada && chaveCabo(e.cabo_entrada) === chaveCabo(ent.cabo) && e.fibra_entrada === ent.fibra)) : undefined;
@@ -681,22 +719,22 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                       const idx = (edDe(cx.chave).splitters.indexOf(s) + 1) || 1;
                       return (
                         <g key={s.id}>
-                          <rect x={x} y={y} width={w} height={h} rx={6} fill="#0f2a1c" stroke="#22c55e" strokeWidth={1.2} {...arrastavel(cx.chave, idSpl)} />
-                          <rect x={x} y={y} width={w} height={20} rx={6} fill={splSel?.chave === cx.chave && splSel.id === s.id ? "#a16207" : "#14532d"}
+                          <rect x={x} y={y} width={w} height={h} rx={6} fill={tm.fundo} stroke={tm.borda} strokeWidth={1.2} {...arrastavel(cx.chave, idSpl)} />
+                          <rect x={x} y={y} width={w} height={20} rx={6} fill={splSel?.chave === cx.chave && splSel.id === s.id ? "#a16207" : tm.cabeca}
                             {...arrastavel(cx.chave, idSpl)}
                             onClick={(e) => { if (modo !== "editar" || moveu.current) return; e.stopPropagation(); setSplSel({ chave: cx.chave, id: s.id }); setSelLig(null); setSel(null); }}>
                             <title>{modo === "editar" ? "Arraste para mover · clique para ver ou remover este splitter" : "Arraste para mover"}</title>
                           </rect>
-                          <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill="#dcfce7" pointerEvents="none">S{idx} · {s.relacao}</text>
-                          <text x={x + w - 6} y={y + 13} fontSize={7.5} fill="#86efac" textAnchor="end">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : ent ? `F${String(ent.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
+                          <text x={x + 6} y={y + 13} fontSize={9} fontWeight={800} fill={tm.texto} pointerEvents="none">S{idx} · {s.relacao}</text>
+                          <text x={x + w - 6} y={y + 13} fontSize={7.5} fill={tm.suave} textAnchor="end" pointerEvents="none">{pon ? portaPonDaRota(pon).rotulo.replace(/^.*· /, "") : ent ? `F${String(ent.fibra).padStart(2, "0")} · sem rota` : s.entrada.splitter ? "2º nível" : "sem entrada"}</text>
                           {!pon && ent && <rect x={x} y={y} width={w} height={h} rx={6} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="4 3"><title>Esta fibra não tem rota: confira ou tire o splitter</title></rect>}
-                          <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill="#22c55e" opacity={0.18} />
-                          <rect x={x - 2} y={yIn - 6} width={12} height={12} rx={2} fill="#16a34a" stroke="#0b0d10" />
-                          <text x={x + 20} y={yIn + 3} fontSize={6.5} fill="#86efac">{perdaSplitter(s.relacao, modelo?.perda_db).toFixed(1).replace(".", ",")} dB</text>
-                          {ponto(cx.chave, { k: "entrada", spl: s.id }, x - 6, yIn, "#4ade80", ocup.has(idPonto({ k: "entrada", spl: s.id })))}
+                          <path d={`M${x + 10} ${yIn - 5} L${x + w - 30} ${y + 26} L${x + w - 30} ${y + h - 8} L${x + 10} ${yIn + 5} Z`} fill={tm.borda} opacity={0.18} pointerEvents="none" />
+                          <rect x={x - 2} y={yIn - 6} width={12} height={12} rx={2} fill={tm.borda} stroke="#0b0d10" pointerEvents="none" />
+                          <text x={x + 20} y={yIn + 3} fontSize={6.5} fill={tm.suave} pointerEvents="none">{perdaSplitter(s.relacao, modelo?.perda_db).toFixed(1).replace(".", ",")} dB</text>
+                          {ponto(cx.chave, { k: "entrada", spl: s.id }, x - 6, yIn, tm.ponto, ocup.has(idPonto({ k: "entrada", spl: s.id })))}
                           {portas.map((p, k) => {
                             const yy = y + 26 + k * ROW + ROW / 2;
-                            const cor = p.status === "cliente" ? "#0284c7" : p.status === "ramal" ? "#d97706" : "#1f3d33";
+                            const cor = p.status === "cliente" ? "#0284c7" : p.status === "ramal" ? "#d97706" : tm.porta;
                             return (
                               <g key={p.numero}>
                                 <title>{`Porta ${p.numero} · ${p.status === "cliente" ? `cliente ${p.descricao ?? ""}` : p.status === "ramal" ? `ramal ${p.descricao ?? ""}` : "livre"}`}</title>
@@ -704,7 +742,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                                 <text x={x + w - 16} y={yy + 3} fontSize={7} fontWeight={800} fill="#fff" textAnchor="middle">{p.numero}</text>
                                 {p.status === "cliente" && <text x={x + w - 32} y={yy + 3} fontSize={7} textAnchor="end">👤</text>}
                                 {pernaSel?.chave === cx.chave && pernaSel.spl === s.id && pernaSel.porta === p.numero && <rect x={x + w - 28} y={yy - 8} width={24} height={16} rx={3} fill="none" stroke="#38bdf8" strokeWidth={1.6} />}
-                                {ponto(cx.chave, { k: "porta", spl: s.id, porta: p.numero }, x + w + 6, yy, "#4ade80", ocup.has(idPonto({ k: "porta", spl: s.id, porta: p.numero })))}
+                                {ponto(cx.chave, { k: "porta", spl: s.id, porta: p.numero }, x + w + 6, yy, tm.ponto, ocup.has(idPonto({ k: "porta", spl: s.id, porta: p.numero })))}
                               </g>
                             );
                           })}
@@ -730,9 +768,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                     {b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f)).map((f) => {
                       const ka = `${b.chave}#${idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f })}`;
                       const kb = `${dest.chave}#${idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f })}`;
-                      const a = pos.get(ka), z = pos.get(kb);
-                      if (!a || !z) return null;
-                      const d = `M${a[0]} ${a[1]} C ${a[0] + 60} ${a[1]}, ${z[0] - 60} ${z[1]}, ${z[0]} ${z[1]}`;
+                      const d = curva(ka, kb);
+                      if (!d) return null;
                       const cf = corFibra(f, b.c.nome);
                       const tr = aceso(ka) && aceso(kb);
                       return (
@@ -786,7 +823,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                               </>
                             );
                           })()}
-                          {ponto(chave, pt, ehE ? x + BW : x, yy, cf.hex, ocup.has(idPonto(pt)))}
+                          {ponto(chave, pt, x, yy, cf.hex, ocup.has(idPonto(pt)), "l")}
+                          {ponto(chave, pt, x + BW, yy, cf.hex, ocup.has(idPonto(pt)), "r")}
                         </g>
                       );
                     })}
