@@ -55,12 +55,32 @@ describe("pela caixa (Unifilar): a fibra que sai", () => {
     expect(els(p, "r")[4].fibra_entrada).toBe(1);
     expect(p.rotas.get("r")!.trechos[0].nome).toBe(B2);
   });
-  it("cabo que vai para outra caixa: não muda sozinha", () => {
+  it("cabo que vai para outra caixa: o Unifilar manda, a rota é cortada na caixa", () => {
     const outra: RotaOptica = { ...rota("t", 1, 1), elementos: [...rota("t", 1, 1).elementos.slice(0, 3), el("CTO 9", "cto", "20", { cabo_entrada: C, fibra_entrada: 1 })] };
     const depois = cad({ emendas: [{ de: { cabo: A, fibra: 6 }, para: { cabo: C, fibra: 2 } }] });
     const p = planoPelaCaixa("PT:12", [rota("r", 6, 1), outra], cad({}), depois);
-    expect(p.rotas.has("r")).toBe(false);
-    expect(p.bloqueadas.map((b) => b.rota.id)).toContain("r");
+    expect(p.cortes.map((c) => [c.rota.id, c.ate])).toEqual([["r", 2]]);
+    expect(els(p, "r").map((e) => e.nome)).toEqual(["OLT", "HUB", "CEO 3"]);
+  });
+  it("fusão desligada: a rota passa a terminar na caixa", () => {
+    const antes = cad({ emendas: [{ de: { cabo: A, fibra: 6 }, para: { cabo: B, fibra: 1 } }] });
+    const r = { ...rota("r", 6, 1), trechos: [{ nome: A, pontos: [], ate: 2 }, { nome: B, pontos: [], ate: 3 }] };
+    const p = planoPelaCaixa("PT:12", [r], antes, cad({}));
+    expect(p.cortes).toHaveLength(1);
+    expect(p.cortes[0].apagar).toEqual([]);
+    expect(els(p, "r")).toHaveLength(3);
+    expect(p.rotas.get("r")!.trechos.map((t) => t.ate)).toEqual([2]);
+  });
+  it("perna desligada: a sub-rota que nascia na caixa é apagada (e as filhas dela)", () => {
+    const base = rota("r", 6, 1);
+    const tronco: RotaOptica = { ...base, elementos: base.elementos.slice(0, 3) };
+    const sub: RotaOptica = { ...base, id: "sub", nome: "sub", pai: { rota_id: "r", chave: "PT:12" }, tronco: 3 };
+    const neta: RotaOptica = { ...sub, id: "neta", nome: "neta", pai: { rota_id: "sub", chave: "PT:13" }, tronco: 4 };
+    const spl = (comPerna: boolean) => [{ id: "s1", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: 6 } }, portas: comPerna ? [{ numero: 1, status: "ramal" as const, saida: { cabo: B, fibra: 1 } }] : [] }];
+    const p = planoPelaCaixa("PT:12", [tronco, sub, neta], cad({ splitters: spl(true) }), cad({ splitters: spl(false) }));
+    expect(p.cortes.map((c) => c.rota.id)).toEqual(["sub"]);
+    expect(p.cortes[0].apagar.sort()).toEqual(["neta", "sub"]);
+    expect(p.rotas.has("sub")).toBe(false);
   });
   it("perna do splitter levada para outra fibra: a sub-rota que saía por ela acompanha", () => {
     const hub: RotaOptica = {

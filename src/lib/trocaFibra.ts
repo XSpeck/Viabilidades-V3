@@ -117,9 +117,52 @@ export interface PlanoTroca {
   pontas: TrocaNaPonta[];
   /** Trocas que mudariam o caminho (cabo que vai para outra caixa): só no mapa da rota */
   bloqueadas: { rota: RotaOptica; motivo: string }[];
+  /**
+   * Rotas cortadas no Unifilar (a fibra deixou de sair da caixa para a próxima): a rota dona termina na caixa
+   * (`ate` = índice dela) ou, se é uma sub-rota que nasce ali, é apagada. `apagar` traz também as sub-rotas
+   * que nasciam no pedaço cortado.
+   */
+  cortes: CorteRota[];
 }
 
-const planoVazio = (): PlanoTroca => ({ rotas: new Map(), mudancas: [], pontas: [], bloqueadas: [] });
+export interface CorteRota {
+  /** Rota dona do pedaço cortado */
+  rota: RotaOptica;
+  /** Caixa onde a rota passa a terminar */
+  caixa: string;
+  /** Último elemento que fica (índice na rota montada) */
+  ate: number;
+  /** Ids que somem: a própria rota (se nasce na caixa) e as sub-rotas que saíam do pedaço cortado */
+  apagar: string[];
+  motivo: string;
+}
+
+const planoVazio = (): PlanoTroca => ({ rotas: new Map(), mudancas: [], pontas: [], bloqueadas: [], cortes: [] });
+
+/**
+ * Corta a rota dona do elemento i+1 depois da caixa i: a rota termina na caixa (ou some, se nasce nela) e
+ * as sub-rotas que saíam do pedaço cortado somem junto.
+ */
+export function corteDaRota(r: RotaOptica, i: number, todas: RotaOptica[], motivo: string): CorteRota {
+  const d = donoDoElemento(r, i + 1, todas);
+  const inteira = !!d.pai && d.tronco === i + 1;
+  const apagar: string[] = [];
+  const filhas = (id: string, desde: number) => {
+    for (const x of todas) {
+      if (x.pai?.rota_id !== id || apagar.includes(x.id) || (x.tronco ?? 0) <= desde) continue;
+      apagar.push(x.id);
+      filhas(x.id, -1);
+    }
+  };
+  if (inteira) { apagar.push(d.id); filhas(d.id, -1); } else filhas(d.id, i + 1);
+  return { rota: d, caixa: r.elementos[i].nome, ate: i, apagar, motivo };
+}
+
+/** A rota como fica depois do corte (termina no elemento `ate`; o traçado depois dele sai) */
+export function rotaCortada(r: RotaOptica, ate: number): RotaOptica {
+  const elementos = r.elementos.slice(0, ate + 1).map((e, k) => (k === ate ? { ...e, fibra_saida: undefined, cabo_saida: undefined } : e));
+  return { ...r, elementos, trechos: r.trechos.filter((t) => t.ate === undefined || t.ate <= ate) };
+}
 
 function juntarPonta(pontas: TrocaNaPonta[], pc: TrocaNaPonta) {
   const ja = pontas.find((x) => x.chave === pc.chave && chaveCabo(x.cabo) === chaveCabo(pc.cabo) && x.lado === pc.lado && x.de === pc.de);
@@ -189,7 +232,8 @@ export function planoPelaCaixa(chave: string, rotas: RotaOptica[], antes: Cadast
     const mesmoCabo = chaveCabo(para.cabo) === chaveCabo(de.cabo);
     const pt = pontasCabo.get(chaveCabo(para.cabo));
     if (!mesmoCabo && (!pt || pt[0] !== chave || pt[1] !== chaveElemento(prox))) {
-      plano.bloqueadas.push({ rota: dono(r, i + 1), motivo: `${nomeCabo(para.cabo)} não vai para ${prox.nome}: para mudar o caminho, edite a rota no mapa.` });
+      // o Unifilar manda: a fibra agora vai por um cabo que não chega na próxima caixa da rota → a rota é cortada aqui
+      cortar(r, i, `a fibra agora sai por ${nomeCabo(para.cabo)}, que não vai para ${prox.nome}`);
       return;
     }
     mexer(r, i, (x) => { if (x.fibra_saida === de.fibra) x.fibra_saida = para.fibra; if (x.cabo_saida && chaveCabo(x.cabo_saida) === chaveCabo(de.cabo)) x.cabo_saida = para.cabo; });
@@ -239,6 +283,15 @@ export function planoPelaCaixa(chave: string, rotas: RotaOptica[], antes: Cadast
     plano.mudancas.push({ rota: dono(r, i), sentido: "chega", de, para, seguem: passam, ponta: cx.nome });
   }
 
+  /** A rota deixa de seguir depois desta caixa (elemento i) */
+  function cortar(r: RotaOptica, i: number, motivo: string) {
+    const c = corteDaRota(r, i, rotas, motivo);
+    const ja = plano.cortes.find((x) => x.rota.id === c.rota.id);
+    if (ja && ja.ate <= c.ate) return;
+    plano.cortes = plano.cortes.filter((x) => x.rota.id !== c.rota.id);
+    plano.cortes.push(c);
+  }
+
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
       if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada || !e.fibra_entrada) return;
@@ -257,6 +310,10 @@ export function planoPelaCaixa(chave: string, rotas: RotaOptica[], antes: Cadast
         if (novo && !(velho && mesmaFibra(velho, novo)) && !mesmaFibra(novo, saiHoje) && !feitas.has(k)) {
           feitas.add(k);
           naSaida(r, i, saiHoje, novo);
+        } else if (velho && !novo && !feitas.has(k)) {
+          // desligado no Unifilar (perna, splitter ou fusão): nada mais leva a rota para a próxima caixa
+          feitas.add(k);
+          cortar(r, i, pelaPorta ? "a perna do splitter que levava a rota foi desligada" : "a fusão que levava a rota foi desligada");
         }
       }
 
@@ -280,6 +337,14 @@ export function planoPelaCaixa(chave: string, rotas: RotaOptica[], antes: Cadast
     const r = rotas.find((x) => x.id === id)!;
     plano.rotas.set(id, { ...r, elementos, trechos: trechosNovos.get(id) ?? r.trechos });
   }
+  // rota cortada: some (nasce na caixa) ou termina na caixa; o que ela mudava depois do corte não vale mais
+  const somem = new Set(plano.cortes.flatMap((c) => c.apagar));
+  for (const c of plano.cortes) {
+    if (somem.has(c.rota.id)) continue;
+    plano.rotas.set(c.rota.id, rotaCortada(plano.rotas.get(c.rota.id) ?? c.rota, c.ate));
+  }
+  somem.forEach((id) => plano.rotas.delete(id));
+  plano.mudancas = plano.mudancas.filter((m) => !somem.has(m.rota.id));
   // a própria caixa não é "outra ponta"
   plano.pontas = plano.pontas.filter((p) => p.chave !== chave);
   return plano;

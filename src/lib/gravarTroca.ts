@@ -9,12 +9,15 @@ import { caixasDoPlano, planoPelasRotas } from "./trocaFibra";
 import type { CadastroLigacoes } from "./unifilar";
 
 /** Rotas (montadas) e caixas (cadastro completo) que mudam; devolve as caixas como ficam na tela */
-export async function gravarTroca(rotas: RotaOptica[], caixas: Omit<CaixaRede, "id" | "atualizado_em">[]): Promise<CaixaRede[]> {
-  if (!rotas.length && !caixas.length) return [];
+export async function gravarTroca(rotas: RotaOptica[], caixas: Omit<CaixaRede, "id" | "atualizado_em">[], apagar: string[] = []): Promise<CaixaRede[]> {
+  if (!rotas.length && !caixas.length && !apagar.length) return [];
   const { doc, writeBatch, serverTimestamp, deleteField } = await import("firebase/firestore");
   const { db } = await import("./firebase");
   const lote = writeBatch(db);
+  // rotas cortadas no Unifilar que nasciam na caixa (e as sub-rotas delas)
+  for (const id of apagar) lote.delete(doc(db, COLECAO_ROTAS, id));
   for (const r of rotas) {
+    if (apagar.includes(r.id)) continue;
     lote.update(doc(db, COLECAO_ROTAS, r.id), camposAtualizarRota(rotaParaGravar(r), { serverTimestamp, deleteField }));
   }
   const gravadas: CaixaRede[] = [];

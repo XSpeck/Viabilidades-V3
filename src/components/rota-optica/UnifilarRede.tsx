@@ -641,6 +641,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   /** Rotas da revisão (as que mudam por causa de ligações mudadas nas caixas) */
   const rotasDaRevisao = (p: PlanoTroca) => [...new Set(p.mudancas.map((m) => m.rota.id))];
+  /** Cortes marcados (o id da rota dona vai em `marcadas`, como as outras) */
+  const cortesValem = (p: PlanoTroca, m: Set<string>) => p.cortes.filter((c) => m.has(`corte:${c.rota.id}`));
 
   /** Tudo o que está pendente vira um plano só: trocas de adaptador do DIO e ligações mudadas nas caixas */
   function montarPlano(): PlanoTroca {
@@ -649,11 +651,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     // caixa por caixa, uma mudança em cima da outra
     let atuais = rotas;
     for (const chave of sujas) {
-      const p = planoPelaCaixa(chave, atuais, inicialDe(cadDe.get(chave)), edDe(chave));
+      const p = planoPelaCaixa(chave, atuais, automatico.get(chave)?.ed ?? inicialDe(cadDe.get(chave)), edDe(chave));
       p.rotas.forEach((r, id) => plano.rotas.set(id, r));
       plano.mudancas.push(...p.mudancas);
       plano.pontas.push(...p.pontas);
       plano.bloqueadas.push(...p.bloqueadas);
+      plano.cortes.push(...p.cortes.filter((c) => !plano.cortes.some((x) => x.rota.id === c.rota.id)));
       if (p.rotas.size) atuais = atuais.map((x) => p.rotas.get(x.id) ?? x);
     }
     return plano;
@@ -663,8 +666,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     setErro(null);
     const plano = montarPlano();
     // nada muda nas rotas por causa das caixas: grava direto
-    if (!plano.mudancas.length && !plano.bloqueadas.length) { void salvar(plano, new Set()); return; }
-    setMarcadas(new Set(rotasDaRevisao(plano)));
+    if (!plano.mudancas.length && !plano.bloqueadas.length && !plano.cortes.length) { void salvar(plano, new Set()); return; }
+    setMarcadas(new Set([...rotasDaRevisao(plano), ...plano.cortes.map((c) => `corte:${c.rota.id}`)]));
     setRevisao(plano);
   }
 
@@ -687,15 +690,20 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     setSalvando(true);
     setErro(null);
     try {
-      const valem = new Set([...rotasMudadas.map((r) => r.id), ...marcadasAgora]);
-      const rotasGravar = [...plano.rotas.values()].filter((r) => valem.has(r.id));
+      // corte desmarcado: a rota fica como está (nem cortada, nem com as outras trocas)
+      const cortes = cortesValem(plano, marcadasAgora);
+      const naoCorta = new Set(plano.cortes.filter((c) => !cortes.includes(c)).flatMap((c) => [c.rota.id, ...c.apagar]));
+      const valem = new Set([...rotasMudadas.map((r) => r.id), ...marcadasAgora, ...cortes.map((c) => c.rota.id)]);
+      naoCorta.forEach((id) => valem.delete(id));
+      const apagar = [...new Set(cortes.flatMap((c) => c.apagar))];
+      const rotasGravar = [...plano.rotas.values()].filter((r) => valem.has(r.id) && !apagar.includes(r.id));
       // as caixas editadas + as das pontas dos cabos trocados (só caixa que já tem cadastro)
       const cadastroDe = (k: string) => (cadDe.has(k) || eds[k] ? edDe(k) : undefined);
       const cadastros = caixasDoPlano(plano.pontas, cadastroDe, new Map(sujas.map((k) => [k, edDe(k)])), valem);
-      const gravadas = await gravarTroca(rotasGravar, [...cadastros].map(([k, ed]) => caixaParaGravar(k, ed)));
+      const gravadas = await gravarTroca(rotasGravar, [...cadastros].map(([k, ed]) => caixaParaGravar(k, ed)), apagar);
       // o splitter vale direto do cadastro (a potência das rotas é refeita com ele): nada a copiar
       gravadas.forEach(onCaixaSalva);
-      const mudouRota = rotasGravar.length > 0;
+      const mudouRota = rotasGravar.length > 0 || apagar.length > 0;
       setDioPend({});
       setEds({});
       setAtds({});
@@ -1225,8 +1233,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/60 p-4" onClick={() => !salvando && setRevisao(null)}>
           <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-700 bg-[#16181c] text-xs text-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-slate-800 bg-[#0f1115] px-4 py-3">
-              <p className="text-sm font-bold">A fibra muda no trecho inteiro do cabo</p>
-              <p className="mt-0.5 text-[11px] text-slate-400">As ligações mudadas trocam a fibra destas rotas, e a caixa da outra ponta do cabo acompanha. Desmarque a rota que não deve mudar (ela fica com a fibra antiga e a diferença aparece no Unifilar).</p>
+              <p className="text-sm font-bold">{revisao.cortes.length && !revisao.mudancas.length ? "Rotas cortadas pelo Unifilar" : "A fibra muda no trecho inteiro do cabo"}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">O Unifilar manda: as ligações mudadas trocam a fibra destas rotas (a caixa da outra ponta do cabo acompanha), e a ligação desligada corta a rota ali (✂). Desmarque o que não deve mudar: a rota fica como está e a diferença aparece no Unifilar.</p>
             </div>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
               {rotasDaRevisao(revisao).map((id) => {
@@ -1262,6 +1270,26 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                   ))}
                 </div>
               )}
+              {revisao.cortes.map((c) => {
+                const id = `corte:${c.rota.id}`;
+                const nomes = c.apagar.map((x) => rotas.find((r) => r.id === x)?.nome ?? x);
+                return (
+                  <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-xl border p-2 ${marcadas.has(id) ? "border-red-500/70 bg-red-500/10" : "border-slate-700"}`}>
+                    <input type="checkbox" className="mt-0.5" checked={marcadas.has(id)} onChange={(e) => setMarcadas((x) => { const n = new Set(x); if (e.target.checked) n.add(id); else n.delete(id); return n; })} />
+                    <span className="min-w-0">
+                      <b className="block truncate text-red-300">✂ {c.rota.nome}</b>
+                      <span className="mt-0.5 block text-[11px] text-slate-300">
+                        {c.apagar.includes(c.rota.id)
+                          ? <>nasce em <b>{curto(c.caixa, 22)}</b> e é apagada: {c.motivo}.</>
+                          : <>passa a terminar em <b>{curto(c.caixa, 22)}</b>: {c.motivo}.</>}
+                      </span>
+                      {nomes.filter((n) => n !== c.rota.nome).length > 0 && (
+                        <span className="mt-0.5 block text-[11px] text-slate-400">Saem junto as sub-rotas: {nomes.filter((n) => n !== c.rota.nome).map((n) => curto(n, 22)).join(", ")}.</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
               {revisao.bloqueadas.map((b, k) => (
                 <p key={`b${k}`} className="rounded-xl border border-red-900 bg-red-950/50 p-2 text-[11px] text-red-300"><b>{b.rota.nome}</b> não muda sozinha: {b.motivo}</p>
               ))}
@@ -1269,7 +1297,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
             <div className="flex justify-end gap-2 border-t border-slate-800 bg-[#0f1115] px-4 py-3">
               <button type="button" disabled={salvando} onClick={() => setRevisao(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300">Voltar</button>
               <button type="button" disabled={salvando} onClick={() => void salvar(revisao, marcadas)} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60">
-                {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar caixas{marcadas.size ? ` e ${marcadas.size} rota${marcadas.size !== 1 ? "s" : ""}` : ""}
+                {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar caixas{marcadas.size ? ` e ${marcadas.size} rota${marcadas.size !== 1 ? "s" : ""}` : ""}{cortesValem(revisao, marcadas).length ? ` (${cortesValem(revisao, marcadas).length} cortada${cortesValem(revisao, marcadas).length !== 1 ? "s" : ""})` : ""}
               </button>
             </div>
           </div>
