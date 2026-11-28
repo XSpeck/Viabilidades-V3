@@ -286,14 +286,14 @@ export function caminhoNaCaixa(m: ModeloUnifilar, p: PontoUni): Set<string> {
 }
 
 /** Um passo da rota inteira (OLT → … → ponta) */
-export interface PassoRota { chave: string; nome: string; tipo: TipoElementoRota; cabo?: string; fibra?: number; porta?: string }
+export interface PassoRota { chave: string; nome: string; tipo: TipoElementoRota; cabo?: string; fibra?: number; porta?: string; /** dBm que chega no elemento (a OLT: o que sai dela) */ pot?: number }
 
 /** As rotas que usam esta fibra deste cabo, com a sequência inteira de cada uma */
 export function rotasDaFibra(rotas: RotaOptica[], cabo: string, fibra: number): { rota: RotaOptica; passos: PassoRota[] }[] {
   const k = chaveCabo(cabo);
   return rotas
     .filter((r) => r.elementos.some((e) => !!e.cabo_entrada && e.fibra_entrada === fibra && chaveCabo(e.cabo_entrada) === k))
-    .map((r) => ({ rota: r, passos: r.elementos.map((e: ElementoRota) => ({ chave: chaveElemento(e), nome: e.nome, tipo: tipoVisual(e), cabo: e.cabo_entrada, fibra: e.fibra_entrada, porta: e.porta || undefined })) }))
+    .map((r) => ({ rota: r, passos: r.elementos.map((e: ElementoRota) => ({ chave: chaveElemento(e), nome: e.nome, tipo: tipoVisual(e), cabo: e.cabo_entrada, fibra: e.fibra_entrada, porta: e.porta || undefined, pot: e.potencia_entrada ?? e.potencia_saida })) }))
     // as rotas principais primeiro, depois as mais longas
     .sort((a, b) => Number(!!a.rota.pai) - Number(!!b.rota.pai) || b.passos.length - a.passos.length);
 }

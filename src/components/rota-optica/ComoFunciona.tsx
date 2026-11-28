@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Cable, GitBranch, Map as MapIcon, Pencil, Zap } from "lucide-react";
+import { Boxes, Cable, Map as MapIcon, Pencil, Zap } from "lucide-react";
 
 /**
  * O mapa do sistema: para que serve cada tela e onde se muda cada coisa.
@@ -18,26 +18,25 @@ const PASSOS = [
   },
   {
     n: "2",
-    titulo: "Árvore",
-    onde: "aba Árvore",
-    serve: "Cada porta PON em detalhe: caminho, potência e ocupação.",
-    edita: [],
-    Icone: GitBranch,
-    cor: "border-slate-200 bg-slate-50 text-slate-800",
-  },
-  {
-    n: "3",
     titulo: "Unifilar",
     onde: "aba Unifilar",
-    serve: "O que tem dentro de cada caixa, ligação por ligação.",
+    serve: "O que tem dentro de cada caixa, ligação por ligação, com a potência (dBm) em cada ponta.",
     edita: ["splitters (colocar e tirar)", "emendas e cor com cor", "pernas em ramal (porta da CTO → CT)", "cliente em cada porta e em cada fibra da CT", "adaptador do DIO de cada rota", "trocar a fibra: vale no trecho inteiro do cabo (rotas e a caixa da outra ponta)", "prédio: botão Editar no prédio (fibra de cada CDOI)"],
     Icone: Cable,
     cor: "border-slate-700 bg-[#16181c] text-slate-100",
   },
+  {
+    n: "3",
+    titulo: "Mapa da rede",
+    onde: "aba Mapa da rede",
+    serve: "A rede inteira para análise. Escolha uma PON para o resumo dela.",
+    edita: [],
+    Icone: MapIcon,
+    cor: "border-slate-200 bg-slate-50 text-slate-800",
+  },
 ] as const;
 
 const OLHAR = [
-  { titulo: "Mapa da rede", serve: "A rede inteira para análise: cores por PON, potência e ocupação, e os alertas.", Icone: MapIcon },
   { titulo: "Simular rompimento", serve: "Onde rompeu e quem fica sem sinal.", Icone: Zap },
 ];
 
@@ -47,7 +46,7 @@ export default function ComoFunciona() {
   return (
     <div className="space-y-3 p-3 text-xs">
       <p className="text-slate-600">
-        Cada coisa se muda <b>num lugar só</b>. A sequência é: desenhe a rota no mapa → confira na árvore → ligue as fibras no Unifilar.
+        Cada coisa se muda <b>num lugar só</b>. A sequência é: desenhe a rota no mapa → ligue as fibras e confira a potência no Unifilar → analise a rede no Mapa da rede.
       </p>
       <ol className="grid gap-2 sm:grid-cols-3">
         {PASSOS.map(({ n, titulo, onde, serve, edita, Icone, cor }) => (
@@ -63,12 +62,12 @@ export default function ComoFunciona() {
                 {edita.map((x) => <li key={x}>{x}</li>)}
               </ul>
             ) : (
-              <p className="mt-1.5 opacity-80">Só para ver. Cada caixa tem <b>Abrir no Unifilar</b>, e cada rota tem <b>Editar</b> (mapa).</p>
+              <p className="mt-1.5 opacity-80">Só para ver: cores por PON, potência, ocupação e alertas. Cada caixa e cada cabo têm <b>Abrir no Unifilar</b>.</p>
             )}
           </li>
         ))}
       </ol>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2">
         {OLHAR.map(({ titulo, serve, Icone }) => (
           <div key={titulo} className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
             <Icone className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />

@@ -40,7 +40,7 @@ interface Props {
   rotas?: RotaOptica[];
   /** As rotas foram gravadas (recarregar) */
   onRotasMudaram?: () => void;
-  /** Árvore: só mostra; o cabo se edita no mapa da rota */
+  /** Só mostra (o cabo se edita no mapa da rota) */
   soLeitura?: boolean;
   onEditarNoMapa?: () => void;
   /** Antes de começar uma troca de fibra (o editor avisa que o não salvo se perde) */
@@ -51,7 +51,7 @@ interface Props {
 
 /** Quadro do cabo: o que vai em cada fibra, com link para as rotas que usam cada uma. */
 export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipos, usuario, onSalva, onFechar, onAbrirRota, semMoldura, onFibra, rotas, onRotasMudaram, soLeitura, onEditarNoMapa, antesDeTrocar }: Props) {
-  /** Fibra escolhida (clique): destacada aqui e na árvore */
+  /** Fibra escolhida (clique): destacada aqui */
   const [fibraSel, setFibraSel] = useState<number | undefined>(fibraDestaque);
   /** Fibras com as sub-rotas abertas (por padrão ficam recolhidas embaixo da rota tronco) */
   const [subAbertas, setSubAbertas] = useState<Set<number>>(new Set());
@@ -265,7 +265,7 @@ export default function QuadroCabo({ chave, nome, cabo, uso, fibraDestaque, tipo
                           key={n}
                           ref={n === fibraDestaque ? destaqueRef : undefined}
                           onClick={() => { setFibraSel(n); onFibra?.(n); }}
-                          title="Clique para ver esta fibra na árvore"
+                          title="Clique para destacar esta fibra"
                           className={`cursor-pointer px-2 py-1.5 ${ativa ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : "bg-white hover:bg-slate-50"}`}
                         >
                           <div className="flex items-center gap-2">

@@ -19,7 +19,6 @@ import {
 } from "@/lib/rotaOptica";
 import RotaDiagrama, { DetalheElemento } from "@/components/rota-optica/RotaDiagrama";
 import RotaEditor from "@/components/rota-optica/RotaEditor";
-import ArvorePonView from "@/components/rota-optica/ArvorePon";
 import UnifilarRede from "@/components/rota-optica/UnifilarRede";
 import { listarCaixas, type CaixaRede } from "@/lib/caixasRede";
 import { capacidadesDosCabos, codigoDoCabo, listarCabos, semCodigo, usoDasFibras, type CaboRede } from "@/lib/cabosRede";
@@ -36,7 +35,7 @@ import CadastroEquipamentos from "@/components/rota-optica/CadastroEquipamentos"
 import { Janela, JanelasProvider } from "@/components/rota-optica/Janelas";
 import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
-import { Boxes, Cable, FileUp, GitBranch, HelpCircle, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
+import { Boxes, Cable, FileUp, HelpCircle, Loader2, Map as MapIcon, Pencil, Plus, Route, Save, Trash2, Users, X, Zap } from "lucide-react";
 import ComoFunciona from "@/components/rota-optica/ComoFunciona";
 import PredioVertical from "@/components/rota-optica/PredioVertical";
 import { chaveElemento } from "@/lib/arvorePon";
@@ -45,7 +44,6 @@ import { idPredioDoElemento } from "@/lib/prediosRede";
 /** Para que serve cada aba (uma frase) */
 const FRASE_VISTA = {
   mapa: "A rede inteira para análise. Para mudar posição ou cabo, abra a rota e clique em Editar.",
-  arvore: "Cada porta PON em detalhe: caminho, potência e ocupação. Só para ver.",
   unifilar: "O que tem dentro de cada caixa: splitters, emendas, clientes nas portas e o DIO. É aqui que se muda.",
 } as const;
 
@@ -92,13 +90,13 @@ export default function RotaOpticaPage() {
   const [rompimento, setRompimento] = useState<{ x: number; y: number } | null>(null);
   /** Tela principal: árvore das portas PON ou mapa da rede */
   // a aba escolhida continua ao atualizar a página
-  const [vista, setVistaEstado] = useState<"arvore" | "mapa" | "unifilar">(() => {
+  const [vista, setVistaEstado] = useState<"mapa" | "unifilar">(() => {
     try {
       const v = typeof window !== "undefined" ? window.localStorage.getItem("rota_optica_vista") : null;
-      return v === "mapa" || v === "unifilar" || v === "arvore" ? v : "arvore";
-    } catch { return "arvore"; }
+      return v === "mapa" ? "mapa" : "unifilar";
+    } catch { return "unifilar"; }
   });
-  const setVista = (v: "arvore" | "mapa" | "unifilar") => {
+  const setVista = (v: "mapa" | "unifilar") => {
     setVistaEstado(v);
     try { window.localStorage.setItem("rota_optica_vista", v); } catch { /* sem guardar */ }
   };
@@ -215,14 +213,6 @@ export default function RotaOpticaPage() {
     const montadas = montarRotas(lista, (x) => (x ? catalogo.find((c) => c.id === x)?.perda_db : undefined));
     if (id) setModo({ tipo: "editar", rota: montadas.find((r) => r.id === id) ?? null });
     setVersaoEditor((v) => v + 1);
-  }
-
-  /** Abre uma rota no editor (mapa) */
-  function editarRota(id: string) {
-    const r = rotas.find((x) => x.id === id);
-    if (!r) return;
-    setRotasAbertas((rs) => rs.filter((x) => x.id !== id));
-    setModo({ tipo: "editar", rota: r });
   }
 
   /** Abre a janela do prédio (onde se escolhe a fibra de cada CDOI) */
@@ -507,7 +497,7 @@ export default function RotaOpticaPage() {
           <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="inline-flex rounded-xl bg-slate-100 p-1" role="tablist">
-            {([["mapa", "Mapa da rede", MapIcon], ["arvore", "Árvore", GitBranch], ["unifilar", "Unifilar", Cable]] as const).map(([k, rot, Ic]) => (
+            {([["mapa", "Mapa da rede", MapIcon], ["unifilar", "Unifilar", Cable]] as const).map(([k, rot, Ic]) => (
               <button
                 key={k}
                 type="button"
@@ -543,23 +533,8 @@ export default function RotaOpticaPage() {
               onAbrirRota={abrirRota}
               onRotasMudaram={recarregar}
             />
-          ) : vista === "mapa" ? (
-            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
           ) : (
-          <ArvorePonView
-            rotas={rotas}
-            caixas={caixas}
-            clientes={clientes}
-            cabos={cabos}
-            catalogo={catalogo}
-            onCaboSalvo={(c) => setCabos((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-            usuario={user?.nome ?? ""}
-            onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
-            onAbrirRota={abrirRota}
-            onRotasMudaram={recarregar}
-            onAbrirNoUnifilar={abrirNoUnifilar}
-            onEditarRota={editarRota}
-          />
+            <MapaRede rotas={rotas} caixas={caixas} onAbrirRota={abrirRota} onAbrirNoUnifilar={abrirNoUnifilar} />
           )}
           </div>
         )

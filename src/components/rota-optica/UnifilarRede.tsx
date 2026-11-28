@@ -14,7 +14,9 @@ import {
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
-import { atualizarRota } from "@/lib/rotaOptica";
+import { atualizarRota, CALCULO_PADRAO } from "@/lib/rotaOptica";
+import { potenciaPortasFinais } from "@/lib/potenciaCaixa";
+import { COR_NIVEL, nivelPotencia } from "@/lib/analiseRede";
 import { paraGravar } from "@/lib/subRotas";
 import { sincronizarSplitterCdoi } from "@/lib/sincronizar";
 import { ligacoesDosClientes, type ClienteRede } from "@/lib/clientesRede";
@@ -142,6 +144,30 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const [boxOff, setBoxOff] = useState<Record<string, { dx: number; dy: number }>>(salvo.boxOff ?? {});
   const [vivo, setVivo] = useState<{ chave: string; id: string; dx: number; dy: number } | null>(null);
   const arrasto = useRef<{ chave: string; id: string; sx: number; sy: number; base: { dx: number; dy: number }; moveu: boolean } | null>(null);
+  /** Potência (dBm) de cada fibra que chega em cada caixa, pelas rotas: chave → "CB|fibra" → dBm */
+  const potChega = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of rotas) r.elementos.forEach((e, i) => {
+      if (i === 0 || !e.cabo_entrada || !e.fibra_entrada || e.potencia_entrada === undefined) return;
+      const k = chaveElemento(e);
+      const mm = m.get(k) ?? new Map<string, number>();
+      const kf = `${chaveCabo(e.cabo_entrada)}|${e.fibra_entrada}`;
+      if (!mm.has(kf)) mm.set(kf, e.potencia_entrada);
+      m.set(k, mm);
+    });
+    return m;
+  }, [rotas]);
+  /** dBm em cada porta de splitter da caixa (HUB: a perna vai fundida no cabo; CTO/CDOI: conector do cliente) */
+  const potPortas = (chave: string, spls: SplitterCaixa[]) => {
+    const mm = potChega.get(chave);
+    if (!mm) return new Map<string, number>();
+    const entradas = [...mm].map(([k, pot]) => { const [cabo, f] = k.split("|"); return { cabo, fibra: +f, pot }; });
+    const base = potenciaPortasFinais(spls, entradas, (id) => catalogo.find((q) => q.id === id)?.perda_db);
+    if (infoDe.get(chave)?.tipo !== "hub") return base;
+    return new Map([...base].map(([k, v]) => [k, v + CALCULO_PADRAO.conector_db - CALCULO_PADRAO.emenda_db]));
+  };
+  const dbm = (v?: number) => (v === undefined ? "" : `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`);
+
   /** Ir até uma caixa (clique no nome no painel da rota): rola até ela e pisca a borda */
   const irPara = useRef<string | null>(Array.isArray(inicial) ? inicial[0] ?? null : inicial ?? null);
   const [destaque, setDestaque] = useState<string | null>(null);
@@ -798,7 +824,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                       </g>
                     )}
                     {/* splitters (estilo GeoGrid: entrada à esquerda, leque, portas numeradas à direita) */}
-                    {cx.spl.map(({ s, x, y, h, w, portas, id: idSpl }) => {
+                    {(() => { const pp = potPortas(cx.chave, edDe(cx.chave).splitters); return cx.spl.map(({ s, x, y, h, w, portas, id: idSpl }) => {
                       const tm = t === "hub" ? TEMA_SPL.hub : t === "cto" ? TEMA_SPL.cto : TEMA_SPL.verde;
                       const modelo = catalogo.find((q) => q.id === s.modelo_id);
                       const ent = s.entrada.fibra;
@@ -829,6 +855,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                                 <rect x={x + w - 26} y={yy - 6} width={20} height={12} rx={2} fill={cor} stroke="#0b0d10" />
                                 <text x={x + w - 16} y={yy + 3} fontSize={7} fontWeight={800} fill="#fff" textAnchor="middle">{p.numero}</text>
                                 {p.status === "cliente" && <text x={x + w - 32} y={yy + 3} fontSize={7} textAnchor="end">👤</text>}
+                                {pp.has(`${s.id}|${p.numero}`) && <text x={x + w - (p.status === "cliente" ? 44 : 30)} y={yy + 2.5} fontSize={6.5} fontWeight={700} textAnchor="end" fill={COR_NIVEL[nivelPotencia(pp.get(`${s.id}|${p.numero}`))]} pointerEvents="none">{dbm(pp.get(`${s.id}|${p.numero}`))}</text>}
                                 {pernaSel?.chave === cx.chave && pernaSel.spl === s.id && pernaSel.porta === p.numero && <rect x={x + w - 28} y={yy - 8} width={24} height={16} rx={3} fill="none" stroke="#38bdf8" strokeWidth={1.6} />}
                                 {ponto(cx.chave, { k: "porta", spl: s.id, porta: p.numero }, x + w + 6, yy, tm.ponto, ocup.has(idPonto({ k: "porta", spl: s.id, porta: p.numero })))}
                               </g>
@@ -836,7 +863,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                           })}
                         </g>
                       );
-                    })}
+                    }); })()}
                   </g>
                 );
               })}
@@ -901,6 +928,10 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                           <text x={ehE ? x + 28.5 : x + BW - 28.5} y={yy + 3} fontSize={7} fontWeight={800} textAnchor="middle" fill={textoSobre(cf.hex)}>{`F${String(f).padStart(2, "0")}`}</text>
                           <text x={ehE ? x + 48 : x + BW - 50} y={yy + 3} fontSize={7} fill="#94a3b8" textAnchor={ehE ? "start" : "end"}>{`T${cf.tubo ?? 1}`}</text>
                           {sinal && <circle cx={ehE ? x + 66 : x + BW - 66} cy={yy} r={2.6} fill="#facc15" />}
+                          {ehE && potChega.get(chave)?.has(`${chaveCabo(c.nome)}|${f}`) && (() => {
+                            const v = potChega.get(chave)!.get(`${chaveCabo(c.nome)}|${f}`)!;
+                            return <text x={x + 74} y={yy + 2.5} fontSize={6.5} fontWeight={700} fill={COR_NIVEL[nivelPotencia(v)]} pointerEvents="none">{dbm(v)} dBm</text>;
+                          })()}
                           {ehE && infoDe.get(chave)?.tipo === "ct" && (() => {
                             const at = atdDe(chave).find((q) => q.numero === f);
                             const sel = fibraCt?.chave === chave && fibraCt.fibra === f;
@@ -1062,7 +1093,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                         )}
                         <button type="button" disabled={!infoDe.has(p.chave)} onClick={() => irParaCaixa(p.chave)} title="Ir até esta caixa"
                           className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left ${aberta ? "bg-orange-500/20 text-orange-200" : "text-slate-200 hover:bg-slate-800"} disabled:cursor-default disabled:hover:bg-transparent`}>
-                          <IconeElemento tipo={p.tipo} tamanho={15} /> <span className="truncate">{curto(p.nome, 30)}{p.porta ? ` · ${p.porta}` : ""}</span>
+                          <IconeElemento tipo={p.tipo} tamanho={15} /> <span className="min-w-0 flex-1 truncate">{curto(p.nome, 30)}{p.porta ? ` · ${p.porta}` : ""}</span>
+                          {p.pot !== undefined && <span className="shrink-0 tabular-nums text-[10px] font-semibold" style={{ color: COR_NIVEL[nivelPotencia(p.pot)] }}>{dbm(p.pot)}</span>}
                         </button>
                       </li>
                     );

@@ -814,7 +814,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (!it) return;
     // Rota vazia e clique num prédio: o prédio se monta na janela dele; um cabo novo começa pela caixa de origem
     if (predioNome && !linhas.length) {
-      setAviso(`Para mexer no ${predioNome}, abra-o na Árvore. Para levar outro cabo até ele, comece pela caixa de onde o cabo sai (ex.: a HUB) e use a ferramenta Prédio.`);
+      setAviso(`Para mexer no ${predioNome}, abra-o no Unifilar (Editar no prédio). Para levar outro cabo até ele, comece pela caixa de onde o cabo sai (ex.: a HUB) e use a ferramenta Prédio.`);
       return;
     }
     const e = it.el;
@@ -2449,7 +2449,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
               )}
               {predioDono && (
                 <p className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-                  Esta é a rota de uma CDOI do prédio <b>{predioDono.nome}</b>. Fibra, splitter, andar e nome são definidos na janela do prédio (Árvore → clique no prédio → Editar):
+                  Esta é a rota de uma CDOI do prédio <b>{predioDono.nome}</b>. Fibra, splitter, andar e nome são definidos na janela do prédio (Unifilar → prédio → Editar no prédio):
                   mudanças feitas aqui voltam ao que está no prédio quando ele for salvo.
                 </p>
               )}

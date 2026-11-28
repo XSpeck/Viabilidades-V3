@@ -36,10 +36,12 @@ interface Props {
   onAbrirRota: (id: string) => void;
   /** Abre a caixa na aba Unifilar (o que tem dentro dela) */
   onAbrirNoUnifilar?: (chave: string | string[]) => void;
+  /** Uma PON escolhida: dBm que sai da OLT nela */
+  potPon?: number;
 }
 
 /** Painel do lado do mapa: indicadores da seleção, alertas e detalhe do que foi clicado */
-export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, soVisivel, onSoVisivel, onIrPara, onAbrirRota, onAbrirNoUnifilar }: Props) {
+export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, soVisivel, onSoVisivel, onIrPara, onAbrirRota, onAbrirNoUnifilar, potPon }: Props) {
   const totalAlertas = alertas.length;
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-[12px] text-slate-700">
@@ -52,7 +54,7 @@ export default function PainelMapa({ aba, onAba, ind, alertas, detalhe, pons, so
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {aba === "indicadores" && <Indicadores_ ind={ind} soVisivel={soVisivel} onSoVisivel={onSoVisivel} />}
+        {aba === "indicadores" && <Indicadores_ ind={ind} soVisivel={soVisivel} onSoVisivel={onSoVisivel} potPon={potPon} />}
         {aba === "alertas" && <Alertas_ alertas={alertas} onIrPara={onIrPara} />}
         {aba === "detalhe" && <Detalhe_ detalhe={detalhe} pons={pons} onAbrirRota={onAbrirRota} onAbrirNoUnifilar={onAbrirNoUnifilar} />}
       </div>
@@ -80,7 +82,7 @@ function Barra({ partes }: { partes: { valor: number; cor: string; titulo: strin
   );
 }
 
-function Indicadores_({ ind, soVisivel, onSoVisivel }: { ind: Indicadores; soVisivel: boolean; onSoVisivel: (v: boolean) => void }) {
+function Indicadores_({ ind, soVisivel, onSoVisivel, potPon }: { ind: Indicadores; soVisivel: boolean; onSoVisivel: (v: boolean) => void; potPon?: number }) {
   const ocup = ind.portas.clientes + ind.portas.ramais;
   const fOc = faixaOcupacao(ocup, ind.portas.total);
   const niveis = (["otima", "boa", "limite", "abaixo", "sem"] as NivelPotencia[]);
@@ -110,7 +112,8 @@ function Indicadores_({ ind, soVisivel, onSoVisivel }: { ind: Indicadores; soVis
 
       <section>
         <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Potência nas pontas</p>
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className={`grid gap-1.5 ${potPon !== undefined ? "grid-cols-3" : "grid-cols-2"}`}>
+          {potPon !== undefined && <Cartao rotulo="Sai da OLT" valor={dbm(potPon)} sub="porta PON" />}
           <Cartao rotulo="Pior ponta" valor={dbm(ind.pior)} sub={ROTULO_NIVEL[nivelPotencia(ind.pior)]} cor={COR_NIVEL[nivelPotencia(ind.pior)]} />
           <Cartao rotulo="Cabos quase cheios" valor={String(ind.cabosCheios)} sub="≥ 85% das fibras" cor={ind.cabosCheios ? "#f97316" : undefined} />
         </div>

@@ -59,7 +59,7 @@ export default function CartaoPredio({
         />
       )}
       <p className="text-[10px] text-slate-500">
-        Aqui só o <b>cabo</b> chega ao prédio. Blocos, andares, CDOIs, fibras e splitters você monta na janela do prédio (Árvore → clique no prédio): cada CDOI vira uma sub-rota sozinha.
+        Aqui só o <b>cabo</b> chega ao prédio. Blocos, andares, CDOIs, fibras e splitters você monta na janela do prédio (Unifilar → prédio → Editar no prédio): cada CDOI vira uma sub-rota sozinha.
       </p>
     </div>
   );

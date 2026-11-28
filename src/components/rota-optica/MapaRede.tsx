@@ -139,6 +139,9 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota, onAbrirNoUni
     ...extras,
   ].sort((a, b) => ORDEM_GRAV.indexOf(a.gravidade) - ORDEM_GRAV.indexOf(b.gravidade));
   const ind = indicadores(caixasSel, cabosSel, extras);
+  // uma PON escolhida: o que sai da OLT nela (o resumo da porta)
+  const raizPon = pon ? rotas.find((r) => !r.pai && portaPonDaRota(r).chave === pon) : undefined;
+  const potPon = raizPon ? raizPon.elementos[0]?.potencia_saida ?? raizPon.elementos[0]?.potencia_entrada : undefined;
 
   const todos: [number, number][] = [...caixasVis.map((c) => [c.lat, c.lon] as [number, number]), ...cabosVis.flatMap((c) => c.pts)];
   const detalhe = sel ? (sel.tipo === "caixa" ? { caixa: analise.caixas.find((c) => c.chave === sel.chave) } : { cabo: analise.cabos.find((c) => c.chave === sel.chave) }) : null;
@@ -276,6 +279,7 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota, onAbrirNoUni
                 onIrPara={irPara}
                 onAbrirRota={onAbrirRota}
                 onAbrirNoUnifilar={onAbrirNoUnifilar}
+                potPon={potPon}
               />
             </div>
           )}

@@ -201,7 +201,7 @@ export default function ClientesRede({ rotas, caixas, clientes, usuario, onClien
                   <span>Ligado na <b>{l.caixa}</b> · perna <b>{l.rotulo}</b></span>
                 </>
               ) : (
-                <span>Sem ligação. Para ligar, abra a CTO/CDOI na árvore, marque a perna como <b>Cliente</b> e busque pelo código ou nome.</span>
+                <span>Sem ligação. Para ligar, abra a CTO/CDOI no Unifilar, modo <b>Clientes nas portas</b>, clique na perna e busque pelo código ou nome.</span>
               )}
             </div>
           );
