@@ -300,8 +300,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     // DIO: grade de adaptadores no meio (capacidade do DIO no cadastro de equipamentos)
     const adaptUsados = m.ligacoes.flatMap((l) => [l.a, l.b]).filter((q): q is { k: "adaptador"; n: number } => q.k === "adaptador").map((q) => q.n);
     const capDio = tipoCx === "dio" ? Math.max(catalogo.find((q) => q.id === infoDe.get(chave)?.equip)?.portas ?? 0, ...adaptUsados, 12) : 0;
+    // cordão OLT → DIO não vira bloco: sem coluna de "chega" no DIO e sem coluna de "sai" na OLT
+    const ehCordaoDio = (c: CaboUni) => m.ligacoes.some((l) => l.tipo === "dio" && l.a.k === "fibra" && l.a.lado === "chega" && chaveCabo(l.a.cabo) === c.chave);
+    const semColE = tipoCx === "dio" && !m.cabos.some((c) => c.lado === "chega" && !ehCordaoDio(c));
+    const semColD = tipoCx === "olt" && m.cabos.every((c) => c.lado !== "sai" || m.ligacoes.some((l) => l.tipo === "cordao" && l.b.k === "fibra" && chaveCabo(l.b.cabo) === c.chave));
     const MID = temSpl ? 240 : tipoCx === "dio" ? COLS * CEL + 60 : 130;
-    const xE = X0 + 12, xD = X0 + 12 + BW + MID;
+    const xE = X0 + 12, xD = X0 + 12 + BW + MID - (semColE ? BW + 20 : 0);
     const ocup = new Set(m.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]));
     const itens: Painel[] = [];
     const vis = (c: CaboUni) => {
@@ -369,7 +373,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     let dio: Painel | undefined;
     if (tipoCx === "dio") {
       const o = off(chave, "dio");
-      dio = { x: xE + BW + 20 + o.dx, y: T + 50 + o.dy, w: COLS * CEL + 20, h: Math.ceil(capDio / COLS) * CEL + 30 };
+      dio = { x: xE + (semColE ? 0 : BW + 20) + o.dx, y: T + 50 + o.dy, w: COLS * CEL + 20, h: Math.ceil(capDio / COLS) * CEL + 30 };
       for (let n = 1; n <= capDio; n++) {
         const k = n - 1;
         pos.set(`${chave}#${idPonto({ k: "adaptador", n })}`, [dio.x + 10 + (k % COLS) * CEL + CEL / 2, dio.y + 20 + Math.floor(k / COLS) * CEL + CEL / 2]);
@@ -402,7 +406,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       }
     }
     // a caixa envolve tudo o que tem dentro (cresce se um item foi arrastado para fora)
-    const wAuto = 24 + BW * 2 + MID;
+    const wAuto = semColD ? 24 + BW + 40 : 24 + BW * 2 + MID - (semColE ? BW + 20 : 0);
     const x0 = Math.min(X0, ...itens.map((q) => q.x - 12));
     const y0 = Math.min(T, ...itens.map((q) => q.y - 44));
     const x1 = Math.max(X0 + wAuto, ...itens.map((q) => q.x + q.w + 12));
