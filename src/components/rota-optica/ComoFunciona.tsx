@@ -12,7 +12,7 @@ const PASSOS = [
     titulo: "Mapa da rede · Editar",
     onde: "aba Mapa da rede, botão Editar rede",
     serve: "Onde as coisas estão e por onde o cabo passa. A rede é livre: nada de rotas.",
-    edita: ["colocar OLT, DIO, CEO, CT, HUB, CTO e CDOI", "desenhar cabo de caixa em caixa (passando pelas do meio)", "pôr caixa em cima de um cabo", "arrastar e apagar", "na OLT: Ligar PON (cordão até o adaptador do DIO)", "tipo e capacidade do cabo"],
+    edita: ["colocar OLT, DIO, CEO, CT, HUB, CTO e CDOI", "desenhar cabo de caixa em caixa (passando pelas do meio)", "pôr caixa em cima de um cabo", "arrastar e apagar", "na OLT: Ligar PON (cordão até o adaptador do DIO)", "tipo e capacidade do cabo", "prédio: Abrir prédio (blocos, andares e as CDOIs de cada andar)"],
     Icone: Pencil,
     cor: "border-indigo-200 bg-indigo-50 text-indigo-900",
   },

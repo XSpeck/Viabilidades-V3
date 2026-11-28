@@ -23,7 +23,7 @@ import { tracadoDoTrecho, type SinalRede } from "@/lib/sinalRede";
 import { nomeCurto } from "@/lib/textoCompleto";
 
 type Pt = { lat: number; lon: number };
-const TIPOS: TipoElementoRota[] = ["olt", "dio", "ceo", "ct", "hub", "cto", "cdoi"];
+const TIPOS: TipoElementoRota[] = ["olt", "dio", "ceo", "ct", "hub", "cto", "cdoi", "predio"];
 type Ferramenta = "navegar" | "cabo" | TipoElementoRota;
 
 interface Props {
@@ -37,6 +37,8 @@ interface Props {
   onCabo: (c: CaboRede) => void;
   onCaboFora: (chave: string) => void;
   onAbrirNoUnifilar?: (chave: string) => void;
+  /** Prédio: blocos, andares e as CDOIs de cada andar */
+  onAbrirPredio?: (chave: string) => void;
 }
 
 function icone(tipo: TipoElementoRota, ativo: boolean, aceso: boolean) {
@@ -66,7 +68,7 @@ function Enquadrar({ pts }: { pts: [number, number][] }) {
   return null;
 }
 
-export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, onCaixa, onCaixaFora, onCabo, onCaboFora, onAbrirNoUnifilar }: Props) {
+export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, onCaixa, onCaixaFora, onCabo, onCaboFora, onAbrirNoUnifilar, onAbrirPredio }: Props) {
   const [camada, setCamada] = useCamada();
   const [ferr, setFerr] = useState<Ferramenta>("navegar");
   const [sel, setSel] = useState<{ k: "el" | "cabo"; chave: string } | null>(null);
@@ -78,7 +80,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   const [desenho, setDesenho] = useState<{ caminho: string[]; trechos: Pt[][]; atual: Pt[] } | null>(null);
   const [tipoCabo, setTipoCabo] = useState("");
 
-  const elementos = useMemo(() => caixas.filter((c) => c.tipo && c.lat !== undefined && c.lon !== undefined), [caixas]);
+  const elementos = useMemo(() => caixas.filter((c) => c.tipo && c.lat !== undefined && c.lon !== undefined && !c.predio_id), [caixas]);
   const elDe = useMemo(() => new Map(caixas.map((c) => [c.chave, c])), [caixas]);
   const tiposCabo = useMemo(() => catalogo.filter((i) => i.categoria === "cabo" && (i.capacidade ?? 0) > 1), [catalogo]);
   const desenhados = useMemo(() => cabos.filter((c) => c.caminho && c.caminho.length >= 2), [cabos]);
@@ -102,7 +104,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
 
   function novoElemento(tipo: TipoElementoRota, p: Pt, noCabo?: { chave: string; t: number }) {
     const n = caixas.filter((c) => c.tipo === tipo).length + 1;
-    setNovo({ tipo, p, nome: `${tipo === "cdoi" ? "CDOI" : tipo.toUpperCase()} ${n}`, codigo: proximoCodigoElemento(caixas.map((c) => c.codigo)), equip: "", noCabo });
+    setNovo({ tipo, p, nome: `${tipo === "cdoi" ? "CDOI" : tipo === "predio" ? "Ed." : tipo.toUpperCase()} ${n}`, codigo: proximoCodigoElemento(caixas.map((c) => c.codigo)), equip: "", noCabo });
   }
 
   function clicarMapa(p: Pt) {
@@ -244,7 +246,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
       const fs = acesas(c, t);
       return { c, t, linha, fs };
     }),
-  ).filter((x) => x.linha.length >= 2);
+  ).filter((x) => x.linha.length >= 2 && !x.c.caminho!.some((k) => elDe.get(k)?.predio_id));
   const desenhoLinha: [number, number][] = desenho?.caminho.length
     ? [
         ...desenho.caminho.flatMap((k, i) => {
@@ -305,7 +307,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
         <div className="pointer-events-auto flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-lg">
           {botao("navegar", "Navegar", <MousePointer2 className="h-3.5 w-3.5" />)}
           {botao("cabo", "Cabo", <Cable className="h-3.5 w-3.5" />)}
-          {TIPOS.map((t) => botao(t, t === "cdoi" ? "CDOI" : t.toUpperCase(), <span className="inline-block h-3.5 w-3.5" dangerouslySetInnerHTML={{ __html: iconeSvg(t, 14) }} />))}
+          {TIPOS.map((t) => botao(t, t === "cdoi" ? "CDOI" : t === "predio" ? "Prédio" : t.toUpperCase(), <span className="inline-block h-3.5 w-3.5" dangerouslySetInnerHTML={{ __html: iconeSvg(t, 14) }} />))}
         </div>
         <SeletorCamada valor={camada} onMudar={setCamada} className="pointer-events-auto ml-auto" />
       </div>
@@ -366,6 +368,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
             <p>{pons(elSel.chave).length ? <>Sinal de <b>{pons(elSel.chave).join(", ")}</b></> : <span className="text-slate-500">Sem sinal</span>}</p>
             {elSel.tipo === "olt" && <PonsDaOlt olt={elSel} caixas={caixas} cabos={cabos} usuario={usuario} onCaixa={onCaixa} onCabo={onCabo} onErro={setErro} />}
             <div className="flex flex-wrap gap-1.5">
+              {elSel.tipo === "predio" && onAbrirPredio && <button type="button" onClick={() => onAbrirPredio(elSel.chave)} className="flex items-center gap-1 rounded-lg bg-sky-700 px-2 py-1.5 font-semibold text-white">Abrir prédio</button>}
               {onAbrirNoUnifilar && <button type="button" onClick={() => onAbrirNoUnifilar(elSel.chave)} className="flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-1.5 font-semibold text-white"><Network className="h-3.5 w-3.5" /> Abrir no Unifilar</button>}
               <button type="button" onClick={() => void apagarElemento(elSel)} className="flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1.5 text-red-700"><Trash2 className="h-3.5 w-3.5" /> Apagar</button>
             </div>

@@ -30,6 +30,7 @@ import { IconeCabo, IconeElemento } from "@/components/rota-optica/IconesRede";
 import { tipoVisual, TIPO_ELEMENTO_LABEL } from "@/lib/rotaOptica";
 import { Boxes, Cable, HelpCircle, Loader2, Map as MapIcon, Pencil, Route, Trash2, Users, X, Zap } from "lucide-react";
 import ComoFunciona from "@/components/rota-optica/ComoFunciona";
+import PredioLivre from "@/components/rota-optica/PredioLivre";
 
 /** Para que serve cada aba (uma frase) */
 const FRASE_VISTA = {
@@ -83,6 +84,9 @@ export default function RotaOpticaPage() {
   const [uniInicial, setUniInicial] = useState<{ chave: string | string[]; n: number } | null>(null);
   /** Aba Mapa da rede: desenhar (editar) ou ver a análise (temas, alertas) */
   const [mapaModo, setMapaModo] = useState<"editar" | "analise">("editar");
+  /** Janela do prédio (blocos, andares e CDOIs) */
+  const [predioAberto, setPredioAberto] = useState<{ chave: string; x: number; y: number } | null>(null);
+  const abrirPredio = (chave: string) => setPredioAberto({ chave, x: Math.max(8, (window.innerWidth - 720) / 2), y: 60 });
   /** Janela "Como funciona" */
   const [ajuda, setAjuda] = useState<{ x: number; y: number } | null>(null);
   /** Rede livre: o sinal sai das portas PON e segue as ligações das caixas (nada disso é gravado) */
@@ -233,6 +237,33 @@ export default function RotaOpticaPage() {
         </div>
       )}
 
+      {predioAberto && caixas.some((c) => c.chave === predioAberto.chave) && (
+        <Janela
+          inicial={predioAberto}
+          largura={Math.min(720, typeof window !== "undefined" ? window.innerWidth - 16 : 720)}
+          titulo={caixas.find((c) => c.chave === predioAberto.chave)!.nome}
+          subtitulo="Blocos, andares e as CDOIs de cada andar"
+          icone={<Boxes className="w-5 h-5" />}
+          corBarra="bg-sky-900"
+          onFechar={() => setPredioAberto(null)}
+        >
+          <PredioLivre
+            key={predioAberto.chave}
+            predio={caixas.find((c) => c.chave === predioAberto.chave)!}
+            caixas={caixas}
+            cabos={cabos}
+            catalogo={catalogo}
+            sinal={sinal}
+            usuario={user?.nome ?? ""}
+            onCaixa={(c) => setCaixas((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+            onCaixaFora={(k) => setCaixas((l) => l.filter((x) => x.chave !== k))}
+            onCabo={(c) => setCabos((l) => [...l.filter((x) => x.chave !== c.chave), c])}
+            onCaboFora={(k) => setCabos((l) => l.filter((x) => x.chave !== k))}
+            onAbrirNoUnifilar={(k) => { setPredioAberto(null); abrirNoUnifilar(k); }}
+          />
+        </Janela>
+      )}
+
       {ajuda && (
         <Janela
           inicial={ajuda}
@@ -323,6 +354,7 @@ export default function RotaOpticaPage() {
               key={uniInicial?.n ?? 0}
               inicial={uniInicial?.chave}
               clientes={clientes}
+              onEditarPredio={abrirPredio}
               cabos={cabos}
               caixas={caixas}
               catalogo={catalogo}
@@ -351,6 +383,7 @@ export default function RotaOpticaPage() {
                 onCabo={(c) => setCabos((l) => [...l.filter((x) => x.chave !== c.chave), c])}
                 onCaboFora={(k) => setCabos((l) => l.filter((x) => x.chave !== k))}
                 onAbrirNoUnifilar={abrirNoUnifilar}
+                onAbrirPredio={abrirPredio}
               />
               )}
             </div>
