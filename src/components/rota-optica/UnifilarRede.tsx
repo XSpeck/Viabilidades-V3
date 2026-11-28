@@ -8,8 +8,8 @@ import { chaveCabo, codigoDoCabo, semCodigo } from "@/lib/cabosRede";
 import { idCaixa, portasPara, salvarCaixa, salvarLayoutUnifilar, type CaixaRede, type LayoutUnifilar, type SplitterCaixa } from "@/lib/caixasRede";
 import type { ItemCatalogo } from "@/lib/catalogoRede";
 import {
-  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, rotasDaFibra, tipoEntre, trocarPortaDio,
-  type CadastroLigacoes, type CaboUni, type ModeloUnifilar, type PontoUni,
+  caminhoNaCaixa, completarPelasRotas, desligar, idPonto, ligar, montarUnifilar, propagarNasRotas, rotasDaFibra, tipoEntre, trocarPortaDio,
+  type CadastroLigacoes, type MudancaRota, type CaboUni, type ModeloUnifilar, type PontoUni,
 } from "@/lib/unifilar";
 import { IconeElemento, iconeSvg } from "./IconesRede";
 import { cortar } from "@/lib/textoCompleto";
@@ -416,11 +416,46 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     setDioPend((d) => ({ ...d, [`${chave}|${chaveCabo(cordao)}`]: { chave, cordao, n } }));
   }
 
-  async function salvarTudo() {
+  /** Revisão antes de gravar: as rotas que passam a sair por outra fibra por causa das ligações mudadas */
+  const [revisao, setRevisao] = useState<{ mudancas: MudancaRota[]; bloqueadas: { rota: RotaOptica; motivo: string }[]; finais: Map<string, RotaOptica> } | null>(null);
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+
+  function revisarESalvar() {
+    setErro(null);
+    // caixa por caixa: o que mudou no cadastro muda as rotas dali pra frente (uma mudança em cima da outra)
+    let atuais = rotas;
+    const mudancas: MudancaRota[] = [];
+    const bloqueadas: { rota: RotaOptica; motivo: string }[] = [];
+    for (const chave of sujas) {
+      const r = propagarNasRotas(chave, atuais, inicialDe(cadDe.get(chave)), edDe(chave));
+      mudancas.push(...r.mudancas);
+      bloqueadas.push(...r.bloqueadas);
+      const novas = new Map(r.mudancas.map((m) => [m.rota.id, { ...m.rota, elementos: m.elementos }]));
+      if (novas.size) atuais = atuais.map((x) => novas.get(x.id) ?? x);
+    }
+    if (!mudancas.length && !bloqueadas.length) { void salvarTudo(new Map()); return; }
+    const finais = new Map<string, RotaOptica>();
+    for (const m of mudancas) finais.set(m.rota.id, atuais.find((x) => x.id === m.rota.id)!);
+    setMarcadas(new Set(finais.keys()));
+    setRevisao({ mudancas, bloqueadas, finais });
+  }
+
+  /** Grava as caixas e as rotas (troca do DIO + as rotas escolhidas na revisão) */
+  async function salvarTudo(propagadas: Map<string, RotaOptica>) {
     setSalvando(true);
     setErro(null);
     let mudouRota = false;
     try {
+      // rotas primeiro: a sincronização da CDOI parte delas já gravadas
+      const paraGravarRotas = new Map<string, RotaOptica>(rotasMudadas.map((r) => [r.id, r]));
+      propagadas.forEach((r, id) => paraGravarRotas.set(id, r));
+      for (const r of paraGravarRotas.values()) {
+        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
+          nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
+        }));
+        mudouRota = true;
+      }
+      const rotasDepois = rotasBase.map((x) => paraGravarRotas.get(x.id) ?? x);
       for (const chave of sujas) {
         const ed = edDe(chave);
         const cad = cadDe.get(chave);
@@ -435,20 +470,14 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         });
         onCaixaSalva(salva);
         // CDOI: o splitter do Unifilar passa para o prédio e para a rota (conta de potência)
-        if (infoDe.get(chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(salva, rotasBase, catalogo, usuario))) mudouRota = true;
-      }
-      // DIO: a porta nova vai para as rotas
-      for (const r of rotasMudadas) {
-        await atualizarRota(r.id, paraGravar({ pai: r.pai, tronco: r.tronco }, {
-          nome: r.nome, origem: r.origem, elementos: r.elementos, trechos: r.trechos, calculo_potencia: r.calculo_potencia, obs: r.obs, criado_por: r.criado_por,
-        }));
-        mudouRota = true;
+        if (infoDe.get(chave)?.tipo === "cdoi" && (await sincronizarSplitterCdoi(salva, rotasDepois, catalogo, usuario))) mudouRota = true;
       }
       setDioPend({});
       if (mudouRota) onRotasMudaram?.();
       setEds({});
       setAtds({});
       setHist([]);
+      setRevisao(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
@@ -512,7 +541,7 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           <>
             <button type="button" disabled={!hist.length} onClick={() => { setEds(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); }} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300 disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" /> Desfazer</button>
             <button type="button" onClick={() => { setEds({}); setHist([]); setDioPend({}); setAtds({}); }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-300">Descartar</button>
-            <button type="button" disabled={salvando} onClick={salvarTudo} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 font-semibold text-white disabled:opacity-60">
+            <button type="button" disabled={salvando} onClick={revisarESalvar} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 font-semibold text-white disabled:opacity-60">
               {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar{sujas.length ? ` ${sujas.length} caixa${sujas.length !== 1 ? "s" : ""}` : ""}{rotasMudadas.length ? `${sujas.length ? " +" : ""} ${rotasMudadas.length} rota${rotasMudadas.length !== 1 ? "s" : ""} (DIO)` : ""}
             </button>
           </>
@@ -917,6 +946,50 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
           </aside>
         )}
       </div>
+      {revisao && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/60 p-4" onClick={() => !salvando && setRevisao(null)}>
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-700 bg-[#16181c] text-xs text-slate-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-800 bg-[#0f1115] px-4 py-3">
+              <p className="text-sm font-bold">As rotas mudam dali pra frente</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">As ligações mudadas fazem estas rotas saírem por outra fibra. Desmarque a rota que não deve mudar (ela fica com a fibra antiga e a diferença aparece no Unifilar).</p>
+            </div>
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+              {[...revisao.finais.keys()].map((id) => {
+                const r = revisao.finais.get(id)!;
+                const ms = revisao.mudancas.filter((m) => m.rota.id === id);
+                return (
+                  <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-xl border p-2 ${marcadas.has(id) ? "border-orange-500/60 bg-orange-500/10" : "border-slate-700"}`}>
+                    <input type="checkbox" className="mt-0.5" checked={marcadas.has(id)} onChange={(e) => setMarcadas((x) => { const n = new Set(x); if (e.target.checked) n.add(id); else n.delete(id); return n; })} />
+                    <span className="min-w-0">
+                      <b className="block truncate">{r.nome}</b>
+                      {ms.map((m, k) => {
+                        const cv = corFibra(m.de.fibra, m.de.cabo), cn = corFibra(m.para.fibra, m.para.cabo);
+                        return (
+                          <span key={k} className="mt-0.5 block text-[11px] text-slate-300">
+                            até <b>{curto(m.proxima, 26)}</b>:{" "}
+                            <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: cv.hex }} /> {chaveCabo(m.de.cabo) !== chaveCabo(m.para.cabo) ? `${curto(semCodigo(m.de.cabo), 18)} ` : ""}F{String(m.de.fibra).padStart(2, "0")} →{" "}
+                            <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: cn.hex }} /> {chaveCabo(m.de.cabo) !== chaveCabo(m.para.cabo) ? `${curto(semCodigo(m.para.cabo), 18)} ` : ""}F{String(m.para.fibra).padStart(2, "0")}
+                            {m.seguem.length > 0 && <span className="text-slate-500"> · segue na F{String(m.para.fibra).padStart(2, "0")} até {curto(m.seguem[m.seguem.length - 1], 22)}</span>}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </label>
+                );
+              })}
+              {revisao.bloqueadas.map((b, k) => (
+                <p key={`b${k}`} className="rounded-xl border border-red-900 bg-red-950/50 p-2 text-[11px] text-red-300"><b>{b.rota.nome}</b> não muda sozinha: {b.motivo}</p>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-800 bg-[#0f1115] px-4 py-3">
+              <button type="button" disabled={salvando} onClick={() => setRevisao(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300">Voltar</button>
+              <button type="button" disabled={salvando} onClick={() => void salvarTudo(new Map([...revisao.finais].filter(([id]) => marcadas.has(id))))} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60">
+                {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar caixas{marcadas.size ? ` e ${marcadas.size} rota${marcadas.size !== 1 ? "s" : ""}` : ""}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <p className="border-t border-slate-800 bg-[#0f1115] px-3 py-1.5 text-[10px] text-slate-500">
         {modo === "clientes"
           ? "Clique numa porta (perna) de splitter, ou numa fibra que chega na CT, para marcar o cliente ou deixar livre. Salve no topo."

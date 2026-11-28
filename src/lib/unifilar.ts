@@ -364,3 +364,126 @@ export function trocarPortaDio(r: RotaOptica, chaveDio: string, n: number): Elem
     return e;
   });
 }
+
+// ---------- A emenda manda: o que muda na caixa muda as rotas dali pra frente ----------
+
+/** Uma rota que passa a sair por outra fibra depois de uma mudança no cadastro da caixa */
+export interface MudancaRota {
+  rota: RotaOptica;
+  /** Índice do elemento seguinte à caixa (o que chega pela fibra que mudou) */
+  i: number;
+  de: PontaFibra;
+  para: PontaFibra;
+  /** Caixas adiante que recebem a fibra nova pelo mesmo cabo (o cabo segue passando por elas) */
+  seguem: string[];
+  /** Caixa seguinte (onde chega a fibra que mudou) */
+  proxima: string;
+  /** A rota inteira já com a mudança (e as outras desta mesma rota, se houver) */
+  elementos: ElementoRota[];
+}
+
+/** Por onde o sinal que chega em `chegada` sai da caixa, pelo cadastro (fusão, regra cor com cor ou perna do splitter) */
+function saidaNoCadastro(c: CadastroLigacoes, chegada: PontaFibra, porta?: { spl: string; porta: number }): PontaFibra | undefined {
+  if (porta) {
+    const s = c.splitters.find((x) => x.id === porta.spl);
+    return s?.portas.find((p) => p.numero === porta.porta)?.saida;
+  }
+  const av = c.emendas.find((m) => mesmaFibra(m.de, chegada));
+  if (av) return av.para;
+  const g = c.regras_emenda.find((r) => chaveCabo(r.de) === chaveCabo(chegada.cabo));
+  return g ? { cabo: g.para, fibra: chegada.fibra } : undefined;
+}
+
+/** A porta de splitter (alimentado pela fibra que chega, em qualquer nível) que leva à fibra que sai */
+function portaQueLeva(c: CadastroLigacoes, chegada: PontaFibra, saida: PontaFibra): { spl: string; porta: number } | undefined {
+  const raizes = c.splitters.filter((s) => s.entrada.fibra && mesmaFibra(s.entrada.fibra, chegada));
+  const doGrupo = [...raizes];
+  for (let k = 0; k < doGrupo.length; k++) c.splitters.forEach((s) => { if (s.entrada.splitter?.id === doGrupo[k].id && !doGrupo.includes(s)) doGrupo.push(s); });
+  for (const s of doGrupo) for (const p of s.portas) if (p.saida && mesmaFibra(p.saida, saida)) return { spl: s.id, porta: p.numero };
+  return undefined;
+}
+
+/**
+ * Depois de mudar o cadastro de uma caixa (`antes` → `depois`): as rotas cujo sinal agora sai por outra fibra.
+ * Muda a chegada no elemento seguinte e, se o cabo continua o mesmo, a fibra segue igual pelas caixas
+ * onde ele só passa. Se o cabo novo vai para outra caixa, a rota não muda sozinha (vai em `bloqueadas`).
+ * Sub-rotas: a mudança vai para a dona do trecho (a rota-mãe quando é tronco).
+ */
+export function propagarNasRotas(
+  chave: string,
+  rotas: RotaOptica[],
+  antes: CadastroLigacoes,
+  depois: CadastroLigacoes,
+): { mudancas: MudancaRota[]; bloqueadas: { rota: RotaOptica; motivo: string }[] } {
+  const mudancas: MudancaRota[] = [];
+  const bloqueadas: { rota: RotaOptica; motivo: string }[] = [];
+  const feitas = new Set<string>();
+  /** Para que caixa vai cada cabo (pelas rotas): chaveCabo → [caixa de onde sai, caixa onde chega] */
+  const pontas = new Map<string, [string, string]>();
+  for (const r of rotas) r.elementos.forEach((e, i) => { if (i > 0 && e.cabo_entrada && !pontas.has(chaveCabo(e.cabo_entrada))) pontas.set(chaveCabo(e.cabo_entrada), [chaveElemento(r.elementos[i - 1]), chaveElemento(e)]); });
+  const dono = (r: RotaOptica, k: number): RotaOptica => {
+    let atual = r;
+    for (let g = 0; g < 20; g++) {
+      if (!atual.pai || !atual.tronco || k >= atual.tronco) return atual;
+      const mae = rotas.find((x) => x.id === atual.pai!.rota_id);
+      if (!mae) return atual;
+      atual = mae;
+    }
+    return atual;
+  };
+  for (const r0 of rotas) {
+    r0.elementos.forEach((e, i) => {
+      const prox = r0.elementos[i + 1];
+      if (i === 0 || chaveElemento(e) !== chave || !prox || !e.cabo_entrada || !e.fibra_entrada || !prox.cabo_entrada || !prox.fibra_entrada) return;
+      const chegada = { cabo: e.cabo_entrada, fibra: e.fibra_entrada };
+      const saiHoje = { cabo: prox.cabo_entrada, fibra: prox.fibra_entrada };
+      // pelo splitter: a porta que hoje leva a rota; depois da mudança, para onde essa porta vai
+      const porta = portaQueLeva(antes, chegada, saiHoje);
+      const pelaPorta = !!porta || antes.splitters.some((s) => s.entrada.fibra && mesmaFibra(s.entrada.fibra, chegada));
+      const velho = pelaPorta ? (porta ? saiHoje : undefined) : saidaNoCadastro(antes, chegada);
+      const novo = pelaPorta ? (porta ? saidaNoCadastro(depois, chegada, porta) : undefined) : saidaNoCadastro(depois, chegada);
+      // só o que esta mudança mexeu, e que a rota ainda não diz
+      if (!novo || (velho && mesmaFibra(velho, novo)) || mesmaFibra(novo, saiHoje)) return;
+      const r = dono(r0, i + 1);
+      const k = `${r.id}|${i + 1}`;
+      if (feitas.has(k)) return;
+      feitas.add(k);
+      if (chaveCabo(novo.cabo) !== chaveCabo(saiHoje.cabo)) {
+        const pt = pontas.get(chaveCabo(novo.cabo));
+        if (!pt || pt[0] !== chave || pt[1] !== chaveElemento(prox)) {
+          bloqueadas.push({ rota: r, motivo: `${novo.cabo.split(" [")[0]} não vai para ${prox.nome}: para mudar o caminho, edite a rota no mapa.` });
+          return;
+        }
+      }
+      const elementos = r.elementos.map((x) => ({ ...x }));
+      elementos[i + 1].cabo_entrada = novo.cabo;
+      elementos[i + 1].fibra_entrada = novo.fibra;
+      if (elementos[i].fibra_saida === saiHoje.fibra) elementos[i].fibra_saida = novo.fibra;
+      if (elementos[i].cabo_saida && chaveCabo(elementos[i].cabo_saida!) === chaveCabo(saiHoje.cabo)) elementos[i].cabo_saida = novo.cabo;
+      // mesmo cabo: a fibra segue igual pelas caixas onde o cabo só passa
+      const seguem: string[] = [];
+      if (chaveCabo(novo.cabo) === chaveCabo(saiHoje.cabo)) {
+        for (let j = i + 2; j < elementos.length; j++) {
+          const x = elementos[j];
+          if (!x.cabo_entrada || chaveCabo(x.cabo_entrada) !== chaveCabo(saiHoje.cabo) || x.fibra_entrada !== saiHoje.fibra) break;
+          x.fibra_entrada = novo.fibra;
+          if (elementos[j - 1].fibra_saida === saiHoje.fibra) elementos[j - 1].fibra_saida = novo.fibra;
+          seguem.push(x.nome);
+        }
+      }
+      const trechos = chaveCabo(novo.cabo) === chaveCabo(saiHoje.cabo) ? r.trechos : r.trechos.map((t) => (t.ate === i + 1 ? { ...t, nome: novo.cabo } : t));
+      mudancas.push({ rota: { ...r, trechos }, i: i + 1, de: saiHoje, para: novo, seguem, proxima: prox.nome, elementos });
+    });
+  }
+  // várias mudanças na mesma rota: cada uma aplica a sua parte sobre a anterior
+  const acum = new Map<string, { elementos: ElementoRota[]; trechos: RotaOptica["trechos"] }>();
+  for (const m of mudancas) {
+    const base = acum.get(m.rota.id) ?? { elementos: m.rota.elementos.map((x) => ({ ...x })), trechos: m.rota.trechos };
+    const ate = m.i + m.seguem.length;
+    const elementos = base.elementos.map((x, j) => (j >= m.i - 1 && j <= ate ? m.elementos[j] : x));
+    const trechos = base.trechos.map((t) => (t.ate === m.i ? m.rota.trechos.find((u) => u.ate === m.i) ?? t : t));
+    acum.set(m.rota.id, { elementos, trechos });
+  }
+  for (const m of mudancas) { const a = acum.get(m.rota.id)!; m.elementos = a.elementos; m.rota = { ...m.rota, trechos: a.trechos }; }
+  return { mudancas, bloqueadas };
+}
