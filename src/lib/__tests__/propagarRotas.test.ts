@@ -118,3 +118,20 @@ describe("não monta splitter repetido", () => {
     expect(completarPelasRotas("PT:12", [r], c).splitters).toBe(0);
   });
 });
+
+describe("CTO onde a rota termina", () => {
+  const cto: RotaOptica = {
+    id: "c", nome: "CTO 3", origem: "manual", trechos: [],
+    elementos: [el("OLT", "olt", "", { porta: "PL 06 - Porta 02" }), el("CEO 9", "ceo", "9", { cabo_entrada: "x", fibra_entrada: 1 }), el("CTO 3", "cto", "47", { cabo_entrada: A, fibra_entrada: 1, splitter: "1:8" })],
+  };
+  const spl = (f: number) => [{ id: "r11", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: f } }, portas: [] }];
+  it("splitter da F01 para a F02: a rota passa a chegar pela F02 e a CEO de trás acompanha", () => {
+    const { mudancas, pontas } = propagarNasRotas("PT:47", [cto], cad({ splitters: spl(1) }), cad({ splitters: spl(2) }));
+    expect(mudancas[0]).toMatchObject({ sentido: "chega" });
+    expect(mudancas[0].elementos[2].fibra_entrada).toBe(2);
+    expect(pontas[0]).toMatchObject({ chave: "PT:9", lado: "sai", de: 1, para: 2 });
+  });
+  it("se a rota não mudou (desmarcada), não monta outro splitter na F01", () => {
+    expect(completarPelasRotas("PT:47", [cto], cad({ splitters: spl(2) })).splitters).toBe(0);
+  });
+});

@@ -309,6 +309,10 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
   const spls = c.splitters.map((s) => ({ ...s, entrada: { ...s.entrada }, portas: portasPara(s.relacao, s.portas).map((p) => ({ ...p })) }));
   let novosSpl = 0, novasPernas = 0;
   const achar = (f: PontaFibra) => spls.find((s) => s.entrada.fibra && mesmaFibra(s.entrada.fibra, f));
+  // fibras que as rotas trazem para esta caixa: splitter numa fibra fora delas foi mudado de entrada no Unifilar
+  const chegamPelaRota = new Set<string>();
+  for (const r of rotas) r.elementos.forEach((e, i) => { if (i > 0 && chaveElemento(e) === chave && e.cabo_entrada && e.fibra_entrada) chegamPelaRota.add(`${chaveCabo(e.cabo_entrada)}|${e.fibra_entrada}`); });
+  const semRota = (s: SplitterCaixa) => !!s.entrada.fibra && !chegamPelaRota.has(`${chaveCabo(s.entrada.fibra.cabo)}|${s.entrada.fibra.fibra}`);
   // 1) splitters: um por fibra que chega e usa splitter aqui
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
@@ -319,6 +323,9 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
       // (alguém trocou a entrada no Unifilar). Não inventa outro splitter: a diferença aparece no desenho.
       const prox = r.elementos[i + 1];
       if (prox?.cabo_entrada && prox.fibra_entrada && spls.some((s) => s.portas.some((p) => p.saida && mesmaFibra(p.saida, { cabo: prox.cabo_entrada!, fibra: prox.fibra_entrada! })))) return;
+      // um splitter igual (mesmo cabo e relação) está numa fibra que nenhuma rota traz: alguém mudou a entrada dele.
+      // Não monta outro: a caixa e a rota discordam e isso aparece no desenho ("Fnn · sem rota").
+      if (spls.some((s) => semRota(s) && chaveCabo(s.entrada.fibra!.cabo) === chaveCabo(f.cabo) && s.relacao === e.splitter)) return;
       // um splitter antigo sem entrada e da mesma relação: ganha a entrada (em vez de criar outro)
       const solto = spls.find((s) => !s.entrada.fibra && !s.entrada.splitter && s.relacao === e.splitter);
       if (solto) { solto.entrada = { fibra: f }; return; }
@@ -501,11 +508,13 @@ export function propagarNasRotas(
   for (const r of rotas) {
     r.elementos.forEach((e, i) => {
       const prox = r.elementos[i + 1];
-      if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada || !e.fibra_entrada || !prox?.cabo_entrada || !prox.fibra_entrada) return;
+      if (i === 0 || chaveElemento(e) !== chave || !e.cabo_entrada || !e.fibra_entrada) return;
       const chegada = { cabo: e.cabo_entrada, fibra: e.fibra_entrada };
-      const saiHoje = { cabo: prox.cabo_entrada, fibra: prox.fibra_entrada };
+      // a rota pode terminar nesta caixa (CTO, CDOI): aí só a fibra que entra conta
+      const saiHoje = prox?.cabo_entrada && prox.fibra_entrada ? { cabo: prox.cabo_entrada, fibra: prox.fibra_entrada } : undefined;
 
       // ---- a fibra que SAI desta caixa ----
+      if (saiHoje && prox) {
       const porta = portaQueLeva(antes, saiHoje);
       const pelaPorta = !!porta || antes.splitters.some((s) => s.entrada.fibra && mesmaFibra(s.entrada.fibra, chegada));
       const velho = pelaPorta ? (porta ? saiHoje : undefined) : saidaNoCadastro(antes, chegada);
@@ -543,9 +552,17 @@ export function propagarNasRotas(
         }
       }
 
+      }
+
       // ---- a fibra que ENTRA nesta caixa ----
-      const veioAntes = entradaNoCadastro(antes, saiHoje);
-      const vemAgora = entradaNoCadastro(depois, saiHoje);
+      let veioAntes = saiHoje ? entradaNoCadastro(antes, saiHoje) : undefined;
+      let vemAgora = saiHoje ? entradaNoCadastro(depois, saiHoje) : undefined;
+      // pelo splitter que recebia a rota (mesmo splitter, pelo código): para onde foi a entrada dele
+      if (!vemAgora) {
+        const splAntes = antes.splitters.find((x) => x.entrada.fibra && mesmaFibra(x.entrada.fibra, chegada));
+        const ent = splAntes ? depois.splitters.find((x) => x.id === splAntes.id)?.entrada.fibra : undefined;
+        if (ent) { veioAntes = chegada; vemAgora = ent; }
+      }
       // a saída desta rota agora é alimentada por outra fibra que chega (mudou a entrada do splitter ou a fusão)
       const k1 = `c|${dono(r, i).id}|${i}`;
       if (vemAgora && !mesmaFibra(vemAgora, chegada) && (!veioAntes || mesmaFibra(veioAntes, chegada)) && !feitas.has(k1)) {
