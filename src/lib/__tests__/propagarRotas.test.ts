@@ -143,3 +143,15 @@ describe("várias trocas no mesmo cabo (prédio)", () => {
     expect(n.splitters[0].portas.map((p) => p.saida?.fibra)).toEqual([3, 1]);
   });
 });
+
+describe("cabo do prédio: as pernas seguem as CDOIs", () => {
+  it("perna na fibra nominal do prédio sai; entra a da CDOI", () => {
+    const P = "06 FO ASO · HUB → Ed. N [CB-000009]";
+    const mae: RotaOptica = { id: "m", nome: "Rota Ed. N", origem: "manual", trechos: [], elementos: [el("OLT", "olt", "", { porta: "PL 06 - Porta 02" }), el("HUB", "hub", "15", { cabo_entrada: A, fibra_entrada: 3, splitter: "1:8" }), el("Ed. N", "predio", "PREDIO-x", { cabo_entrada: P, fibra_entrada: 1 })] };
+    const sub: RotaOptica = { id: "s", nome: "AND-T", origem: "manual", trechos: [], pai: { rota_id: "m", chave: "PT:PREDIO-x" }, tronco: 3, elementos: [...mae.elementos, el("AND-T", "cdoi", "16", { cabo_entrada: P, fibra_entrada: 3 })] };
+    const c = cad({ splitters: [{ id: "r33", relacao: "1:8", entrada: { fibra: { cabo: A, fibra: 3 } }, portas: [{ numero: 1, status: "livre" as const }, { numero: 2, status: "ramal" as const, saida: { cabo: P, fibra: 1 } }] }] });
+    const r = completarPelasRotas("PT:15", [mae, sub], c);
+    const saidas = r.ed.splitters[0].portas.filter((p) => p.saida).map((p) => p.saida!.fibra);
+    expect(saidas).toEqual([3]);
+  });
+});

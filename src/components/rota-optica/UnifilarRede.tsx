@@ -492,6 +492,12 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   }
   const traco = inicioTraco ? calcularTraco(inicioTraco) : null;
   const tracar = (inicio: Pt) => setTraco(inicio);
+  /** Cabo que sai desta caixa para um prédio: devolve a chave do prédio */
+  function predioDoCabo(chave: string, p: PontoUni): string | undefined {
+    if (p.k !== "fibra" || p.lado !== "sai") return undefined;
+    const c = modelos.get(chave)?.cabos.find((x) => x.lado === "sai" && x.chave === chaveCabo(p.cabo));
+    return c?.outraChave && infoDe.get(c.outraChave)?.tipo === "predio" ? c.outraChave : undefined;
+  }
   async function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "clientes") {
@@ -537,6 +543,14 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
     const cordao = sel.p.k === "fibra" && sel.p.lado === "chega" ? sel.p : p.k === "fibra" && p.lado === "chega" ? p : null;
     const adapt = sel.p.k === "adaptador" ? sel.p : p.k === "adaptador" ? p : null;
     if (cordao && adapt) { moverPortaDio(chave, cordao.cabo, adapt.n); setSel(null); return; }
+    // cabo que vai para um prédio: a fibra de cada CDOI é do prédio (lá se troca, e esta caixa acompanha sozinha)
+    const pr = predioDoCabo(chave, p) ?? predioDoCabo(chave, sel.p);
+    if (pr) {
+      setErro(`Esse cabo vai para o ${infoDe.get(pr)?.nome ?? "prédio"}: a fibra de cada CDOI se troca na janela do prédio, e a perna aqui acompanha sozinha.`);
+      setSel(null);
+      onEditarPredio?.(pr);
+      return;
+    }
     const t = tipoEntre(sel.p, p);
     if (!["fusao", "entrada", "perna", "nivel2"].includes(t)) { setErro(t); return; }
     const m = modelos.get(chave)!;
@@ -1080,7 +1094,11 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                 <div className="mb-3 space-y-1.5 rounded-xl border border-slate-700 p-2">
                   <p className="font-semibold">{l.tipo === "passa" ? "Passa direto (vem da rota)" : l.origem === "rota" ? "Sugestão da rota" : l.origem === "regra" ? "Cor com cor" : "Ligação"}</p>
                   {l.tipo !== "passa" && l.origem === "rota" && <button type="button" onClick={() => { const r = ligar(edDe(selLig.chave), l.a, l.b); if (typeof r !== "string") mudar(selLig.chave, r); setSelLig(null); }} className="rounded-md bg-amber-500 px-2 py-1 font-semibold text-white">Aceitar</button>}
-                  {l.tipo !== "passa" && l.origem !== "rota" && <button type="button" onClick={() => { mudar(selLig.chave, desligar(edDe(selLig.chave), l)); setSelLig(null); }} className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 font-semibold text-white"><X className="h-3 w-3" /> Desligar</button>}
+                  {l.tipo !== "passa" && l.origem !== "rota" && <button type="button" onClick={() => {
+                    const pr = predioDoCabo(selLig.chave, l.a) ?? predioDoCabo(selLig.chave, l.b);
+                    if (pr) { setErro(`Essa perna vai para o ${infoDe.get(pr)?.nome ?? "prédio"}: troque a fibra da CDOI na janela do prédio.`); onEditarPredio?.(pr); setSelLig(null); return; }
+                    mudar(selLig.chave, desligar(edDe(selLig.chave), l)); setSelLig(null);
+                  }} className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 font-semibold text-white"><X className="h-3 w-3" /> Desligar</button>}
                 </div>
               );
             })()}

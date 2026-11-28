@@ -335,6 +335,28 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
       novosSpl++;
     });
   }
+  // cabo até um prédio: quem manda é o prédio (fibra de cada CDOI). Perna numa fibra que nenhuma CDOI usa fica livre.
+  const usadasPredio = new Map<string, Set<number>>();
+  for (const r of rotas) {
+    r.elementos.forEach((e, i) => {
+      if (i === 0 || chaveElemento(e) !== chave) return;
+      const prox = r.elementos[i + 1];
+      if (!prox?.cabo_entrada || prox.tipo !== "predio") return;
+      const k = chaveCabo(prox.cabo_entrada);
+      const set = usadasPredio.get(k) ?? new Set<number>();
+      r.elementos.slice(i + 2).forEach((x) => { if (x.cabo_entrada && x.fibra_entrada && chaveCabo(x.cabo_entrada) === k) set.add(x.fibra_entrada); });
+      usadasPredio.set(k, set);
+    });
+  }
+  let soltas = 0;
+  for (const s of spls) for (const p of s.portas) {
+    const usadas = p.saida ? usadasPredio.get(chaveCabo(p.saida.cabo)) : undefined;
+    if (!p.saida || !usadas || usadas.has(p.saida.fibra)) continue;
+    p.status = "livre";
+    p.saida = undefined;
+    p.descricao = undefined;
+    soltas++;
+  }
   // 2) pernas: o que sai depois desta caixa em cada rota vai numa porta do splitter daquela fibra
   const jaSai = (f: PontaFibra) => spls.some((s) => s.portas.some((p) => p.saida && mesmaFibra(p.saida, f)));
   for (const r of rotas) {
@@ -344,8 +366,8 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
       if (!s) return;
       const prox = r.elementos[i + 1];
       if (!prox?.cabo_entrada) return;
-      // cabo até um prédio entra inteiro: as fibras são as das CDOIs logo depois
-      const saidas: PontaFibra[] = prox.fibra_entrada
+      // cabo até um prédio entra inteiro: as fibras são as das CDOIs logo depois (a do prédio é só nominal)
+      const saidas: PontaFibra[] = prox.fibra_entrada && prox.tipo !== "predio"
         ? [{ cabo: prox.cabo_entrada, fibra: prox.fibra_entrada }]
         : r.elementos.slice(i + 2).filter((x) => x.cabo_entrada && x.fibra_entrada && chaveCabo(x.cabo_entrada) === chaveCabo(prox.cabo_entrada!)).map((x) => ({ cabo: x.cabo_entrada!, fibra: x.fibra_entrada! }));
       for (const f of saidas) {
@@ -359,7 +381,7 @@ export function completarPelasRotas(chave: string, rotas: RotaOptica[], c: Cadas
       }
     });
   }
-  const mudou = novosSpl > 0 || novasPernas > 0 || spls.some((s, k) => JSON.stringify(s.entrada) !== JSON.stringify(c.splitters[k]?.entrada));
+  const mudou = novosSpl > 0 || novasPernas > 0 || soltas > 0 || spls.some((s, k) => JSON.stringify(s.entrada) !== JSON.stringify(c.splitters[k]?.entrada));
   return { ed: mudou ? { ...c, splitters: spls } : c, splitters: novosSpl, pernas: novasPernas };
 }
 
