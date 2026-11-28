@@ -637,3 +637,27 @@ export function propagarNasRotas(
   // a própria caixa não é "outra ponta"
   return { mudancas, bloqueadas, pontas: pontas.filter((p) => p.chave !== chave) };
 }
+
+/**
+ * Fibra trocada numa rota (pelo editor da rota): o que muda nas caixas das duas pontas de cada trecho.
+ * Compara trecho por trecho (mesmas duas caixas, mesmo cabo); devolve, por caixa e cabo, de que fibra para qual.
+ */
+export function trocasNasPontas(antes: ElementoRota[], depois: ElementoRota[]): { chave: string; cabo: string; lado: Lado; mapa: Map<number, number> }[] {
+  const out = new Map<string, { chave: string; cabo: string; lado: Lado; mapa: Map<number, number> }>();
+  const por = (chave: string, cabo: string, lado: Lado, de: number, para: number) => {
+    const k = `${chave}|${chaveCabo(cabo)}|${lado}`;
+    const t = out.get(k) ?? { chave, cabo, lado, mapa: new Map<number, number>() };
+    t.mapa.set(de, para);
+    out.set(k, t);
+  };
+  for (let i = 1; i < depois.length; i++) {
+    const e = depois[i], a = depois[i - 1];
+    if (!e.cabo_entrada || !e.fibra_entrada) continue;
+    const j = antes.findIndex((x, k) => k > 0 && chaveElemento(x) === chaveElemento(e) && chaveElemento(antes[k - 1]) === chaveElemento(a));
+    const v = j > 0 ? antes[j] : undefined;
+    if (!v?.cabo_entrada || !v.fibra_entrada || chaveCabo(v.cabo_entrada) !== chaveCabo(e.cabo_entrada) || v.fibra_entrada === e.fibra_entrada) continue;
+    por(chaveElemento(a), e.cabo_entrada, "sai", v.fibra_entrada, e.fibra_entrada);
+    por(chaveElemento(e), e.cabo_entrada, "chega", v.fibra_entrada, e.fibra_entrada);
+  }
+  return [...out.values()];
+}

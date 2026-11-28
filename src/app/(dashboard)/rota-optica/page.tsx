@@ -373,6 +373,7 @@ export default function RotaOpticaPage() {
           onSalvarParcial={modo.rota ? async (d) => { await atualizarRota(modo.rota!.id, d); await recarregar(); } : undefined}
           caixas={caixas}
           onRotasRegravadas={editorRegravado}
+          onCaixaSalva={(c) => setCaixas((cs) => [...cs.filter((x) => x.id !== c.id), c])}
           onEditarPredio={async (k) => { if (await confirmar("Sair do editor da rota e abrir a janela do prédio? O que não foi salvo aqui se perde.", { ok: "Abrir o prédio" })) { setModo({ tipo: "ver" }); editarPredio(k); } }}
           onAbrirNoUnifilar={async (k) => { if (await confirmar("Sair do editor da rota e abrir a caixa no Unifilar? O que não foi salvo aqui se perde.", { ok: "Abrir no Unifilar" })) abrirNoUnifilar(k); }}
         />

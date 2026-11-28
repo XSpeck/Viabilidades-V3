@@ -42,7 +42,8 @@ import { chaveElemento, portaPonDaRota } from "@/lib/arvorePon";
 import { CODIGO_PREDIO, idPredioDoElemento, listarPredios, novoId, salvarPredio, type PredioRede } from "@/lib/prediosRede";
 import { IconeCabo, IconeElemento } from "./IconesRede";
 import EstacaoOltDio, { type DadosEstacao } from "./EstacaoOltDio";
-import { splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
+import { salvarCaixa, splitterDoCadastro, type CaixaRede } from "@/lib/caixasRede";
+import { trocarFibrasNoCadastro, trocasNasPontas } from "@/lib/unifilar";
 
 const RotaEditorMapa = dynamic(() => import("./RotaEditorMapa"), {
   ssr: false,
@@ -100,13 +101,15 @@ interface Props {
   caixas?: CaixaRede[];
   /** Abre a caixa na aba Unifilar (fecha o editor) */
   onAbrirNoUnifilar?: (chave: string) => void;
+  /** Caixa gravada junto (a fibra trocada aqui leva a fusão/perna das caixas das pontas) */
+  onCaixaSalva?: (c: CaixaRede) => void;
   /** Abre a janela do prédio (fibra de cada CDOI); fecha o editor */
   onEditarPredio?: (chave: string) => void;
   /** Troca de fibra gravou rotas: recarregar e reabrir o editor */
   onRotasRegravadas?: () => void;
 }
 
-export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar, onRotasRegravadas, onEditarPredio }: Props) {
+export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCabos, centroPadrao, rede, onCaboSalvo, onCancelar, onSalvar, onSalvarParcial, todas, caixas = [], onAbrirNoUnifilar, onRotasRegravadas, onEditarPredio, onCaixaSalva }: Props) {
   /** Painel do cabo (tipo, capacidade, observação, fibras e troca de fibra) aberto para o elemento i */
   const [painelCabo, setPainelCabo] = useState<number | null>(null);
   // Todo traçado é editável: o do KML (rotas do GeoGrid) vira postes de cada trecho ao abrir
@@ -1419,6 +1422,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
         }
       }
       await gravarGlobais();
+      await acompanharCaixas(inicial?.elementos ?? [], elementosGravar);
       await onSalvar(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: nome.trim(),
         origem: inicial?.origem ?? "manual",
@@ -1452,6 +1456,22 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     if (comparavel(montarElemento(linhas, i)) !== comparavel(salvos[l.orig])) return true;
     const t = trechosSalvos.find((x) => x.ate === l.orig);
     return !!t && JSON.stringify(t.pontos.slice(1, -1)) !== JSON.stringify(l.vertices);
+  }
+
+  /** A fibra trocada aqui vale no trecho inteiro: as caixas das duas pontas (fusão, entrada do splitter, perna) acompanham */
+  async function acompanharCaixas(antes: ElementoRota[], depois: ElementoRota[]) {
+    const porCaixa = new Map<string, CaixaRede>();
+    for (const t of trocasNasPontas(antes, depois)) {
+      const cad = porCaixa.get(t.chave) ?? caixas.find((c) => c.chave === t.chave);
+      if (!cad || (!cad.splitters?.length && !cad.emendas?.length)) continue;
+      const base = { emendas: cad.emendas ?? [], regras_emenda: cad.regras_emenda ?? [], splitters: cad.splitters ?? [] };
+      const novo = trocarFibrasNoCadastro(base, t.cabo, t.lado, t.mapa);
+      if (JSON.stringify(novo) !== JSON.stringify(base)) porCaixa.set(t.chave, { ...cad, ...novo });
+    }
+    for (const c of porCaixa.values()) {
+      const gravada = await salvarCaixa({ ...c, atualizado_por: usuario });
+      onCaixaSalva?.(gravada);
+    }
   }
 
   async function salvarElemento(i: number) {
@@ -1496,6 +1516,7 @@ export default function RotaEditor({ inicial, usuario, catalogo, cabos, nomesCab
     try {
       await gravarCabos([ls[i]], tc);
       await gravarGlobais();
+      await acompanharCaixas(salvos, novos);
       await onSalvarParcial(paraGravar({ pai: paiEf, tronco: troncoEf || undefined }, {
         nome: inicial?.nome ?? nome.trim(),
         origem: inicial?.origem ?? "manual",

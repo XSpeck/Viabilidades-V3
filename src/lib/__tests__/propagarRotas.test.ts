@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { completarPelasRotas, propagarNasRotas, trocarFibraNoCadastro, trocarFibrasNoCadastro, type CadastroLigacoes } from "../unifilar";
+import { completarPelasRotas, propagarNasRotas, trocarFibraNoCadastro, trocarFibrasNoCadastro, trocasNasPontas, type CadastroLigacoes } from "../unifilar";
 import type { ElementoRota, RotaOptica } from "../rotaOptica";
 
 const A = "24 FO ASO · HUB → CEO 3 [CB-000006]";
@@ -153,5 +153,15 @@ describe("cabo do prédio: as pernas seguem as CDOIs", () => {
     const r = completarPelasRotas("PT:15", [mae, sub], c);
     const saidas = r.ed.splitters[0].portas.filter((p) => p.saida).map((p) => p.saida!.fibra);
     expect(saidas).toEqual([3]);
+  });
+});
+
+describe("editor da rota: a fibra trocada leva as caixas das pontas", () => {
+  it("F02 → F01 no cabo da HUB até a CTO: a HUB sai pela F01 e a CTO recebe na F01", () => {
+    const C27 = "02 FO · HUB 1 → CTO 4 [CB-000027]";
+    const antes = [el("HUB 1", "hub", "46"), el("CTO 4", "cto", "48", { cabo_entrada: C27, fibra_entrada: 2 })];
+    const depois = [el("HUB 1", "hub", "46"), el("CTO 4", "cto", "48", { cabo_entrada: C27, fibra_entrada: 1 })];
+    const t = trocasNasPontas(antes, depois);
+    expect(t.map((x) => `${x.chave} ${x.lado} ${[...x.mapa].join(";")}`)).toEqual(["PT:46 sai 2,1", "PT:48 chega 2,1"]);
   });
 });
