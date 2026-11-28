@@ -672,22 +672,27 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
               {blocos.filter((b) => b.c.lado === "sai" && b.c.outraChave && abertas.includes(b.c.outraChave)).map((b) => {
                 const dest = blocos.find((x) => x.chave === b.c.outraChave && x.c.lado === "chega" && x.c.chave === b.c.chave);
                 if (!dest) return null;
+                // só as fibras em uso: com sinal pelas rotas ou ligadas dentro de uma das duas caixas
+                const ligA = new Set(modelos.get(b.chave)?.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]) ?? []);
+                const ligB = new Set(modelos.get(dest.chave)?.ligacoes.flatMap((l) => [idPonto(l.a), idPonto(l.b)]) ?? []);
+                const emUso = (f: number) => b.c.sinal.has(f) || dest.c.sinal.has(f)
+                  || ligA.has(idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f }))
+                  || ligB.has(idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f }));
                 return (
                   <g key={`cab${b.chave}${b.c.id}`}>
-                    {b.fibras.filter((f) => dest.fibras.includes(f)).map((f) => {
+                    {b.fibras.filter((f) => dest.fibras.includes(f) && emUso(f)).map((f) => {
                       const ka = `${b.chave}#${idPonto({ k: "fibra", lado: "sai", cabo: b.c.nome, fibra: f })}`;
                       const kb = `${dest.chave}#${idPonto({ k: "fibra", lado: "chega", cabo: dest.c.nome, fibra: f })}`;
                       const a = pos.get(ka), z = pos.get(kb);
                       if (!a || !z) return null;
                       const d = `M${a[0]} ${a[1]} C ${a[0] + 60} ${a[1]}, ${z[0] - 60} ${z[1]}, ${z[0]} ${z[1]}`;
                       const cf = corFibra(f, b.c.nome);
-                      const usada = b.c.sinal.has(f) || dest.c.sinal.has(f);
                       const tr = aceso(ka) && aceso(kb);
                       return (
                         <g key={f}>
                           {tr && <path d={d} fill="none" stroke={LAR} strokeWidth={5} opacity={0.85} strokeLinecap="round" />}
-                          <path d={d} fill="none" stroke="#0b0d10" strokeWidth={usada ? 3.4 : 2.4} />
-                          <path d={d} fill="none" stroke={cf.hex} strokeWidth={usada ? 1.9 : 1.1} opacity={usada ? 1 : 0.45} />
+                          <path d={d} fill="none" stroke="#0b0d10" strokeWidth={3.4} />
+                          <path d={d} fill="none" stroke={cf.hex} strokeWidth={1.9} />
                         </g>
                       );
                     })}
