@@ -182,7 +182,7 @@ export default function MapaRede({ rotas, caixas = [], onAbrirRota, onAbrirNoUni
 
   const controle = "rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm";
   return (
-    <div className={`overflow-hidden border border-gray-200 bg-white ${cheia ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-xl"}`}>
+    <div className={`isolate overflow-hidden border border-gray-200 bg-white ${cheia ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-xl"}`}>
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-3 py-2">
         <select className={controle} value={pon} onChange={(e) => setPon(e.target.value)} aria-label="Porta PON">
           <option value="">Todas as portas PON ({rotas.length} rota{rotas.length !== 1 ? "s" : ""})</option>

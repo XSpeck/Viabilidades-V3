@@ -266,7 +266,7 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
   );
 
   return (
-    <div className="relative h-[min(76vh,720px)] overflow-hidden rounded-xl border border-gray-200">
+    <div className="relative isolate h-[min(76vh,720px)] overflow-hidden rounded-xl border border-gray-200">
       <MapContainer center={pts[0] ?? [-28.68, -49.37]} zoom={15} scrollWheelZoom={false} doubleClickZoom={false} zoomControl={false}
         className={`h-full w-full z-0 [&_.leaflet-interactive]:outline-none ${ferr !== "navegar" ? "cursor-crosshair [&_.leaflet-grab]:cursor-crosshair" : ""}`}>
         <CamadaBase camada={camada} />
