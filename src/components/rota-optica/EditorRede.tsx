@@ -329,11 +329,11 @@ export default function EditorRede({ caixas, cabos, catalogo, sinal, usuario, on
                   {c.trechos?.[t]?.metros ? ` · ${formatMetros(c.trechos[t].metros!)}` : ""}
                 </Tooltip>
               </Polyline>
-              {aceso && <Polyline positions={linha} interactive={false} pathOptions={{ color: "#ffffff", weight: 2.5, opacity: 0.95, lineCap: "round", className: "fh-fluxo" }} />}
+              {aceso && <Polyline positions={linha} interactive={false} className="fh-fluxo" pathOptions={{ color: "#ffffff", weight: 2.5, opacity: 0.95, lineCap: "round" }} />}
             </Fragment>
           );
         })}
-        {desenhoLinha.length >= 1 && <Polyline positions={desenhoLinha} pathOptions={{ color: "#f97316", weight: 4, dashArray: "8 6", className: "fh-fluxo" }} interactive={false} />}
+        {desenhoLinha.length >= 1 && <Polyline positions={desenhoLinha} className="fh-fluxo" pathOptions={{ color: "#f97316", weight: 4 }} interactive={false} />}
         {desenho?.atual.map((p, k) => <Marker key={`d${k}`} position={[p.lat, p.lon]} icon={iconePonto} interactive={false} />)}
         {elementos.map((e) => (
           <Marker key={e.chave} position={[e.lat!, e.lon!]} icon={icone(e.tipo!, sel?.chave === e.chave, pons(e.chave).length > 0, potDe.get(e.chave), nomes || sel?.chave === e.chave ? nomeCurto(e.nome, 22) : undefined)}
