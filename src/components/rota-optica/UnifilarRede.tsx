@@ -68,7 +68,8 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
   const [hist, setHist] = useState<Record<string, CadastroLigacoes>[]>([]);
   const [sel, setSel] = useState<Pt | null>(null);
   const [selLig, setSelLig] = useState<{ chave: string; id: string } | null>(null);
-  const [traco, setTraco] = useState<Set<string> | null>(null);
+  /** Ponto clicado no "Navegar": o caminho laranja é recalculado quando novas caixas abrem */
+  const [inicioTraco, setTraco] = useState<Pt | null>(null);
   const [rotasTraco, setRotasTraco] = useState<ReturnType<typeof rotasDaFibra>>([]);
   const [rotaIdx, setRotaIdx] = useState(0);
   const [cabosAbertos, setCabosAbertos] = useState<Set<string>>(new Set());
@@ -213,7 +214,7 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
     setAbertas(n);
   }
   /** Caminho laranja: dentro da caixa e atravessando os cabos para as caixas abertas */
-  function tracar(inicio: Pt) {
+  function calcularTraco(inicio: Pt): Set<string> {
     const acesos = new Set<string>();
     const fila: Pt[] = [inicio];
     const vistos = new Set<string>();
@@ -235,8 +236,10 @@ export default function UnifilarRede({ rotas, caixas, catalogo, usuario, onCaixa
         fila.push({ chave: cabo.outraChave, p: { k: "fibra", lado: mm[1] === "sai" ? "chega" : "sai", cabo: cabo.nome, fibra: +mm[3] } });
       }
     }
-    setTraco(acesos);
+    return acesos;
   }
+  const traco = inicioTraco ? calcularTraco(inicioTraco) : null;
+  const tracar = (inicio: Pt) => setTraco(inicio);
   function clicarPonto(chave: string, p: PontoUni) {
     setErro(null);
     if (modo === "navegar") {
