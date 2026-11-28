@@ -286,6 +286,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
   const blocos: Bloco[] = [];
   /** Pontos de fibra de cordão escondidos (as ligações deles dentro da caixa não se desenham) */
   const ocultos = new Set<string>();
+  /** Fibra escondida do cordão → o ponto visível no lugar dela (porta PON na OLT, adaptador no DIO) */
+  const ancoras = new Map<string, PontoUni>();
   const caixasDes: { chave: string; x: number; y: number; w: number; h: number; spl: { s: SplitterCaixa; x: number; y: number; h: number; w: number; portas: ReturnType<typeof portasPara>; id: string }[]; pons: string[]; capDio: number; olt?: Painel; dio?: Painel; arrumada: boolean }[] = [];
   const COLS = 12, CEL = 16;
   let xCur = 20;
@@ -319,16 +321,17 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
       return v.length ? v : todas.slice(0, Math.min(12, todas.length));
     };
     /** Cordão OLT → DIO: a fibra dele é a própria porta PON (na OLT) ou o adaptador (no DIO) */
-    const pontaDoCordao = (c: CaboUni, f: number): [number, number] | undefined => {
+    const pontaDoCordao = (c: CaboUni, f: number): { q: [number, number]; p: PontoUni } | undefined => {
       const fid = idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f });
       if (tipoCx === "olt" && c.lado === "sai") {
         const l = m.ligacoes.find((x) => x.tipo === "cordao" && idPonto(x.b) === fid);
-        return l ? pos.get(`${chave}#${idPonto(l.a)}`) : undefined;
+        const q = l ? pos.get(`${chave}#${idPonto(l.a)}`) : undefined;
+        return l && q ? { q, p: l.a } : undefined;
       }
       if (tipoCx === "dio" && c.lado === "chega") {
         const l = m.ligacoes.find((x) => x.tipo === "dio" && idPonto(x.a) === fid && x.b.k === "adaptador");
         const q = l ? pos.get(`${chave}#${idPonto(l.b)}`) : undefined;
-        return q ? [q[0], q[1] + 9] : undefined;
+        return l && q ? { q: [q[0], q[1] + 9], p: l.b } : undefined;
       }
       return undefined;
     };
@@ -339,8 +342,10 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
         if (doCordao.length) {
           doCordao.forEach((f) => {
             const kk = `${chave}#${idPonto({ k: "fibra", lado: c.lado, cabo: c.nome, fibra: f })}`;
-            pos.set(kk, pontaDoCordao(c, f)!);
+            const a = pontaDoCordao(c, f)!;
+            pos.set(kk, a.q);
             ocultos.add(kk);
+            ancoras.set(kk, a.p);
           });
           blocos.push({ chave, c, x, y, fibras: doCordao, h: 0, id: `c:${c.lado}:${c.chave}`, oculto: true });
           continue;
@@ -968,7 +973,8 @@ export default function UnifilarRede({ rotas: rotasBase, caixas, catalogo, usuar
                               ? { chave: b.chave, p: { k: "fibra" as const, lado: "sai" as const, cabo: b.c.nome, fibra: f } }
                               : { chave: dest.chave, p: { k: "fibra" as const, lado: "chega" as const, cabo: dest.c.nome, fibra: f } };
                             if (modo === "clientes") { setErro(`${cf.rotulo} do cabo ${curto(semCodigo(b.c.nome), 30)}. Clientes se marcam nas portas dos splitters.`); return; }
-                            void clicarPonto(perto.chave, perto.p);
+                            // cordão: a ponta é a porta PON (OLT) ou o adaptador (DIO), que ficam embaixo da linha
+                            void clicarPonto(perto.chave, ancoras.get(`${perto.chave}#${idPonto(perto.p)}`) ?? perto.p);
                           }}>
                           <title>{`${cf.rotulo} ${cf.nome.toLowerCase()} · ${semCodigo(b.c.nome)}${semSinal(f) ? " · sem sinal: nada ligado nela na caixa de onde sai" : ""}${modo === "editar" ? " · clique para escolher esta fibra na ponta mais perto" : " · clique para traçar"}`}</title>
                           <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
